@@ -1,0 +1,1077 @@
+
+import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
+import type { Point, CanvasElement, ImageElement, ShapeType, ShapeElement } from '../types';
+import type { OutpaintingState } from '../types';
+import { TransformableElement } from './TransformableElement';
+
+// ... (OutpaintingFrame, DraggableOutpaintingPanel, CropManager components remain unchanged) ...
+interface OutpaintingFrameProps {
+  outpaintingState: OutpaintingState;
+  zoom: number;
+  onUpdateFrame: (newFrame: { position: Point; width: number; height: number; }) => void;
+}
+
+const OutpaintingFrame: React.FC<OutpaintingFrameProps> = ({ outpaintingState, zoom, onUpdateFrame }) => {
+    const interactionRef = useRef<{
+        type: 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+        startFrame: OutpaintingState['frame'];
+        startPoint: Point;
+        startAspectRatio: number;
+    } | null>(null);
+
+    const handleMouseDown = useCallback((e: React.MouseEvent, type: NonNullable<typeof interactionRef.current>['type']) => {
+        e.stopPropagation();
+        interactionRef.current = {
+            type,
+            startFrame: outpaintingState.frame,
+            startPoint: { x: e.clientX, y: e.clientY },
+            startAspectRatio: outpaintingState.frame.width / outpaintingState.frame.height,
+        };
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+    }, [outpaintingState.frame]);
+
+    const handleMouseMove = useCallback((e: MouseEvent) => {
+        if (!interactionRef.current) return;
+        const { type, startFrame, startPoint, startAspectRatio } = interactionRef.current;
+        const dx = (e.clientX - startPoint.x) / zoom;
+        const dy = (e.clientY - startPoint.y) / zoom;
+        
+        let { position, width, height } = startFrame;
+        let newWidth = width;
+        let newHeight = height;
+        let newPos = { ...position };
+
+        // 1. Calculate Unconstrained Dimensions
+        if (type.includes('e')) newWidth = Math.max(1, width + dx);
+        if (type.includes('w')) newWidth = Math.max(1, width - dx);
+        if (type.includes('s')) newHeight = Math.max(1, height + dy);
+        if (type.includes('n')) newHeight = Math.max(1, height - dy);
+
+        // 2. Aspect Ratio Constraint (Shift Key) - Corners Only
+        if (e.shiftKey && type.length === 2) {
+            const deltaW = Math.abs(newWidth - width);
+            const deltaH = Math.abs(newHeight - height);
+            
+            if (deltaW > deltaH * startAspectRatio) {
+                newHeight = newWidth / startAspectRatio;
+            } else {
+                newWidth = newHeight * startAspectRatio;
+            }
+        }
+
+        // 3. Minimum Size Constraints
+        newWidth = Math.max(outpaintingState.element.width, newWidth);
+        newHeight = Math.max(outpaintingState.element.height, newHeight);
+
+        // 4. Re-Apply Aspect Ratio
+        if (e.shiftKey && type.length === 2) {
+             if (newWidth / newHeight < startAspectRatio) {
+                 newWidth = newHeight * startAspectRatio;
+             } else if (newWidth / newHeight > startAspectRatio) {
+                 newHeight = newWidth / startAspectRatio;
+             }
+        }
+
+        const dw = newWidth - width;
+        const dh = newHeight - height;
+        
+        if (type.includes('e')) newPos.x += dw/2;
+        if (type.includes('w')) newPos.x -= dw/2;
+        if (type.includes('s')) newPos.y += dh/2;
+        if (type.includes('n')) newPos.y -= dh/2;
+
+        onUpdateFrame({ position: newPos, width: newWidth, height: newHeight });
+
+    }, [zoom, onUpdateFrame, outpaintingState.element]);
+
+    const handleMouseUp = useCallback(() => {
+        interactionRef.current = null;
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+    }, []);
+
+    const frameStyle: React.CSSProperties = {
+      position: 'absolute',
+      left: outpaintingState.frame.position.x,
+      top: outpaintingState.frame.position.y,
+      width: outpaintingState.frame.width,
+      height: outpaintingState.frame.height,
+      transform: `translate(-50%, -50%)`,
+    };
+
+    return (
+        <>
+            <div style={frameStyle} className="pointer-events-none border-2 border-dashed border-[#8B3DFF] bg-[#8B3DFF]/10 rounded-lg"></div>
+            <div style={frameStyle} className="pointer-events-auto">
+                {['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map(dir => (
+                    <div
+                        key={dir}
+                        onMouseDown={e => handleMouseDown(e, dir as any)}
+                        className={`absolute w-3 h-3 bg-white border border-[#8B3DFF] shadow-sm rounded-full transform-handle
+                            ${dir.includes('n') ? 'top-0 -translate-y-1/2' : ''}
+                            ${dir.includes('s') ? 'bottom-0 translate-y-1/2' : ''}
+                            ${dir.includes('e') ? 'right-0 translate-x-1/2' : ''}
+                            ${dir.includes('w') ? 'left-0 -translate-x-1/2' : ''}
+                            ${!dir.includes('n') && !dir.includes('s') ? 'top-1/2 -translate-y-1/2' : ''}
+                            ${!dir.includes('e') && !dir.includes('w') ? 'left-1/2 -translate-x-1/2' : ''}
+                            cursor-${dir}-resize hover:scale-125 transition-transform`}
+                    />
+                ))}
+            </div>
+        </>
+    );
+};
+
+const DraggableOutpaintingPanel: React.FC<{
+    outpaintingPrompt: string;
+    setOutpaintingPrompt: (val: string) => void;
+    isAutoPrompting: boolean;
+    handleAutoPrompt: () => void;
+    onGenerate: () => void;
+    onCancel: () => void;
+}> = ({ outpaintingPrompt, setOutpaintingPrompt, isAutoPrompting, handleAutoPrompt, onGenerate, onCancel }) => {
+    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 200, y: window.innerHeight - 140 });
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef({ x: 0, y: 0 });
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'BUTTON') return;
+        setIsDragging(true);
+        dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+    };
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            setPosition({
+                x: e.clientX - dragStartRef.current.x,
+                y: e.clientY - dragStartRef.current.y
+            });
+        };
+        const handleMouseUp = () => setIsDragging(false);
+
+        if (isDragging) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
+
+    return (
+        <div 
+            style={{ left: position.x, top: position.y }}
+            className={`fixed z-[1001] bg-white/90 backdrop-blur-xl p-4 rounded-2xl shadow-2xl border border-white/50 flex flex-col gap-3 min-w-[400px] animate-fade-in-up ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+            onMouseDown={handleMouseDown}
+        >
+             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                 <div className="flex items-center gap-2">
+                     <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor" className="text-black/10"><circle cx="1" cy="1" r="1"/><circle cx="1" cy="5" r="1"/><circle cx="1" cy="9" r="1"/><circle cx="5" cy="1" r="1"/><circle cx="5" cy="5" r="1"/><circle cx="5" cy="9" r="1"/></svg>
+                     <h3 className="font-bold text-[#1D1D1F]">AI 擴圖 (Outpainting)</h3>
+                 </div>
+                 <button onClick={onCancel} className="text-[#86868B] hover:text-[#1D1D1F]">&times;</button>
+             </div>
+             <div className="flex gap-2">
+                 <div className="relative flex-grow">
+                    <input 
+                        type="text" 
+                        value={outpaintingPrompt}
+                        onChange={(e) => setOutpaintingPrompt(e.target.value)}
+                        placeholder="描述擴展區域的內容..." 
+                        className="w-full bg-[#F5F5F7] border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-black/5 outline-none cursor-text"
+                        onMouseDown={(e) => e.stopPropagation()} 
+                    />
+                    <button 
+                        onClick={handleAutoPrompt}
+                        disabled={isAutoPrompting}
+                        className="absolute right-1 top-1 bottom-1 px-3 text-[10px] font-bold text-[#AF52DE] bg-white rounded-lg shadow-sm border border-gray-100 hover:bg-gray-50 transition-all disabled:opacity-50"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        {isAutoPrompting ? '分析中...' : '✨ 自動發想'}
+                    </button>
+                 </div>
+                 <button 
+                    onClick={onGenerate}
+                    className="bg-black text-white px-5 py-2.5 rounded-xl font-medium text-sm hover:bg-gray-800 transition-all shadow-lg shadow-black/10"
+                    onMouseDown={(e) => e.stopPropagation()}
+                 >
+                     生成
+                 </button>
+             </div>
+             <p className="text-[10px] text-[#86868B]">拖曳紫色虛線框調整生成範圍。提示詞越精確，效果越好。</p>
+         </div>
+    );
+}
+
+// ... CropManager ...
+interface CropManagerProps {
+    element: ImageElement;
+    zoom: number;
+    onCancel: () => void;
+    onConfirm: (cropRect: { x: number, y: number, width: number, height: number }) => void;
+}
+
+const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onConfirm }) => {
+    const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: element.width, height: element.height });
+    const dragRef = useRef<{ type: string, startPoint: Point, startRect: typeof cropRect } | null>(null);
+
+    const handleMouseDown = (e: React.MouseEvent, type: string) => {
+        e.stopPropagation();
+        dragRef.current = {
+            type,
+            startPoint: { x: e.clientX, y: e.clientY },
+            startRect: { ...cropRect }
+        };
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+        if (!dragRef.current) return;
+        const { type, startPoint, startRect } = dragRef.current;
+        const dx = (e.clientX - startPoint.x) / zoom;
+        const dy = (e.clientY - startPoint.y) / zoom;
+        
+        let { x, y, width, height } = startRect;
+        const minSize = 20;
+        const maxWidth = element.width;
+        const maxHeight = element.height;
+
+        if (type.includes('e')) {
+            width = Math.min(Math.max(minSize, startRect.width + dx), maxWidth - startRect.x);
+        }
+        if (type.includes('w')) {
+            const maxDeltaLeft = startRect.width - minSize;
+            const deltaX = Math.min(Math.max(dx, -startRect.x), maxDeltaLeft);
+            x = startRect.x + deltaX;
+            width = startRect.width - deltaX;
+        }
+        if (type.includes('s')) {
+            height = Math.min(Math.max(minSize, startRect.height + dy), maxHeight - startRect.y);
+        }
+        if (type.includes('n')) {
+            const maxDeltaTop = startRect.height - minSize;
+            const deltaY = Math.min(Math.max(dy, -startRect.y), maxDeltaTop);
+            y = startRect.y + deltaY;
+            height = startRect.height - deltaY;
+        }
+
+        setCropRect({ x, y, width, height });
+    };
+
+    const handleMouseUp = () => {
+        dragRef.current = null;
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    const renderHandle = (cursor: string, posClass: string, type: string) => (
+        <div 
+            className={`absolute w-3 h-3 bg-white border border-[#2997FF] rounded-full shadow-sm z-50 ${posClass}`}
+            style={{ cursor }}
+            onMouseDown={(e) => handleMouseDown(e, type)}
+        />
+    );
+
+    return (
+        <div 
+            className="absolute"
+            style={{
+                left: element.position.x,
+                top: element.position.y,
+                width: element.width,
+                height: element.height,
+                transform: `translate(-50%, -50%) rotate(${element.rotation}deg)`,
+                zIndex: 2000 
+            }}
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div className="absolute bg-black/50" style={{ left: 0, top: 0, width: '100%', height: cropRect.y }} />
+            <div className="absolute bg-black/50" style={{ left: 0, top: cropRect.y + cropRect.height, width: '100%', height: element.height - (cropRect.y + cropRect.height) }} />
+            <div className="absolute bg-black/50" style={{ left: 0, top: cropRect.y, width: cropRect.x, height: cropRect.height }} />
+            <div className="absolute bg-black/50" style={{ left: cropRect.x + cropRect.width, top: cropRect.y, width: element.width - (cropRect.x + cropRect.width), height: cropRect.height }} />
+
+            <div 
+                className="absolute border border-white/80 shadow-[0_0_0_1px_rgba(41,151,255,1)]"
+                style={{ left: cropRect.x, top: cropRect.y, width: cropRect.width, height: cropRect.height, cursor: 'move' }}
+            >
+                <div className="w-full h-full relative opacity-50 pointer-events-none">
+                    <div className="absolute left-1/3 top-0 w-px h-full bg-white/50 shadow-[0_0_2px_rgba(0,0,0,0.5)]" />
+                    <div className="absolute left-2/3 top-0 w-px h-full bg-white/50 shadow-[0_0_2px_rgba(0,0,0,0.5)]" />
+                    <div className="absolute top-1/3 left-0 w-full h-px bg-white/50 shadow-[0_0_2px_rgba(0,0,0,0.5)]" />
+                    <div className="absolute top-2/3 left-0 w-full h-px bg-white/50 shadow-[0_0_2px_rgba(0,0,0,0.5)]" />
+                </div>
+                {renderHandle('nw-resize', '-top-1.5 -left-1.5', 'nw')}
+                {renderHandle('n-resize', '-top-1.5 left-1/2 -translate-x-1/2', 'n')}
+                {renderHandle('ne-resize', '-top-1.5 -right-1.5', 'ne')}
+                {renderHandle('e-resize', 'top-1/2 -translate-y-1/2 -right-1.5', 'e')}
+                {renderHandle('se-resize', '-bottom-1.5 -right-1.5', 'se')}
+                {renderHandle('s-resize', '-bottom-1.5 left-1/2 -translate-x-1/2', 's')}
+                {renderHandle('sw-resize', '-bottom-1.5 -left-1.5', 'sw')}
+                {renderHandle('w-resize', 'top-1/2 -translate-y-1/2 -left-1.5', 'w')}
+            </div>
+
+            <div 
+                className="absolute left-1/2 -translate-x-1/2 flex gap-2 pointer-events-auto whitespace-nowrap z-[2001]"
+                style={{ top: 'calc(100% + 16px)' }}
+            >
+                 <button 
+                    onClick={onCancel}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur-md text-[#1D1D1F] text-xs font-bold border border-black/10 shadow-[0_4px_12px_rgba(0,0,0,0.12)] hover:bg-white hover:scale-105 transition-all active:scale-95"
+                 >
+                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                     取消
+                 </button>
+                 <button 
+                    onClick={() => onConfirm(cropRect)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/90 backdrop-blur-md text-white text-xs font-bold border border-transparent shadow-[0_4px_12px_rgba(0,0,0,0.2)] hover:bg-black hover:scale-105 transition-all active:scale-95"
+                 >
+                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                     確認裁剪
+                 </button>
+            </div>
+        </div>
+    );
+}
+
+// ... Interfaces and Icons ...
+interface InfiniteCanvasProps {
+  elements: CanvasElement[];
+  selectedElementIds: string[];
+  onSelectElement: (id: string | null, shiftKey: boolean) => void;
+  onMarqueeSelect: (ids: string[], shiftKey: boolean) => void;
+  onUpdateElement: (element: CanvasElement, dragDelta?: Point) => void;
+  onInteractionEnd: () => void;
+  setResetViewCallback: (callback: () => void) => void;
+  onGenerate: (selectedElements: CanvasElement[]) => void;
+  onContextMenu: (e: React.MouseEvent, worldPoint: Point, elementId: string | null) => void;
+  onEditDrawing: (elementId: string) => void;
+  imageStyle: string;
+  onSetImageStyle: (style: string) => void;
+  imageAspectRatio: string;
+  onSetImageAspectRatio: (ratio: string) => void;
+  preserveTransparency: boolean;
+  onSetPreserveTransparency: (preserve: boolean) => void;
+  outpaintingState: OutpaintingState | null;
+  onUpdateOutpaintingFrame: (newFrame: { position: Point; width: number; height: number; }) => void;
+  onCancelOutpainting: () => void;
+  onOutpaintingGenerate: (prompt: string) => void;
+  onAutoPromptGenerate: (state: OutpaintingState) => Promise<string>;
+  stylePresets: { id: string, name: string, label: string }[];
+  onCameraAngle: (prompt: string) => void;
+  onRemoveBackground: (mode: string) => void;
+  onHarmonize: () => void;
+  isGenerating: boolean;
+  croppingElementId: string | null;
+  onCancelCrop: () => void;
+  onApplyCrop: (cropRect: { x: number, y: number, width: number, height: number }) => void;
+  interactionMode: 'select' | 'hand';
+  activeShapeTool: ShapeType | null; 
+  onUpscale: (factor: number) => void;
+}
+
+// ... (MarqueeRect, CanvasApi, Constants, CameraIcons, SelectionMenuIcons, CAMERA_ANGLES, ASPECT_RATIOS) ...
+interface MarqueeRect {
+  start: Point;
+  end: Point;
+}
+
+export interface CanvasApi {
+  screenToWorld: (screenPoint: Point) => Point;
+}
+
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 5;
+
+const CameraIcons = {
+    TopLeft: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10"/><path d="M7 7v10"/></svg>, 
+    Top: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>, 
+    TopRight: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M17 7H7"/><path d="M17 7v10"/></svg>, 
+    NW: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="19" x2="5" y2="5"></line><polyline points="19 5 5 5 5 19"></polyline></svg>,
+    N:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>,
+    NE: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="19" x2="19" y2="5"></line><polyline points="5 5 19 5 19 5 19 19"></polyline></svg>,
+    W:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>,
+    Center: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="6" /></svg>,
+    E:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>,
+    SW: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"></line><polyline points="19 19 5 19 5 5"></polyline></svg>,
+    S:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>,
+    SE: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="5" x2="19" y2="19"></line><polyline points="5 19 19 19 19 5"></polyline></svg>,
+};
+
+const SelectionMenuIcons = {
+    MagicFilled: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" /></svg>),
+    Settings: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>),
+    Collapse: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>),
+    Upscale: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1"/></svg>)
+};
+
+const CAMERA_ANGLES = [
+  { id: 'top-left', icon: <CameraIcons.NW />, label: '俯視左上', prompt: 'High angle shot, from above, from the top left corner' },
+  { id: 'top', icon: <CameraIcons.N />, label: '正俯視', prompt: "Bird's-eye view, extreme high angle shot, overhead view" },
+  { id: 'top-right', icon: <CameraIcons.NE />, label: '俯視右上', prompt: 'High angle shot, from above, from the top right corner' },
+  { id: 'left', icon: <CameraIcons.W />, label: '左側視', prompt: 'Side view, profile shot, from the left' },
+  { id: 'center', icon: <CameraIcons.Center />, label: '正視', prompt: 'Eye-level shot, from front, looking at viewer' },
+  { id: 'right', icon: <CameraIcons.E />, label: '右側視', prompt: 'Side view, profile shot, from the right' },
+  { id: 'bottom-left', icon: <CameraIcons.SW />, label: '仰視左下', prompt: 'Low angle shot, from below, from the bottom left corner' },
+  { id: 'bottom', icon: <CameraIcons.S />, label: '正仰視', prompt: "Worm's-eye view, extreme low angle shot, looking up" },
+  { id: 'bottom-right', icon: <CameraIcons.SE />, label: '仰視右下', prompt: 'Low angle shot, from below, from the bottom right corner' },
+];
+
+const ASPECT_RATIOS = [
+  { value: 'Original', label: '原圖比例 (Original)' },
+  { value: '1:1', label: '1:1 正方形 (Instagram/Social)' },
+  { value: '3:4', label: '3:4 傳統比例 (Portrait)' },
+  { value: '4:3', label: '4:3 傳統比例 (Landscape)' },
+  { value: '9:16', label: '9:16 手機全螢幕 (Reels/Shorts)' },
+  { value: '16:9', label: '16:9 寬螢幕 (YouTube)' },
+  { value: '2:3', label: '2:3 經典相機 (DSLR)' },
+  { value: '3:2', label: '3:2 經典相機 (DSLR)' },
+  { value: '21:9', label: '21:9 電影感 (Cinematic)' },
+];
+
+export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({ 
+  elements, 
+  selectedElementIds, 
+  onSelectElement,
+  onMarqueeSelect, 
+  onUpdateElement, 
+  onInteractionEnd,
+  setResetViewCallback,
+  onGenerate,
+  onContextMenu,
+  onEditDrawing,
+  imageStyle,
+  onSetImageStyle,
+  imageAspectRatio,
+  onSetImageAspectRatio,
+  preserveTransparency,
+  onSetPreserveTransparency,
+  outpaintingState,
+  onUpdateOutpaintingFrame,
+  onCancelOutpainting,
+  onOutpaintingGenerate,
+  onAutoPromptGenerate,
+  stylePresets,
+  onCameraAngle,
+  onRemoveBackground,
+  onHarmonize,
+  isGenerating,
+  croppingElementId,
+  onCancelCrop,
+  onApplyCrop,
+  interactionMode,
+  activeShapeTool,
+  onUpscale,
+}, ref) => {
+  const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [isPanning, setIsPanning] = useState(false);
+  const [startPan, setStartPan] = useState<Point>({ x: 0, y: 0 });
+  const [isSpacebarPressed, setIsSpacebarPressed] = useState(false);
+  const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
+  const [outpaintingPrompt, setOutpaintingPrompt] = useState('');
+  const [isAutoPrompting, setIsAutoPrompting] = useState(false);
+  
+  const [menuOffset, setMenuOffset] = useState<Point>({ x: 20, y: 0 }); 
+  const [isDraggingMenu, setIsDraggingMenu] = useState(false);
+  const [isMenuExpanded, setIsMenuExpanded] = useState(false); 
+  const menuDragStartRef = useRef<Point>({ x: 0, y: 0 });
+  const [upscaleFactor, setUpscaleFactor] = useState<number>(2);
+
+  const canvasRef = useRef<HTMLDivElement>(null);
+  
+  const screenToWorld = useCallback((screenPoint: Point): Point => {
+    return {
+      x: (screenPoint.x - pan.x) / zoom,
+      y: (screenPoint.y - pan.y) / zoom,
+    };
+  }, [pan, zoom]);
+  
+  const worldToScreen = useCallback((worldPoint: Point): Point => {
+      return {
+          x: worldPoint.x * zoom + pan.x,
+          y: worldPoint.y * zoom + pan.y
+      };
+  }, [pan, zoom]);
+
+  useImperativeHandle(ref, () => ({
+    screenToWorld,
+  }), [screenToWorld]);
+
+  useEffect(() => {
+    if (outpaintingState) {
+        setOutpaintingPrompt('');
+    }
+  }, [outpaintingState]);
+  
+  useEffect(() => {
+      if (selectedElementIds.length === 0) {
+          setMenuOffset({ x: 20, y: 0 });
+      }
+      setIsMenuExpanded(false);
+  }, [selectedElementIds]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable) {
+            return;
+        }
+        e.preventDefault();
+        setIsSpacebarPressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacebarPressed(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('.floating-menu')) return;
+    if ((e.target as HTMLElement).closest('button')) return;
+    
+    if (croppingElementId) {
+        if (!isSpacebarPressed && e.button !== 1) return;
+    }
+
+    if (activeShapeTool && e.button === 0) {
+        return; 
+    }
+
+    if (isSpacebarPressed || e.button === 1 || interactionMode === 'hand') {
+      setIsPanning(true);
+      setStartPan({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    } else if (e.button === 0) {
+      if (!outpaintingState && !croppingElementId) { 
+        if (!e.shiftKey) {
+            onSelectElement(null, false);
+        }
+        const point = screenToWorld({ x: e.clientX, y: e.clientY });
+        setMarqueeRect({ start: point, end: point });
+      }
+    }
+  }, [isSpacebarPressed, pan, outpaintingState, onSelectElement, screenToWorld, croppingElementId, interactionMode, activeShapeTool]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDraggingMenu) {
+        e.preventDefault();
+        const dx = e.clientX - menuDragStartRef.current.x;
+        const dy = e.clientY - menuDragStartRef.current.y;
+        setMenuOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+        menuDragStartRef.current = { x: e.clientX, y: e.clientY };
+        return;
+    }
+
+    if (isPanning) {
+      setPan({
+        x: e.clientX - startPan.x,
+        y: e.clientY - startPan.y,
+      });
+    } else if (marqueeRect) {
+        const point = screenToWorld({ x: e.clientX, y: e.clientY });
+        setMarqueeRect(prev => prev ? { ...prev, end: point } : null);
+    }
+  }, [isPanning, startPan, marqueeRect, screenToWorld, isDraggingMenu]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+    setIsDraggingMenu(false);
+    if (marqueeRect) {
+        const x1 = Math.min(marqueeRect.start.x, marqueeRect.end.x);
+        const y1 = Math.min(marqueeRect.start.y, marqueeRect.end.y);
+        const x2 = Math.max(marqueeRect.start.x, marqueeRect.end.x);
+        const y2 = Math.max(marqueeRect.start.y, marqueeRect.end.y);
+        
+        const selectedIds = elements.filter(el => {
+            const elRight = el.position.x + el.width / 2;
+            const elLeft = el.position.x - el.width / 2;
+            const elBottom = el.position.y + el.height / 2;
+            const elTop = el.position.y - el.height / 2;
+            
+            return (elLeft < x2 && elRight > x1 && elTop < y2 && elBottom > y1);
+        }).map(el => el.id);
+        
+        if (selectedIds.length > 0) {
+            onMarqueeSelect(selectedIds, true);
+        }
+        setMarqueeRect(null);
+    }
+  }, [marqueeRect, elements, onMarqueeSelect]);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const zoomSensitivity = 0.001;
+      const newZoom = Math.min(Math.max(MIN_ZOOM, zoom - e.deltaY * zoomSensitivity), MAX_ZOOM);
+      
+      const mouseX = e.clientX - pan.x;
+      const mouseY = e.clientY - pan.y;
+      
+      const newPanX = e.clientX - (mouseX / zoom) * newZoom;
+      const newPanY = e.clientY - (mouseY / zoom) * newZoom;
+
+      setZoom(newZoom);
+      setPan({ x: newPanX, y: newPanY });
+    } else {
+      setPan(prev => ({ x: prev.x - e.deltaX, y: prev.y - e.deltaY }));
+    }
+  }, [zoom, pan]);
+
+  const handleMenuMouseDown = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if ((e.target as HTMLElement).tagName === 'BUTTON' || (e.target as HTMLElement).tagName === 'SELECT' || (e.target as HTMLElement).tagName === 'OPTION') return;
+      
+      setIsDraggingMenu(true);
+      menuDragStartRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  useEffect(() => {
+    setResetViewCallback(() => {
+      setPan({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      setZoom(1);
+    });
+  }, [setResetViewCallback]);
+  
+  useEffect(() => {
+      setPan({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      setZoom(1);
+  }, []);
+
+  const handleContextMenu = (e: React.MouseEvent, elementId: string | null) => {
+      e.preventDefault();
+      const worldPoint = screenToWorld({ x: e.clientX, y: e.clientY });
+      onContextMenu(e, worldPoint, elementId);
+  };
+  
+  const handleAutoPrompt = async () => {
+      if (!outpaintingState) return;
+      setIsAutoPrompting(true);
+      try {
+          const prompt = await onAutoPromptGenerate(outpaintingState);
+          setOutpaintingPrompt(prompt);
+      } catch (e) {
+          console.error(e);
+          alert("自動生成提示詞失敗");
+      } finally {
+          setIsAutoPrompting(false);
+      }
+  };
+
+  const handleZoomStep = (delta: number) => {
+      setZoom(prev => {
+          let newZoom = prev + delta;
+          newZoom = Math.round(newZoom * 10) / 10;
+          return Math.min(Math.max(MIN_ZOOM, newZoom), MAX_ZOOM);
+      });
+  };
+
+  const handleFitToScreen = useCallback(() => {
+      if (elements.length === 0) {
+          setPan({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+          setZoom(1);
+          return;
+      }
+      
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      elements.forEach(el => {
+          minX = Math.min(minX, el.position.x - el.width / 2);
+          maxX = Math.max(maxX, el.position.x + el.width / 2);
+          minY = Math.min(minY, el.position.y - el.height / 2);
+          maxY = Math.max(maxY, el.position.y + el.height / 2);
+      });
+
+      const padding = 100;
+      const width = maxX - minX + padding * 2;
+      const height = maxY - minY + padding * 2;
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      const containerW = canvasRef.current?.clientWidth || window.innerWidth;
+      const containerH = canvasRef.current?.clientHeight || window.innerHeight;
+
+      const zoomFit = Math.min(
+          (containerW) / width,
+          (containerH) / height,
+          1
+      );
+      
+      const newZoom = Math.max(MIN_ZOOM, zoomFit);
+
+      const newPanX = (containerW / 2) - (centerX * newZoom);
+      const newPanY = (containerH / 2) - (centerY * newZoom);
+
+      setZoom(newZoom);
+      setPan({ x: newPanX, y: newPanY });
+
+  }, [elements]);
+
+  const selectionBounds = useMemo(() => {
+      if (selectedElementIds.length === 0) return null;
+      const selectedEls = elements.filter(el => selectedElementIds.includes(el.id));
+      if (selectedEls.length === 0) return null;
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      selectedEls.forEach(el => {
+          minX = Math.min(minX, el.position.x - el.width / 2);
+          maxX = Math.max(maxX, el.position.x + el.width / 2);
+          minY = Math.min(minY, el.position.y - el.height / 2);
+          maxY = Math.max(maxY, el.position.y + el.height / 2);
+      });
+      return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+  }, [elements, selectedElementIds]);
+
+  const menuPosition = useMemo(() => {
+      if (!selectionBounds) return null;
+      const anchorWorld = { x: selectionBounds.maxX, y: selectionBounds.minY };
+      const anchorScreen = worldToScreen(anchorWorld);
+      return {
+          left: anchorScreen.x + menuOffset.x,
+          top: anchorScreen.y + menuOffset.y
+      };
+  }, [selectionBounds, worldToScreen, menuOffset]);
+
+  const hasTextSelected = useMemo(() => {
+      return elements.some(el => selectedElementIds.includes(el.id) && el.type === 'text');
+  }, [elements, selectedElementIds]);
+
+  const selectedEls = useMemo(() => elements.filter(el => selectedElementIds.includes(el.id)), [elements, selectedElementIds]);
+  const hasImageOrDrawingOrShape = useMemo(() => selectedEls.some(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape'), [selectedEls]);
+  const hasNote = useMemo(() => selectedEls.some(el => el.type === 'note'), [selectedEls]);
+  
+  const showGenerativeSettings = hasImageOrDrawingOrShape || hasNote;
+  const croppingElement = useMemo(() => {
+      if (!croppingElementId) return null;
+      return elements.find(el => el.id === croppingElementId) as ImageElement | undefined;
+  }, [croppingElementId, elements]);
+
+  const shouldHideMenu = (hasTextSelected && !hasImageOrDrawingOrShape); 
+
+  return (
+    <div 
+      ref={canvasRef}
+      className={`w-full h-full overflow-hidden relative 
+        ${isSpacebarPressed || interactionMode === 'hand' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : (activeShapeTool ? 'cursor-crosshair' : 'cursor-default')}
+      `}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onWheel={handleWheel}
+      onContextMenu={(e) => handleContextMenu(e, null)}
+    >
+      <div 
+        className="absolute inset-0 pointer-events-none opacity-[0.03]"
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          backgroundImage: 'radial-gradient(#000 1px, transparent 1px)',
+          backgroundSize: '20px 20px'
+        }}
+      />
+
+      <div 
+        className="absolute inset-0 origin-top-left"
+        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+      >
+        {elements.map(el => (
+          <TransformableElement
+            key={el.id}
+            element={el}
+            isSelected={selectedElementIds.includes(el.id) && croppingElementId !== el.id}
+            isOutpainting={!!outpaintingState && outpaintingState.element.id === el.id}
+            zoom={zoom}
+            onSelect={onSelectElement}
+            onUpdate={onUpdateElement}
+            onInteractionEnd={onInteractionEnd}
+            onContextMenu={(e, id) => handleContextMenu(e, id)}
+            onEditDrawing={onEditDrawing}
+            interactionMode={interactionMode}
+          />
+        ))}
+        
+        {croppingElement && (
+            <CropManager 
+                element={croppingElement}
+                zoom={zoom}
+                onCancel={onCancelCrop}
+                onConfirm={onApplyCrop}
+            />
+        )}
+        
+        {marqueeRect && (
+            <div 
+                className="absolute border border-[#007AFF] bg-[#007AFF]/10 pointer-events-none"
+                style={{
+                    left: Math.min(marqueeRect.start.x, marqueeRect.end.x),
+                    top: Math.min(marqueeRect.start.y, marqueeRect.end.y),
+                    width: Math.abs(marqueeRect.end.x - marqueeRect.start.x),
+                    height: Math.abs(marqueeRect.end.y - marqueeRect.start.y),
+                }}
+            />
+        )}
+
+        {outpaintingState && (
+            <OutpaintingFrame 
+                outpaintingState={outpaintingState} 
+                zoom={zoom} 
+                onUpdateFrame={onUpdateOutpaintingFrame} 
+            />
+        )}
+      </div>
+
+      {outpaintingState && (
+         <DraggableOutpaintingPanel 
+            outpaintingPrompt={outpaintingPrompt}
+            setOutpaintingPrompt={setOutpaintingPrompt}
+            isAutoPrompting={isAutoPrompting}
+            handleAutoPrompt={handleAutoPrompt}
+            onGenerate={() => onOutpaintingGenerate(outpaintingPrompt)}
+            onCancel={onCancelOutpainting}
+         />
+      )}
+      
+      <div className="absolute bottom-6 right-6 z-20 flex items-center gap-3">
+          <div className="flex items-center bg-white/90 backdrop-blur-xl rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.08)] border border-black/5 p-1 h-10">
+              <button 
+                  onClick={() => handleZoomStep(-0.1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 text-[#1D1D1F] transition-colors"
+                  aria-label="Zoom Out"
+              >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </button>
+              
+              <span className="w-12 text-center text-xs font-mono font-medium text-[#1D1D1F] select-none">
+                  {Math.round(zoom * 100)}%
+              </span>
+
+              <button 
+                  onClick={() => handleZoomStep(0.1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 text-[#1D1D1F] transition-colors"
+                  aria-label="Zoom In"
+              >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </button>
+          </div>
+
+          <button 
+              onClick={handleFitToScreen}
+              className="w-10 h-10 bg-white/90 backdrop-blur-xl rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.08)] border border-black/5 flex items-center justify-center text-[#1D1D1F] hover:bg-white hover:scale-105 transition-all active:scale-95"
+              title="適合畫面 (Fit to Screen)"
+          >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+              </svg>
+          </button>
+      </div>
+
+      {!outpaintingState && !isGenerating && !croppingElementId && selectedElementIds.length > 0 && !shouldHideMenu && menuPosition && (
+          <div style={{
+              position: 'absolute',
+              left: menuPosition.left,
+              top: menuPosition.top,
+              transform: `scale(${Math.max(0.65, Math.min(1, zoom))})`,
+              transformOrigin: 'top left',
+              zIndex: 50,
+          }}>
+              {isMenuExpanded ? (
+                <div 
+                    className="floating-menu bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] border border-white/50 p-4 flex flex-col gap-4 min-w-[320px] animate-fade-in-up"
+                    style={{
+                        cursor: isDraggingMenu ? 'grabbing' : 'grab'
+                    }}
+                    onMouseDown={handleMenuMouseDown}
+                >
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-gray-200 rounded-full opacity-50" />
+                    
+                    <div className="flex items-center justify-between mt-1 mb-2 pl-1 pr-1">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-[#86868B] uppercase tracking-wider select-none">
+                                {selectedElementIds.length} 個物件已選取
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                             <button onClick={() => onSelectElement(null, false)} className="text-xs text-[#007AFF] hover:underline">取消選取</button>
+                             <button onClick={() => setIsMenuExpanded(false)} className="text-[#86868B] hover:text-[#1D1D1F] transition-colors p-1 rounded-full hover:bg-black/5" title="收折選單">
+                                 <SelectionMenuIcons.Collapse />
+                             </button>
+                        </div>
+                    </div>
+
+                    {selectedElementIds.length >= 2 && (
+                        <button 
+                            onClick={onHarmonize}
+                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-2 rounded-xl text-sm font-semibold shadow-md shadow-orange-500/20 hover:opacity-90 transition-all active:scale-95"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                            一鍵調和
+                        </button>
+                    )}
+
+                    <div className="flex w-full">
+                        <button 
+                            onClick={() => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)))}
+                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#AF52DE] to-[#5856D6] text-white py-3 rounded-xl text-sm font-semibold shadow-lg shadow-purple-500/20 hover:opacity-90 transition-all active:scale-95"
+                        >
+                            <SelectionMenuIcons.MagicFilled />
+                            一鍵生成圖片
+                        </button>
+                    </div>
+                    
+                    {showGenerativeSettings && (
+                        <>
+                        <div className="h-px bg-gray-100 w-full" />
+                        
+                        <div className="flex flex-col gap-3">
+                            {hasImageOrDrawingOrShape && (
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-semibold text-[#1D1D1F]">保留透明背景</label>
+                                    <div 
+                                        className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
+                                        onClick={() => onSetPreserveTransparency(!preserveTransparency)}
+                                    >
+                                        <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${preserveTransparency ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-semibold text-[#1D1D1F]">參考風格</label>
+                                <div className="relative">
+                                    <select 
+                                        value={imageStyle} 
+                                        onChange={(e) => onSetImageStyle(e.target.value)}
+                                        className="w-full bg-[#F5F5F7] border-none rounded-lg px-3 py-2 text-sm text-[#1D1D1F] focus:ring-2 focus:ring-black/5 cursor-pointer appearance-none"
+                                    >
+                                        <option value="Default">無</option>
+                                        {stylePresets.map(s => <option key={s.id} value={s.label}>{s.name}</option>)}
+                                    </select>
+                                    <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#86868B]">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-semibold text-[#1D1D1F]">輸出比例</label>
+                                <div className="relative">
+                                    <select
+                                        value={imageAspectRatio}
+                                        onChange={(e) => onSetImageAspectRatio(e.target.value)}
+                                        className="w-full bg-[#F5F5F7] border-none rounded-lg px-3 py-2 text-sm text-[#1D1D1F] focus:ring-2 focus:ring-black/5 cursor-pointer appearance-none"
+                                    >
+                                        {ASPECT_RATIOS.map(ratio => (
+                                            <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#86868B]">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {selectedElementIds.length === 1 && elements.find(el => el.id === selectedElementIds[0])?.type === 'image' && (
+                            <>
+                                <div className="mt-2 pt-3 border-t border-gray-100 flex flex-col gap-3">
+                                    <button
+                                        onClick={() => onRemoveBackground('enhanced')}
+                                        className="w-full h-9 bg-black text-white rounded-lg text-xs font-medium hover:bg-gray-800 transition-colors shadow-sm flex items-center justify-center gap-2"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>
+                                        智慧去背
+                                    </button>
+
+                                    <div className="flex gap-2 h-9">
+                                        <div className="flex bg-[#F5F5F7] rounded-lg p-0.5 h-full items-center">
+                                            <button 
+                                                onClick={() => setUpscaleFactor(2)}
+                                                className={`px-3 h-full flex items-center text-[10px] font-medium rounded-md transition-all ${upscaleFactor === 2 ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
+                                            >2x</button>
+                                            <button 
+                                                onClick={() => setUpscaleFactor(4)}
+                                                className={`px-3 h-full flex items-center text-[10px] font-medium rounded-md transition-all ${upscaleFactor === 4 ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
+                                            >4x</button>
+                                        </div>
+                                        <button 
+                                            onClick={() => onUpscale(upscaleFactor)}
+                                            className="flex-1 h-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg shadow-sm transition-colors active:scale-95 flex items-center justify-center gap-1.5"
+                                        >
+                                            <SelectionMenuIcons.Upscale />
+                                            智能放大
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="mt-2 pt-3 border-t border-gray-100">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-xs font-semibold text-[#1D1D1F]">視角控制器</span>
+                                </div>
+                                
+                                <div className="bg-[#D1D1D6] p-1.5 rounded-xl shadow-inner">
+                                    <div className="grid grid-cols-3 gap-1.5">
+                                        {CAMERA_ANGLES.map(angle => (
+                                        <button
+                                            key={angle.id}
+                                            onClick={() => onCameraAngle(angle.prompt)}
+                                            title={angle.label}
+                                            className="group relative bg-white shadow-[0_1px_0_rgba(0,0,0,0.3)] rounded-[6px] h-10 flex items-center justify-center text-[#1D1D1F] hover:bg-white active:bg-[#E5E5EA] active:translate-y-[1px] active:shadow-none transition-all duration-75"
+                                        >
+                                            <span className="opacity-80 group-hover:opacity-100 scale-90">{angle.icon}</span>
+                                        </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="text-center mt-2">
+                                    <span className="text-[10px] text-[#86868B]">點擊調整 AI 生成視角</span>
+                                </div>
+                                </div>
+                            </>
+                        )}
+
+                        </>
+                    )}
+                </div>
+              ) : (
+                <div 
+                    className="floating-menu bg-white/90 backdrop-blur-xl rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-white/50 p-1.5 flex items-center gap-1 min-w-0 animate-fade-in-up"
+                    style={{
+                        cursor: isDraggingMenu ? 'grabbing' : 'grab'
+                    }}
+                    onMouseDown={handleMenuMouseDown}
+                >
+                     <button 
+                        onClick={() => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)))}
+                        className="w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-tr from-[#AF52DE] to-[#5856D6] text-white shadow-md hover:scale-105 active:scale-95 transition-all"
+                        title="一鍵生成圖片"
+                     >
+                         <SelectionMenuIcons.MagicFilled />
+                     </button>
+                     
+                     <div className="w-px h-5 bg-black/10 mx-1" />
+
+                     <button 
+                        onClick={() => setIsMenuExpanded(true)}
+                        className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/5 text-[#1D1D1F] transition-all active:scale-95"
+                        title="更多設定"
+                     >
+                         <SelectionMenuIcons.Settings />
+                     </button>
+                </div>
+              )}
+          </div>
+      )}
+    </div>
+  );
+});
