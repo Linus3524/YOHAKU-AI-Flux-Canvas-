@@ -83,6 +83,7 @@ const FEATURE_DOCS = [
       { title: "Ctrl + G", desc: "建立群組 (Group)。" },
       { title: "Ctrl + Shift + G", desc: "解散群組 (Ungroup)。" },
       { title: "Delete / Backspace", desc: "刪除選取的物件。" },
+      { title: "Alt + 拖曳", desc: "按住 Alt (Mac: Option) 並拖曳物件，即可就地複製一份，支援多選同時複製。" },
       { title: "Shift + 拖曳", desc: "等比例縮放圖片，或多選/減選物件。" },
       { title: "Ctrl + 滾輪", desc: "縮放畫布 (Zoom)。" }
     ]
