@@ -169,7 +169,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
       onSelect(element.id, e.shiftKey);
 
       let startElement = element;
-      if (type === 'drag' && (e.metaKey || e.ctrlKey) && onDuplicateInPlace) {
+      if (type === 'drag' && e.altKey && onDuplicateInPlace) {
           // Batch copy: get mapping of all selected objects (including Artboard)
           // Pass current element and shift state to lock the selection synchronously
           const mapping = onDuplicateInPlace(element.id, e.shiftKey);
