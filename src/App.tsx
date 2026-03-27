@@ -13,7 +13,7 @@ import { FloatingAssistant } from './components/FloatingAssistant';
 import { ArtboardPanel, downloadArtboard } from './features/artboard';
 import { useCanvas } from './hooks/useCanvas';
 import { useAI } from './hooks/useAI';
-import { STYLE_PRESETS, COLORS, isCJK, wrapTextCanvas, loadImage, createShapeDataUrl, restoreOriginalAlpha, getClosestAspectRatio, measureTextVisualBounds } from './utils/helpers';
+import { STYLE_PRESETS, COLORS, isCJK, wrapTextCanvas, loadImage, createShapeDataUrl, restoreOriginalAlpha, getClosestAspectRatio, measureTextVisualBounds, renderImageElementToDataUrl } from './utils/helpers';
 import { drawTextOnCanvas } from './utils/textCanvas'; // ✅ 新增
 import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import type { 
@@ -411,7 +411,7 @@ const App: React.FC = () => {
       try {
           const scale = 3;
 
-          // ✅ 計算各種效果的最大溢出量
+          // Calculate effect overflow for canvas padding (effects need space to render into)
           const shadowOverflow = element.shadowBlur
               ? Math.ceil(element.shadowBlur + Math.abs(4) + 4)
               : 0;
@@ -421,25 +421,28 @@ const App: React.FC = () => {
           const strokeOverflow = Math.ceil((element.strokeWidth || 0) / 2);
           const effectPadding = Math.max(shadowOverflow, glowOverflow, strokeOverflow, 0);
 
-          // ✅ canvas 尺寸 = 文字框 + 兩側效果溢出
-          const finalWidth  = Math.ceil(element.width)  + effectPadding * 2;
-          const finalHeight = Math.ceil(element.height) + effectPadding * 2;
+          // Canvas includes padding for effects to render into
+          const canvasWidth  = Math.ceil(element.width)  + effectPadding * 2;
+          const canvasHeight = Math.ceil(element.height) + effectPadding * 2;
 
           const canvas = document.createElement('canvas');
-          canvas.width  = finalWidth  * scale;
-          canvas.height = finalHeight * scale;
+          canvas.width  = canvasWidth  * scale;
+          canvas.height = canvasHeight * scale;
 
           const ctx = canvas.getContext('2d');
           if (!ctx) return;
 
           ctx.scale(scale, scale);
 
-          // ✅ 繪製起點偏移 effectPadding，讓效果有空間向四面溢出
+          // Draw text at offset position so effects have room to overflow
           drawTextOnCanvas(ctx, element, effectPadding, effectPadding);
 
           const newSrc = canvas.toDataURL('image/png');
 
-          // ✅ position 往左上移動 effectPadding，視覺位置與原文字框完全重合
+          // Image element keeps the SAME size and position as the original text element.
+          // The image source is larger (includes effect overflow), but the element
+          // dimensions match the original so the bounding box stays the same.
+          // Effects will naturally overflow the element bounds (overflow: visible).
           const newImage: ImageElement = {
               id: element.id,
               type: 'image',
@@ -448,8 +451,8 @@ const App: React.FC = () => {
                   x: element.position.x - effectPadding,
                   y: element.position.y - effectPadding,
               },
-              width:    finalWidth,
-              height:   finalHeight,
+              width:    canvasWidth,
+              height:   canvasHeight,
               rotation: element.rotation,
               zIndex:   element.zIndex,
               isVisible: element.isVisible,
@@ -643,21 +646,37 @@ const App: React.FC = () => {
       }));
   };
 
-  const downloadImage = useCallback((elementId: string) => {
+  const downloadImage = useCallback(async (elementId: string) => {
     if (!elementId) return;
     const element = elements.find(el => el.id === elementId);
-    if (element && (element.type === 'image' || element.type === 'drawing') && element.src) {
-        const link = document.createElement('a');
-        link.href = element.src;
-        const mimeType = element.src.match(/data:(.*);base64/)?.[1] || 'image/png';
-        const extension = mimeType.split('/')[1] || 'png';
-        let filename = element.name ? element.name.trim() : `canvas-image-${Date.now()}`;
-        if (!filename.toLowerCase().endsWith(`.${extension}`)) filename = `${filename}.${extension}`;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
+    if (!element || (element.type !== 'image' && element.type !== 'drawing') || !element.src) return;
+
+    const el = element as any;
+    const hasEffects = el.shadowEnabled || (el.fade && el.fade.direction !== 'none');
+
+    // 有效果時透過 Canvas 合成（所見即所得），否則直接下載原圖
+    const dataUrl = hasEffects
+        ? await renderImageElementToDataUrl({
+            src: element.src,
+            width: element.width,
+            height: element.height,
+            shadowEnabled: el.shadowEnabled,
+            shadowColor: el.shadowColor,
+            shadowBlur: el.shadowBlur,
+            shadowOffsetX: el.shadowOffsetX,
+            shadowOffsetY: el.shadowOffsetY,
+            fade: (element as ImageElement).fade,
+          })
+        : element.src;
+
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    let filename = element.name ? element.name.trim() : `canvas-image-${Date.now()}`;
+    if (!filename.toLowerCase().endsWith('.png')) filename = `${filename}.png`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }, [elements]);
 
   const handleExportCanvas = originalExportCanvas;

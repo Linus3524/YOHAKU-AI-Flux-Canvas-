@@ -437,7 +437,20 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             try {
                 if (el.type === 'image' || el.type === 'drawing') {
                     const img = await loadImage((el as any).src);
+
+                    // 套用陰影（canvas shadow 在 drawImage 前設定）
+                    if ((el as any).shadowEnabled) {
+                        offCtx.shadowColor = (el as any).shadowColor ?? 'rgba(0,0,0,0.4)';
+                        offCtx.shadowBlur = (el as any).shadowBlur ?? 10;
+                        offCtx.shadowOffsetX = (el as any).shadowOffsetX ?? 4;
+                        offCtx.shadowOffsetY = (el as any).shadowOffsetY ?? 4;
+                    }
                     offCtx.drawImage(img, -el.width / 2, -el.height / 2, el.width, el.height);
+                    // 重置陰影，避免影響後續效果
+                    offCtx.shadowColor = 'transparent';
+                    offCtx.shadowBlur = 0;
+                    offCtx.shadowOffsetX = 0;
+                    offCtx.shadowOffsetY = 0;
 
                     // 處理 fade 效果（作為遮罩應用）
                     const fade = (el as ImageElement).fade;

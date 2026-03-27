@@ -1,5 +1,5 @@
 
-import type { ShapeElement, ArrowHeadType, TextElement, ArrowElement } from '../types';
+import type { ShapeElement, ArrowHeadType, TextElement, ArrowElement, SimpleFadeOptions } from '../types';
 
 // Updated Color Palette - Pastel Tones (Light Bg, Dark Text)
 export const COLORS = [
@@ -768,3 +768,101 @@ export const detectIfIllustration = async (src: string): Promise<boolean> => {
         return false;
     }
 };
+
+// ── 圖片元素合成（含陰影、淡出效果） ──────────────────────────────────────────
+// 用於下載、匯出時確保效果完整保留（所見即所得）
+export async function renderImageElementToDataUrl(params: {
+  src: string;
+  width: number;
+  height: number;
+  shadowEnabled?: boolean;
+  shadowColor?: string;
+  shadowBlur?: number;
+  shadowOffsetX?: number;
+  shadowOffsetY?: number;
+  fade?: SimpleFadeOptions;
+}): Promise<string> {
+  const { src, width, height, fade } = params;
+
+  const img = await loadImage(src);
+
+  // 用原始圖片解析度渲染，避免縮圖導致畫質下降
+  const renderW = img.naturalWidth || width;
+  const renderH = img.naturalHeight || height;
+  // 按原圖與元素顯示尺寸的比例縮放陰影參數
+  const scale = renderW / width;
+  const padding = Math.ceil(100 * scale); // 依比例放大 padding
+
+  const canvas = document.createElement('canvas');
+  canvas.width = renderW + padding * 2;
+  canvas.height = renderH + padding * 2;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return src;
+
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+
+  // 套用陰影（參數依比例縮放）
+  if (params.shadowEnabled) {
+    ctx.shadowColor = params.shadowColor ?? 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = (params.shadowBlur ?? 10) * scale;
+    ctx.shadowOffsetX = (params.shadowOffsetX ?? 4) * scale;
+    ctx.shadowOffsetY = (params.shadowOffsetY ?? 4) * scale;
+  }
+  ctx.drawImage(img, -renderW / 2, -renderH / 2, renderW, renderH);
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+
+  // 套用淡出遮罩
+  if (fade && fade.direction !== 'none') {
+    const { direction, intensity } = fade;
+    const w = renderW;
+    const h = renderH;
+    const x = -w / 2;
+    const y = -h / 2;
+    let gradient: CanvasGradient | undefined;
+
+    ctx.save();
+
+    if (direction === 'radial') {
+      const fadeStart = 1 - intensity / 100;
+      ctx.save();
+      ctx.translate(x + w / 2, y + h / 2);
+      ctx.scale(w / 2, h / 2);
+      gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      gradient.addColorStop(0, 'black');
+      if (fadeStart > 0) gradient.addColorStop(fadeStart, 'black');
+      gradient.addColorStop(Math.min(fadeStart + (1 - fadeStart) * 0.25, 1), 'rgba(0,0,0,0.5)');
+      gradient.addColorStop(Math.min(fadeStart + (1 - fadeStart) * 0.5, 1), 'rgba(0,0,0,0.2)');
+      gradient.addColorStop(Math.min(fadeStart + (1 - fadeStart) * 0.75, 1), 'rgba(0,0,0,0.05)');
+      gradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = gradient;
+      ctx.globalCompositeOperation = 'destination-in';
+      ctx.fillRect(-1, -1, 2, 2);
+      ctx.restore();
+    } else {
+      const fadeEnd = intensity / 100;
+      if (direction === 'top') gradient = ctx.createLinearGradient(0, y, 0, y + h);
+      else if (direction === 'bottom') gradient = ctx.createLinearGradient(0, y + h, 0, y);
+      else if (direction === 'left') gradient = ctx.createLinearGradient(x, 0, x + w, 0);
+      else if (direction === 'right') gradient = ctx.createLinearGradient(x + w, 0, x, 0);
+
+      if (gradient) {
+        gradient.addColorStop(0, 'transparent');
+        gradient.addColorStop(fadeEnd * 0.25, 'rgba(0,0,0,0.05)');
+        gradient.addColorStop(fadeEnd * 0.5, 'rgba(0,0,0,0.2)');
+        gradient.addColorStop(fadeEnd * 0.75, 'rgba(0,0,0,0.5)');
+        gradient.addColorStop(fadeEnd, 'black');
+        if (fadeEnd < 1) gradient.addColorStop(1, 'black');
+        ctx.fillStyle = gradient;
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.fillRect(x, y, w, h);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  return canvas.toDataURL('image/png');
+}

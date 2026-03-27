@@ -821,9 +821,13 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                         }
                     case 'image':
                         const maskStyle = el.fade ? generateSimpleMaskCSS(el.fade) : '';
+                        const imgShadow = (el as any).shadowEnabled
+                            ? `${(el as any).shadowOffsetX ?? 4}px ${(el as any).shadowOffsetY ?? 4}px ${(el as any).shadowBlur ?? 10}px ${(el as any).shadowColor ?? 'rgba(0,0,0,0.4)'}`
+                            : 'none';
                         return (
                             <div style={{
-                                ...style
+                                ...style,
+                                boxShadow: imgShadow,
                             }}> {/* ✅ 修改：移除 mask，避免與 transform 衝突 */}
                                 <div style={{
                                     width: '100%',

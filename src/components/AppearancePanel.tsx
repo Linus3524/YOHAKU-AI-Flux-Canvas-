@@ -106,6 +106,93 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ element, onUpd
         </select>
       </div>
 
+      {/* Shadow Controls (Only for images) */}
+      {element.type === 'image' && (
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-xs text-[#86868B]">陰影</label>
+            <button
+              onClick={() => onUpdate({ shadowEnabled: !(element as any).shadowEnabled } as any)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className={`w-8 h-5 rounded-full transition-colors relative flex-shrink-0 ${
+                (element as any).shadowEnabled ? 'bg-[#007AFF]' : 'bg-gray-300'
+              }`}
+            >
+              <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-transform ${
+                (element as any).shadowEnabled ? 'translate-x-[14px]' : 'translate-x-[2px]'
+              }`} />
+            </button>
+          </div>
+
+          {(element as any).shadowEnabled && (
+            <div className="space-y-2">
+              {/* 陰影顏色 */}
+              <div className="flex justify-between items-center">
+                <label className="text-xs text-[#374151] font-medium">顏色</label>
+                <input
+                  type="color"
+                  value={(element as any).shadowColor || '#000000'}
+                  onChange={(e) => onUpdate({ shadowColor: e.target.value } as any)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="w-6 h-6 rounded border border-gray-200 cursor-pointer"
+                />
+              </div>
+
+              {/* 模糊程度 */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs text-[#374151] font-medium">模糊</label>
+                  <span className="text-xs text-[#374151]">{(element as any).shadowBlur ?? 10}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="50"
+                  value={(element as any).shadowBlur ?? 10}
+                  onChange={(e) => onUpdate({ shadowBlur: parseInt(e.target.value, 10) } as any)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#007AFF]"
+                />
+              </div>
+
+              {/* X 偏移 */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs text-[#374151] font-medium">X 偏移</label>
+                  <span className="text-xs text-[#374151]">{(element as any).shadowOffsetX ?? 4}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="-30"
+                  max="30"
+                  value={(element as any).shadowOffsetX ?? 4}
+                  onChange={(e) => onUpdate({ shadowOffsetX: parseInt(e.target.value, 10) } as any)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#007AFF]"
+                />
+              </div>
+
+              {/* Y 偏移 */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs text-[#374151] font-medium">Y 偏移</label>
+                  <span className="text-xs text-[#374151]">{(element as any).shadowOffsetY ?? 4}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="-30"
+                  max="30"
+                  value={(element as any).shadowOffsetY ?? 4}
+                  onChange={(e) => onUpdate({ shadowOffsetY: parseInt(e.target.value, 10) } as any)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#007AFF]"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Fade Controls (Only for images) */}
       {element.type === 'image' && (
         <div>

@@ -32,6 +32,11 @@ export interface ImageElement extends BaseElement {
   type: 'image';
   src: string;
   fade?: SimpleFadeOptions;
+  shadowEnabled?: boolean;
+  shadowColor?: string;
+  shadowBlur?: number;
+  shadowOffsetX?: number;
+  shadowOffsetY?: number;
 }
 
 export type ArrowHeadType = 'none' | 'triangle' | 'arrow' | 'circle';
