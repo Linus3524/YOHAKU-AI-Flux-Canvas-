@@ -857,14 +857,11 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                         }
                     case 'image':
                         const maskStyle = el.fade ? generateSimpleMaskCSS(el.fade) : '';
-                        const imgShadow = (el as any).shadowEnabled
-                            ? `${(el as any).shadowOffsetX ?? 4}px ${(el as any).shadowOffsetY ?? 4}px ${(el as any).shadowBlur ?? 10}px ${(el as any).shadowColor ?? 'rgba(0,0,0,0.4)'}`
-                            : 'none';
+                        const imgDropShadow = (el as any).shadowEnabled
+                            ? `drop-shadow(${(el as any).shadowOffsetX ?? 4}px ${(el as any).shadowOffsetY ?? 4}px ${(el as any).shadowBlur ?? 10}px ${(el as any).shadowColor ?? 'rgba(0,0,0,0.4)'})`
+                            : undefined;
                         return (
-                            <div style={{
-                                ...style,
-                                boxShadow: imgShadow,
-                            }}> {/* ✅ 修改：移除 mask，避免與 transform 衝突 */}
+                            <div style={{ ...style }}> {/* 外層不加 boxShadow，避免方形框陰影 */}
                                 <div style={{
                                     width: '100%',
                                     height: '100%',
@@ -874,8 +871,9 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                     maskSize: '100% 100%',
                                     WebkitMaskRepeat: 'no-repeat',
                                     maskRepeat: 'no-repeat',
-                                }}> {/* ✅ 修改：mask 移到內層 div 避免 transform 衝突 */}
-                                    <img src={el.src} alt="Canvas element" style={{ width: '100%', height: '100%', objectFit: 'fill' }} className="pointer-events-none" draggable={false} /> {/* ✅ 修改：移除 style={style}，改為尺寸填滿，避免 double transform */}
+                                    filter: imgDropShadow, // drop-shadow 跟著實際像素輪廓，支援透明背景 PNG
+                                }}>
+                                    <img src={el.src} alt="Canvas element" style={{ width: '100%', height: '100%', objectFit: 'fill' }} className="pointer-events-none" draggable={false} />
                                 </div>
                             </div>
                         );
