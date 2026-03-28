@@ -24,12 +24,27 @@ interface TransformableElementProps {
   screenToWorld: (screenPoint: Point) => Point;
 }
 
+type ResizeHandle = 'se' | 'sw' | 'ne' | 'nw' | 'e' | 'w' | 's' | 'n';
+
+// widthSign/heightSign: how rotDx/rotDy affect size. posSignX/posSignY: which corner is fixed.
+const HANDLE_CFG: Record<ResizeHandle, { ws: number; hs: number; px: number; py: number }> = {
+    se: { ws: +1, hs: +1, px: +1, py: +1 },
+    sw: { ws: -1, hs: +1, px: -1, py: +1 },
+    ne: { ws: +1, hs: -1, px: +1, py: -1 },
+    nw: { ws: -1, hs: -1, px: -1, py: -1 },
+    e:  { ws: +1, hs:  0, px: +1, py:  0 },
+    w:  { ws: -1, hs:  0, px: -1, py:  0 },
+    s:  { ws:  0, hs: +1, px:  0, py: +1 },
+    n:  { ws:  0, hs: -1, px:  0, py: -1 },
+};
+
 type Interaction = {
   type: 'drag' | 'resize' | 'rotate' | 'resize-arrow-start' | 'resize-arrow-end';
   startPoint: Point;
   startElement: CanvasElement;
   startAngle?: number;
   center?: Point;
+  resizeHandle?: ResizeHandle;
 } | null;
 
 export const TransformableElement: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld }) => {
@@ -150,7 +165,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
   ]);
 
 
-  const handleInteractionStart = useCallback((e: React.MouseEvent, type: Interaction['type']) => {
+  const handleInteractionStart = useCallback((e: React.MouseEvent, type: Interaction['type'], resizeHandle?: ResizeHandle) => {
       if (e.button !== 0) return;
       
       // Strict event interception: ensure underlying Artboard or Canvas doesn't trigger
@@ -185,7 +200,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
       }
 
       const startPoint = { x: e.clientX, y: e.clientY };
-      let interactionDetails: Interaction = { type, startPoint, startElement };
+      let interactionDetails: Interaction = { type, startPoint, startElement, resizeHandle };
 
       if (type === 'rotate' && elementRef.current) {
           const rect = elementRef.current.getBoundingClientRect();
@@ -221,27 +236,29 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
             }
             onUpdate(updatedElement, delta);
         } else if (type === 'resize') {
+            const handle = interaction.resizeHandle ?? 'se';
+            const { ws, hs, px, py } = HANDLE_CFG[handle];
+
             const rad = startElement.rotation * (Math.PI / 180);
             const cos = Math.cos(-rad);
             const sin = Math.sin(-rad);
             const rotDx = dx * cos - dy * sin;
             const rotDy = dx * sin + dy * cos;
 
-            let newWidth = Math.max(10, startElement.width + rotDx);
-            let newHeight = Math.max(10, startElement.height + rotDy);
+            let newWidth  = ws !== 0 ? Math.max(10, startElement.width  + ws * rotDx) : startElement.width;
+            let newHeight = hs !== 0 ? Math.max(10, startElement.height + hs * rotDy) : startElement.height;
 
             const isImage = startElement.type === 'image';
             const isText = startElement.type === 'text';
+            const isVerticalEl = isText && (startElement as TextElement).writingMode === 'vertical';
             const shouldKeepRatio = isImage ? !e.shiftKey : e.shiftKey;
 
             if (isText) {
                 const padding = 12 + Math.ceil((startElement.strokeWidth || 0) / 2);
                 const lineHeightPx = startElement.fontSize * startElement.lineHeight;
-                const isVerticalEl = (startElement as TextElement).writingMode === 'vertical';
-                // Enforce minimum box size so text is never invisible
-                const minBoxWidth = isVerticalEl ? padding * 2 + lineHeightPx : padding * 2 + Math.ceil(startElement.fontSize * 0.5);
+                const minBoxWidth  = isVerticalEl ? padding * 2 + lineHeightPx : padding * 2 + Math.ceil(startElement.fontSize * 0.5);
                 const minBoxHeight = isVerticalEl ? padding * 2 + Math.ceil(startElement.fontSize * 0.5) : padding * 2 + lineHeightPx;
-                newWidth = Math.max(minBoxWidth, newWidth);
+                newWidth  = Math.max(minBoxWidth,  newWidth);
                 newHeight = Math.max(minBoxHeight, newHeight);
 
                 const canvas = document.createElement('canvas');
@@ -261,25 +278,30 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                 }
             } else if (shouldKeepRatio) {
                 const ratio = startElement.width / startElement.height;
-                if (Math.abs(rotDx) > Math.abs(rotDy)) {
+                if (ws === 0) {
+                    newWidth = newHeight * ratio;
+                } else if (hs === 0) {
                     newHeight = newWidth / ratio;
                 } else {
-                    newWidth = newHeight * ratio;
+                    if (Math.abs(ws * rotDx) > Math.abs(hs * rotDy)) newHeight = newWidth / ratio;
+                    else newWidth = newHeight * ratio;
                 }
             }
-            
-            const dw = newWidth - startElement.width;
+
+            const dw = newWidth  - startElement.width;
             const dh = newHeight - startElement.height;
-            const posDx = (dw / 2 * Math.cos(rad)) - (dh / 2 * Math.sin(rad));
-            const posDy = (dw / 2 * Math.sin(rad)) + (dh / 2 * Math.cos(rad));
+            // For horizontal text, top edge is always the anchor (text grows downward)
+            const effectivePy = (isText && !isVerticalEl) ? +1 : py;
+            const localDx = dw / 2 * px;
+            const localDy = dh / 2 * effectivePy;
+            const posDx = localDx * Math.cos(rad) - localDy * Math.sin(rad);
+            const posDy = localDx * Math.sin(rad) + localDy * Math.cos(rad);
 
-            const isVerticalEl = startElement.type === 'text' && (startElement as TextElement).writingMode === 'vertical';
-
-            onUpdate({ 
-                ...startElement, 
-                width: newWidth, 
+            onUpdate({
+                ...startElement,
+                width: newWidth,
                 height: newHeight,
-                ...(isText ? { 
+                ...(isText ? {
                     isWidthLocked: !isVerticalEl ? true : (startElement as TextElement).isWidthLocked,
                     isHeightLocked: isVerticalEl ? true : (startElement as TextElement).isHeightLocked
                 } : {}),
@@ -554,42 +576,8 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             </div>
                         );
                     case 'text':
-                        if (isEditing) {
-                             const textStyle: React.CSSProperties = {
-                                fontFamily: el.fontFamily,
-                                fontSize: `${el.fontSize}px`,
-                                color: el.color,
-                                textAlign: el.align,
-                                letterSpacing: `${el.letterSpacing}em`,
-                                lineHeight: el.lineHeight,
-                                fontWeight: el.isBold ? 'bold' : 'normal',
-                                fontStyle: el.isItalic ? 'italic' : 'normal',
-                                textDecoration: el.isUnderline ? 'underline' : 'none',
-                                whiteSpace: 'pre-wrap',
-                                width: '100%',
-                                height: '100%',
-                                outline: 'none',
-                                resize: 'none',
-                                overflow: 'hidden',
-                                background: el.backgroundColor || 'transparent',
-                                border: 'none',
-                                padding: `${12 + Math.ceil((el.strokeWidth || 0) / 2)}px`,
-                                margin: 0,
-                                writingMode: el.writingMode === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
-                            };
-                            return (
-                                <textarea
-                                    ref={textareaRef}
-                                    value={el.text}
-                                    onChange={(e) => onUpdate({ ...el, text: e.target.value })}
-                                    onBlur={() => setIsEditing(false)}
-                                    style={textStyle}
-                                    className="cursor-text"
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                />
-                            );
-                        } else {
-                            // SVG RENDERER FOR TEXT
+                        {
+                            // SVG RENDERER FOR TEXT (always shown; transparent textarea overlaid when editing)
                             const padding = 12 + Math.ceil((el.strokeWidth || 0) / 2);
                             const isVertical = el.writingMode === 'vertical';
                             const lineHeightPx = el.fontSize * el.lineHeight;
@@ -610,14 +598,13 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
 
                             const linesToRender = wrappedTextData ? wrappedTextData.lines : [];
 
-                            // Create a temporary measurement context if needed for mixed text rendering in SVG
-                            let measureCtx: CanvasRenderingContext2D | null = null;
-                            if (isVertical) {
-                                const c = document.createElement('canvas');
-                                measureCtx = c.getContext('2d');
-                                if (measureCtx) {
-                                    measureCtx.font = `${el.isItalic ? 'italic' : ''} ${el.isBold ? 'bold' : ''} ${el.fontSize}px ${el.fontFamily}`;
-                                }
+                            // Measurement context for char-by-char width calculation (both horizontal and vertical)
+                            const measureCanvas = document.createElement('canvas');
+                            const measureCtx = measureCanvas.getContext('2d');
+                            if (measureCtx) {
+                                // @ts-ignore
+                                measureCtx.letterSpacing = '0px';
+                                measureCtx.font = `${el.isItalic ? 'italic' : ''} ${el.isBold ? 'bold' : ''} ${el.fontSize}px ${el.fontFamily}`;
                             }
 
                             return (
@@ -675,14 +662,14 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     const centerY = el.height / 2;
 
                                                     const chars = line.split('');
-                                                    const totalH = chars.reduce((sum, char) => sum + (isCJK(char) ? el.fontSize : el.fontSize * 0.6), 0) + (chars.length - 1) * ((el.letterSpacing || 0) * el.fontSize);
+                                                    const totalH = chars.reduce((sum, char) => sum + (isCJK(char) ? el.fontSize : el.fontSize * 0.6), 0) + (chars.length - 1) * (el.letterSpacing || 0);
                                                     const totalAngle = totalH / currentRadius;
                                                     
                                                     let currentAngle = isArch ? -totalAngle / 2 : Math.PI + totalAngle / 2;
                                                     
                                                     return chars.map((char, charIdx) => {
                                                         const stepAngle = el.fontSize / currentRadius;
-                                                        const letterSpacingAngle = ((el.letterSpacing || 0) * el.fontSize) / currentRadius;
+                                                        const letterSpacingAngle = (el.letterSpacing || 0) / currentRadius;
                                                         
                                                         const theta = isArch ? (currentAngle + stepAngle / 2) : (currentAngle - stepAngle / 2);
                                                         const cx = pivotX + currentRadius * Math.cos(theta);
@@ -720,7 +707,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     const calcLineHeight = (line: string) =>
                                                         line.split('').reduce((sum, char) => 
                                                             sum + (isCJK(char) ? el.fontSize : el.fontSize * 0.6), 0)
-                                                        + (line.length - 1) * ((el.letterSpacing || 0) * el.fontSize);
+                                                        + (line.length - 1) * (el.letterSpacing || 0);
 
                                                     const lineH = calcLineHeight(line);
                                                     let yPos = padding;
@@ -741,7 +728,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                             renderY += charW / 2;
                                                             currentY += charW;
                                                         }
-                                                        currentY += (el.letterSpacing || 0) * el.fontSize;
+                                                        currentY += el.letterSpacing || 0;
 
                                                         return (
                                                             <text 
@@ -771,7 +758,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                 linesToRender.map((line, i) => (
                                                     <text key={i} fill={el.color} stroke={el.strokeColor} strokeWidth={el.strokeWidth}
                                                         fontFamily={el.fontFamily} fontSize={el.fontSize} fontWeight={el.isBold ? 'bold' : 'normal'}
-                                                        style={{ filter: filterString, letterSpacing: `${el.letterSpacing}em`, paintOrder: 'stroke' }} dominantBaseline="middle"
+                                                        style={{ filter: filterString, letterSpacing: `${el.letterSpacing || 0}px`, paintOrder: 'stroke' }} dominantBaseline="middle"
                                                         strokeLinejoin="round" strokeLinecap="round"
                                                     >
                                                         <textPath 
@@ -784,46 +771,87 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     </text>
                                                 ))
                                             ) : (
-                                                <text
-                                                    fill={el.color}
-                                                    stroke={el.strokeColor}
-                                                    strokeWidth={el.strokeWidth || 0}
-                                                    strokeLinejoin="round"
-                                                    strokeLinecap="round"
-                                                    paintOrder="stroke"
-                                                    fontFamily={el.fontFamily}
-                                                    fontSize={el.fontSize}
-                                                    fontWeight={el.isBold ? 'bold' : 'normal'}
-                                                    fontStyle={el.isItalic ? 'italic' : 'normal'}
-                                                    textDecoration={el.isUnderline ? 'underline' : 'none'}
-                                                    letterSpacing={`${el.letterSpacing}em`}
-                                                    style={{ filter: filterString, paintOrder: 'stroke' }}
-                                                    dominantBaseline="middle"
-                                                >
-                                                    {(() => {
-                                                        const getTextAnchorAndX = () => {
-                                                            if (el.align === 'center') return { anchor: 'middle' as const, xPos: '50%' };
-                                                            if (el.align === 'right') return { anchor: 'end' as const, xPos: el.width - padding };
-                                                            return { anchor: 'start' as const, xPos: padding };
-                                                        };
-                                                        const { anchor: computedAnchor, xPos: computedX } = getTextAnchorAndX();
-
-                                                        return linesToRender.map((line, i) => {
-                                                            const totalH = linesToRender.length * lineHeightPx;
-                                                            const yStart = (el.height - totalH) / 2 + lineHeightPx/2;
-                                                            const yPos = yStart + (i * lineHeightPx);
-
+                                                // --- HORIZONTAL STRAIGHT: char-by-char for precise alignment & letter-spacing ---
+                                                (() => {
+                                                    const spacingPx = el.letterSpacing || 0;
+                                                    const totalLines = linesToRender.length;
+                                                    const totalH = totalLines * lineHeightPx;
+                                                    const yStart = (el.height - totalH) / 2 + lineHeightPx / 2;
+                                                    const commonTextProps = {
+                                                        fill: el.color,
+                                                        stroke: el.strokeColor,
+                                                        strokeWidth: el.strokeWidth || 0,
+                                                        strokeLinejoin: 'round' as const,
+                                                        strokeLinecap: 'round' as const,
+                                                        paintOrder: 'stroke',
+                                                        fontFamily: el.fontFamily,
+                                                        fontSize: el.fontSize,
+                                                        fontWeight: el.isBold ? 'bold' : 'normal',
+                                                        fontStyle: el.isItalic ? 'italic' : 'normal',
+                                                        textDecoration: el.isUnderline ? 'underline' : 'none',
+                                                        dominantBaseline: 'middle' as const,
+                                                        style: { filter: filterString, paintOrder: 'stroke' },
+                                                    };
+                                                    return linesToRender.map((line, i) => {
+                                                        const yPos = yStart + i * lineHeightPx;
+                                                        const chars = line.split('');
+                                                        const lineWidth = measureCtx
+                                                            ? chars.reduce((sum, c) => sum + measureCtx!.measureText(c).width, 0) + Math.max(0, chars.length - 1) * spacingPx
+                                                            : chars.length * el.fontSize * 0.6;
+                                                        let startX: number;
+                                                        if (el.align === 'center') startX = el.width / 2 - lineWidth / 2;
+                                                        else if (el.align === 'right') startX = el.width - padding - lineWidth;
+                                                        else startX = padding;
+                                                        let cx = startX;
+                                                        return chars.map((char, ci) => {
+                                                            const cw = measureCtx ? measureCtx.measureText(char).width : el.fontSize * 0.6;
+                                                            const x = cx;
+                                                            cx += cw + spacingPx;
                                                             return (
-                                                                <tspan key={i} x={computedX} y={yPos} textAnchor={computedAnchor}>
-                                                                    {line}
-                                                                </tspan>
-                                                            )
+                                                                <text key={`${i}-${ci}`} x={x} y={yPos} textAnchor="start" {...commonTextProps}>
+                                                                    {char}
+                                                                </text>
+                                                            );
                                                         });
-                                                    })()}
-                                                </text>
+                                                    });
+                                                })()
                                             )
                                         )}
                                     </svg>
+                                    {/* 透明 textarea 覆蓋層：只在編輯時顯示，文字透明但游標可見 */}
+                                    {isEditing && (
+                                        <textarea
+                                            ref={textareaRef}
+                                            value={el.text}
+                                            onChange={(e) => onUpdate({ ...el, text: e.target.value })}
+                                            onBlur={() => setIsEditing(false)}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                            style={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                color: 'transparent',
+                                                caretColor: el.color,
+                                                background: 'transparent',
+                                                resize: 'none',
+                                                border: 'none',
+                                                outline: 'none',
+                                                padding: `${12 + Math.ceil((el.strokeWidth || 0) / 2)}px`,
+                                                fontSize: `${el.fontSize}px`,
+                                                lineHeight: el.lineHeight,
+                                                letterSpacing: `${el.letterSpacing || 0}px`,
+                                                fontFamily: el.fontFamily,
+                                                fontWeight: el.isBold ? 'bold' : 'normal',
+                                                fontStyle: el.isItalic ? 'italic' : 'normal',
+                                                whiteSpace: 'pre-wrap',
+                                                writingMode: el.writingMode === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
+                                                overflow: 'hidden',
+                                                cursor: 'text',
+                                                zIndex: 10,
+                                                pointerEvents: 'auto',
+                                            }}
+                                            className="cursor-text"
+                                        />
+                                    )}
                                 </div>
                             );
                         }
@@ -959,29 +987,53 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
 
             {isSelected && !isOutpainting && !element.isLocked && interactionMode === 'select' && element.type !== 'artboard' && (
                 <>
-                    <div className={`absolute -inset-1 border-2 pointer-events-none opacity-50 ${borderRadiusClass}`} style={{ borderColor: getLayerColor(element.type) }} />
-                    
+                    {/* 選取框：1px 貼齊 element 邊緣 */}
+                    <div className={`absolute inset-0 border pointer-events-none ${borderRadiusClass}`} style={{ borderColor: getLayerColor(element.type) }} />
+
                     {element.type === 'arrow' ? (
                         <>
-                            <div className="absolute top-1/2 -left-2 -translate-y-1/2 w-4 h-4 bg-white border rounded-full cursor-grab transform-handle shadow-sm"
-                                style={{ borderColor: getLayerColor(element.type) }}
+                            <div className="absolute top-1/2 -translate-y-1/2 cursor-grab transform-handle"
+                                style={{ left: -5, width: 10, height: 10, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 2 }}
                                 onMouseDown={(e) => handleInteractionStart(e, 'resize-arrow-start')} />
-                            <div className="absolute top-1/2 -right-2 -translate-y-1/2 w-4 h-4 bg-white border rounded-full cursor-grab transform-handle shadow-sm"
-                                style={{ borderColor: getLayerColor(element.type) }}
+                            <div className="absolute top-1/2 -translate-y-1/2 cursor-grab transform-handle"
+                                style={{ right: -5, width: 10, height: 10, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 2 }}
                                 onMouseDown={(e) => handleInteractionStart(e, 'resize-arrow-end')} />
                         </>
                     ) : (
                         <>
-                            <div className={`absolute -top-8 left-1/2 -translate-x-1/2 w-5 h-5 bg-white border rounded-full cursor-alias transform-handle shadow-sm flex items-center justify-center hover:scale-110 transition-transform`}
-                                style={{ borderColor: getLayerColor(element.type) }}
+                            {/* 旋轉鈕：貼齊選取框上方 */}
+                            <div className="absolute left-1/2 -translate-x-1/2 cursor-alias transform-handle flex items-center justify-center hover:scale-110 transition-transform"
+                                style={{ top: -24, width: 14, height: 14, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: '50%' }}
                                 onMouseDown={(e) => handleInteractionStart(e, 'rotate')}>
-                                    <div className={`w-1.5 h-1.5 rounded-full`} style={{ backgroundColor: getLayerColor(element.type) }} />
-                                </div>
-                            <div className={`absolute -top-3 left-1/2 -translate-x-1/2 w-px h-3 pointer-events-none opacity-50`} style={{ backgroundColor: getLayerColor(element.type) }} />
+                                <div style={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: getLayerColor(element.type) }} />
+                            </div>
+                            <div className="absolute left-1/2 -translate-x-1/2 w-px pointer-events-none opacity-40"
+                                style={{ top: -12, height: 12, backgroundColor: getLayerColor(element.type) }} />
 
-                            <div className={`absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-white border rounded-full cursor-se-resize transform-handle shadow-sm hover:scale-110 transition-transform`}
-                                style={{ borderColor: getLayerColor(element.type) }}
-                                onMouseDown={(e) => handleInteractionStart(e, 'resize')} />
+                            {/* Corner handles：中心精確對齊選取框角落（7px 正方形，偏移 -3px = 半寬） */}
+                            {([
+                                ['nw', { top: -4, left:  -4 }, 'cursor-nw-resize'],
+                                ['ne', { top: -4, right: -4 }, 'cursor-ne-resize'],
+                                ['sw', { bottom: -4, left:  -4 }, 'cursor-sw-resize'],
+                                ['se', { bottom: -4, right: -4 }, 'cursor-se-resize'],
+                            ] as [ResizeHandle, React.CSSProperties, string][]).map(([dir, pos, cur]) => (
+                                <div key={dir}
+                                    className={`absolute transform-handle hover:scale-125 transition-transform ${cur}`}
+                                    style={{ ...pos, width: 7, height: 7, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 1 }}
+                                    onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
+                            ))}
+                            {/* Edge handles：中心精確對齊選取框邊中點（7px 正方形，偏移 -3px） */}
+                            {([
+                                ['e', { top: '50%', right: -4, transform: 'translateY(-50%)' }, 'cursor-e-resize',  true],
+                                ['w', { top: '50%', left:  -4, transform: 'translateY(-50%)' }, 'cursor-w-resize',  true],
+                                ['s', { bottom: -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-s-resize', element.type !== 'text'],
+                                ['n', { top:    -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-n-resize', element.type !== 'text'],
+                            ] as [ResizeHandle, React.CSSProperties, string, boolean][]).filter(([,,,show]) => show).map(([dir, pos, cur]) => (
+                                <div key={dir}
+                                    className={`absolute transform-handle hover:scale-125 transition-transform ${cur}`}
+                                    style={{ ...pos, width: 7, height: 7, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 1 }}
+                                    onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
+                            ))}
                         </>
                     )}
                 </>

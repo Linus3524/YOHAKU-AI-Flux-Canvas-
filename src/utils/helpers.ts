@@ -254,7 +254,7 @@ export const measureTextVisualBounds = (element: TextElement, ctx: CanvasRenderi
     let blockLength = 0; 
     let blockThickness = 0;
     
-    const letterSpacingPx = (element.letterSpacing || 0) * element.fontSize;
+    const letterSpacingPx = element.letterSpacing || 0; // stored in px
     if (isVertical) {
         blockLength = lines.reduce((max, line) => {
              const chars = line.split('');
@@ -315,7 +315,7 @@ export function wrapTextCanvas(ctx: CanvasRenderingContext2D, text: string, maxD
     ctx.letterSpacing = '0px';
     const sections = text.split('\n');
     let lines: string[] = [];
-    const spacingPx = letterSpacing * fontSize;
+    const spacingPx = letterSpacing; // letterSpacing is now in px
 
     if (isVertical) {
         sections.forEach(section => {

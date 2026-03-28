@@ -11,8 +11,7 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
     const curveStrength = el.curveStrength || 0;
     const isCurved = Math.abs(curveStrength) > 0.1;
 
-    const spacingEm = el.letterSpacing || 0;
-    const spacingPx = spacingEm * el.fontSize;
+    const spacingPx = el.letterSpacing || 0; // stored in px
 
     // Always use '0px' — letter spacing is applied manually char-by-char for consistent results
     // @ts-ignore
@@ -36,7 +35,7 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
         return 100000;
     })();
 
-    const { lines } = wrapTextCanvas(ctx, el.text, maxConstraint, lineHeightPx, isVertical, el.fontSize, spacingEm);
+    const { lines } = wrapTextCanvas(ctx, el.text, maxConstraint, lineHeightPx, isVertical, el.fontSize, spacingPx);
 
     // --- Offscreen Canvas approach for proper drop-shadow emulation ---
     // CSS drop-shadow applies to the entire composite element once.

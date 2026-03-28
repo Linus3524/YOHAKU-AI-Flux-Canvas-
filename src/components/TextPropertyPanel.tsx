@@ -80,11 +80,11 @@ const Icons = {
 }
 
 // Simple Slider Control
-const SliderControl = ({ label, value, onChange, min, max, step = 1, unit = "" }: { label: string, value: number, onChange: (val: number) => void, min: number, max: number, step?: number, unit?: string }) => (
+const SliderControl = ({ label, value, onChange, min, max, step = 1, unit = "", decimals }: { label: string, value: number, onChange: (val: number) => void, min: number, max: number, step?: number, unit?: string, decimals?: number }) => (
     <div className="flex flex-col gap-1 w-full">
         <div className="flex justify-between items-center">
              <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">{label}</span>
-             <span className="text-[10px] font-mono text-[#1D1D1F]">{value.toFixed(step < 1 ? 2 : 0)}{unit}</span>
+             <span className="text-[10px] font-mono text-[#1D1D1F]">{value.toFixed(decimals ?? (step < 1 ? 2 : 0))}{unit}</span>
         </div>
         <input 
             type="range" 
@@ -311,8 +311,8 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
 
                     {/* Section 2: Spacing & Layout Sliders */}
                     <div className="grid grid-cols-2 gap-4">
-                        <SliderControl label="行距" value={element.lineHeight} onChange={(val) => onUpdate({ lineHeight: val })} min={0.8} max={3.0} step={0.1} />
-                        <SliderControl label="字距" value={element.letterSpacing} onChange={(val) => onUpdate({ letterSpacing: val })} min={-0.1} max={0.5} step={0.01} />
+                        <SliderControl label="行距" value={element.lineHeight} onChange={(val) => onUpdate({ lineHeight: val })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
+                        <SliderControl label="字距" value={element.letterSpacing || 0} onChange={(val) => onUpdate({ letterSpacing: val })} min={-20} max={100} step={1} unit="px" decimals={0} />
                     </div>
 
                     <div className="h-px bg-gray-100 w-full" />
