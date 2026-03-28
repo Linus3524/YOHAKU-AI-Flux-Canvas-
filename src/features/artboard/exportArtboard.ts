@@ -30,6 +30,9 @@ export const exportArtboardAsImage = async (
     allElements: CanvasElement[],
     scale: number = 2
 ): Promise<string> => {
+    // Wait for fonts to load so measureText uses the same metrics as SVG display
+    await document.fonts.ready;
+
     const canvas = document.createElement('canvas');
     canvas.width  = artboard.width  * scale;
     canvas.height = artboard.height * scale;

@@ -434,6 +434,9 @@ const App: React.FC = () => {
 
           ctx.scale(scale, scale);
 
+          // Wait for fonts to load so measureText uses the same metrics as SVG display
+          await document.fonts.ready;
+
           // Draw text at offset position so effects have room to overflow
           drawTextOnCanvas(ctx, element, effectPadding, effectPadding);
 

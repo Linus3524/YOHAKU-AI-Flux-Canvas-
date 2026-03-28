@@ -50,31 +50,33 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           if (ctx) {
-              const isLocked = element.isWidthLocked || element.isHeightLocked;
-              if (isLocked) {
-                  // ── 固定寬度/高度模式 ──
+              const isVertical = element.writingMode === 'vertical';
+
+              if (element.isWidthLocked && element.isHeightLocked) {
+                  // ── 固定模式：寬高都鎖，什麼都不做 ──
+
+              } else if (element.isWidthLocked || element.isHeightLocked) {
+                  // ── 固定寬 / 固定高模式：一軸固定，另一軸自動 ──
                   const strokeW = element.strokeWidth || 0;
                   const padding = 12 + Math.ceil(strokeW / 2);
-
                   ctx.font = `${element.isItalic ? 'italic' : ''} ${element.isBold ? 'bold' : ''} ${element.fontSize}px ${element.fontFamily}`;
                   const lineHeightPx = element.fontSize * element.lineHeight;
-                  const isVertical = element.writingMode === 'vertical';
 
                   if (isVertical) {
-                      // 直書：高度固定（使用者拉的），重新計算需要多少寬度（幾欄）
+                      // 直書：高度固定，重新計算需要多少寬度（幾欄）
                       const availableHeight = Math.max(10, element.height - padding * 2);
                       const { height: totalColumnsWidth } = wrapTextCanvas(
-                          ctx, element.text, availableHeight, lineHeightPx, isVertical
+                          ctx, element.text, availableHeight, lineHeightPx, isVertical, element.fontSize, element.letterSpacing || 0
                       );
                       const newWidth = totalColumnsWidth + padding * 2;
                       if (Math.abs(newWidth - element.width) > 2) {
                           onUpdate({ ...element, width: newWidth });
                       }
                   } else {
-                      // 橫書：寬度固定（使用者拉的），重新計算需要多少高度
+                      // 橫書：寬度固定，重新計算需要多少高度
                       const availableWidth = Math.max(10, element.width - padding * 2);
                       const { height: textHeight } = wrapTextCanvas(
-                          ctx, element.text, availableWidth, lineHeightPx, isVertical
+                          ctx, element.text, availableWidth, lineHeightPx, isVertical, element.fontSize, element.letterSpacing || 0
                       );
                       const newHeight = textHeight + padding * 2;
                       if (Math.abs(newHeight - element.height) > 2) {
@@ -82,13 +84,13 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                       }
                   }
               } else {
-                  // ── 自動模式：原本邏輯完全不動 ──
+                  // ── 自動模式：寬高都跟著文字縮放 ──
                   const bounds = measureTextVisualBounds(element, ctx);
                   if (Math.abs(bounds.width - element.width) > 2 || Math.abs(bounds.height - element.height) > 2) {
-                      onUpdate({ 
-                          ...element, 
-                          width: bounds.width, 
-                          height: bounds.height 
+                      onUpdate({
+                          ...element,
+                          width: bounds.width,
+                          height: bounds.height
                       });
                   }
               }
@@ -131,7 +133,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
               : Math.max(10, element.width - textPadding * 2)
           : 100000;
       
-      return wrapTextCanvas(ctx, element.text, maxWidth, lineHeightPx, isVertical);
+      return wrapTextCanvas(ctx, element.text, maxWidth, lineHeightPx, isVertical, element.fontSize, element.letterSpacing || 0);
   }, [
       element.type === 'text' ? element.text : null, 
       element.type === 'text' ? element.fontSize : null, 
@@ -234,20 +236,26 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
 
             if (isText) {
                 const padding = 12 + Math.ceil((startElement.strokeWidth || 0) / 2);
+                const lineHeightPx = startElement.fontSize * startElement.lineHeight;
+                const isVerticalEl = (startElement as TextElement).writingMode === 'vertical';
+                // Enforce minimum box size so text is never invisible
+                const minBoxWidth = isVerticalEl ? padding * 2 + lineHeightPx : padding * 2 + Math.ceil(startElement.fontSize * 0.5);
+                const minBoxHeight = isVerticalEl ? padding * 2 + Math.ceil(startElement.fontSize * 0.5) : padding * 2 + lineHeightPx;
+                newWidth = Math.max(minBoxWidth, newWidth);
+                newHeight = Math.max(minBoxHeight, newHeight);
+
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
                     ctx.font = `${startElement.isItalic ? 'italic' : ''} ${startElement.isBold ? 'bold' : ''} ${startElement.fontSize}px ${startElement.fontFamily}`;
-                    const lineHeightPx = startElement.fontSize * startElement.lineHeight;
-                    const isVerticalEl = (startElement as TextElement).writingMode === 'vertical';
-                    
+                    const letterSp = (startElement as TextElement).letterSpacing || 0;
                     if (isVerticalEl) {
                         const availableHeight = Math.max(10, newHeight - padding * 2);
-                        const { height: totalColumnsWidth } = wrapTextCanvas(ctx, startElement.text, availableHeight, lineHeightPx, true);
+                        const { height: totalColumnsWidth } = wrapTextCanvas(ctx, startElement.text, availableHeight, lineHeightPx, true, startElement.fontSize, letterSp);
                         newWidth = totalColumnsWidth + padding * 2;
                     } else {
                         const availableWidth = Math.max(10, newWidth - padding * 2);
-                        const { height: textHeight } = wrapTextCanvas(ctx, startElement.text, availableWidth, lineHeightPx, false);
+                        const { height: textHeight } = wrapTextCanvas(ctx, startElement.text, availableWidth, lineHeightPx, false, startElement.fontSize, letterSp);
                         newHeight = textHeight + padding * 2;
                     }
                 }
@@ -565,7 +573,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                 overflow: 'hidden',
                                 background: el.backgroundColor || 'transparent',
                                 border: 'none',
-                                padding: '15px',
+                                padding: `${12 + Math.ceil((el.strokeWidth || 0) / 2)}px`,
                                 margin: 0,
                                 writingMode: el.writingMode === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
                             };

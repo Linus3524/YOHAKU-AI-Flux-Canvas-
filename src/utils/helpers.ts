@@ -240,10 +240,9 @@ export const measureTextVisualBounds = (element: TextElement, ctx: CanvasRenderi
     const effectPadding = 20 + strokeW + shadowB * 1.5; 
 
     ctx.font = `${element.isItalic ? 'italic' : ''} ${element.isBold ? 'bold' : ''} ${element.fontSize}px ${element.fontFamily}`;
-    if (element.letterSpacing) {
-        // @ts-ignore
-        ctx.letterSpacing = `${element.letterSpacing}em`;
-    }
+    // Always use 0px — letter spacing is applied manually below for consistent measurement
+    // @ts-ignore
+    ctx.letterSpacing = '0px';
 
     const curveStrength = element.curveStrength || 0;
     const isVertical = element.writingMode === 'vertical';
@@ -255,18 +254,20 @@ export const measureTextVisualBounds = (element: TextElement, ctx: CanvasRenderi
     let blockLength = 0; 
     let blockThickness = 0;
     
+    const letterSpacingPx = (element.letterSpacing || 0) * element.fontSize;
     if (isVertical) {
-        const spacingPx = (element.letterSpacing || 0) * element.fontSize;
         blockLength = lines.reduce((max, line) => {
              const chars = line.split('');
-             const totalH = chars.reduce((sum, char) => sum + (isCJK(char) ? element.fontSize : ctx.measureText(char).width), 0) + Math.max(0, chars.length - 1) * spacingPx;
+             const totalH = chars.reduce((sum, char) => sum + (isCJK(char) ? element.fontSize : ctx.measureText(char).width), 0) + Math.max(0, chars.length - 1) * letterSpacingPx;
              return Math.max(max, totalH);
         }, 0);
         blockThickness = lines.length * lineHeightPx;
     } else {
         blockLength = lines.reduce((max, line) => {
-             const m = ctx.measureText(line);
-             return Math.max(max, m.width);
+             const chars = line.split('');
+             const charsWidth = chars.reduce((sum, c) => sum + ctx.measureText(c).width, 0);
+             const spacingTotal = Math.max(0, chars.length - 1) * letterSpacingPx;
+             return Math.max(max, charsWidth + spacingTotal);
         }, 0);
         blockThickness = lines.length * lineHeightPx;
     }
@@ -309,11 +310,14 @@ export const measureTextVisualBounds = (element: TextElement, ctx: CanvasRenderi
 };
 
 export function wrapTextCanvas(ctx: CanvasRenderingContext2D, text: string, maxDimension: number, lineHeight: number, isVertical: boolean = false, fontSize: number = 16, letterSpacing: number = 0): { lines: string[], height: number } {
+    // Ensure ctx.letterSpacing is cleared so measureText returns bare char widths
+    // @ts-ignore
+    ctx.letterSpacing = '0px';
     const sections = text.split('\n');
     let lines: string[] = [];
-    
+    const spacingPx = letterSpacing * fontSize;
+
     if (isVertical) {
-        const spacingPx = letterSpacing * fontSize;
         sections.forEach(section => {
             const chars = section.split('');
             let currentLine = '';
@@ -322,7 +326,7 @@ export function wrapTextCanvas(ctx: CanvasRenderingContext2D, text: string, maxD
                 const char = chars[i];
                 const charHeight = isCJK(char) ? fontSize : ctx.measureText(char).width;
                 const advance = charHeight + (currentLine.length > 0 ? spacingPx : 0);
-                
+
                 if (maxDimension < 10000 && currentHeight + advance > maxDimension && currentLine.length > 0) {
                     lines.push(currentLine);
                     currentLine = char;
@@ -339,18 +343,21 @@ export function wrapTextCanvas(ctx: CanvasRenderingContext2D, text: string, maxD
         return { lines, height: lines.length * lineHeight };
     } else {
         sections.forEach(section => {
-            const words = section.split(''); 
+            const words = section.split('');
             let currentLine = '';
+            let currentWidth = 0;
             for (let i = 0; i < words.length; i++) {
                 const char = words[i];
-                const testLine = currentLine + char;
-                const metrics = ctx.measureText(testLine);
-                const testWidth = metrics.width;
-                if (maxDimension < 10000 && testWidth > maxDimension && i > 0) {
+                const charWidth = ctx.measureText(char).width;
+                const addSpacing = currentLine.length > 0 ? spacingPx : 0;
+                const newWidth = currentWidth + addSpacing + charWidth;
+                if (maxDimension < 10000 && newWidth > maxDimension && i > 0) {
                     lines.push(currentLine);
                     currentLine = char;
+                    currentWidth = charWidth;
                 } else {
-                    currentLine = testLine;
+                    currentLine += char;
+                    currentWidth = newWidth;
                 }
             }
             lines.push(currentLine);

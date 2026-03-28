@@ -61,7 +61,6 @@ const FONT_GROUPS = [
   }
 ];
 
-const FONT_SIZES = [12, 14, 18, 24, 30, 36, 48, 60, 72, 96, 128];
 const PRESET_COLORS = ['#1D1D1F', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#AF52DE', '#8E8E93', '#FFFFFF', 'transparent'];
 
 const Icons = {
@@ -172,10 +171,12 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
         const newWidth = element.height;
         const newHeight = element.width;
         
-        onUpdate({ 
+        onUpdate({
             writingMode: mode,
             width: newWidth,
-            height: newHeight
+            height: newHeight,
+            isWidthLocked: false,
+            isHeightLocked: false
         });
     };
 
@@ -251,21 +252,18 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                     </div>
                 </div>
 
-                <div className="relative group">
-                    <select 
-                        value={element.fontSize}
-                        onChange={(e) => onUpdate({ fontSize: Number(e.target.value) })}
-                        onMouseDown={(e) => e.stopPropagation()} 
-                        className="appearance-none bg-[#F5F5F7] hover:bg-gray-100 text-[#1D1D1F] text-sm font-medium rounded-lg pl-3 pr-7 py-2 outline-none cursor-pointer w-18 transition-colors"
-                    >
-                        {FONT_SIZES.map(size => (
-                            <option key={size} value={size}>{size}</option>
-                        ))}
-                    </select>
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                        <Icons.ChevronDown />
-                    </div>
-                </div>
+                <input
+                    type="number"
+                    value={element.fontSize}
+                    min={1}
+                    max={999}
+                    onChange={(e) => {
+                        const val = Math.min(999, Math.max(1, Number(e.target.value)));
+                        if (!isNaN(val)) onUpdate({ fontSize: val });
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className="bg-[#F5F5F7] hover:bg-gray-100 text-[#1D1D1F] text-sm font-medium rounded-lg px-2 py-2 outline-none w-16 text-center transition-colors"
+                />
 
                 <div className="w-px h-6 bg-gray-200" />
 

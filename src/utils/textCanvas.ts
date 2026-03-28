@@ -14,13 +14,9 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
     const spacingEm = el.letterSpacing || 0;
     const spacingPx = spacingEm * el.fontSize;
 
-    if (isVertical || isCurved) {
-        // @ts-ignore
-        ctx.letterSpacing = '0px';
-    } else {
-        // @ts-ignore
-        ctx.letterSpacing = spacingEm ? `${spacingEm}em` : '0px';
-    }
+    // Always use '0px' — letter spacing is applied manually char-by-char for consistent results
+    // @ts-ignore
+    ctx.letterSpacing = '0px';
 
     // Draw background directly on main canvas (no shadow needed for bg)
     if (el.backgroundColor && el.backgroundColor !== 'transparent') {
@@ -40,7 +36,7 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
         return 100000;
     })();
 
-    const { lines } = wrapTextCanvas(ctx, el.text, maxConstraint, lineHeightPx, isVertical);
+    const { lines } = wrapTextCanvas(ctx, el.text, maxConstraint, lineHeightPx, isVertical, el.fontSize, spacingEm);
 
     // --- Offscreen Canvas approach for proper drop-shadow emulation ---
     // CSS drop-shadow applies to the entire composite element once.
@@ -276,20 +272,31 @@ const drawTextContent = (
             });
         });
     } else {
-        // --- Horizontal Straight ---
-        let startX = x + textPadding;
-        if (el.align === 'center') startX = x + el.width / 2;
-        else if (el.align === 'right') startX = x + el.width - textPadding;
-
-        ctx.textAlign = el.align;
+        // --- Horizontal Straight --- (char-by-char for consistent letter spacing with SVG display)
+        ctx.textAlign = 'left';
 
         const totalTextHeight = lines.length * lineHeightPx;
-        const startY = y + (el.height - totalTextHeight)/2 + lineHeightPx/2;
+        const startY = y + (el.height - totalTextHeight) / 2 + lineHeightPx / 2;
 
         lines.forEach((line, i) => {
             const ly = startY + (i * lineHeightPx);
-            if (el.strokeWidth && el.strokeWidth > 0) ctx.strokeText(line, startX, ly);
-            ctx.fillText(line, startX, ly);
+            const chars = line.split('');
+
+            // Calculate total line width for alignment
+            const lineWidth = chars.reduce((sum, c) => sum + ctx.measureText(c).width, 0)
+                + Math.max(0, chars.length - 1) * spacingPx;
+
+            let cx: number;
+            if (el.align === 'center') cx = x + el.width / 2 - lineWidth / 2;
+            else if (el.align === 'right') cx = x + el.width - textPadding - lineWidth;
+            else cx = x + textPadding;
+
+            chars.forEach(char => {
+                const charW = ctx.measureText(char).width;
+                if (el.strokeWidth && el.strokeWidth > 0) ctx.strokeText(char, cx, ly);
+                ctx.fillText(char, cx, ly);
+                cx += charW + spacingPx;
+            });
         });
     }
 };
