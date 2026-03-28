@@ -11,21 +11,37 @@ interface TextPropertyPanelProps {
 // Organized Font Groups with new additions
 const FONT_GROUPS = [
   {
-    label: '繁體中文 (Traditional Chinese)',
+    label: '繁體中文 - 黑體/無襯線',
     options: [
-      { name: 'Noto Sans TC', label: '思源黑體', family: '"Noto Sans TC", sans-serif' },
-      { name: 'Noto Serif TC', label: '思源宋體', family: '"Noto Serif TC", serif' },
-      { name: 'Chiron GoRound TC', label: '昭源圓體', family: '"Chiron GoRound TC", sans-serif' },
+      { name: 'Noto Sans TC', label: '思源黑體 Noto Sans TC', family: '"Noto Sans TC", sans-serif' },
+    ]
+  },
+  {
+    label: '繁體中文 - 明體/楷體',
+    options: [
+      { name: 'Noto Serif TC', label: '思源宋體 Noto Serif TC', family: '"Noto Serif TC", serif' },
+      { name: 'LXGW WenKai TC', label: '霞鶩文楷 TC（楷書）', family: '"LXGW WenKai TC", serif' },
+      { name: 'Iansui', label: '芫荽 Iansui（手寫楷）', family: '"Iansui", serif' },
+      { name: 'Shippori Mincho', label: 'しっぽり明朝（仿宋）', family: '"Shippori Mincho", serif' },
+    ]
+  },
+  {
+    label: '繁體中文 - 特殊風格',
+    options: [
+      { name: 'Cubic 11', label: '俐方體 Cubic 11（像素）', family: '"Cubic 11", monospace' },
+      { name: 'DotGothic16', label: 'Dot 點陣體 DotGothic16', family: '"DotGothic16", sans-serif' },
     ]
   },
   {
     label: '日文/漢字 (兼容繁中)',
     options: [
-      { name: 'Zen Maru Gothic', label: 'Zen 圓體 (類似粉圓)', family: '"Zen Maru Gothic", sans-serif' },
-      { name: 'M PLUS Rounded 1c', label: 'M+ 圓體 (粗細多變)', family: '"M PLUS Rounded 1c", sans-serif' },
-      { name: 'Klee One', label: 'Klee 楷體 (類似芫荽)', family: '"Klee One", cursive' },
-      { name: 'Hachi Maru Pop', label: 'Hachi 麥克筆 (可愛風)', family: '"Hachi Maru Pop", cursive' },
-      { name: 'DotGothic16', label: 'Dot 點陣體 (Pixel)', family: '"DotGothic16", sans-serif' },
+      { name: 'Chiron GoRound TC', label: '昭源圓體 Chiron GoRound（日系圓體）', family: '"Chiron GoRound TC", sans-serif' },
+      { name: 'LINE Seed JP', label: 'LINE Seed JP（LINE 官方）', family: '"LINE Seed JP", sans-serif' },
+      { name: 'Kaisei Opti', label: 'Kaisei Opti（古典明體）', family: '"Kaisei Opti", serif' },
+      { name: 'Zen Maru Gothic', label: 'Zen 圓體', family: '"Zen Maru Gothic", sans-serif' },
+      { name: 'M PLUS Rounded 1c', label: 'M+ 圓體', family: '"M PLUS Rounded 1c", sans-serif' },
+      { name: 'Klee One', label: 'Klee 楷體', family: '"Klee One", cursive' },
+      { name: 'Hachi Maru Pop', label: 'Hachi 麥克筆', family: '"Hachi Maru Pop", cursive' },
     ]
   },
   {

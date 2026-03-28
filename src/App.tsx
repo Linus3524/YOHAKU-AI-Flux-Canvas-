@@ -772,6 +772,15 @@ const App: React.FC = () => {
   const contextMenuElement = contextMenu?.elementId ? elements.find(el => el.id === contextMenu.elementId) : null;
   const isGrouped = selectedElements.length > 0 && selectedElements.every(el => el.groupId && el.groupId === selectedElements[0].groupId);
   const isLocked = contextMenuElement?.isLocked || false;
+  const isVisible = contextMenuElement?.isVisible ?? true;
+
+  const handleUnlockAll = useCallback(() => {
+    setElements(prev => prev.map(el => ({ ...el, isLocked: false })));
+  }, [setElements]);
+
+  const handleShowAll = useCallback(() => {
+    setElements(prev => prev.map(el => ({ ...el, isVisible: true })));
+  }, [setElements]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1128,11 +1137,14 @@ const App: React.FC = () => {
             group: handleGroup,
             ungroup: handleUngroup,
             toggleLock: handleToggleLock,
-            rasterizeText: handleRasterizeTextOverride, 
+            toggleVisibility: handleToggleVisibility,
+            unlockAll: handleUnlockAll,
+            showAll: handleShowAll,
+            rasterizeText: handleRasterizeTextOverride,
             rasterizeShape: handleRasterizeShape,
             rasterizeArrow: handleRasterizeArrow,
             mergeLayers: handleMergeLayersOverride,
-            extractPrompt: handleExtractPrompt 
+            extractPrompt: handleExtractPrompt
           }}
           canChangeColor={canChangeColor}
           elementType={contextMenuElement?.type || null}
@@ -1140,6 +1152,7 @@ const App: React.FC = () => {
           selectionCount={selectedElementIds.length}
           isGrouped={!!isGrouped}
           isLocked={isLocked}
+          isVisible={isVisible}
         />
       )}
 

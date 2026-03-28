@@ -37,6 +37,9 @@ interface ContextMenuProps {
     group: () => void;
     ungroup: () => void;
     toggleLock: (elementId: string) => void;
+    toggleVisibility: (elementId: string) => void;
+    unlockAll: () => void;
+    showAll: () => void;
     rasterizeText: (elementId: string) => void;
     rasterizeShape: (elementId: string) => void;
     rasterizeArrow: (elementId: string) => void;
@@ -50,6 +53,7 @@ interface ContextMenuProps {
   selectionCount: number;
   isGrouped: boolean;
   isLocked: boolean;
+  isVisible: boolean;
 }
 
 const MenuIcons = {
@@ -107,6 +111,10 @@ const MenuIcons = {
   Ungroup: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>,
   Lock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>,
   Unlock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>,
+  Eye: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
+  EyeOff: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>,
+  UnlockAll: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path><line x1="8" y1="21" x2="16" y2="21"></line></svg>,
+  ShowAll: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle><line x1="4" y1="4" x2="8" y2="8"></line><line x1="20" y1="4" x2="16" y2="8"></line></svg>,
   Text: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="4 7 4 4 20 4 20 7"></polyline>
@@ -160,7 +168,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     hasCopiedStyle,
     selectionCount,
     isGrouped,
-    isLocked
+    isLocked,
+    isVisible
 }) => {
     const menuRef = useRef<HTMLDivElement>(null);
     const [colorSubMenuVisible, setColorSubMenuVisible] = useState(false);
@@ -251,9 +260,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     <>
                         <div className="px-4 py-1.5 text-[10px] font-bold text-[#86868B] uppercase tracking-wider opacity-60">編輯</div>
                         
-                        {/* Locking */}
+                        {/* Locking & Visibility */}
                         <MenuItem icon={isLocked ? <MenuIcons.Unlock /> : <MenuIcons.Lock />} onClick={() => handleAction(() => actions.toggleLock(menuData.elementId!))}>
                             {isLocked ? '解鎖物件' : '鎖定物件'}
+                        </MenuItem>
+                        <MenuItem icon={isVisible ? <MenuIcons.EyeOff /> : <MenuIcons.Eye />} onClick={() => handleAction(() => actions.toggleVisibility(menuData.elementId!))}>
+                            {isVisible ? '隱藏物件' : '顯示物件'}
                         </MenuItem>
 
                         {/* Grouping / Merging */}
@@ -440,7 +452,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     </div>
 
                     <div className="border-t my-1 border-gray-100/50" />
-                    
+                    <div className="px-4 py-1.5 text-[10px] font-bold text-[#86868B] uppercase tracking-wider opacity-60">圖層管理</div>
+                    <MenuItem icon={<MenuIcons.UnlockAll />} onClick={() => handleAction(actions.unlockAll)}>全部解除鎖定</MenuItem>
+                    <MenuItem icon={<MenuIcons.ShowAll />} onClick={() => handleAction(actions.showAll)}>顯示全部物件</MenuItem>
+
+                    <div className="border-t my-1 border-gray-100/50" />
+
                     <MenuItem icon={<MenuIcons.Export />} onClick={() => handleAction(actions.exportCanvas)}>匯出畫布</MenuItem>
                     <MenuItem icon={<MenuIcons.Import />} onClick={() => handleAction(actions.importCanvas)}>匯入畫布</MenuItem>
                 </>

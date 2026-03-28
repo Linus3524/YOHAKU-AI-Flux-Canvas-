@@ -458,7 +458,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
 
     // Modified: Only Note elements are rounded. Text and everything else is square (rounded-none).
     const borderRadiusClass = (element.type === 'note') ? 'rounded-2xl' : 'rounded-none';
-    const pointerEventsClass = interactionMode === 'hand' ? '!pointer-events-none' : (element.isLocked ? 'pointer-events-auto' : '');
+    const pointerEventsClass = interactionMode === 'hand' ? '!pointer-events-none' : (element.isLocked ? '!pointer-events-none' : '');
 
 const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
     const { shapeType } = shapeEl;
@@ -532,9 +532,9 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                 width: element.width,
                 height: element.height,
                 transform: `translate(-50%, -50%) rotate(${element.rotation}deg)`,
-                cursor: (element.isLocked) ? 'not-allowed' : (isOutpainting ? 'move' : 'move'),
+                cursor: isOutpainting ? 'move' : 'move',
                 zIndex: element.zIndex,
-                pointerEvents: 'auto',
+                pointerEvents: element.isLocked ? 'none' : 'auto',
                 opacity: element.opacity ?? 1,
                 mixBlendMode: element.type === 'note' ? 'normal' : (element.blendMode || 'normal'), // ✅ 新增
             }}
