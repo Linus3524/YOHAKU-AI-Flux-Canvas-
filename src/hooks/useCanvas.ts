@@ -713,15 +713,14 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     
         try {
             const newSrc = await createShapeDataUrl(element);
-            const padding = Math.max(20, element.strokeWidth * 2);
-            
+            // 尺寸與原 SVG 一致，不加額外 padding（stroke 已在 createShapeDataUrl 中處理）
             const newImage: ImageElement = {
                 id: element.id,
                 type: 'image',
                 src: newSrc,
-                position: element.position, 
-                width: element.width + padding * 2,
-                height: element.height + padding * 2,
+                position: element.position,
+                width: element.width,
+                height: element.height,
                 rotation: element.rotation,
                 zIndex: element.zIndex,
                 isVisible: element.isVisible,
@@ -729,7 +728,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 name: `${element.name} (Rasterized)`,
                 groupId: element.groupId
             };
-            
+
             setElements(prev => prev.map(el => el.id === id ? newImage : el));
             showToast("形狀已轉換為圖片圖層！");
         } catch (e) {

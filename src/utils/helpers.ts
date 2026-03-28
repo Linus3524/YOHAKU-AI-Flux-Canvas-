@@ -388,21 +388,23 @@ export const loadImage = (src: string): Promise<HTMLImageElement> => {
 
 export const createShapeDataUrl = (element: ShapeElement): Promise<string> => {
     return new Promise((resolve) => {
-        const padding = 0;
-        const width = element.width;
-        const height = element.height;
+        // 與 SVG 渲染的 viewBox 一致：canvas 尺寸加上 strokeWidth，讓 stroke 不被裁切
+        const sw = element.strokeWidth || 0;
+        const padding = sw / 2 + 1; // 半個 stroke + 1px 安全邊距
+        const width = element.width + padding * 2;
+        const height = element.height + padding * 2;
 
-        const scale = 3; 
-        
+        const scale = 3;
+
         const canvas = document.createElement('canvas');
         canvas.width = width * scale;
         canvas.height = height * scale;
-        
+
         const ctx = canvas.getContext('2d');
         if (!ctx) { resolve(''); return; }
 
-        ctx.scale(scale, scale); 
-        ctx.translate(padding, padding);
+        ctx.scale(scale, scale);
+        ctx.translate(padding, padding); // 偏移讓 stroke 不被裁切
 
         // 強化顏色解析邏輯
         const parseColor = (colorStr: string) => {

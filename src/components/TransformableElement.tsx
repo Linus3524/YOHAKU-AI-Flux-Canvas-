@@ -542,7 +542,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
             onDoubleClick={handleDoubleClick}
             onContextMenu={handleElementContextMenu}
         >
-            <div className={`element-body w-full h-full relative ${element.isLocked ? 'opacity-90' : ''}`}>
+            <div className={`element-body w-full h-full relative`}>
               {/* Locked Indicator */}
               {element.isLocked && element.type !== 'artboard' && (
                   <div className="absolute -top-3 -right-3 z-50 bg-white/80 backdrop-blur-sm p-1 rounded-full shadow-sm border border-black/10 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
