@@ -241,8 +241,8 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
             onClick={(e) => e.stopPropagation()}
         >
             {/* ── Top Bar: Font · Size · Text Color · More · Done ── */}
-            <div className="flex items-center gap-2">
-                <div className="px-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors">
+            <div className="flex items-end gap-2">
+                <div className="pb-1.5 px-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors">
                     <Icons.Grip />
                 </div>
 
@@ -283,14 +283,15 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                     className="bg-[#F5F5F7] hover:bg-gray-100 text-[#1D1D1F] text-sm font-medium rounded-lg px-2 py-2 outline-none w-14 text-center transition-colors"
                 />
 
-                <div className="w-px h-6 bg-gray-200" />
-
-                {/* Text color — only shown in top bar when panel is collapsed; moves to right column when expanded */}
-                {!showMore && (
-                    <ColorPickerButton color={element.color} onChange={(c) => onUpdate({ color: c })} />
-                )}
+                <div className="w-px h-8 bg-gray-200" />
 
                 <div className="flex-1" />
+
+                {/* 文字色 + 背景色 — always in top bar with label; items-end aligns all at bottom */}
+                <ColorPickerButton label="文字色" color={element.color} onChange={(c) => onUpdate({ color: c })} />
+                <ColorPickerButton label="背景色" color={element.backgroundColor ?? 'transparent'} onChange={(c) => onUpdate({ backgroundColor: c })} />
+
+                <div className="w-px h-8 bg-gray-200" />
 
                 <button
                     onClick={() => setShowMore(!showMore)}
@@ -348,12 +349,8 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                         {/* ── Vertical divider ── */}
                         <div className="w-px bg-gray-100 mx-1 self-stretch" />
 
-                        {/* ── RIGHT COLUMN: Effects ── */}
+                        {/* ── RIGHT COLUMN: Effects (文字色/背景色 are in top bar) ── */}
                         <div className="flex flex-col gap-3 pl-3" style={{ width: 170 }}>
-                            {/* 文字色 — moved here from top bar when expanded so all swatches align */}
-                            <div className="flex items-center gap-2">
-                                <ColorPickerButton label="文字色" color={element.color} onChange={(c) => onUpdate({ color: c })} />
-                            </div>
                             {/* 邊框 */}
                             <div className="flex items-center gap-2">
                                 <ColorPickerButton label="邊框" color={element.strokeColor ?? '#FF3B30'} onChange={(c) => onUpdate({ strokeColor: c })} />
@@ -368,10 +365,6 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                             <div className="flex items-center gap-2">
                                 <ColorPickerButton label="光暈" color={element.glowColor} onChange={(c) => onUpdate({ glowColor: c })} />
                                 <SliderControl label="強度" value={element.glowBlur || 0} onChange={(val) => onUpdate({ glowBlur: val })} min={0} max={50} />
-                            </div>
-                            {/* 背景色 */}
-                            <div className="flex items-center gap-2">
-                                <ColorPickerButton label="背景色" color={element.backgroundColor ?? 'transparent'} onChange={(c) => onUpdate({ backgroundColor: c })} />
                             </div>
                         </div>
 
