@@ -149,7 +149,8 @@ const drawTextContent = (
                 const colX = startX - (i * lineHeightPx);
                 const chars = line.split('');
                 const charHeights = chars.map(c => isCJK(c) ? el.fontSize : el.fontSize * 0.6);
-                const totalColH = charHeights.reduce((s, h) => s + h, 0) + Math.max(0, chars.length - 1) * spacingPx;
+                // n spacings (not n-1): ensures wrap-point gap = spacingPx at ±100
+                const totalColH = charHeights.reduce((s, h) => s + h, 0) + chars.length * spacingPx;
 
                 const arcAngle = Math.abs(curvatureNorm) * 2 * Math.PI;
                 const baseR = totalColH / arcAngle;
@@ -164,14 +165,15 @@ const drawTextContent = (
                 chars.forEach((char, idx) => {
                     const charH = charHeights[idx];
                     const s = accumulated + charH / 2 - totalColH / 2;
-                    accumulated += charH + (idx < chars.length - 1 ? spacingPx : 0);
+                    accumulated += charH + spacingPx; // always add spacingPx (wrap-gap fix)
 
                     const theta = s / R;
                     const cy = centerY + R * Math.sin(theta);
                     const baseX = R * (1 - Math.cos(theta));
-                    // Positive: center bows RIGHT (ends go left); Negative: center bows LEFT (baseline out)
+                    // Positive: center bows RIGHT; Negative: center bows LEFT
                     const cx = isNeg ? colX + baseX + shiftX : colX - baseX + shiftX;
-                    let rotDeg = isNeg ? (theta + Math.PI) * 180 / Math.PI : theta * 180 / Math.PI;
+                    // isNeg: mirror lean (-theta), NOT flip 180°
+                    let rotDeg = isNeg ? -theta * 180 / Math.PI : theta * 180 / Math.PI;
                     if (!isCJK(char)) rotDeg += 90;
 
                     ctx.save();
@@ -232,7 +234,8 @@ const drawTextContent = (
         lines.forEach((line, lineIdx) => {
             const chars = line.split('');
             const charWidths = chars.map(c => ctx.measureText(c).width);
-            const totalLineWidth = charWidths.reduce((sum, w) => sum + w, 0) + Math.max(0, chars.length - 1) * spacingPx;
+            // n spacings (not n-1): ensures wrap-point gap = spacingPx at ±100
+            const totalLineWidth = charWidths.reduce((sum, w) => sum + w, 0) + chars.length * spacingPx;
 
             const arcAngle = Math.abs(curvatureNorm) * 2 * Math.PI;
             const baseR = totalLineWidth / arcAngle;
@@ -250,13 +253,14 @@ const drawTextContent = (
             chars.forEach((char, i) => {
                 const charW = charWidths[i];
                 const s = accumulated + charW / 2 - totalLineWidth / 2;
-                accumulated += charW + (i < chars.length - 1 ? spacingPx : 0);
+                accumulated += charW + spacingPx; // always add spacingPx (wrap-gap fix)
 
                 const theta = s / R;
                 const charX = centerX + R * Math.sin(theta);
                 const baseY = isNeg ? -R * (1 - Math.cos(theta)) : R * (1 - Math.cos(theta));
                 const charY = boxCenterY + baseY + shiftY;
-                const rotRad = isNeg ? theta + Math.PI : theta;
+                // isNeg: mirror lean (-theta), NOT flip 180° (theta+π would invert chars upside-down)
+                const rotRad = isNeg ? -theta : theta;
 
                 ctx.save();
                 ctx.translate(charX, charY);

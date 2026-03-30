@@ -107,29 +107,10 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                   }
               } else {
                   // ── 自動模式：寬高都跟著文字縮放 ──
+                  // measureTextVisualBounds already includes sagitta for curved text
                   const bounds = measureTextVisualBounds(element, ctx);
-                  const curveStr = (element as any).curveStrength || 0;
-                  const isCurvedEl = Math.abs(curveStr) > 0.1;
-                  let targetWidth = bounds.width;
-                  let targetHeight = bounds.height;
-                  if (isCurvedEl) {
-                      const strokeW = element.strokeWidth || 0;
-                      const padEl = 12 + Math.ceil(strokeW / 2);
-                      const arcAngle = Math.abs(curveStr / 100) * 2 * Math.PI;
-                      if (isVertical) {
-                          // 直書弧形：sagitta 加到寬度
-                          const textH = Math.max(1, bounds.height - padEl * 2);
-                          const R = textH / arcAngle;
-                          const sagitta = R * (1 - Math.cos(arcAngle / 2));
-                          targetWidth = bounds.width + sagitta;
-                      } else {
-                          // 橫書弧形：sagitta 加到高度
-                          const textW = Math.max(1, bounds.width - padEl * 2);
-                          const R = textW / arcAngle;
-                          const sagitta = R * (1 - Math.cos(arcAngle / 2));
-                          targetHeight = bounds.height + sagitta;
-                      }
-                  }
+                  const targetWidth = bounds.width;
+                  const targetHeight = bounds.height;
                   if (Math.abs(targetWidth - element.width) > 2 || Math.abs(targetHeight - element.height) > 2) {
                       onUpdate({ ...element, width: targetWidth, height: targetHeight });
                   }
@@ -676,7 +657,8 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                         const colX = (el.width - totalTextWidth) / 2 + (linesToRender.length - 1 - i) * lineHeightPx + lineHeightPx / 2;
                                                         const chars = line.split('');
                                                         const charHeights = chars.map(c => isCJK(c) ? el.fontSize : el.fontSize * 0.6);
-                                                        const totalColH = charHeights.reduce((s, h) => s + h, 0) + Math.max(0, chars.length - 1) * spacingPx;
+                                                        // n spacings (not n-1): wrap-point gap = spacingPx at ±100
+                                                        const totalColH = charHeights.reduce((s, h) => s + h, 0) + chars.length * spacingPx;
 
                                                         const arcAngle = Math.abs(curvatureNorm) * 2 * Math.PI;
                                                         const baseR = totalColH / arcAngle;
@@ -691,13 +673,14 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                         chars.forEach((char, charIdx) => {
                                                             const charH = charHeights[charIdx];
                                                             const s = accumulated + charH / 2 - totalColH / 2;
-                                                            accumulated += charH + (charIdx < chars.length - 1 ? spacingPx : 0);
+                                                            accumulated += charH + spacingPx; // always add (wrap-gap fix)
 
                                                             const theta = s / R;
                                                             const cy = centerY + R * Math.sin(theta);
                                                             const baseX = R * (1 - Math.cos(theta));
                                                             const cx = isNeg ? colX + baseX + shiftX : colX - baseX + shiftX;
-                                                            let rotDeg = isNeg ? (theta + Math.PI) * 180 / Math.PI : theta * 180 / Math.PI;
+                                                            // isNeg: mirror lean (-theta), NOT flip 180°
+                                                            let rotDeg = isNeg ? -theta * 180 / Math.PI : theta * 180 / Math.PI;
                                                             if (!isCJK(char)) rotDeg += 90;
 
                                                             allCurvedCharsV.push({ char, cx, cy, rotDeg, key: `${i}-${charIdx}` });
@@ -799,7 +782,8 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     const charWidths = measureCtx
                                                         ? chars.map(c => measureCtx!.measureText(c).width)
                                                         : chars.map(() => el.fontSize * 0.6);
-                                                    const totalLineWidth = charWidths.reduce((sum, w) => sum + w, 0) + Math.max(0, chars.length - 1) * spacingPx;
+                                                    // n spacings (not n-1): wrap-point gap = spacingPx at ±100
+                                                    const totalLineWidth = charWidths.reduce((sum, w) => sum + w, 0) + chars.length * spacingPx;
 
                                                     const arcAngle = Math.abs(curvatureNorm) * 2 * Math.PI;
                                                     const baseR = totalLineWidth / arcAngle;
@@ -814,13 +798,14 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     chars.forEach((char, charIdx) => {
                                                         const charW = charWidths[charIdx];
                                                         const s = accumulated + charW / 2 - totalLineWidth / 2;
-                                                        accumulated += charW + (charIdx < chars.length - 1 ? spacingPx : 0);
+                                                        accumulated += charW + spacingPx; // always add (wrap-gap fix)
 
                                                         const theta = s / R;
                                                         const charX = centerX + R * Math.sin(theta);
                                                         const baseY = isNeg ? -R * (1 - Math.cos(theta)) : R * (1 - Math.cos(theta));
                                                         const charY = boxCenterY + baseY + shiftY;
-                                                        const rotDeg = isNeg ? (theta + Math.PI) * 180 / Math.PI : theta * 180 / Math.PI;
+                                                        // isNeg: mirror lean (-theta), NOT flip 180°
+                                                        const rotDeg = isNeg ? -theta * 180 / Math.PI : theta * 180 / Math.PI;
 
                                                         allCurvedChars.push({ char, x: charX, y: charY, rotation: rotDeg, key: `${lineIdx}-${charIdx}` });
                                                     });

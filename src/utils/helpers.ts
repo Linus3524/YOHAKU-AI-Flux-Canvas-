@@ -276,11 +276,13 @@ export const measureTextVisualBounds = (element: TextElement, ctx: CanvasRenderi
     let finalHeight = 0;
 
     if (Math.abs(curveStrength) > 0.1) {
-        const radius = 10000 / Math.abs(curveStrength);
-        const arcLength = blockLength;
-        const theta = arcLength / radius;
-        const sagitta = radius * (1 - Math.cos(theta / 2));
-        const chord = 2 * radius * Math.sin(theta / 2);
+        // New formula: R = arcLength / (|k/100| * 2π), same as SVG/canvas renderer
+        // arcLength = blockLength + letterSpacingPx (include nth spacing for wrap-point gap)
+        const arcAngle = Math.abs(curveStrength / 100) * 2 * Math.PI;
+        const arcLength = blockLength + letterSpacingPx;
+        const radius = arcLength / arcAngle;
+        const sagitta = radius * (1 - Math.cos(arcAngle / 2));
+        const chord = 2 * radius * Math.sin(arcAngle / 2);
         const rotationBuffer = element.fontSize * 0.8;
 
         if (isVertical) {
