@@ -116,7 +116,6 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
       element.type === 'text' ? element.fontSize : null,
       element.type === 'text' ? element.lineHeight : null,
       element.type === 'text' ? element.letterSpacing : null,
-      element.type === 'text' ? element.curveStrength : null,
       element.type === 'text' ? element.strokeWidth : null,
       element.type === 'text' ? element.writingMode : null,
       element.type === 'text' ? element.isWidthLocked : null,
@@ -183,7 +182,8 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
       }
 
       // Single trigger guarantee: ensure selection is updated before duplication
-      onSelect(element.id, e.shiftKey);
+      // For rotate/resize: never toggle with shiftKey (prevents deselecting during Shift+rotate)
+      onSelect(element.id, type === 'drag' ? e.shiftKey : false);
 
       let startElement = element;
       if (type === 'drag' && e.altKey && onDuplicateInPlace) {
@@ -314,7 +314,9 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
              const { center, startAngle } = interaction;
              const currentAngle = Math.atan2(e.clientY - center.y, e.clientX - center.x);
              const angleDiff = currentAngle - startAngle;
-             onUpdate({ ...startElement, rotation: startElement.rotation + angleDiff * (180 / Math.PI) });
+             let newRotation = startElement.rotation + angleDiff * (180 / Math.PI);
+             if (e.shiftKey) newRotation = Math.round(newRotation / 45) * 45;
+             onUpdate({ ...startElement, rotation: newRotation });
         } else if (type === 'resize-arrow-start' || type === 'resize-arrow-end') {
             const arrowElement = startElement as ArrowElement;
             let { start, end } = arrowElement;
@@ -581,8 +583,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             const padding = 12 + Math.ceil((el.strokeWidth || 0) / 2);
                             const isVertical = el.writingMode === 'vertical';
                             const lineHeightPx = el.fontSize * el.lineHeight;
-                            const curveStrength = el.curveStrength || 0;
-                            
+
                             const shadowFilters = [];
                             if (el.shadowColor && el.shadowBlur !== undefined && el.shadowBlur > 0) {
                                 shadowFilters.push(`drop-shadow(4px 4px ${el.shadowBlur}px ${el.shadowColor})`);
@@ -610,96 +611,16 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             return (
                                 <div style={{...style, overflow: 'visible', pointerEvents: 'none'}}> 
                                     {el.backgroundColor && el.backgroundColor !== 'transparent' && (
-                                        <div className={`absolute inset-0 ${borderRadiusClass}`} style={{ backgroundColor: el.backgroundColor }} />
+                                        <div className={`absolute inset-0 ${borderRadiusClass}`} style={{ backgroundColor: el.backgroundColor, zIndex: 0 }} />
                                     )}
-                                    <svg 
-                                        width="100%" 
-                                        height="100%" 
-                                        viewBox={`0 0 ${el.width} ${el.height}`} 
-                                        style={{ overflow: 'visible' }}
+                                    <svg
+                                        width="100%"
+                                        height="100%"
+                                        viewBox={`0 0 ${el.width} ${el.height}`}
+                                        style={{ overflow: 'visible', position: 'relative', zIndex: 1 }}
                                     >
-                                        <defs>
-                                            {!isVertical && Math.abs(curveStrength) > 0.1 && linesToRender.map((_, i) => {
-                                                const baseRadius = 10000 / Math.abs(curveStrength);
-                                                const isArch = curveStrength > 0;
-                                                const currentRadius = isArch 
-                                                    ? baseRadius - (i * lineHeightPx)
-                                                    : baseRadius + (i * lineHeightPx);
-                                                const r = Math.max(1, currentRadius);
-                                                
-                                                const startX = el.width/2 - r;
-                                                const endX = el.width/2 + r;
-                                                
-                                                // Adjust center Y
-                                                const boxMidY = el.height / 2;
-                                                const sagitta = r * (1 - Math.cos((el.width / r) / 2));
-                                                const shiftY = isArch ? -sagitta/2 : sagitta/2;
-                                                
-                                                const pivotY = isArch ? boxMidY + r + shiftY : boxMidY - r + shiftY;
-
-                                                const pathD = curveStrength > 0
-                                                    ? `M ${startX} ${pivotY} A ${r} ${r} 0 0 1 ${endX} ${pivotY}`
-                                                    : `M ${endX} ${pivotY} A ${r} ${r} 0 0 0 ${startX} ${pivotY}`;
-                                                return (
-                                                    <path id={`curve-${el.id}-${i}`} d={pathD} key={i} />
-                                                );
-                                            })}
-                                        </defs>
-
                                         {isVertical ? (
-                                            Math.abs(curveStrength) > 0.1 ? (
-                                                // --- VERTICAL CURVE RENDERER ---
-                                                linesToRender.map((line, i) => {
-                                                    const radius = 10000 / Math.abs(curveStrength);
-                                                    const isArch = curveStrength > 0;
-                                                    const totalTextThickness = linesToRender.length * lineHeightPx;
-                                                    const startX = el.width/2 + (totalTextThickness)/2 - lineHeightPx/2;
-                                                    
-                                                    const colX = startX - (i * lineHeightPx);
-                                                    const lineOffset = (i - (linesToRender.length-1)/2) * lineHeightPx;
-                                                    const currentRadius = isArch ? radius + lineOffset : radius - lineOffset;
-                                                    const pivotX = isArch ? colX - currentRadius : colX + currentRadius;
-                                                    const centerY = el.height / 2;
-
-                                                    const chars = line.split('');
-                                                    const totalH = chars.reduce((sum, char) => sum + (isCJK(char) ? el.fontSize : el.fontSize * 0.6), 0) + (chars.length - 1) * (el.letterSpacing || 0);
-                                                    const totalAngle = totalH / currentRadius;
-                                                    
-                                                    let currentAngle = isArch ? -totalAngle / 2 : Math.PI + totalAngle / 2;
-                                                    
-                                                    return chars.map((char, charIdx) => {
-                                                        const stepAngle = el.fontSize / currentRadius;
-                                                        const letterSpacingAngle = (el.letterSpacing || 0) / currentRadius;
-                                                        
-                                                        const theta = isArch ? (currentAngle + stepAngle / 2) : (currentAngle - stepAngle / 2);
-                                                        const cx = pivotX + currentRadius * Math.cos(theta);
-                                                        const cy = centerY + currentRadius * Math.sin(theta);
-                                                        
-                                                        const thetaDeg = theta * 180 / Math.PI;
-                                                        let rot = isArch ? thetaDeg : (thetaDeg + 180);
-                                                        if (!isCJK(char)) rot += 90;
-
-                                                        if (isArch) currentAngle += stepAngle + letterSpacingAngle;
-                                                        else currentAngle -= stepAngle + letterSpacingAngle;
-
-                                                        return (
-                                                            <text 
-                                                                key={`${i}-${charIdx}`} 
-                                                                x={0} y={0}
-                                                                transform={`translate(${cx},${cy}) rotate(${rot})`}
-                                                                fill={el.color} stroke={el.strokeColor} strokeWidth={el.strokeWidth || 0}
-                                                                fontFamily={el.fontFamily} fontSize={el.fontSize} fontWeight={el.isBold ? 'bold' : 'normal'}
-                                                                style={{ filter: filterString, paintOrder: 'stroke' }}
-                                                                textAnchor="middle" dominantBaseline="middle"
-                                                                strokeLinejoin="round" strokeLinecap="round"
-                                                            >
-                                                                {char}
-                                                            </text>
-                                                        );
-                                                    });
-                                                })
-                                            ) : (
-                                                // --- VERTICAL STRAIGHT RENDERER: three-pass ---
+                                            // --- VERTICAL STRAIGHT RENDERER: three-pass ---
                                                 (() => {
                                                     const totalTextWidth = linesToRender.length * lineHeightPx;
                                                     const allChars: { char: string; x: number; y: number; transform?: string; key: string }[] = [];
@@ -754,29 +675,10 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                         </>
                                                     );
                                                 })()
-                                            )
                                         ) : (
-                                            // --- HORIZONTAL RENDERER ---
-                                            Math.abs(curveStrength) > 0.1 ? (
-                                                linesToRender.map((line, i) => (
-                                                    <text key={i} fill={el.color} stroke={el.strokeColor} strokeWidth={el.strokeWidth}
-                                                        fontFamily={el.fontFamily} fontSize={el.fontSize} fontWeight={el.isBold ? 'bold' : 'normal'}
-                                                        style={{ filter: filterString, letterSpacing: `${el.letterSpacing || 0}px`, paintOrder: 'stroke' }} dominantBaseline="middle"
-                                                        strokeLinejoin="round" strokeLinecap="round"
-                                                    >
-                                                        <textPath 
-                                                            href={`#curve-${el.id}-${i}`} 
-                                                            startOffset="50%" 
-                                                            textAnchor="middle" 
-                                                        >
-                                                            {line}
-                                                        </textPath>
-                                                    </text>
-                                                ))
-                                            ) : (
-                                                // --- HORIZONTAL STRAIGHT: char-by-char, three-pass rendering ---
-                                                // Pass 1: glow/shadow (group filter), Pass 2: stroke, Pass 3: fill
-                                                // This prevents right-char stroke from overlapping left-char fill
+                                            // --- HORIZONTAL STRAIGHT: char-by-char, three-pass rendering ---
+                                            // Pass 1: glow/shadow (group filter), Pass 2: stroke, Pass 3: fill
+                                            // This prevents right-char stroke from overlapping left-char fill
                                                 (() => {
                                                     const spacingPx = el.letterSpacing || 0;
                                                     const totalH = linesToRender.length * lineHeightPx;
@@ -848,7 +750,6 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                         </>
                                                     );
                                                 })()
-                                            )
                                         )}
                                     </svg>
                                     {/* 透明 textarea 覆蓋層：只在編輯時顯示，文字透明但游標可見 */}

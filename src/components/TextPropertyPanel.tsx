@@ -353,18 +353,6 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                         </div>
                     </div>
 
-                    <div className="h-px bg-gray-100 w-full" />
-
-                    {/* Section 4: Curve */}
-                    <div className="w-full">
-                        <SliderControl 
-                            label="曲線" 
-                            value={element.curveStrength || 0} 
-                            onChange={(val) => onUpdate({ curveStrength: val })} 
-                            min={-100} 
-                            max={100} 
-                        />
-                    </div>
                 </div>
             )}
         </div>
