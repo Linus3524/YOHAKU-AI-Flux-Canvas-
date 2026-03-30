@@ -113,14 +113,22 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                   let targetWidth = bounds.width;
                   let targetHeight = bounds.height;
                   if (isCurvedEl) {
-                      // 弧形文字需要加上 sagitta（弧高）：R = totalTextWidth / (|k| * 2π)
                       const strokeW = element.strokeWidth || 0;
                       const padEl = 12 + Math.ceil(strokeW / 2);
-                      const textW = Math.max(1, bounds.width - padEl * 2);
                       const arcAngle = Math.abs(curveStr / 100) * 2 * Math.PI;
-                      const R = textW / arcAngle;
-                      const sagitta = R * (1 - Math.cos(arcAngle / 2));
-                      targetHeight = bounds.height + sagitta;
+                      if (isVertical) {
+                          // 直書弧形：sagitta 加到寬度
+                          const textH = Math.max(1, bounds.height - padEl * 2);
+                          const R = textH / arcAngle;
+                          const sagitta = R * (1 - Math.cos(arcAngle / 2));
+                          targetWidth = bounds.width + sagitta;
+                      } else {
+                          // 橫書弧形：sagitta 加到高度
+                          const textW = Math.max(1, bounds.width - padEl * 2);
+                          const R = textW / arcAngle;
+                          const sagitta = R * (1 - Math.cos(arcAngle / 2));
+                          targetHeight = bounds.height + sagitta;
+                      }
                   }
                   if (Math.abs(targetWidth - element.width) > 2 || Math.abs(targetHeight - element.height) > 2) {
                       onUpdate({ ...element, width: targetWidth, height: targetHeight });
@@ -638,61 +646,137 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                         style={{ overflow: 'visible', position: 'relative', zIndex: 1 }}
                                     >
                                         {isVertical ? (
-                                            // --- VERTICAL STRAIGHT RENDERER: three-pass ---
-                                                (() => {
-                                                    const totalTextWidth = linesToRender.length * lineHeightPx;
-                                                    const allChars: { char: string; x: number; y: number; transform?: string; key: string }[] = [];
+                                            (() => {
+                                                const spacingPx = el.letterSpacing || 0;
+                                                const isCurvedV = Math.abs(el.curveStrength || 0) > 0.1;
+                                                const totalTextWidth = linesToRender.length * lineHeightPx;
+
+                                                const basePropsV = {
+                                                    fontFamily: el.fontFamily, fontSize: el.fontSize,
+                                                    fontWeight: el.isBold ? 'bold' : 'normal' as const,
+                                                    fontStyle: el.isItalic ? 'italic' : 'normal' as const,
+                                                    textDecoration: el.isUnderline ? 'underline' : 'none' as const,
+                                                    dominantBaseline: 'middle' as const, textAnchor: 'middle' as const,
+                                                    strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const,
+                                                };
+                                                const hasStrokeV = !!(el.strokeWidth && el.strokeWidth > 0 && el.strokeColor);
+
+                                                if (isCurvedV) {
+                                                    // --- VERTICAL CURVED RENDERER ---
+                                                    // Mirror of canvas textCanvas.ts vertical curved section
+                                                    // Main axis = Y (top→bottom), arc deflects in X
+                                                    const curveStrength = el.curveStrength!;
+                                                    const curvatureNorm = curveStrength / 100;
+                                                    const isNeg = curvatureNorm < 0;
+                                                    const centerY = el.height / 2;
+
+                                                    const allCurvedCharsV: { char: string; cx: number; cy: number; rotDeg: number; key: string }[] = [];
 
                                                     linesToRender.forEach((line, i) => {
-                                                        const startX = (el.width - totalTextWidth)/2 + (linesToRender.length - 1 - i) * lineHeightPx + lineHeightPx/2;
-                                                        const lineH = line.split('').reduce((sum, c) => sum + (isCJK(c) ? el.fontSize : el.fontSize * 0.6), 0) + (line.length - 1) * (el.letterSpacing || 0);
-                                                        let yPos = padding;
-                                                        if (el.align === 'center') yPos = el.height / 2 - lineH / 2;
-                                                        else if (el.align === 'right') yPos = el.height - padding - lineH;
-                                                        let currentY = yPos;
-                                                        line.split('').forEach((char, charIdx) => {
-                                                            const isVChar = isCJK(char);
-                                                            let renderY = currentY;
-                                                            if (isVChar) { renderY += el.fontSize / 2; currentY += el.fontSize; }
-                                                            else { const cw = measureCtx ? measureCtx.measureText(char).width : el.fontSize * 0.6; renderY += cw / 2; currentY += cw; }
-                                                            currentY += el.letterSpacing || 0;
-                                                            allChars.push({ char, x: startX, y: renderY, transform: !isVChar ? `rotate(90, ${startX}, ${renderY})` : undefined, key: `${i}-${charIdx}` });
+                                                        const colX = (el.width - totalTextWidth) / 2 + (linesToRender.length - 1 - i) * lineHeightPx + lineHeightPx / 2;
+                                                        const chars = line.split('');
+                                                        const charHeights = chars.map(c => isCJK(c) ? el.fontSize : el.fontSize * 0.6);
+                                                        const totalColH = charHeights.reduce((s, h) => s + h, 0) + Math.max(0, chars.length - 1) * spacingPx;
+
+                                                        const arcAngle = Math.abs(curvatureNorm) * 2 * Math.PI;
+                                                        const baseR = totalColH / arcAngle;
+                                                        const lineOff = (i - (linesToRender.length - 1) / 2) * lineHeightPx;
+                                                        const R = isNeg ? baseR + lineOff : baseR - lineOff;
+                                                        if (R <= 0) return;
+
+                                                        const sagitta = R * (1 - Math.cos(arcAngle / 2));
+                                                        const shiftX = isNeg ? -sagitta / 2 : sagitta / 2;
+
+                                                        let accumulated = 0;
+                                                        chars.forEach((char, charIdx) => {
+                                                            const charH = charHeights[charIdx];
+                                                            const s = accumulated + charH / 2 - totalColH / 2;
+                                                            accumulated += charH + (charIdx < chars.length - 1 ? spacingPx : 0);
+
+                                                            const theta = s / R;
+                                                            const cy = centerY + R * Math.sin(theta);
+                                                            const baseX = R * (1 - Math.cos(theta));
+                                                            const cx = isNeg ? colX + baseX + shiftX : colX - baseX + shiftX;
+                                                            let rotDeg = isNeg ? (theta + Math.PI) * 180 / Math.PI : theta * 180 / Math.PI;
+                                                            if (!isCJK(char)) rotDeg += 90;
+
+                                                            allCurvedCharsV.push({ char, cx, cy, rotDeg, key: `${i}-${charIdx}` });
                                                         });
                                                     });
 
-                                                    const baseProps = {
-                                                        fontFamily: el.fontFamily, fontSize: el.fontSize,
-                                                        fontWeight: el.isBold ? 'bold' : 'normal' as const,
-                                                        fontStyle: el.isItalic ? 'italic' : 'normal' as const,
-                                                        textDecoration: el.isUnderline ? 'underline' : 'none' as const,
-                                                        dominantBaseline: 'middle' as const, textAnchor: 'middle' as const,
-                                                        strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const,
-                                                    };
-                                                    const hasStroke = !!(el.strokeWidth && el.strokeWidth > 0 && el.strokeColor);
                                                     return (
                                                         <>
                                                             {filterString && (
                                                                 <g filter={filterString}>
-                                                                    {allChars.map(({ char, x, y, transform, key }) => (
-                                                                        <text key={key} x={x} y={y} transform={transform} fill={el.color} stroke={hasStroke ? el.strokeColor : 'none'} strokeWidth={hasStroke ? (el.strokeWidth || 0) : 0} {...baseProps}>{char}</text>
+                                                                    {allCurvedCharsV.map(({ char, cx, cy, rotDeg, key }) => (
+                                                                        <text key={key} transform={`translate(${cx},${cy}) rotate(${rotDeg})`}
+                                                                            fill={el.color} stroke={hasStrokeV ? el.strokeColor : 'none'}
+                                                                            strokeWidth={hasStrokeV ? (el.strokeWidth || 0) : 0}
+                                                                            {...basePropsV}>{char}</text>
                                                                     ))}
                                                                 </g>
                                                             )}
-                                                            {hasStroke && (
+                                                            {hasStrokeV && (
                                                                 <g>
-                                                                    {allChars.map(({ char, x, y, transform, key }) => (
-                                                                        <text key={`s-${key}`} x={x} y={y} transform={transform} fill="none" stroke={el.strokeColor} strokeWidth={el.strokeWidth || 0} {...baseProps}>{char}</text>
+                                                                    {allCurvedCharsV.map(({ char, cx, cy, rotDeg, key }) => (
+                                                                        <text key={`s-${key}`} transform={`translate(${cx},${cy}) rotate(${rotDeg})`}
+                                                                            fill="none" stroke={el.strokeColor} strokeWidth={el.strokeWidth || 0}
+                                                                            {...basePropsV}>{char}</text>
                                                                     ))}
                                                                 </g>
                                                             )}
                                                             <g>
-                                                                {allChars.map(({ char, x, y, transform, key }) => (
-                                                                    <text key={`f-${key}`} x={x} y={y} transform={transform} fill={el.color} stroke="none" {...baseProps}>{char}</text>
+                                                                {allCurvedCharsV.map(({ char, cx, cy, rotDeg, key }) => (
+                                                                    <text key={`f-${key}`} transform={`translate(${cx},${cy}) rotate(${rotDeg})`}
+                                                                        fill={el.color} stroke="none" {...basePropsV}>{char}</text>
                                                                 ))}
                                                             </g>
                                                         </>
                                                     );
-                                                })()
+                                                }
+
+                                                // --- VERTICAL STRAIGHT RENDERER: three-pass ---
+                                                const allCharsV: { char: string; x: number; y: number; transform?: string; key: string }[] = [];
+                                                linesToRender.forEach((line, i) => {
+                                                    const startX = (el.width - totalTextWidth)/2 + (linesToRender.length - 1 - i) * lineHeightPx + lineHeightPx/2;
+                                                    const lineH = line.split('').reduce((sum, c) => sum + (isCJK(c) ? el.fontSize : el.fontSize * 0.6), 0) + (line.length - 1) * spacingPx;
+                                                    let yPos = padding;
+                                                    if (el.align === 'center') yPos = el.height / 2 - lineH / 2;
+                                                    else if (el.align === 'right') yPos = el.height - padding - lineH;
+                                                    let currentY = yPos;
+                                                    line.split('').forEach((char, charIdx) => {
+                                                        const isVChar = isCJK(char);
+                                                        let renderY = currentY;
+                                                        if (isVChar) { renderY += el.fontSize / 2; currentY += el.fontSize; }
+                                                        else { const cw = measureCtx ? measureCtx.measureText(char).width : el.fontSize * 0.6; renderY += cw / 2; currentY += cw; }
+                                                        currentY += spacingPx;
+                                                        allCharsV.push({ char, x: startX, y: renderY, transform: !isVChar ? `rotate(90, ${startX}, ${renderY})` : undefined, key: `${i}-${charIdx}` });
+                                                    });
+                                                });
+                                                return (
+                                                    <>
+                                                        {filterString && (
+                                                            <g filter={filterString}>
+                                                                {allCharsV.map(({ char, x, y, transform, key }) => (
+                                                                    <text key={key} x={x} y={y} transform={transform} fill={el.color} stroke={hasStrokeV ? el.strokeColor : 'none'} strokeWidth={hasStrokeV ? (el.strokeWidth || 0) : 0} {...basePropsV}>{char}</text>
+                                                                ))}
+                                                            </g>
+                                                        )}
+                                                        {hasStrokeV && (
+                                                            <g>
+                                                                {allCharsV.map(({ char, x, y, transform, key }) => (
+                                                                    <text key={`s-${key}`} x={x} y={y} transform={transform} fill="none" stroke={el.strokeColor} strokeWidth={el.strokeWidth || 0} {...basePropsV}>{char}</text>
+                                                                ))}
+                                                            </g>
+                                                        )}
+                                                        <g>
+                                                            {allCharsV.map(({ char, x, y, transform, key }) => (
+                                                                <text key={`f-${key}`} x={x} y={y} transform={transform} fill={el.color} stroke="none" {...basePropsV}>{char}</text>
+                                                            ))}
+                                                        </g>
+                                                    </>
+                                                );
+                                            })()
                                         ) : (
                                             (() => {
                                             const isCurved = Math.abs(el.curveStrength || 0) > 0.1;

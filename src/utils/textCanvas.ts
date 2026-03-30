@@ -137,51 +137,50 @@ const drawTextContent = (
 
         if (isCurved) {
             // --- VERTICAL CURVED ---
-            const radius = 10000 / Math.abs(curveStrength);
-            const isArch = curveStrength > 0;
+            // Same formula as horizontal but axes swapped:
+            // Main axis = Y (top→bottom), arc deflects in X (positive = bows right)
+            // R = totalColHeight / (|curvatureNorm| × 2π)
+            const curvatureNorm = curveStrength / 100;
+            const isNeg = curvatureNorm < 0;
             const centerY = y + el.height / 2;
 
-            lines.forEach((line, i) => {
+            lines.forEach((lineIdx2, i) => {
+                const line = lineIdx2;
                 const colX = startX - (i * lineHeightPx);
                 const chars = line.split('');
-                let totalH = 0;
-                const charHeights = chars.map(char => {
-                    const h = isCJK(char) ? el.fontSize : el.fontSize * 0.6;
-                    totalH += h;
-                    return h;
-                });
-                totalH += (chars.length - 1) * spacingPx;
+                const charHeights = chars.map(c => isCJK(c) ? el.fontSize : el.fontSize * 0.6);
+                const totalColH = charHeights.reduce((s, h) => s + h, 0) + Math.max(0, chars.length - 1) * spacingPx;
 
-                const totalAngle = totalH / radius;
-                let currentAngle = isArch ? -totalAngle / 2 : Math.PI + totalAngle / 2;
+                const arcAngle = Math.abs(curvatureNorm) * 2 * Math.PI;
+                const baseR = totalColH / arcAngle;
+                const lineOff = (i - (lines.length - 1) / 2) * lineHeightPx;
+                const R = isNeg ? baseR + lineOff : baseR - lineOff;
+                if (R <= 0) return;
 
-                const lineOffset = (i - (lines.length-1)/2) * lineHeightPx;
-                const currentRadius = isArch ? radius + lineOffset : radius - lineOffset;
-                const pivotX = isArch ? colX - currentRadius : colX + currentRadius;
+                const sagitta = R * (1 - Math.cos(arcAngle / 2));
+                const shiftX = isNeg ? -sagitta / 2 : sagitta / 2;
 
+                let accumulated = 0;
                 chars.forEach((char, idx) => {
                     const charH = charHeights[idx];
-                    const stepAngle = charH / currentRadius;
-                    const letterSpacingAngle = spacingPx / currentRadius;
+                    const s = accumulated + charH / 2 - totalColH / 2;
+                    accumulated += charH + (idx < chars.length - 1 ? spacingPx : 0);
 
-                    const theta = isArch ? (currentAngle + stepAngle / 2) : (currentAngle - stepAngle / 2);
-                    const cx = pivotX + currentRadius * Math.cos(theta);
-                    const cy = centerY + currentRadius * Math.sin(theta);
-
-                    const thetaDeg = theta * 180 / Math.PI;
-                    let rot = isArch ? thetaDeg : (thetaDeg + 180);
-                    if (!isCJK(char)) rot += 90;
+                    const theta = s / R;
+                    const cy = centerY + R * Math.sin(theta);
+                    const baseX = R * (1 - Math.cos(theta));
+                    // Positive: center bows RIGHT (ends go left); Negative: center bows LEFT (baseline out)
+                    const cx = isNeg ? colX + baseX + shiftX : colX - baseX + shiftX;
+                    let rotDeg = isNeg ? (theta + Math.PI) * 180 / Math.PI : theta * 180 / Math.PI;
+                    if (!isCJK(char)) rotDeg += 90;
 
                     ctx.save();
                     ctx.translate(cx, cy);
-                    ctx.rotate(rot * Math.PI / 180);
+                    ctx.rotate(rotDeg * Math.PI / 180);
                     ctx.textAlign = 'center';
                     if (doStroke) ctx.strokeText(char, 0, 0);
                     if (doFill) ctx.fillText(char, 0, 0);
                     ctx.restore();
-
-                    if (isArch) currentAngle += stepAngle + letterSpacingAngle;
-                    else currentAngle -= stepAngle + letterSpacingAngle;
                 });
             });
         } else {
