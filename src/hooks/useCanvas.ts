@@ -119,19 +119,31 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     }, [addElement, getCenterOfViewport]);
 
     const addText = useCallback((position?: Point) => {
+        const defaultText = '雙擊編輯文字';
+        const fontSize = 24;
+        const fontFamily = '"Noto Sans TC", sans-serif';
+        const lineHeight = 1.5;
+        const padding = 4;
+        // Estimate width char-by-char to avoid web font loading issues in offscreen canvas.
+        // CJK chars are full-width (≈fontSize); latin chars are narrower (≈fontSize*0.55).
+        const estimateCharWidth = (c: string) =>
+            /[\u4e00-\u9fff\u3040-\u30ff\uff00-\uffef\u3400-\u4dbf]/.test(c) ? fontSize : fontSize * 0.55;
+        const measuredWidth = [...defaultText].reduce((sum, c) => sum + estimateCharWidth(c), 0);
+        const initialWidth = Math.ceil(measuredWidth) + padding * 2;
+        const initialHeight = Math.ceil(fontSize * lineHeight) + padding * 2;
         addElement({
           type: 'text',
           position: position || getCenterOfViewport(),
-          width: 300,
-          height: 100,
+          width: initialWidth,
+          height: initialHeight,
           rotation: 0,
-          text: '雙擊編輯文字',
-          fontFamily: '"Noto Sans TC", sans-serif',
-          fontSize: 24,
+          text: defaultText,
+          fontFamily,
+          fontSize,
           color: '#1D1D1F',
           align: 'left',
           letterSpacing: 0,
-          lineHeight: 1.5,
+          lineHeight,
           isBold: false,
           isItalic: false,
           isUnderline: false,

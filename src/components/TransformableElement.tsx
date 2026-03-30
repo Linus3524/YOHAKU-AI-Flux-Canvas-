@@ -166,7 +166,8 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
       }
 
       // Single trigger guarantee: ensure selection is updated before duplication
-      onSelect(element.id, e.shiftKey);
+      // For rotate/resize: never toggle with shiftKey (prevents deselecting during Shift+rotate)
+      onSelect(element.id, type === 'drag' ? e.shiftKey : false);
 
       let startElement = element;
       if (type === 'drag' && e.altKey && onDuplicateInPlace) {
@@ -233,7 +234,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
             const shouldKeepRatio = isImage ? !e.shiftKey : e.shiftKey;
 
             if (isText) {
-                const padding = 12 + Math.ceil((startElement.strokeWidth || 0) / 2);
+                const padding = 4 + Math.ceil((startElement.strokeWidth || 0) / 2);
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
@@ -284,7 +285,9 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
              const { center, startAngle } = interaction;
              const currentAngle = Math.atan2(e.clientY - center.y, e.clientX - center.x);
              const angleDiff = currentAngle - startAngle;
-             onUpdate({ ...startElement, rotation: startElement.rotation + angleDiff * (180 / Math.PI) });
+             let newRotation = startElement.rotation + angleDiff * (180 / Math.PI);
+             if (e.shiftKey) newRotation = Math.round(newRotation / 45) * 45;
+             onUpdate({ ...startElement, rotation: newRotation });
         } else if (type === 'resize-arrow-start' || type === 'resize-arrow-end') {
             const arrowElement = startElement as ArrowElement;
             let { start, end } = arrowElement;
@@ -582,7 +585,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             );
                         } else {
                             // SVG RENDERER FOR TEXT
-                            const padding = 12 + Math.ceil((el.strokeWidth || 0) / 2);
+                            const padding = 4 + Math.ceil((el.strokeWidth || 0) / 2);
                             const isVertical = el.writingMode === 'vertical';
                             const lineHeightPx = el.fontSize * el.lineHeight;
                             const curveStrength = el.curveStrength || 0;
@@ -642,9 +645,11 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                 
                                                 const pivotY = isArch ? boxMidY + r + shiftY : boxMidY - r + shiftY;
 
+                                                // arch (curveStrength>0): left→right, sweep=0 (arc bulges UP)
+                                                // frown (curveStrength<0): left→right, sweep=1 (arc bulges DOWN)
                                                 const pathD = curveStrength > 0
-                                                    ? `M ${startX} ${pivotY} A ${r} ${r} 0 0 1 ${endX} ${pivotY}`
-                                                    : `M ${endX} ${pivotY} A ${r} ${r} 0 0 0 ${startX} ${pivotY}`;
+                                                    ? `M ${startX} ${pivotY} A ${r} ${r} 0 0 0 ${endX} ${pivotY}`
+                                                    : `M ${startX} ${pivotY} A ${r} ${r} 0 0 1 ${endX} ${pivotY}`;
                                                 return (
                                                     <path id={`curve-${el.id}-${i}`} d={pathD} key={i} />
                                                 );
@@ -821,9 +826,13 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                         }
                     case 'image':
                         const maskStyle = el.fade ? generateSimpleMaskCSS(el.fade) : '';
+                        const imgShadowFilter = el.shadowColor && el.shadowBlur && el.shadowBlur > 0
+                            ? `drop-shadow(${el.shadowOffsetX ?? 4}px ${el.shadowOffsetY ?? 4}px ${el.shadowBlur}px ${el.shadowColor})`
+                            : undefined;
                         return (
                             <div style={{
-                                ...style
+                                ...style,
+                                filter: imgShadowFilter,
                             }}> {/* ✅ 修改：移除 mask，避免與 transform 衝突 */}
                                 <div style={{
                                     width: '100%',
