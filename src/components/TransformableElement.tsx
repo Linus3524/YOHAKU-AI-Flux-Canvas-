@@ -93,7 +93,14 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                       const { height: textHeight } = wrapTextCanvas(
                           ctx, element.text, availableWidth, lineHeightPx, isVertical, element.fontSize, element.letterSpacing || 0
                       );
-                      const newHeight = textHeight + padding * 2;
+                      const curveStr2 = (element as any).curveStrength || 0;
+                      let extraH = 0;
+                      if (Math.abs(curveStr2) > 0.1) {
+                          const R2 = 10000 / Math.abs(curveStr2);
+                          const arcAngle2 = availableWidth / R2;
+                          extraH = R2 * (1 - Math.cos(arcAngle2 / 2));
+                      }
+                      const newHeight = textHeight + padding * 2 + extraH;
                       if (Math.abs(newHeight - element.height) > 2) {
                           onUpdate({ ...element, height: newHeight });
                       }
@@ -101,12 +108,22 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
               } else {
                   // ── 自動模式：寬高都跟著文字縮放 ──
                   const bounds = measureTextVisualBounds(element, ctx);
-                  if (Math.abs(bounds.width - element.width) > 2 || Math.abs(bounds.height - element.height) > 2) {
-                      onUpdate({
-                          ...element,
-                          width: bounds.width,
-                          height: bounds.height
-                      });
+                  const curveStr = (element as any).curveStrength || 0;
+                  const isCurvedEl = Math.abs(curveStr) > 0.1;
+                  let targetWidth = bounds.width;
+                  let targetHeight = bounds.height;
+                  if (isCurvedEl) {
+                      // 弧形文字需要加上 sagitta（弧高）
+                      const strokeW = element.strokeWidth || 0;
+                      const padEl = 12 + Math.ceil(strokeW / 2);
+                      const textW = Math.max(1, bounds.width - padEl * 2);
+                      const R = 10000 / Math.abs(curveStr);
+                      const arcAngle = textW / R;
+                      const sagitta = R * (1 - Math.cos(arcAngle / 2));
+                      targetHeight = bounds.height + sagitta;
+                  }
+                  if (Math.abs(targetWidth - element.width) > 2 || Math.abs(targetHeight - element.height) > 2) {
+                      onUpdate({ ...element, width: targetWidth, height: targetHeight });
                   }
               }
           }
@@ -122,6 +139,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
       element.type === 'text' ? element.isHeightLocked : null,
       element.type === 'text' ? element.width : null,
       element.type === 'text' ? element.height : null,
+      element.type === 'text' ? (element as any).curveStrength : null,
       interaction,
       onUpdate
   ]);
@@ -676,11 +694,113 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     );
                                                 })()
                                         ) : (
+                                            (() => {
+                                            const isCurved = Math.abs(el.curveStrength || 0) > 0.1;
+                                            const spacingPx = el.letterSpacing || 0;
+
+                                            if (isCurved) {
+                                                // --- HORIZONTAL CURVED: polar coordinate char positioning ---
+                                                const curveStrength = el.curveStrength!;
+                                                const radius = 10000 / Math.abs(curveStrength);
+                                                const isArch = curveStrength > 0;
+                                                const centerX = el.width / 2;
+                                                const boxCenterY = el.height / 2;
+
+                                                const maxLineWidth = linesToRender.reduce((max, line) => {
+                                                    const chars = line.split('');
+                                                    const w = measureCtx
+                                                        ? chars.reduce((sum, c) => sum + measureCtx!.measureText(c).width, 0) + Math.max(0, chars.length - 1) * spacingPx
+                                                        : chars.length * el.fontSize * 0.6;
+                                                    return Math.max(max, w);
+                                                }, 0);
+
+                                                const arcAngleTotal = maxLineWidth / radius;
+                                                const sagitta = radius * (1 - Math.cos(arcAngleTotal / 2));
+                                                const shiftY = isArch ? -sagitta / 2 : sagitta / 2;
+
+                                                const allCurvedChars: { char: string; x: number; y: number; rotation: number; key: string }[] = [];
+
+                                                linesToRender.forEach((line, lineIdx) => {
+                                                    const lineOffset = (lineIdx - (linesToRender.length - 1) / 2) * lineHeightPx;
+                                                    const currentRadius = isArch ? radius - lineOffset : radius + lineOffset;
+                                                    if (currentRadius <= 0) return;
+
+                                                    const pivotY = isArch
+                                                        ? boxCenterY + radius + shiftY
+                                                        : boxCenterY - radius + shiftY;
+
+                                                    const chars = line.split('');
+                                                    const charWidths = measureCtx
+                                                        ? chars.map(c => measureCtx!.measureText(c).width)
+                                                        : chars.map(() => el.fontSize * 0.6);
+
+                                                    const totalLineWidth = charWidths.reduce((sum, w) => sum + w, 0) + Math.max(0, chars.length - 1) * spacingPx;
+                                                    const totalAngle = totalLineWidth / currentRadius;
+
+                                                    let currentAngle = isArch
+                                                        ? -Math.PI / 2 - totalAngle / 2
+                                                        : Math.PI / 2 - totalAngle / 2;
+
+                                                    chars.forEach((char, charIdx) => {
+                                                        const charW = charWidths[charIdx];
+                                                        const charAngle = charW / currentRadius;
+                                                        const spacingAngle = spacingPx / currentRadius;
+                                                        const theta = currentAngle + charAngle / 2;
+
+                                                        const charX = centerX + currentRadius * Math.cos(theta);
+                                                        const charY = pivotY + currentRadius * Math.sin(theta);
+                                                        const rotDeg = (theta + (isArch ? Math.PI / 2 : -Math.PI / 2)) * 180 / Math.PI;
+
+                                                        allCurvedChars.push({ char, x: charX, y: charY, rotation: rotDeg, key: `${lineIdx}-${charIdx}` });
+                                                        currentAngle += charAngle + spacingAngle;
+                                                    });
+                                                });
+
+                                                const basePropsCurved = {
+                                                    fontFamily: el.fontFamily, fontSize: el.fontSize,
+                                                    fontWeight: el.isBold ? 'bold' : 'normal' as const,
+                                                    fontStyle: el.isItalic ? 'italic' : 'normal' as const,
+                                                    textDecoration: el.isUnderline ? 'underline' : 'none' as const,
+                                                    dominantBaseline: 'middle' as const, textAnchor: 'middle' as const,
+                                                    strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const,
+                                                };
+                                                const hasStrokeCurved = !!(el.strokeWidth && el.strokeWidth > 0 && el.strokeColor);
+
+                                                return (
+                                                    <>
+                                                        {filterString && (
+                                                            <g filter={filterString}>
+                                                                {allCurvedChars.map(({ char, x, y, rotation, key }) => (
+                                                                    <text key={key} transform={`translate(${x},${y}) rotate(${rotation})`}
+                                                                        fill={el.color} stroke={hasStrokeCurved ? el.strokeColor : 'none'}
+                                                                        strokeWidth={hasStrokeCurved ? (el.strokeWidth || 0) : 0}
+                                                                        {...basePropsCurved}>{char}</text>
+                                                                ))}
+                                                            </g>
+                                                        )}
+                                                        {hasStrokeCurved && (
+                                                            <g>
+                                                                {allCurvedChars.map(({ char, x, y, rotation, key }) => (
+                                                                    <text key={`s-${key}`} transform={`translate(${x},${y}) rotate(${rotation})`}
+                                                                        fill="none" stroke={el.strokeColor} strokeWidth={el.strokeWidth || 0}
+                                                                        {...basePropsCurved}>{char}</text>
+                                                                ))}
+                                                            </g>
+                                                        )}
+                                                        <g>
+                                                            {allCurvedChars.map(({ char, x, y, rotation, key }) => (
+                                                                <text key={`f-${key}`} transform={`translate(${x},${y}) rotate(${rotation})`}
+                                                                    fill={el.color} stroke="none" {...basePropsCurved}>{char}</text>
+                                                            ))}
+                                                        </g>
+                                                    </>
+                                                );
+                                            }
+
                                             // --- HORIZONTAL STRAIGHT: char-by-char, three-pass rendering ---
                                             // Pass 1: glow/shadow (group filter), Pass 2: stroke, Pass 3: fill
                                             // This prevents right-char stroke from overlapping left-char fill
-                                                (() => {
-                                                    const spacingPx = el.letterSpacing || 0;
+                                            return (() => {
                                                     const totalH = linesToRender.length * lineHeightPx;
                                                     const yStart = (el.height - totalH) / 2 + lineHeightPx / 2;
 
@@ -749,7 +869,8 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                             </g>
                                                         </>
                                                     );
-                                                })()
+                                                })();
+                                            })()
                                         )}
                                     </svg>
                                     {/* 透明 textarea 覆蓋層：只在編輯時顯示，文字透明但游標可見 */}

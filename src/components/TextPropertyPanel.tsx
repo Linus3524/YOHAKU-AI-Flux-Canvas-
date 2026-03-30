@@ -329,6 +329,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                     <div className="grid grid-cols-2 gap-4">
                         <SliderControl label="行距" value={element.lineHeight} onChange={(val) => onUpdate({ lineHeight: val })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
                         <SliderControl label="字距" value={element.letterSpacing || 0} onChange={(val) => onUpdate({ letterSpacing: val })} min={-20} max={100} step={1} unit="px" decimals={0} />
+                        <SliderControl label="彎曲" value={element.curveStrength || 0} onChange={(val) => onUpdate({ curveStrength: val })} min={-100} max={100} step={1} unit="" decimals={0} />
                     </div>
 
                     <div className="h-px bg-gray-100 w-full" />
