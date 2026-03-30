@@ -699,61 +699,58 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     });
                                                 })
                                             ) : (
-                                                // --- VERTICAL STRAIGHT RENDERER: three-pass ---
-                                                (() => {
+                                                // --- VERTICAL STRAIGHT RENDERER ---
+                                                linesToRender.map((line, i) => {
                                                     const totalTextWidth = linesToRender.length * lineHeightPx;
-                                                    const allChars: { char: string; x: number; y: number; transform?: string; key: string }[] = [];
+                                                    const startX = (el.width - totalTextWidth)/2 + (linesToRender.length - 1 - i) * lineHeightPx + lineHeightPx/2;
+                                                    
+                                                    const calcLineHeight = (line: string) =>
+                                                        line.split('').reduce((sum, char) => 
+                                                            sum + (isCJK(char) ? el.fontSize : el.fontSize * 0.6), 0)
+                                                        + (line.length - 1) * (el.letterSpacing || 0);
 
-                                                    linesToRender.forEach((line, i) => {
-                                                        const startX = (el.width - totalTextWidth)/2 + (linesToRender.length - 1 - i) * lineHeightPx + lineHeightPx/2;
-                                                        const lineH = line.split('').reduce((sum, c) => sum + (isCJK(c) ? el.fontSize : el.fontSize * 0.6), 0) + (line.length - 1) * (el.letterSpacing || 0);
-                                                        let yPos = padding;
-                                                        if (el.align === 'center') yPos = el.height / 2 - lineH / 2;
-                                                        else if (el.align === 'right') yPos = el.height - padding - lineH;
-                                                        let currentY = yPos;
-                                                        line.split('').forEach((char, charIdx) => {
-                                                            const isVChar = isCJK(char);
-                                                            let renderY = currentY;
-                                                            if (isVChar) { renderY += el.fontSize / 2; currentY += el.fontSize; }
-                                                            else { const cw = measureCtx ? measureCtx.measureText(char).width : el.fontSize * 0.6; renderY += cw / 2; currentY += cw; }
-                                                            currentY += el.letterSpacing || 0;
-                                                            allChars.push({ char, x: startX, y: renderY, transform: !isVChar ? `rotate(90, ${startX}, ${renderY})` : undefined, key: `${i}-${charIdx}` });
-                                                        });
+                                                    const lineH = calcLineHeight(line);
+                                                    let yPos = padding;
+                                                    if (el.align === 'center') yPos = el.height / 2 - lineH / 2;
+                                                    else if (el.align === 'right') yPos = el.height - padding - lineH;
+
+                                                    const chars = line.split('');
+                                                    let currentY = yPos;
+
+                                                    return chars.map((char, charIdx) => {
+                                                        const isVerticalChar = isCJK(char);
+                                                        let renderY = currentY;
+                                                        if (isVerticalChar) {
+                                                            renderY += el.fontSize / 2;
+                                                            currentY += el.fontSize;
+                                                        } else {
+                                                            const charW = measureCtx ? measureCtx.measureText(char).width : el.fontSize * 0.6;
+                                                            renderY += charW / 2;
+                                                            currentY += charW;
+                                                        }
+                                                        currentY += el.letterSpacing || 0;
+
+                                                        return (
+                                                            <text 
+                                                                key={`${i}-${charIdx}`}
+                                                                x={startX} y={renderY}
+                                                                fill={el.color} stroke={el.strokeColor} strokeWidth={el.strokeWidth || 0}
+                                                                fontFamily={el.fontFamily} fontSize={el.fontSize} fontWeight={el.isBold ? 'bold' : 'normal'} fontStyle={el.isItalic ? 'italic' : 'normal'}
+                                                                textDecoration={el.isUnderline ? 'underline' : 'none'}
+                                                                style={{ 
+                                                                    filter: filterString, 
+                                                                    writingMode: isVerticalChar ? 'horizontal-tb' : 'horizontal-tb',
+                                                                    paintOrder: 'stroke'
+                                                                }}
+                                                                transform={!isVerticalChar ? `rotate(90, ${startX}, ${renderY})` : undefined}
+                                                                dominantBaseline="middle" textAnchor="middle"
+                                                                strokeLinejoin="round" strokeLinecap="round"
+                                                            >
+                                                                {char}
+                                                            </text>
+                                                        )
                                                     });
-
-                                                    const baseProps = {
-                                                        fontFamily: el.fontFamily, fontSize: el.fontSize,
-                                                        fontWeight: el.isBold ? 'bold' : 'normal' as const,
-                                                        fontStyle: el.isItalic ? 'italic' : 'normal' as const,
-                                                        textDecoration: el.isUnderline ? 'underline' : 'none' as const,
-                                                        dominantBaseline: 'middle' as const, textAnchor: 'middle' as const,
-                                                        strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const,
-                                                    };
-                                                    const hasStroke = !!(el.strokeWidth && el.strokeWidth > 0 && el.strokeColor);
-                                                    return (
-                                                        <>
-                                                            {filterString && (
-                                                                <g filter={filterString}>
-                                                                    {allChars.map(({ char, x, y, transform, key }) => (
-                                                                        <text key={key} x={x} y={y} transform={transform} fill={el.color} stroke={hasStroke ? el.strokeColor : 'none'} strokeWidth={hasStroke ? (el.strokeWidth || 0) : 0} {...baseProps}>{char}</text>
-                                                                    ))}
-                                                                </g>
-                                                            )}
-                                                            {hasStroke && (
-                                                                <g>
-                                                                    {allChars.map(({ char, x, y, transform, key }) => (
-                                                                        <text key={`s-${key}`} x={x} y={y} transform={transform} fill="none" stroke={el.strokeColor} strokeWidth={el.strokeWidth || 0} {...baseProps}>{char}</text>
-                                                                    ))}
-                                                                </g>
-                                                            )}
-                                                            <g>
-                                                                {allChars.map(({ char, x, y, transform, key }) => (
-                                                                    <text key={`f-${key}`} x={x} y={y} transform={transform} fill={el.color} stroke="none" {...baseProps}>{char}</text>
-                                                                ))}
-                                                            </g>
-                                                        </>
-                                                    );
-                                                })()
+                                                })
                                             )
                                         ) : (
                                             // --- HORIZONTAL RENDERER ---
@@ -774,17 +771,28 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     </text>
                                                 ))
                                             ) : (
-                                                // --- HORIZONTAL STRAIGHT: char-by-char, three-pass rendering ---
-                                                // Pass 1: glow/shadow (group filter), Pass 2: stroke, Pass 3: fill
-                                                // This prevents right-char stroke from overlapping left-char fill
+                                                // --- HORIZONTAL STRAIGHT: char-by-char for precise alignment & letter-spacing ---
                                                 (() => {
                                                     const spacingPx = el.letterSpacing || 0;
-                                                    const totalH = linesToRender.length * lineHeightPx;
+                                                    const totalLines = linesToRender.length;
+                                                    const totalH = totalLines * lineHeightPx;
                                                     const yStart = (el.height - totalH) / 2 + lineHeightPx / 2;
-
-                                                    // Compute positions for all chars across all lines
-                                                    const allChars: { char: string; x: number; y: number; key: string }[] = [];
-                                                    linesToRender.forEach((line, i) => {
+                                                    const commonTextProps = {
+                                                        fill: el.color,
+                                                        stroke: el.strokeColor,
+                                                        strokeWidth: el.strokeWidth || 0,
+                                                        strokeLinejoin: 'round' as const,
+                                                        strokeLinecap: 'round' as const,
+                                                        paintOrder: 'stroke',
+                                                        fontFamily: el.fontFamily,
+                                                        fontSize: el.fontSize,
+                                                        fontWeight: el.isBold ? 'bold' : 'normal',
+                                                        fontStyle: el.isItalic ? 'italic' : 'normal',
+                                                        textDecoration: el.isUnderline ? 'underline' : 'none',
+                                                        dominantBaseline: 'middle' as const,
+                                                        style: { filter: filterString, paintOrder: 'stroke' },
+                                                    };
+                                                    return linesToRender.map((line, i) => {
                                                         const yPos = yStart + i * lineHeightPx;
                                                         const chars = line.split('');
                                                         const lineWidth = measureCtx
@@ -795,58 +803,17 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                         else if (el.align === 'right') startX = el.width - padding - lineWidth;
                                                         else startX = padding;
                                                         let cx = startX;
-                                                        chars.forEach((char, ci) => {
+                                                        return chars.map((char, ci) => {
                                                             const cw = measureCtx ? measureCtx.measureText(char).width : el.fontSize * 0.6;
-                                                            allChars.push({ char, x: cx, y: yPos, key: `${i}-${ci}` });
+                                                            const x = cx;
                                                             cx += cw + spacingPx;
+                                                            return (
+                                                                <text key={`${i}-${ci}`} x={x} y={yPos} textAnchor="start" {...commonTextProps}>
+                                                                    {char}
+                                                                </text>
+                                                            );
                                                         });
                                                     });
-
-                                                    const baseProps = {
-                                                        fontFamily: el.fontFamily,
-                                                        fontSize: el.fontSize,
-                                                        fontWeight: el.isBold ? 'bold' : 'normal' as const,
-                                                        fontStyle: el.isItalic ? 'italic' : 'normal' as const,
-                                                        textDecoration: el.isUnderline ? 'underline' : 'none' as const,
-                                                        dominantBaseline: 'middle' as const,
-                                                        textAnchor: 'start' as const,
-                                                        strokeLinejoin: 'round' as const,
-                                                        strokeLinecap: 'round' as const,
-                                                    };
-                                                    const hasStroke = !!(el.strokeWidth && el.strokeWidth > 0 && el.strokeColor);
-
-                                                    return (
-                                                        <>
-                                                            {/* Pass 1: glow/shadow applied at group level (behind everything) */}
-                                                            {filterString && (
-                                                                <g filter={filterString}>
-                                                                    {allChars.map(({ char, x, y, key }) => (
-                                                                        <text key={key} x={x} y={y} fill={el.color}
-                                                                            stroke={hasStroke ? el.strokeColor : 'none'}
-                                                                            strokeWidth={hasStroke ? (el.strokeWidth || 0) : 0}
-                                                                            {...baseProps}>{char}</text>
-                                                                    ))}
-                                                                </g>
-                                                            )}
-                                                            {/* Pass 2: stroke only, all chars (middle layer) */}
-                                                            {hasStroke && (
-                                                                <g>
-                                                                    {allChars.map(({ char, x, y, key }) => (
-                                                                        <text key={`s-${key}`} x={x} y={y} fill="none"
-                                                                            stroke={el.strokeColor} strokeWidth={el.strokeWidth || 0}
-                                                                            {...baseProps}>{char}</text>
-                                                                    ))}
-                                                                </g>
-                                                            )}
-                                                            {/* Pass 3: fill only, all chars (top layer) */}
-                                                            <g>
-                                                                {allChars.map(({ char, x, y, key }) => (
-                                                                    <text key={`f-${key}`} x={x} y={y} fill={el.color} stroke="none"
-                                                                        {...baseProps}>{char}</text>
-                                                                ))}
-                                                            </g>
-                                                        </>
-                                                    );
                                                 })()
                                             )
                                         )}

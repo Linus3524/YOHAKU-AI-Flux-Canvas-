@@ -69,11 +69,7 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
         offCtx.textBaseline = 'middle';
 
         // Draw text content on offscreen canvas (NO shadow)
-        // Two-pass: stroke first (all chars), then fill (all chars) — prevents right chars covering left chars' stroke
-        if (el.strokeWidth && el.strokeWidth > 0) {
-            drawTextContent(offCtx, el, x, y, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'strokeOnly');
-        }
-        drawTextContent(offCtx, el, x, y, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'fillOnly');
+        drawTextContent(offCtx, el, x, y, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding);
 
         // Now composite the offscreen canvas onto main canvas with shadow effects
         // Reset transform for drawImage (pixel-level operation)
@@ -107,17 +103,14 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
 
         ctx.restore();
     } else {
-        // No effects — draw directly (fast path), still two-pass for stroke
+        // No effects — draw directly (fast path)
         ctx.lineWidth = el.strokeWidth || 0;
         ctx.strokeStyle = el.strokeColor || 'transparent';
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         ctx.fillStyle = el.color;
         ctx.textBaseline = 'middle';
-        if (el.strokeWidth && el.strokeWidth > 0) {
-            drawTextContent(ctx, el, x, y, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'strokeOnly');
-        }
-        drawTextContent(ctx, el, x, y, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'fillOnly');
+        drawTextContent(ctx, el, x, y, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding);
     }
 };
 
@@ -125,11 +118,8 @@ const drawTextContent = (
     ctx: CanvasRenderingContext2D, el: TextElement,
     x: number, y: number, lines: string[],
     lineHeightPx: number, isVertical: boolean, isCurved: boolean,
-    curveStrength: number, spacingPx: number, textPadding: number, padding: number,
-    mode: 'strokeOnly' | 'fillOnly' | 'both' = 'both'
+    curveStrength: number, spacingPx: number, textPadding: number, padding: number
 ): void => {
-    const doStroke = (mode === 'strokeOnly' || mode === 'both') && !!(el.strokeWidth && el.strokeWidth > 0);
-    const doFill = mode === 'fillOnly' || mode === 'both';
     if (isVertical) {
         // --- Vertical Text Drawing ---
         const totalTextWidth = lines.length * lineHeightPx;
@@ -176,8 +166,8 @@ const drawTextContent = (
                     ctx.translate(cx, cy);
                     ctx.rotate(rot * Math.PI / 180);
                     ctx.textAlign = 'center';
-                    if (doStroke) ctx.strokeText(char, 0, 0);
-                    if (doFill) ctx.fillText(char, 0, 0);
+                    if (el.strokeWidth && el.strokeWidth > 0) ctx.strokeText(char, 0, 0);
+                    ctx.fillText(char, 0, 0);
                     ctx.restore();
 
                     if (isArch) currentAngle += stepAngle + letterSpacingAngle;
@@ -202,16 +192,16 @@ const drawTextContent = (
 
                     if (isCJK(char)) {
                         ctx.textAlign = 'center';
-                        if (doStroke) ctx.strokeText(char, startX, currentY);
-                        if (doFill) ctx.fillText(char, startX, currentY);
+                        if (el.strokeWidth && el.strokeWidth > 0) ctx.strokeText(char, startX, currentY);
+                        ctx.fillText(char, startX, currentY);
                         advanceY = el.fontSize;
                     } else {
                         ctx.save();
                         ctx.translate(startX, currentY);
                         ctx.rotate(90 * Math.PI / 180);
                         ctx.textAlign = 'center';
-                        if (doStroke) ctx.strokeText(char, 0, 0);
-                        if (doFill) ctx.fillText(char, 0, 0);
+                        if (el.strokeWidth && el.strokeWidth > 0) ctx.strokeText(char, 0, 0);
+                        ctx.fillText(char, 0, 0);
                         ctx.restore();
                         const charW = ctx.measureText(char).width;
                         advanceY = charW;
@@ -273,8 +263,8 @@ const drawTextContent = (
                 else ctx.rotate(-Math.PI / 2);
 
                 ctx.textAlign = 'center';
-                if (doStroke) ctx.strokeText(char, 0, 0);
-                if (doFill) ctx.fillText(char, 0, 0);
+                if (el.strokeWidth && el.strokeWidth > 0) ctx.strokeText(char, 0, 0);
+                ctx.fillText(char, 0, 0);
                 ctx.restore();
 
                 currentAngle += charAngle + spacingAngle;
@@ -302,8 +292,8 @@ const drawTextContent = (
 
             chars.forEach(char => {
                 const charW = ctx.measureText(char).width;
-                if (doStroke) ctx.strokeText(char, cx, ly);
-                if (doFill) ctx.fillText(char, cx, ly);
+                if (el.strokeWidth && el.strokeWidth > 0) ctx.strokeText(char, cx, ly);
+                ctx.fillText(char, cx, ly);
                 cx += charW + spacingPx;
             });
         });
