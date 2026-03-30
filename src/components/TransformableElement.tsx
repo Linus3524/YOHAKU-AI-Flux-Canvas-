@@ -66,11 +66,13 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
           const ctx = canvas.getContext('2d');
           if (ctx) {
               const isVertical = element.writingMode === 'vertical';
+              // Curved text always auto-resizes (ignore locks) so box always wraps text
+              const isCurvedMode = Math.abs((element as any).curveStrength || 0) > 0.1;
 
-              if (element.isWidthLocked && element.isHeightLocked) {
+              if (!isCurvedMode && element.isWidthLocked && element.isHeightLocked) {
                   // ── 固定模式：寬高都鎖，什麼都不做 ──
 
-              } else if (element.isWidthLocked || element.isHeightLocked) {
+              } else if (!isCurvedMode && (element.isWidthLocked || element.isHeightLocked)) {
                   // ── 固定寬 / 固定高模式：一軸固定，另一軸自動 ──
                   const strokeW = element.strokeWidth || 0;
                   const padding = 12 + Math.ceil(strokeW / 2);
@@ -1118,30 +1120,39 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             <div className="absolute left-1/2 -translate-x-1/2 w-px pointer-events-none opacity-40"
                                 style={{ top: -12, height: 12, backgroundColor: getLayerColor(element.type) }} />
 
-                            {/* Corner handles：中心精確對齊選取框角落（7px 正方形，偏移 -3px = 半寬） */}
-                            {([
-                                ['nw', { top: -4, left:  -4 }, 'cursor-nw-resize'],
-                                ['ne', { top: -4, right: -4 }, 'cursor-ne-resize'],
-                                ['sw', { bottom: -4, left:  -4 }, 'cursor-sw-resize'],
-                                ['se', { bottom: -4, right: -4 }, 'cursor-se-resize'],
-                            ] as [ResizeHandle, React.CSSProperties, string][]).map(([dir, pos, cur]) => (
-                                <div key={dir}
-                                    className={`absolute transform-handle hover:scale-125 transition-transform ${cur}`}
-                                    style={{ ...pos, width: 7, height: 7, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 1 }}
-                                    onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
-                            ))}
-                            {/* Edge handles：中心精確對齊選取框邊中點（7px 正方形，偏移 -3px） */}
-                            {([
-                                ['e', { top: '50%', right: -4, transform: 'translateY(-50%)' }, 'cursor-e-resize',  true],
-                                ['w', { top: '50%', left:  -4, transform: 'translateY(-50%)' }, 'cursor-w-resize',  true],
-                                ['s', { bottom: -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-s-resize', element.type !== 'text'],
-                                ['n', { top:    -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-n-resize', element.type !== 'text'],
-                            ] as [ResizeHandle, React.CSSProperties, string, boolean][]).filter(([,,,show]) => show).map(([dir, pos, cur]) => (
-                                <div key={dir}
-                                    className={`absolute transform-handle hover:scale-125 transition-transform ${cur}`}
-                                    style={{ ...pos, width: 7, height: 7, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 1 }}
-                                    onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
-                            ))}
+                            {/* Curved text: box is always auto-sized — suppress all resize handles */}
+                            {(() => {
+                                const isCurvedText = element.type === 'text' && Math.abs((element as any).curveStrength || 0) > 0.1;
+                                if (isCurvedText) return null;
+                                return (
+                                    <>
+                                        {/* Corner handles：中心精確對齊選取框角落（7px 正方形，偏移 -3px = 半寬） */}
+                                        {([
+                                            ['nw', { top: -4, left:  -4 }, 'cursor-nw-resize'],
+                                            ['ne', { top: -4, right: -4 }, 'cursor-ne-resize'],
+                                            ['sw', { bottom: -4, left:  -4 }, 'cursor-sw-resize'],
+                                            ['se', { bottom: -4, right: -4 }, 'cursor-se-resize'],
+                                        ] as [ResizeHandle, React.CSSProperties, string][]).map(([dir, pos, cur]) => (
+                                            <div key={dir}
+                                                className={`absolute transform-handle hover:scale-125 transition-transform ${cur}`}
+                                                style={{ ...pos, width: 7, height: 7, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 1 }}
+                                                onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
+                                        ))}
+                                        {/* Edge handles：中心精確對齊選取框邊中點（7px 正方形，偏移 -3px） */}
+                                        {([
+                                            ['e', { top: '50%', right: -4, transform: 'translateY(-50%)' }, 'cursor-e-resize',  true],
+                                            ['w', { top: '50%', left:  -4, transform: 'translateY(-50%)' }, 'cursor-w-resize',  true],
+                                            ['s', { bottom: -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-s-resize', element.type !== 'text'],
+                                            ['n', { top:    -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-n-resize', element.type !== 'text'],
+                                        ] as [ResizeHandle, React.CSSProperties, string, boolean][]).filter(([,,,show]) => show).map(([dir, pos, cur]) => (
+                                            <div key={dir}
+                                                className={`absolute transform-handle hover:scale-125 transition-transform ${cur}`}
+                                                style={{ ...pos, width: 7, height: 7, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 1 }}
+                                                onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
+                                        ))}
+                                    </>
+                                );
+                            })()}
                         </>
                     )}
                 </>

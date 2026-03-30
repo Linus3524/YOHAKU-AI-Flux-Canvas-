@@ -277,19 +277,24 @@ export const measureTextVisualBounds = (element: TextElement, ctx: CanvasRenderi
 
     if (Math.abs(curveStrength) > 0.1) {
         // New formula: R = arcLength / (|k/100| * 2π), same as SVG/canvas renderer
-        // arcLength = blockLength + letterSpacingPx (include nth spacing for wrap-point gap)
+        // arcLength = blockLength + letterSpacingPx (nth spacing for wrap-point gap)
         const arcAngle = Math.abs(curveStrength / 100) * 2 * Math.PI;
         const arcLength = blockLength + letterSpacingPx;
         const radius = arcLength / arcAngle;
         const sagitta = radius * (1 - Math.cos(arcAngle / 2));
-        const chord = 2 * radius * Math.sin(arcAngle / 2);
+        // chord = 2R*sin(halfArc) breaks down when arc > π (chord → 0 at full circle).
+        // Use actual visual span: for halfArc > π/2, the arc passes through the ±90° points → full diameter.
+        const halfArc = arcAngle / 2;
+        const xSpan = halfArc <= Math.PI / 2 ? 2 * radius * Math.sin(halfArc) : 2 * radius;
         const rotationBuffer = element.fontSize * 0.8;
 
         if (isVertical) {
+            // Vertical: deflection axis = X (sagitta), main axis = Y (xSpan = arc vertical extent)
             finalWidth = blockThickness + sagitta + effectPadding * 2 + rotationBuffer;
-            finalHeight = chord + effectPadding * 2 + rotationBuffer;
+            finalHeight = xSpan + effectPadding * 2 + rotationBuffer;
         } else {
-            finalWidth = chord + effectPadding * 2 + rotationBuffer;
+            // Horizontal: main axis = X (xSpan = arc horizontal extent), deflection = Y (sagitta)
+            finalWidth = xSpan + effectPadding * 2 + rotationBuffer;
             finalHeight = blockThickness + sagitta + effectPadding * 2 + rotationBuffer;
         }
     } else {
