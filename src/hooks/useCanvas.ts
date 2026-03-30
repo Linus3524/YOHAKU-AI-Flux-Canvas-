@@ -794,17 +794,19 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             const scaleX = img.naturalWidth / element.width;
             const scaleY = img.naturalHeight / element.height;
   
-            const sx = cropRect.x * scaleX;
-            const sy = cropRect.y * scaleY;
-            const sWidth = cropRect.width * scaleX;
-            const sHeight = cropRect.height * scaleY;
-  
+            const sx = Math.round(cropRect.x * scaleX);
+            const sy = Math.round(cropRect.y * scaleY);
+            const sWidth = Math.round(cropRect.width * scaleX);
+            const sHeight = Math.round(cropRect.height * scaleY);
+
             canvas.width = sWidth;
             canvas.height = sHeight;
-  
+
             const ctx = canvas.getContext('2d');
             if (!ctx) throw new Error("Canvas context failed");
-  
+
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
             const newSrc = canvas.toDataURL('image/png');
   
