@@ -228,35 +228,37 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
     }, [isDragging]);
 
     return (
-        <div 
-            className="fixed z-[1000] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-gray-100 p-2 flex flex-col gap-2 min-w-[340px] animate-fade-in-up transition-shadow duration-200"
-            style={{ 
-                left: position.x, 
+        <div
+            className="fixed z-[1000] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-gray-100 p-2 flex flex-col gap-2 animate-fade-in-up transition-shadow duration-200"
+            style={{
+                left: position.x,
                 top: position.y,
+                minWidth: showMore ? 460 : 340,
                 cursor: isDragging ? 'grabbing' : 'default',
                 boxShadow: isDragging ? '0 20px 60px rgba(0,0,0,0.2)' : '0 10px 40px rgba(0,0,0,0.15)'
             }}
             onMouseDown={handleMouseDown}
             onClick={(e) => e.stopPropagation()}
         >
-            {/* Primary Row: Font, Size, Color, Toggle */}
+            {/* ── Top Bar: Font · Size · Text Color · More · Done ── */}
             <div className="flex items-center gap-2">
                 <div className="px-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors">
                     <Icons.Grip />
                 </div>
 
-                <div className="relative group">
-                    <select 
+                {/* Font dropdown */}
+                <div className="relative">
+                    <select
                         value={element.fontFamily}
                         onChange={(e) => onUpdate({ fontFamily: e.target.value })}
-                        onMouseDown={(e) => e.stopPropagation()} 
+                        onMouseDown={(e) => e.stopPropagation()}
                         className="appearance-none bg-[#F5F5F7] hover:bg-gray-100 text-[#1D1D1F] text-sm font-medium rounded-lg pl-3 pr-8 py-2 outline-none cursor-pointer w-44 truncate transition-colors"
                         style={{ fontFamily: element.fontFamily }}
                     >
                         {FONT_GROUPS.map(group => (
-                            <optgroup key={group.label} label={group.label} className="font-sans font-bold text-gray-400 text-[10px] uppercase tracking-wider">
+                            <optgroup key={group.label} label={group.label}>
                                 {group.options.map(f => (
-                                    <option key={f.name} value={f.family} style={{ fontFamily: f.family }} className="text-[#1D1D1F] text-sm font-normal">
+                                    <option key={f.name} value={f.family} style={{ fontFamily: f.family }}>
                                         {f.label}
                                     </option>
                                 ))}
@@ -268,27 +270,28 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                     </div>
                 </div>
 
+                {/* Font size */}
                 <input
                     type="number"
                     value={element.fontSize}
-                    min={1}
-                    max={999}
+                    min={1} max={999}
                     onChange={(e) => {
                         const val = Math.min(999, Math.max(1, Number(e.target.value)));
                         if (!isNaN(val)) onUpdate({ fontSize: val });
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className="bg-[#F5F5F7] hover:bg-gray-100 text-[#1D1D1F] text-sm font-medium rounded-lg px-2 py-2 outline-none w-16 text-center transition-colors"
+                    className="bg-[#F5F5F7] hover:bg-gray-100 text-[#1D1D1F] text-sm font-medium rounded-lg px-2 py-2 outline-none w-14 text-center transition-colors"
                 />
 
                 <div className="w-px h-6 bg-gray-200" />
 
-                <ColorPickerButton label="文字色" color={element.color} onChange={(c) => onUpdate({ color: c })} />
+                {/* Text color — no label so it aligns with the buttons */}
+                <ColorPickerButton color={element.color} onChange={(c) => onUpdate({ color: c })} />
 
                 <div className="flex-1" />
-                
-                <button 
-                    onClick={() => setShowMore(!showMore)} 
+
+                <button
+                    onClick={() => setShowMore(!showMore)}
                     onMouseDown={(e) => e.stopPropagation()}
                     className={`w-8 h-8 flex items-center justify-center rounded-lg text-[#1D1D1F] transition-colors ${showMore ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
                 >
@@ -300,60 +303,73 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                 </button>
             </div>
 
-            {/* Expanded Options - Cleaner Layout */}
+            {/* ── Expanded Panel ── */}
             {showMore && (
-                <div className="flex flex-col gap-3 p-1 pt-2" onMouseDown={(e) => e.stopPropagation()}>
-                    <div className="h-px bg-gray-100 w-full" />
-                    
-                    {/* Section 1: Alignment & Style */}
-                    <div className="flex items-center justify-between">
-                         <div className="flex bg-[#F5F5F7] rounded-lg p-0.5">
-                             <button onClick={() => handleWritingModeChange('horizontal')} className={`p-1.5 rounded-md transition-all ${(!element.writingMode || element.writingMode === 'horizontal') ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.TextHorizontal /></button>
-                             <button onClick={() => handleWritingModeChange('vertical')} className={`p-1.5 rounded-md transition-all ${element.writingMode === 'vertical' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.TextVertical /></button>
-                         </div>
-                         <div className="flex bg-[#F5F5F7] rounded-lg p-0.5">
-                            <button onClick={() => onUpdate({ align: 'left' })} className={`p-1.5 rounded-md transition-all ${element.align === 'left' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.AlignLeft /></button>
-                            <button onClick={() => onUpdate({ align: 'center' })} className={`p-1.5 rounded-md transition-all ${element.align === 'center' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.AlignCenter /></button>
-                            <button onClick={() => onUpdate({ align: 'right' })} className={`p-1.5 rounded-md transition-all ${element.align === 'right' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.AlignRight /></button>
+                <div className="flex flex-col gap-0 p-1 pt-1" onMouseDown={(e) => e.stopPropagation()}>
+                    <div className="h-px bg-gray-100 w-full mb-3" />
+
+                    {/* Two-column layout */}
+                    <div className="flex gap-0">
+
+                        {/* ── LEFT COLUMN: Typography & Layout ── */}
+                        <div className="flex flex-col gap-3 flex-1 pr-4">
+
+                            {/* Row: Writing mode + Align + B/I/U on one line */}
+                            <div className="flex items-center gap-1.5">
+                                {/* 直/橫書 */}
+                                <div className="flex bg-[#F5F5F7] rounded-lg p-0.5">
+                                    <button onClick={() => handleWritingModeChange('horizontal')} className={`p-1.5 rounded-md transition-all ${(!element.writingMode || element.writingMode === 'horizontal') ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.TextHorizontal /></button>
+                                    <button onClick={() => handleWritingModeChange('vertical')} className={`p-1.5 rounded-md transition-all ${element.writingMode === 'vertical' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.TextVertical /></button>
+                                </div>
+                                <div className="w-px h-4 bg-gray-200" />
+                                {/* 對齊 */}
+                                <div className="flex bg-[#F5F5F7] rounded-lg p-0.5">
+                                    <button onClick={() => onUpdate({ align: 'left' })} className={`p-1.5 rounded-md transition-all ${element.align === 'left' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.AlignLeft /></button>
+                                    <button onClick={() => onUpdate({ align: 'center' })} className={`p-1.5 rounded-md transition-all ${element.align === 'center' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.AlignCenter /></button>
+                                    <button onClick={() => onUpdate({ align: 'right' })} className={`p-1.5 rounded-md transition-all ${element.align === 'right' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.AlignRight /></button>
+                                </div>
+                                <div className="w-px h-4 bg-gray-200" />
+                                {/* B / I / U */}
+                                <div className="flex gap-0.5">
+                                    <button onClick={() => onUpdate({ isBold: !element.isBold })} className={`p-1.5 rounded-lg transition-all ${element.isBold ? 'bg-black text-white' : 'hover:bg-gray-100 text-[#1D1D1F]'}`}><Icons.Bold /></button>
+                                    <button onClick={() => onUpdate({ isItalic: !element.isItalic })} className={`p-1.5 rounded-lg transition-all ${element.isItalic ? 'bg-black text-white' : 'hover:bg-gray-100 text-[#1D1D1F]'}`}><Icons.Italic /></button>
+                                    <button onClick={() => onUpdate({ isUnderline: !element.isUnderline })} className={`p-1.5 rounded-lg transition-all ${element.isUnderline ? 'bg-black text-white' : 'hover:bg-gray-100 text-[#1D1D1F]'}`}><Icons.Underline /></button>
+                                </div>
+                            </div>
+
+                            {/* Sliders */}
+                            <SliderControl label="行距" value={element.lineHeight} onChange={(val) => onUpdate({ lineHeight: val })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
+                            <SliderControl label="字距" value={element.letterSpacing || 0} onChange={(val) => onUpdate({ letterSpacing: val })} min={-20} max={100} step={1} unit="px" decimals={0} />
+                            <SliderControl label="彎曲" value={(element as any).curveStrength || 0} onChange={(val) => onUpdate({ curveStrength: val } as any)} min={-100} max={100} step={1} unit="" decimals={0} />
                         </div>
-                        <div className="flex gap-1">
-                            <button onClick={() => onUpdate({ isBold: !element.isBold })} className={`p-1.5 rounded-lg transition-all ${element.isBold ? 'bg-black text-white' : 'hover:bg-gray-100 text-[#1D1D1F]'}`}><Icons.Bold /></button>
-                            <button onClick={() => onUpdate({ isItalic: !element.isItalic })} className={`p-1.5 rounded-lg transition-all ${element.isItalic ? 'bg-black text-white' : 'hover:bg-gray-100 text-[#1D1D1F]'}`}><Icons.Italic /></button>
-                            <button onClick={() => onUpdate({ isUnderline: !element.isUnderline })} className={`p-1.5 rounded-lg transition-all ${element.isUnderline ? 'bg-black text-white' : 'hover:bg-gray-100 text-[#1D1D1F]'}`}><Icons.Underline /></button>
+
+                        {/* ── Vertical divider ── */}
+                        <div className="w-px bg-gray-100 mx-1 self-stretch" />
+
+                        {/* ── RIGHT COLUMN: Effects ── */}
+                        <div className="flex flex-col gap-3 pl-3" style={{ width: 170 }}>
+                            {/* 邊框 */}
+                            <div className="flex items-center gap-2">
+                                <ColorPickerButton label="邊框" color={element.strokeColor ?? '#FF3B30'} onChange={(c) => onUpdate({ strokeColor: c })} />
+                                <SliderControl label="粗細" value={element.strokeWidth || 0} onChange={(val) => onUpdate({ strokeWidth: val })} min={0} max={20} />
+                            </div>
+                            {/* 陰影 */}
+                            <div className="flex items-center gap-2">
+                                <ColorPickerButton label="陰影" color={element.shadowColor} onChange={(c) => onUpdate({ shadowColor: c })} />
+                                <SliderControl label="模糊" value={element.shadowBlur || 0} onChange={(val) => onUpdate({ shadowBlur: val })} min={0} max={50} />
+                            </div>
+                            {/* 光暈 */}
+                            <div className="flex items-center gap-2">
+                                <ColorPickerButton label="光暈" color={element.glowColor} onChange={(c) => onUpdate({ glowColor: c })} />
+                                <SliderControl label="強度" value={element.glowBlur || 0} onChange={(val) => onUpdate({ glowBlur: val })} min={0} max={50} />
+                            </div>
+                            {/* 背景色 */}
+                            <div className="flex items-center gap-2">
+                                <ColorPickerButton label="背景色" color={element.backgroundColor ?? 'transparent'} onChange={(c) => onUpdate({ backgroundColor: c })} />
+                            </div>
                         </div>
+
                     </div>
-
-                    <div className="h-px bg-gray-100 w-full" />
-
-                    {/* Section 2: Spacing & Layout Sliders */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <SliderControl label="行距" value={element.lineHeight} onChange={(val) => onUpdate({ lineHeight: val })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
-                        <SliderControl label="字距" value={element.letterSpacing || 0} onChange={(val) => onUpdate({ letterSpacing: val })} min={-20} max={100} step={1} unit="px" decimals={0} />
-                        <SliderControl label="彎曲" value={element.curveStrength || 0} onChange={(val) => onUpdate({ curveStrength: val })} min={-100} max={100} step={1} unit="" decimals={0} />
-                    </div>
-
-                    <div className="h-px bg-gray-100 w-full" />
-
-                    {/* Section 3: Colors & Effects */}
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                        <div className="flex items-center gap-3">
-                            <ColorPickerButton label="邊框" color={element.strokeColor} onChange={(c) => onUpdate({ strokeColor: c })} />
-                            <SliderControl label="粗細" value={element.strokeWidth || 0} onChange={(val) => onUpdate({ strokeWidth: val })} min={0} max={20} />
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <ColorPickerButton label="背景色" color={element.backgroundColor ?? '#ffffff'} onChange={(c) => onUpdate({ backgroundColor: c })} />
-                            <div className="flex-1"></div> {/* Spacer */}
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <ColorPickerButton label="陰影" color={element.shadowColor} onChange={(c) => onUpdate({ shadowColor: c })} />
-                            <SliderControl label="模糊" value={element.shadowBlur || 0} onChange={(val) => onUpdate({ shadowBlur: val })} min={0} max={50} />
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <ColorPickerButton label="光暈" color={element.glowColor} onChange={(c) => onUpdate({ glowColor: c })} />
-                            <SliderControl label="強度" value={element.glowBlur || 0} onChange={(val) => onUpdate({ glowBlur: val })} min={0} max={50} />
-                        </div>
-                    </div>
-
                 </div>
             )}
         </div>
