@@ -115,7 +115,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
         try {
             const genAI = createAiClient();
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-3.1-flash-lite-preview',
+                model: 'gemini-2.5-flash',
                 contents: { parts: [{ text: userPrompt }] },
                 config: {
                     systemInstruction: `You are a professional Creative Director and Prompt Engineer.
