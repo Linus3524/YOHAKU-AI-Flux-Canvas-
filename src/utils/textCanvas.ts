@@ -222,62 +222,50 @@ const drawTextContent = (
             });
         }
     } else if (isCurved) {
-        // --- HORIZONTAL CURVE RENDERER (Optimized) ---
-        const radius = 10000 / Math.abs(curveStrength);
-        const isArch = curveStrength > 0;
+        // --- HORIZONTAL CURVE RENDERER ---
+        // curvatureNorm ∈ [-1,1]: +1 = full circle arch up (∩), -1 = full circle arch down baseline-out (∪ flipped)
+        // R = totalLineWidth / (|curvatureNorm| * 2π)  →  at ±1, text wraps exactly once around circle
+        const curvatureNorm = curveStrength / 100;
+        const isNeg = curvatureNorm < 0;
         const centerX = x + el.width / 2;
-
         const boxCenterY = y + el.height / 2;
 
-        const maxLineWidth = lines.reduce((max, line) => {
-            const chars = line.split('');
-            const w = chars.reduce((sum, c) => sum + ctx.measureText(c).width, 0) + (chars.length - 1) * spacingPx;
-            return Math.max(max, w);
-        }, 0);
-
-        const arcAngleTotal = maxLineWidth / radius;
-        const sagitta = radius * (1 - Math.cos(arcAngleTotal / 2));
-        const shiftY = isArch ? -sagitta/2 : sagitta/2;
-
-        lines.forEach((line, i) => {
-            const lineOffset = (i - (lines.length-1)/2) * lineHeightPx;
-            const currentRadius = isArch ? radius - lineOffset : radius + lineOffset;
-
-            if (currentRadius <= 0) return;
-
-            const pivotY = isArch ? boxCenterY + radius + shiftY : boxCenterY - radius + shiftY;
-
+        lines.forEach((line, lineIdx) => {
             const chars = line.split('');
             const charWidths = chars.map(c => ctx.measureText(c).width);
-            const totalLineWidth = charWidths.reduce((sum, w) => sum + w, 0) + (chars.length - 1) * spacingPx;
+            const totalLineWidth = charWidths.reduce((sum, w) => sum + w, 0) + Math.max(0, chars.length - 1) * spacingPx;
 
-            const totalAngle = totalLineWidth / currentRadius;
+            const arcAngle = Math.abs(curvatureNorm) * 2 * Math.PI;
+            const baseR = totalLineWidth / arcAngle;
+            // Multi-line: inner lines have smaller radius
+            const lineOffset = (lineIdx - (lines.length - 1) / 2) * lineHeightPx;
+            const R = isNeg ? baseR + lineOffset : baseR - lineOffset;
+            if (R <= 0) return;
 
-            let currentAngle = isArch
-                ? -Math.PI / 2 - totalAngle / 2
-                : Math.PI / 2 - totalAngle / 2;
+            const sagitta = R * (1 - Math.cos(arcAngle / 2));
+            // Vertical shift to keep arc visually centred in the box
+            const shiftY = isNeg ? sagitta / 2 : -sagitta / 2;
 
-            chars.forEach((char, idx) => {
-                const charW = charWidths[idx];
-                const charAngle = charW / currentRadius;
-                const spacingAngle = spacingPx / currentRadius;
+            // Arc offset s for each char (left → right, relative to text centre)
+            let accumulated = 0;
+            chars.forEach((char, i) => {
+                const charW = charWidths[i];
+                const s = accumulated + charW / 2 - totalLineWidth / 2;
+                accumulated += charW + (i < chars.length - 1 ? spacingPx : 0);
 
-                const theta = currentAngle + charAngle / 2;
+                const theta = s / R;
+                const charX = centerX + R * Math.sin(theta);
+                const baseY = isNeg ? -R * (1 - Math.cos(theta)) : R * (1 - Math.cos(theta));
+                const charY = boxCenterY + baseY + shiftY;
+                const rotRad = isNeg ? theta + Math.PI : theta;
 
                 ctx.save();
-                ctx.translate(centerX, pivotY);
-                ctx.rotate(theta);
-                ctx.translate(currentRadius, 0);
-
-                if (isArch) ctx.rotate(Math.PI / 2);
-                else ctx.rotate(-Math.PI / 2);
-
+                ctx.translate(charX, charY);
+                ctx.rotate(rotRad);
                 ctx.textAlign = 'center';
                 if (doStroke) ctx.strokeText(char, 0, 0);
                 if (doFill) ctx.fillText(char, 0, 0);
                 ctx.restore();
-
-                currentAngle += charAngle + spacingAngle;
             });
         });
     } else {

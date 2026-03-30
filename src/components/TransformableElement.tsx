@@ -96,8 +96,8 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                       const curveStr2 = (element as any).curveStrength || 0;
                       let extraH = 0;
                       if (Math.abs(curveStr2) > 0.1) {
-                          const R2 = 10000 / Math.abs(curveStr2);
-                          const arcAngle2 = availableWidth / R2;
+                          const arcAngle2 = Math.abs(curveStr2 / 100) * 2 * Math.PI;
+                          const R2 = availableWidth / arcAngle2;
                           extraH = R2 * (1 - Math.cos(arcAngle2 / 2));
                       }
                       const newHeight = textHeight + padding * 2 + extraH;
@@ -113,12 +113,12 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                   let targetWidth = bounds.width;
                   let targetHeight = bounds.height;
                   if (isCurvedEl) {
-                      // 弧形文字需要加上 sagitta（弧高）
+                      // 弧形文字需要加上 sagitta（弧高）：R = totalTextWidth / (|k| * 2π)
                       const strokeW = element.strokeWidth || 0;
                       const padEl = 12 + Math.ceil(strokeW / 2);
                       const textW = Math.max(1, bounds.width - padEl * 2);
-                      const R = 10000 / Math.abs(curveStr);
-                      const arcAngle = textW / R;
+                      const arcAngle = Math.abs(curveStr / 100) * 2 * Math.PI;
+                      const R = textW / arcAngle;
                       const sagitta = R * (1 - Math.cos(arcAngle / 2));
                       targetHeight = bounds.height + sagitta;
                   }
@@ -699,60 +699,46 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                             const spacingPx = el.letterSpacing || 0;
 
                                             if (isCurved) {
-                                                // --- HORIZONTAL CURVED: polar coordinate char positioning ---
+                                                // --- HORIZONTAL CURVED: new polar formula ---
+                                                // R = totalLineWidth / (|curvatureNorm| * 2π)
+                                                // +100 = ∩ full circle, -100 = ∪ full circle baseline-out
                                                 const curveStrength = el.curveStrength!;
-                                                const radius = 10000 / Math.abs(curveStrength);
-                                                const isArch = curveStrength > 0;
+                                                const curvatureNorm = curveStrength / 100;
+                                                const isNeg = curvatureNorm < 0;
                                                 const centerX = el.width / 2;
                                                 const boxCenterY = el.height / 2;
-
-                                                const maxLineWidth = linesToRender.reduce((max, line) => {
-                                                    const chars = line.split('');
-                                                    const w = measureCtx
-                                                        ? chars.reduce((sum, c) => sum + measureCtx!.measureText(c).width, 0) + Math.max(0, chars.length - 1) * spacingPx
-                                                        : chars.length * el.fontSize * 0.6;
-                                                    return Math.max(max, w);
-                                                }, 0);
-
-                                                const arcAngleTotal = maxLineWidth / radius;
-                                                const sagitta = radius * (1 - Math.cos(arcAngleTotal / 2));
-                                                const shiftY = isArch ? -sagitta / 2 : sagitta / 2;
 
                                                 const allCurvedChars: { char: string; x: number; y: number; rotation: number; key: string }[] = [];
 
                                                 linesToRender.forEach((line, lineIdx) => {
-                                                    const lineOffset = (lineIdx - (linesToRender.length - 1) / 2) * lineHeightPx;
-                                                    const currentRadius = isArch ? radius - lineOffset : radius + lineOffset;
-                                                    if (currentRadius <= 0) return;
-
-                                                    const pivotY = isArch
-                                                        ? boxCenterY + radius + shiftY
-                                                        : boxCenterY - radius + shiftY;
-
                                                     const chars = line.split('');
                                                     const charWidths = measureCtx
                                                         ? chars.map(c => measureCtx!.measureText(c).width)
                                                         : chars.map(() => el.fontSize * 0.6);
-
                                                     const totalLineWidth = charWidths.reduce((sum, w) => sum + w, 0) + Math.max(0, chars.length - 1) * spacingPx;
-                                                    const totalAngle = totalLineWidth / currentRadius;
 
-                                                    let currentAngle = isArch
-                                                        ? -Math.PI / 2 - totalAngle / 2
-                                                        : Math.PI / 2 - totalAngle / 2;
+                                                    const arcAngle = Math.abs(curvatureNorm) * 2 * Math.PI;
+                                                    const baseR = totalLineWidth / arcAngle;
+                                                    const lineOffset = (lineIdx - (linesToRender.length - 1) / 2) * lineHeightPx;
+                                                    const R = isNeg ? baseR + lineOffset : baseR - lineOffset;
+                                                    if (R <= 0) return;
 
+                                                    const sagitta = R * (1 - Math.cos(arcAngle / 2));
+                                                    const shiftY = isNeg ? sagitta / 2 : -sagitta / 2;
+
+                                                    let accumulated = 0;
                                                     chars.forEach((char, charIdx) => {
                                                         const charW = charWidths[charIdx];
-                                                        const charAngle = charW / currentRadius;
-                                                        const spacingAngle = spacingPx / currentRadius;
-                                                        const theta = currentAngle + charAngle / 2;
+                                                        const s = accumulated + charW / 2 - totalLineWidth / 2;
+                                                        accumulated += charW + (charIdx < chars.length - 1 ? spacingPx : 0);
 
-                                                        const charX = centerX + currentRadius * Math.cos(theta);
-                                                        const charY = pivotY + currentRadius * Math.sin(theta);
-                                                        const rotDeg = (theta + (isArch ? Math.PI / 2 : -Math.PI / 2)) * 180 / Math.PI;
+                                                        const theta = s / R;
+                                                        const charX = centerX + R * Math.sin(theta);
+                                                        const baseY = isNeg ? -R * (1 - Math.cos(theta)) : R * (1 - Math.cos(theta));
+                                                        const charY = boxCenterY + baseY + shiftY;
+                                                        const rotDeg = isNeg ? (theta + Math.PI) * 180 / Math.PI : theta * 180 / Math.PI;
 
                                                         allCurvedChars.push({ char, x: charX, y: charY, rotation: rotDeg, key: `${lineIdx}-${charIdx}` });
-                                                        currentAngle += charAngle + spacingAngle;
                                                     });
                                                 });
 
