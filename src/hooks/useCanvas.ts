@@ -135,7 +135,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
           isBold: false,
           isItalic: false,
           isUnderline: false,
-          strokeColor: '#000000',
+          strokeColor: '#FF3B30',
           strokeWidth: 0,
           backgroundColor: 'transparent',
           shadowColor: undefined,

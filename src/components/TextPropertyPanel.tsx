@@ -109,7 +109,7 @@ const SliderControl = ({ label, value, onChange, min, max, step = 1, unit = "", 
             step={step}
             value={value} 
             onChange={(e) => onChange(Number(e.target.value))}
-            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
+            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#007AFF]"
         />
     </div>
 );
@@ -285,8 +285,10 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
 
                 <div className="w-px h-6 bg-gray-200" />
 
-                {/* Text color — no label so it aligns with the buttons */}
-                <ColorPickerButton color={element.color} onChange={(c) => onUpdate({ color: c })} />
+                {/* Text color — only shown in top bar when panel is collapsed; moves to right column when expanded */}
+                {!showMore && (
+                    <ColorPickerButton color={element.color} onChange={(c) => onUpdate({ color: c })} />
+                )}
 
                 <div className="flex-1" />
 
@@ -348,6 +350,10 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
 
                         {/* ── RIGHT COLUMN: Effects ── */}
                         <div className="flex flex-col gap-3 pl-3" style={{ width: 170 }}>
+                            {/* 文字色 — moved here from top bar when expanded so all swatches align */}
+                            <div className="flex items-center gap-2">
+                                <ColorPickerButton label="文字色" color={element.color} onChange={(c) => onUpdate({ color: c })} />
+                            </div>
                             {/* 邊框 */}
                             <div className="flex items-center gap-2">
                                 <ColorPickerButton label="邊框" color={element.strokeColor ?? '#FF3B30'} onChange={(c) => onUpdate({ strokeColor: c })} />
