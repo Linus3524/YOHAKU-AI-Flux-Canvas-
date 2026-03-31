@@ -566,9 +566,115 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                 const style: React.CSSProperties = { width: '100%', height: '100%' };
 
                 switch (el.type) {
-                    case 'note':
+                    case 'note': {
+                        const refImgs = el.referenceImages ?? [null, null, null, null];
+                        const hasAnyRef = refImgs.some(Boolean);
+                        const circledNums = ['①','②','③','④'];
+
+                        const handleRefUpload = (idx: number, file: File) => {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                                const src = ev.target?.result as string;
+                                const newRefs = [...refImgs];
+                                newRefs[idx] = src;
+                                onUpdate({ ...el, referenceImages: newRefs });
+                            };
+                            reader.readAsDataURL(file);
+                        };
+
+                        const handleRefRemove = (e: React.MouseEvent, idx: number) => {
+                            e.stopPropagation();
+                            const newRefs = [...refImgs];
+                            newRefs[idx] = null;
+                            onUpdate({ ...el, referenceImages: newRefs });
+                        };
+
+                        // 自適應顯示模式（依元素寬度）
+                        const refMode: 'hidden' | 'compact' | 'full' =
+                            el.width < 130 ? 'hidden' :
+                            el.width < 210 ? 'compact' : 'full';
+
+                        // 字體/圖示大小隨元素寬度線性縮放
+                        const scaleFactor = Math.min(1, Math.max(0.7, (el.width - 130) / 200));
+                        const numFontSize  = Math.round(12 * scaleFactor);  // 數字大小
+                        const iconSize     = Math.round(14 * scaleFactor);  // 上傳圖示
+                        const labelFontSize = Math.round(9 * scaleFactor);  // "上傳參考圖"
+
                         return (
-                           <div style={style} className={`rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] text-[#1D1D1F] font-medium flex items-center justify-center ${el.color} transition-shadow hover:shadow-[0_12px_40px_rgba(0,0,0,0.18)]`}>
+                            <div style={style} className={`rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] text-[#1D1D1F] font-medium flex flex-col ${el.color} transition-shadow hover:shadow-[0_12px_40px_rgba(0,0,0,0.18)] overflow-hidden`}>
+                                {/* 參考圖區塊 */}
+                                {refMode !== 'hidden' && (isSelected || hasAnyRef) && (
+                                    <div
+                                        className="px-2 pt-2 pb-1.5 flex-shrink-0"
+                                        onMouseDown={e => e.stopPropagation()}
+                                    >
+                                        <div className="grid grid-cols-4 gap-1.5">
+                                            {[0,1,2,3].map(idx => {
+                                                const src = refImgs[idx];
+                                                return (
+                                                    <div key={idx} className="relative aspect-square">
+                                                        {src ? (
+                                                            /* 已有圖片：顯示縮圖 */
+                                                            <div className="relative w-full h-full rounded-md overflow-hidden border border-[#1D1D1F]/15">
+                                                                <img src={src} className="w-full h-full object-cover" draggable={false} />
+                                                                {/* 數字標示 */}
+                                                                <div className="absolute top-0.5 left-1 text-white font-bold drop-shadow-md select-none"
+                                                                    style={{ fontSize: numFontSize }}>
+                                                                    {idx + 1}
+                                                                </div>
+                                                                {/* 刪除按鈕（compact 時縮小） */}
+                                                                <button
+                                                                    onClick={e => handleRefRemove(e, idx)}
+                                                                    className="absolute top-0.5 right-0.5 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white leading-none transition-colors"
+                                                                    style={{ width: Math.max(12, iconSize), height: Math.max(12, iconSize), fontSize: Math.max(7, labelFontSize - 1) }}
+                                                                >✕</button>
+                                                            </div>
+                                                        ) : (
+                                                            /* 空槽 */
+                                                            <label className={`flex flex-col items-center justify-center w-full h-full rounded-md cursor-pointer transition-colors
+                                                                ${refMode === 'full'
+                                                                    ? 'border-2 border-dashed border-[#1D1D1F]/20 hover:border-[#1D1D1F]/40 gap-0.5'
+                                                                    : 'gap-0' /* compact：無虛線框，只顯示數字 */
+                                                                }`}>
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="hidden"
+                                                                    onChange={e => {
+                                                                        const file = e.target.files?.[0];
+                                                                        if (file) handleRefUpload(idx, file);
+                                                                        e.target.value = '';
+                                                                    }}
+                                                                    onMouseDown={e => e.stopPropagation()}
+                                                                />
+                                                                {/* 數字 */}
+                                                                <span className="text-[#1D1D1F]/40 font-semibold select-none"
+                                                                    style={{ fontSize: numFontSize + 1 }}>
+                                                                    {idx + 1}
+                                                                </span>
+                                                                {/* 上傳圖示（full 模式才顯示） */}
+                                                                {refMode === 'full' && (
+                                                                    <>
+                                                                        <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[#1D1D1F]/40">
+                                                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                                                                        </svg>
+                                                                        <span className="text-[#1D1D1F]/40 select-none"
+                                                                            style={{ fontSize: labelFontSize }}>
+                                                                            上傳參考圖
+                                                                        </span>
+                                                                    </>
+                                                                )}
+                                                            </label>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="mt-1.5 border-t border-[#1D1D1F]/10" />
+                                    </div>
+                                )}
+
+                                {/* 文字區 */}
                                 <textarea
                                     ref={textareaRef}
                                     value={el.content}
@@ -576,16 +682,17 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                     onChange={(e) => onUpdate({ ...el, content: e.target.value })}
                                     onBlur={() => setIsEditing(false)}
                                     onMouseDown={(e) => {
-                                      if (e.button !== 0 || el.isLocked || interactionMode === 'hand') return;
-                                      onSelect(element.id, e.shiftKey);
-                                      if (isEditing) e.stopPropagation();
+                                        if (e.button !== 0 || el.isLocked || interactionMode === 'hand') return;
+                                        onSelect(element.id, e.shiftKey);
+                                        if (isEditing) e.stopPropagation();
                                     }}
-                                    className={`w-full h-full bg-transparent text-[#1D1D1F] p-6 resize-none border-none focus:outline-none placeholder-[#1D1D1F]/40 ${isEditing ? 'cursor-text' : (el.isLocked ? 'cursor-not-allowed' : 'cursor-move')} ${el.textAlign === 'center' ? 'text-center' : 'text-left'}`}
+                                    className={`flex-1 min-h-0 bg-transparent text-[#1D1D1F] px-6 py-4 resize-none border-none focus:outline-none placeholder-[#1D1D1F]/40 ${isEditing ? 'cursor-text' : (el.isLocked ? 'cursor-not-allowed' : 'cursor-move')} ${el.textAlign === 'center' ? 'text-center' : 'text-left'}`}
                                     style={{ fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.6' }}
                                     placeholder={el.isLocked ? "" : "請輸入內容..."}
                                 />
                             </div>
                         );
+                    }
                     case 'text':
                         {
                             // SVG RENDERER FOR TEXT (always shown; transparent textarea overlaid when editing)

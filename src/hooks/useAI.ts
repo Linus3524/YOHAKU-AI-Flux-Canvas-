@@ -839,17 +839,42 @@ STRICT RULES:
               const styleLabel = styleObj ? styleObj.label : imageStyle;
               finalInstructions = instructions ? `${instructions}, ${styleLabel} Style` : `${styleLabel} Style`;
           }
-    
+
+          // 收集便利貼的參考圖（最多4張，按編號①②③④）
+          const circledNums = ['①','②','③','④'];
+          const noteRefImages: { idx: number; data: string; mimeType: string }[] = [];
+          for (const note of noteElements) {
+              if (note.type === 'note' && note.referenceImages) {
+                  note.referenceImages.forEach((src, i) => {
+                      if (src) {
+                          const [header, data] = src.split(',');
+                          const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                          noteRefImages.push({ idx: i, data, mimeType });
+                      }
+                  });
+              }
+          }
+
+          // 如果有參考圖，在 prompt 末尾加說明
+          let promptWithRefHint = finalInstructions;
+          if (noteRefImages.length > 0) {
+              const refNote = noteRefImages.map(r => `參考圖${circledNums[r.idx]}`).join('、');
+              promptWithRefHint = finalInstructions
+                  ? `${finalInstructions}\n\n（已附上 ${refNote} 作為視覺參考，請依照提示詞的指示使用這些參考圖）`
+                  : `請參考附上的 ${refNote} 生成圖片`;
+          }
+
           if (frameElements.length > 0) {
               const generatePromises = frameElements.map(async (frame) => {
-                  const promptText = `Generate an image based on this description: "${finalInstructions}".`;
+                  const promptText = `Generate an image based on this description: "${promptWithRefHint}".`;
+                  const refParts = noteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
                   const textPart = { text: promptText };
                   let targetRatio = frame.aspectRatioLabel;
                   if (!['1:1', '3:4', '4:3', '9:16', '16:9'].includes(targetRatio)) targetRatio = '1:1'; 
                   
                   const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                     model: 'gemini-3.1-flash-image-preview',
-                    contents: { parts: [textPart] },
+                    contents: { parts: [...refParts, textPart] },
                     config: { imageConfig: { aspectRatio: targetRatio } },
                   }));
                   const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
@@ -899,14 +924,18 @@ STRICT RULES:
                   ? `CRITICAL: The input image has a transparent background. You MUST output the subject on a PURE WHITE background only. Do NOT add any gradients, shadows, textures, or environmental backgrounds. The subject must be perfectly isolated.\n\n`
                   : '';
               
-              let promptForEditing = transparencyPrompt + (finalInstructions || "Creatively reimagine and enhance the image(s).");
-              
+              let promptForEditing = transparencyPrompt + (promptWithRefHint || "Creatively reimagine and enhance the image(s).");
+
               const textPart = { text: promptForEditing };
-              parts = [...resolvedImageParts as any, textPart];
-          } else { 
-              const promptText = `Generate a completely new image based on this description: "${finalInstructions}"`;
+              const noteRefParts = noteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
+              parts = [...resolvedImageParts as any, ...noteRefParts, textPart];
+          } else {
+              const promptText = noteRefImages.length > 0
+                  ? `Generate a new image based on this description: "${promptWithRefHint}"`
+                  : `Generate a completely new image based on this description: "${finalInstructions}"`;
               const textPart = { text: promptText };
-              parts = [textPart];
+              const noteRefParts = noteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
+              parts = [...noteRefParts, textPart];
           }
           
           const generateSingleImage = async () => {

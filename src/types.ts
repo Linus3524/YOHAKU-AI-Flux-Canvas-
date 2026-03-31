@@ -26,6 +26,7 @@ export interface NoteElement extends BaseElement {
   content: string;
   color: string;
   textAlign?: 'left' | 'center' | 'right';
+  referenceImages?: (string | null)[];  // 最多4張參考圖，null = 空槽
 }
 
 export interface ImageElement extends BaseElement {
