@@ -1,3 +1,13 @@
+/**
+ * @project     YOHAKU (Infinite Canvas Design Tool)
+ * @author      LINUS Nice Day Japan (CHANG CHIN WEI)
+ * @copyright   Copyright © 2026 LINUS Nice Day Japan (CHANG CHIN WEI). All Rights Reserved.
+ *
+ * @credits     Based on the open-source foundational framework "Nano Banana"
+ * by @prompt_case, used under MIT License.
+ *
+ * This file contains proprietary enhancements and logic specific to YOHAKU.
+ */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { 
