@@ -1263,6 +1263,38 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         }
     }, [selectedElementIds, elements, setElements]);
     
+    const bringForward = useCallback(() => {
+        if (selectedElementIds.length === 0) return;
+        const selectedSet = new Set(selectedElementIds);
+        const currentMaxZ = Math.max(...elements.filter(el => selectedSet.has(el.id)).map(el => el.zIndex));
+        const above = elements
+            .filter(el => !selectedSet.has(el.id) && el.zIndex > currentMaxZ)
+            .sort((a, b) => a.zIndex - b.zIndex);
+        if (above.length === 0) return; // already at top
+        const swapZ = above[0].zIndex;
+        setElements(prev => prev.map(el => {
+            if (selectedSet.has(el.id)) return { ...el, zIndex: swapZ + 1 };
+            if (el.zIndex === swapZ) return { ...el, zIndex: currentMaxZ };
+            return el;
+        }));
+    }, [selectedElementIds, elements, setElements]);
+
+    const sendBackward = useCallback(() => {
+        if (selectedElementIds.length === 0) return;
+        const selectedSet = new Set(selectedElementIds);
+        const currentMinZ = Math.min(...elements.filter(el => selectedSet.has(el.id)).map(el => el.zIndex));
+        const below = elements
+            .filter(el => !selectedSet.has(el.id) && el.zIndex < currentMinZ)
+            .sort((a, b) => b.zIndex - a.zIndex);
+        if (below.length === 0) return; // already at bottom
+        const swapZ = below[0].zIndex;
+        setElements(prev => prev.map(el => {
+            if (selectedSet.has(el.id)) return { ...el, zIndex: swapZ - 1 };
+            if (el.zIndex === swapZ) return { ...el, zIndex: currentMinZ };
+            return el;
+        }));
+    }, [selectedElementIds, elements, setElements]);
+
     const sendToBack = useCallback(() => {
         if (selectedElementIds.length === 0) return;
         const selectedSet = new Set(selectedElementIds);
@@ -1381,6 +1413,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         duplicateSelection,
         duplicateInPlace,
         bringToFront,
+        bringForward,
+        sendBackward,
         sendToBack,
         handleRasterizeText,
         handleRasterizeShape,

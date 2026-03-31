@@ -205,6 +205,8 @@ const App: React.FC = () => {
       duplicateSelection,
       duplicateInPlace,
       bringToFront,
+      bringForward,
+      sendBackward,
       sendToBack,
       handleRasterizeText: originalRasterizeText, 
       handleRasterizeShape,
@@ -229,6 +231,8 @@ const App: React.FC = () => {
       setImageStyle,
       imageAspectRatio,
       setImageAspectRatio,
+      imageSize,
+      setImageSize,
       preserveTransparency,
       setPreserveTransparency,
       showStyleLibrary,
@@ -791,6 +795,22 @@ const App: React.FC = () => {
   const isLocked = contextMenuElement?.isLocked || false;
   const isVisible = contextMenuElement?.isVisible ?? true;
 
+  const handleFlipHorizontal = useCallback((elementId: string) => {
+    setElements(prev => prev.map(el =>
+      el.id === elementId && el.type === 'image'
+        ? { ...el, flipX: !el.flipX }
+        : el
+    ));
+  }, [setElements]);
+
+  const handleFlipVertical = useCallback((elementId: string) => {
+    setElements(prev => prev.map(el =>
+      el.id === elementId && el.type === 'image'
+        ? { ...el, flipY: !el.flipY }
+        : el
+    ));
+  }, [setElements]);
+
   const handleUnlockAll = useCallback(() => {
     setElements(prev => prev.map(el => ({ ...el, isLocked: false })));
   }, [setElements]);
@@ -1027,6 +1047,8 @@ const App: React.FC = () => {
         onSetImageStyle={setImageStyle}
         imageAspectRatio={imageAspectRatio}
         onSetImageAspectRatio={setImageAspectRatio}
+        imageSize={imageSize}
+        onSetImageSize={setImageSize}
         preserveTransparency={preserveTransparency}
         onSetPreserveTransparency={setPreserveTransparency}
         outpaintingState={outpaintingState}
@@ -1221,7 +1243,11 @@ const App: React.FC = () => {
             addFrame,
             deleteElement,
             bringToFront,
+            bringForward,
+            sendBackward,
             sendToBack,
+            flipHorizontal: handleFlipHorizontal,
+            flipVertical: handleFlipVertical,
             changeColor: handleColorChange,
             downloadImage,
             copyStyle: handleCopyStyle,
