@@ -32,6 +32,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [copiedStyle, setCopiedStyle] = useState<{ analysis: import('../components/StylePasteModal').StyleAnalysisResult } | null>(null);
     const [imageStyle, setImageStyle] = useState<string>('Default');
     const [imageAspectRatio, setImageAspectRatio] = useState<string>('Original');
+    const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('1K');
     const [preserveTransparency, setPreserveTransparency] = useState(true);
     const [showStyleLibrary, setShowStyleLibrary] = useState(false);
     const zIndexCounter = useRef(Math.max(0, ...elements.map(e => e.zIndex)) + 1);
@@ -875,7 +876,7 @@ STRICT RULES:
                   const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                     model: 'gemini-3.1-flash-image-preview',
                     contents: { parts: [...refParts, textPart] },
-                    config: { imageConfig: { aspectRatio: targetRatio } },
+                    config: { imageConfig: { aspectRatio: targetRatio, imageSize } },
                   }));
                   const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                   if (part?.inlineData) {
@@ -942,7 +943,7 @@ STRICT RULES:
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                 model: 'gemini-3.1-flash-image-preview',
                 contents: { parts },
-                config: { imageConfig: { aspectRatio: targetAspectRatio } },
+                config: { imageConfig: { aspectRatio: targetAspectRatio, imageSize } },
             }));
             for (const part of response.candidates?.[0]?.content?.parts || []) {
                 if (part.inlineData) {
@@ -995,6 +996,8 @@ STRICT RULES:
         setImageStyle,
         imageAspectRatio,
         setImageAspectRatio,
+        imageSize,
+        setImageSize,
         preserveTransparency,
         setPreserveTransparency,
         showStyleLibrary,

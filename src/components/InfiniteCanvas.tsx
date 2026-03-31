@@ -392,6 +392,8 @@ interface InfiniteCanvasProps {
   onSetImageStyle: (style: string) => void;
   imageAspectRatio: string;
   onSetImageAspectRatio: (ratio: string) => void;
+  imageSize: '1K' | '2K' | '4K';
+  onSetImageSize: (size: '1K' | '2K' | '4K') => void;
   preserveTransparency: boolean;
   onSetPreserveTransparency: (preserve: boolean) => void;
   outpaintingState: OutpaintingState | null;
@@ -492,6 +494,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onSetImageStyle,
   imageAspectRatio,
   onSetImageAspectRatio,
+  imageSize,
+  onSetImageSize,
   preserveTransparency,
   onSetPreserveTransparency,
   outpaintingState,
@@ -1063,6 +1067,31 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                                                 </div>
                                         </div>
+                                    </div>
+
+                                    {/* 輸出解析度 */}
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-xs font-semibold text-[#1D1D1F]">輸出解析度</label>
+                                        <div className="flex gap-2">
+                                            {(['1K', '2K', '4K'] as const).map(size => (
+                                                <button
+                                                    key={size}
+                                                    onClick={() => onSetImageSize(size)}
+                                                    className={`flex-1 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                                                        imageSize === size
+                                                            ? 'bg-[#1D1D1F] text-white border-[#1D1D1F]'
+                                                            : 'bg-[#F5F5F7] text-[#1D1D1F] border-transparent hover:border-black/20'
+                                                    }`}
+                                                >
+                                                    {size}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {imageSize !== '1K' && (
+                                            <p className="text-[10px] text-[#86868B]">
+                                                {imageSize === '2K' ? '較高畫質，費用約 1.7x' : '最高畫質，費用約 2.5x'}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             )}

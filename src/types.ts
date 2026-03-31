@@ -38,6 +38,8 @@ export interface ImageElement extends BaseElement {
   shadowBlur?: number;
   shadowOffsetX?: number;
   shadowOffsetY?: number;
+  flipX?: boolean;
+  flipY?: boolean;
 }
 
 export type ArrowHeadType = 'none' | 'triangle' | 'arrow' | 'circle';

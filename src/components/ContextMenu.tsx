@@ -25,7 +25,11 @@ interface ContextMenuProps {
     addFrame: (ratioLabel: string, ratioValue: number, position: Point) => void;
     deleteElement: () => void;
     bringToFront: () => void;
+    bringForward: () => void;
+    sendBackward: () => void;
     sendToBack: () => void;
+    flipHorizontal: (elementId: string) => void;
+    flipVertical: (elementId: string) => void;
     changeColor: (color: string) => void;
     downloadImage: (elementId: string) => void;
     exportArtboard: (elementId: string) => void;
@@ -103,8 +107,22 @@ const MenuIcons = {
   Expand: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>,
   Download: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>,
   Palette: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5"></circle><circle cx="17.5" cy="10.5" r=".5"></circle><circle cx="8.5" cy="7.5" r=".5"></circle><circle cx="6.5" cy="12.5" r=".5"></circle><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"></path></svg>,
-  LayerUp: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>,
-  LayerDown: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>,
+  LayerUp: () => (
+    // 移至最前：箭頭朝上 + 頂部粗線（代表到達最頂層）
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="5" y1="3" x2="19" y2="3" strokeWidth="2.5"/>
+      <line x1="12" y1="21" x2="12" y2="9"/>
+      <polyline points="7 14 12 9 17 14"/>
+    </svg>
+  ),
+  LayerDown: () => (
+    // 移至最後：箭頭朝下 + 底部粗線（代表到達最底層）
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="3" x2="12" y2="15"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="5" y1="21" x2="19" y2="21" strokeWidth="2.5"/>
+    </svg>
+  ),
   Trash: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
   File: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>,
   Group: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>,
@@ -123,6 +141,33 @@ const MenuIcons = {
     </svg>
   ),
   Merge: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path><path d="M8 8h8v8H8z"></path></svg>,
+  LayerUpOne: () => (
+    // 前移一層：箭頭朝上 + 底部細線（代表從當前位置往上移一步）
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="20" x2="12" y2="8"/>
+      <polyline points="7 13 12 8 17 13"/>
+      <line x1="5" y1="21" x2="19" y2="21" strokeWidth="1.5" strokeOpacity="0.4"/>
+    </svg>
+  ),
+  LayerDownOne: () => (
+    // 後移一層：箭頭朝下 + 頂部細線（代表從當前位置往下移一步）
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="5" y1="3" x2="19" y2="3" strokeWidth="1.5" strokeOpacity="0.4"/>
+      <line x1="12" y1="4" x2="12" y2="16"/>
+      <polyline points="7 11 12 16 17 11"/>
+    </svg>
+  ),
+  FlipH: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18M4 7l4 5-4 5M20 7l-4 5 4 5"></path></svg>,
+  FlipV: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M7 4l5 4 5-4M7 20l5-4 5 4"></path></svg>,
+  Layout: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>,
+  Reorder: () => (
+    // 圖層排序觸發：三層堆疊矩形，最上層最明顯（代表圖層面板）
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="14" width="18" height="5" rx="1.5"/>
+      <rect x="3" y="8" width="18" height="5" rx="1.5"/>
+      <rect x="3" y="2" width="18" height="5" rx="1.5"/>
+    </svg>
+  ),
   Export: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>
@@ -174,6 +219,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     const menuRef = useRef<HTMLDivElement>(null);
     const [colorSubMenuVisible, setColorSubMenuVisible] = useState(false);
     const [frameSubMenuVisible, setFrameSubMenuVisible] = useState(false);
+    const [layerOrderSubMenuVisible, setLayerOrderSubMenuVisible] = useState(false);
+    const [layoutSubMenuVisible, setLayoutSubMenuVisible] = useState(false);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -256,10 +303,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                             刪除工作區域
                         </MenuItem>
                     </>
+                ) : isLocked ? (
+                    // Locked element — minimal menu: only unlock
+                    <>
+                        <div className="px-4 py-1.5 text-[10px] font-bold text-[#86868B] uppercase tracking-wider opacity-60">編輯</div>
+                        <MenuItem icon={<MenuIcons.Unlock />} onClick={() => handleAction(() => actions.toggleLock(menuData.elementId!))}>
+                            解鎖物件
+                        </MenuItem>
+                    </>
                 ) : (
                     <>
                         <div className="px-4 py-1.5 text-[10px] font-bold text-[#86868B] uppercase tracking-wider opacity-60">編輯</div>
-                        
+
                         {/* Locking & Visibility */}
                         <MenuItem icon={isLocked ? <MenuIcons.Unlock /> : <MenuIcons.Lock />} onClick={() => handleAction(() => actions.toggleLock(menuData.elementId!))}>
                             {isLocked ? '解鎖物件' : '鎖定物件'}
@@ -316,13 +371,33 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
                         {elementType === 'image' && (
                              <>
+                                {/* 佈局 submenu */}
+                                <div className="relative" onMouseLeave={() => setLayoutSubMenuVisible(false)}>
+                                    <button
+                                        onMouseEnter={() => { setLayoutSubMenuVisible(true); setLayerOrderSubMenuVisible(false); setColorSubMenuVisible(false); setFrameSubMenuVisible(false); }}
+                                        className="w-full flex justify-between items-center text-left px-4 py-2.5 text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[#86868B] group-hover:text-[#1D1D1F] transition-colors"><MenuIcons.Layout /></span>
+                                            <span>佈局</span>
+                                        </div>
+                                        <span className="text-xs text-[#86868B]">▶</span>
+                                    </button>
+                                    {layoutSubMenuVisible && (
+                                        <div style={subMenuStyle} className="w-44 rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-2 ring-1 ring-black/5">
+                                            <MenuItem icon={<MenuIcons.FlipH />} onClick={() => handleAction(() => actions.flipHorizontal(menuData.elementId!))}>水平翻轉</MenuItem>
+                                            <MenuItem icon={<MenuIcons.FlipV />} onClick={() => handleAction(() => actions.flipVertical(menuData.elementId!))}>垂直翻轉</MenuItem>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="border-t my-1 border-gray-100/50" />
                                 <MenuItem icon={<MenuIcons.Search />} onClick={() => handleAction(() => actions.extractPrompt(menuData.elementId!))}>
                                     提取提示詞
                                 </MenuItem>
                                 <MenuItem icon={<MenuIcons.Magic />} onClick={() => handleAction(() => actions.copyStyle(menuData.elementId!))}>
                                     複製風格
                                 </MenuItem>
-                                <MenuItem 
+                                <MenuItem
                                     icon={<MenuIcons.Paste />}
                                     onClick={() => handleAction(() => actions.pasteStyle([menuData.elementId!]))}
                                     disabled={!hasCopiedStyle}
@@ -394,8 +469,27 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                         )}
                         
                         <div className="px-4 py-1.5 text-[10px] font-bold text-[#86868B] uppercase tracking-wider opacity-60">圖層與整理</div>
-                        <MenuItem icon={<MenuIcons.LayerUp />} onClick={() => handleAction(actions.bringToFront)}>移至最前</MenuItem>
-                        <MenuItem icon={<MenuIcons.LayerDown />} onClick={() => handleAction(actions.sendToBack)}>移至最後</MenuItem>
+                        {/* 圖層排序 submenu */}
+                        <div className="relative" onMouseLeave={() => setLayerOrderSubMenuVisible(false)}>
+                            <button
+                                onMouseEnter={() => { setLayerOrderSubMenuVisible(true); setLayoutSubMenuVisible(false); setColorSubMenuVisible(false); setFrameSubMenuVisible(false); }}
+                                className="w-full flex justify-between items-center text-left px-4 py-2.5 text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="text-[#86868B] group-hover:text-[#1D1D1F] transition-colors"><MenuIcons.Reorder /></span>
+                                    <span>圖層排序</span>
+                                </div>
+                                <span className="text-xs text-[#86868B]">▶</span>
+                            </button>
+                            {layerOrderSubMenuVisible && (
+                                <div style={subMenuStyle} className="w-44 rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-2 ring-1 ring-black/5">
+                                    <MenuItem icon={<MenuIcons.LayerUp />} onClick={() => handleAction(actions.bringToFront)}>移至最前</MenuItem>
+                                    <MenuItem icon={<MenuIcons.LayerUpOne />} onClick={() => handleAction(actions.bringForward)}>前移一層</MenuItem>
+                                    <MenuItem icon={<MenuIcons.LayerDownOne />} onClick={() => handleAction(actions.sendBackward)}>後移一層</MenuItem>
+                                    <MenuItem icon={<MenuIcons.LayerDown />} onClick={() => handleAction(actions.sendToBack)}>移至最後</MenuItem>
+                                </div>
+                            )}
+                        </div>
                         <div className="border-t my-1 border-gray-100/50" />
                         <MenuItem icon={<MenuIcons.Trash />} onClick={() => handleAction(actions.deleteElement)} destructive>刪除</MenuItem>
                     </>

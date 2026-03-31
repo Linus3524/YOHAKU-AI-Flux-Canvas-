@@ -382,7 +382,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
     }, [element, onEditDrawing, isOutpainting, interactionMode]);
     
     const handleElementContextMenu = (e: React.MouseEvent) => {
-        if (element.isLocked || interactionMode === 'hand') return;
+        if (interactionMode === 'hand') return;
         e.preventDefault();
         e.stopPropagation();
         onContextMenu(e, screenToWorld({ x: e.clientX, y: e.clientY }), element.id);
@@ -469,7 +469,9 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
 
     // Modified: Only Note elements are rounded. Text and everything else is square (rounded-none).
     const borderRadiusClass = (element.type === 'note') ? 'rounded-2xl' : 'rounded-none';
-    const pointerEventsClass = interactionMode === 'hand' ? '!pointer-events-none' : (element.isLocked ? '!pointer-events-none' : '');
+    // Locked elements keep pointer-events so right-click (context menu) still works;
+    // left-click is blocked inside handleInteractionStart (early return when isLocked).
+    const pointerEventsClass = interactionMode === 'hand' ? '!pointer-events-none' : '';
 
 const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
     const { shapeType } = shapeEl;
@@ -545,7 +547,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                 transform: `translate(-50%, -50%) rotate(${element.rotation}deg)`,
                 cursor: isOutpainting ? 'move' : 'move',
                 zIndex: element.zIndex,
-                pointerEvents: element.isLocked ? 'none' : 'auto',
+                pointerEvents: 'auto',
                 opacity: element.opacity ?? 1,
                 mixBlendMode: element.type === 'note' ? 'normal' : (element.blendMode || 'normal'), // ✅ 新增
             }}
@@ -1074,11 +1076,15 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                 </div>
                             );
                         }
-                    case 'image':
+                    case 'image': {
                         const maskStyle = el.fade ? generateSimpleMaskCSS(el.fade) : '';
                         const imgDropShadow = (el as any).shadowEnabled
                             ? `drop-shadow(${(el as any).shadowOffsetX ?? 4}px ${(el as any).shadowOffsetY ?? 4}px ${(el as any).shadowBlur ?? 10}px ${(el as any).shadowColor ?? 'rgba(0,0,0,0.4)'})`
                             : undefined;
+                        const flipTransform = [
+                            el.flipX ? 'scaleX(-1)' : '',
+                            el.flipY ? 'scaleY(-1)' : '',
+                        ].filter(Boolean).join(' ') || undefined;
                         return (
                             <div style={{ ...style }}> {/* 外層不加 boxShadow，避免方形框陰影 */}
                                 <div style={{
@@ -1090,12 +1096,14 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                     maskSize: '100% 100%',
                                     WebkitMaskRepeat: 'no-repeat',
                                     maskRepeat: 'no-repeat',
-                                    filter: imgDropShadow, // drop-shadow 跟著實際像素輪廓，支援透明背景 PNG
+                                    filter: imgDropShadow,
+                                    transform: flipTransform,
                                 }}>
                                     <img src={el.src} alt="Canvas element" style={{ width: '100%', height: '100%', objectFit: 'fill' }} className="pointer-events-none" draggable={false} />
                                 </div>
                             </div>
                         );
+                    }
                     case 'drawing':
                         return (
                             <div style={style} className="rounded-xl flex items-center justify-center">
