@@ -30,7 +30,7 @@ export const analyzeImagePrompt = async (base64Image: string, apiKey: string): P
 
   try {
     const response: GenerateContentResponse = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.1-flash-lite-preview',
       contents: {
         parts: [
             imagePart,

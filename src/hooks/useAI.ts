@@ -115,7 +115,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
         try {
             const genAI = createAiClient();
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.1-flash-lite-preview',
                 contents: { parts: [{ text: userPrompt }] },
                 config: {
                     systemInstruction: `You are a professional Creative Director and Prompt Engineer.
@@ -164,7 +164,7 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
 }`;
 
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.1-flash-lite-preview',
                 contents: { parts: [imagePart, { text: prompt }] },
             }));
 
@@ -718,7 +718,7 @@ STRICT RULES:
             const prompt = `Analyze this image and write a detailed prompt for Outpainting in Traditional Chinese (繁體中文). Describe the scene, lighting, and style to extend the image naturally. Output ONLY the prompt text.`;
 
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.1-flash-lite-preview',
                 contents: { parts: [imagePart, { text: prompt }] },
             }));
             

@@ -14,6 +14,7 @@ const FONT_GROUPS = [
     label: '繁體中文 - 黑體/無襯線',
     options: [
       { name: 'Noto Sans TC', label: '思源黑體 Noto Sans TC', family: '"Noto Sans TC", sans-serif' },
+      { name: 'Chiron GoRound TC', label: '昭源圓體 Chiron GoRound', family: '"Chiron GoRound TC", sans-serif' },
     ]
   },
   {
@@ -35,7 +36,6 @@ const FONT_GROUPS = [
   {
     label: '日文/漢字 (兼容繁中)',
     options: [
-      { name: 'Chiron GoRound TC', label: '昭源圓體 Chiron GoRound（日系圓體）', family: '"Chiron GoRound TC", sans-serif' },
       { name: 'LINE Seed JP', label: 'LINE Seed JP（LINE 官方）', family: '"LINE Seed JP", sans-serif' },
       { name: 'Kaisei Opti', label: 'Kaisei Opti（古典明體）', family: '"Kaisei Opti", serif' },
       { name: 'Zen Maru Gothic', label: 'Zen 圓體', family: '"Zen Maru Gothic", sans-serif' },
@@ -280,7 +280,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                         if (!isNaN(val)) onUpdate({ fontSize: val });
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className="bg-[#F5F5F7] hover:bg-gray-100 text-[#1D1D1F] text-sm font-medium rounded-lg px-2 py-2 outline-none w-14 text-center transition-colors"
+                    className="bg-[#F5F5F7] hover:bg-gray-100 text-[#1D1D1F] text-sm font-medium rounded-lg px-2 py-2 outline-none w-16 text-center transition-colors"
                 />
 
                 <div className="w-px h-8 bg-gray-200" />
@@ -315,7 +315,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                     <div className="flex gap-0">
 
                         {/* ── LEFT COLUMN: Typography & Layout ── */}
-                        <div className="flex flex-col gap-3 flex-1 pr-4">
+                        <div className="flex flex-col justify-between flex-1 pr-4">
 
                             {/* Row: Writing mode + Align + B/I/U on one line */}
                             <div className="flex items-center gap-1.5">

@@ -313,3 +313,22 @@ export const downloadArtboard = async (
     link.click();
     document.body.removeChild(link);
 };
+
+export const downloadMultipleArtboards = async (
+    artboards: ArtboardElement[],
+    allElements: CanvasElement[]
+): Promise<void> => {
+    for (let i = 0; i < artboards.length; i++) {
+        const artboard = artboards[i];
+        const dataUrl = await exportArtboardAsImage(artboard, allElements);
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = `${artboard.artboardName || 'artboard'}-${i + 1}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        if (i < artboards.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 400));
+        }
+    }
+};

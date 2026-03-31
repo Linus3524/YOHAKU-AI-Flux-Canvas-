@@ -14,6 +14,7 @@ interface LayerPanelProps {
   onUngroup: () => void;
   onDelete: (id: string) => void;
   onMerge: () => void; // New prop
+  onExportMultiple?: (ids: string[]) => void;
   isDraggingOnCanvas?: boolean;
 }
 
@@ -76,6 +77,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
     onUngroup,
     onDelete,
     onMerge,
+    onExportMultiple,
     isDraggingOnCanvas = false
 }) => {
     const [isOpen, setIsOpen] = useState(true);
@@ -487,12 +489,26 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
             <div className="flex-1 overflow-y-auto p-2 space-y-1 max-h-[60vh]">
                 {artboardElements.length > 0 && (
                     <>
-                        <div 
+                        <div
                             className="flex items-center gap-1 text-[10px] font-bold text-[#86868B] uppercase tracking-wider px-2 py-1 cursor-pointer hover:bg-black/5 rounded transition-colors"
                             onClick={() => setIsArtboardOpen(!isArtboardOpen)}
                         >
                             {isArtboardOpen ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
-                            工作區域 (ARTBOARDS)
+                            <span className="flex-1">工作區域 (ARTBOARDS)</span>
+                            {(() => {
+                                const selectedArtboardIds = artboardElements
+                                    .filter(el => selectedElementIds.includes(el.id))
+                                    .map(el => el.id);
+                                return selectedArtboardIds.length >= 2 && onExportMultiple ? (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onExportMultiple(selectedArtboardIds); }}
+                                        className="ml-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-[#007AFF] text-white hover:bg-blue-600 transition-colors normal-case tracking-normal"
+                                        title="匯出選取的工作區域"
+                                    >
+                                        匯出 ({selectedArtboardIds.length})
+                                    </button>
+                                ) : null;
+                            })()}
                         </div>
                         {isArtboardOpen && artboardElements.map(renderLayerItem)}
                     </>

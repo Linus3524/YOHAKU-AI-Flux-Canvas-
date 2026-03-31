@@ -21,7 +21,7 @@ import { TextPropertyPanel } from './components/TextPropertyPanel';
 import { ShapePropertyPanel } from './components/ShapePropertyPanel'; 
 import { ArrowPropertyPanel } from './components/ArrowPropertyPanel';
 import { FloatingAssistant } from './components/FloatingAssistant'; 
-import { ArtboardPanel, downloadArtboard } from './features/artboard';
+import { ArtboardPanel, downloadArtboard, downloadMultipleArtboards } from './features/artboard';
 import { useCanvas } from './hooks/useCanvas';
 import { useAI } from './hooks/useAI';
 import { STYLE_PRESETS, COLORS, isCJK, wrapTextCanvas, loadImage, createShapeDataUrl, restoreOriginalAlpha, getClosestAspectRatio, measureTextVisualBounds, renderImageElementToDataUrl } from './utils/helpers';
@@ -1019,7 +1019,14 @@ const App: React.FC = () => {
             onGroup={handleGroup}
             onUngroup={handleUngroup}
             onDelete={handleDeleteLayer}
-            onMerge={handleMergeLayersOverride} 
+            onMerge={handleMergeLayersOverride}
+            onExportMultiple={(ids) => {
+                const artboardsToExport = ids
+                    .map(id => elements.find(el => el.id === id))
+                    .filter((el): el is ArtboardElement => el?.type === 'artboard')
+                    .sort((a, b) => b.zIndex - a.zIndex);
+                downloadMultipleArtboards(artboardsToExport, elements);
+            }}
             isDraggingOnCanvas={isDraggingOnCanvas}
         />
       )}
