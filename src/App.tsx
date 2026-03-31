@@ -12,6 +12,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { InfiniteCanvas, CanvasApi } from './components/InfiniteCanvas';
 import { ContextMenu } from './components/ContextMenu';
+import { StylePasteModal } from './components/StylePasteModal';
 import { DrawingModal } from './components/DrawingModal';
 import { ImageEditModal } from './components/ImageEditModal';
 import { DraggableToolbar } from './components/DraggableToolbar';
@@ -229,6 +230,7 @@ const App: React.FC = () => {
       showStyleLibrary,
       setShowStyleLibrary,
       handleCopyStyle,
+      handleApplyStyle,
       handlePasteStyle,
       handleCameraAngle,
       handleRemoveBackground,
@@ -489,6 +491,7 @@ const App: React.FC = () => {
 
   const [resetView, setResetView] = useState<() => void>(() => () => {});
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, worldPoint: Point, elementId: string | null } | null>(null);
+  const [stylePasteModal, setStylePasteModal] = useState<{ targetIds: string[] } | null>(null);
   const [editingDrawing, setEditingDrawing] = useState<DrawingElement | null>(null);
   const [editingImage, setEditingImage] = useState<ImageElement | null>(null);
   const [interactionMode, setInteractionMode] = useState<'select' | 'hand'>('select');
@@ -1137,7 +1140,7 @@ const App: React.FC = () => {
             changeColor: handleColorChange,
             downloadImage,
             copyStyle: handleCopyStyle,
-            pasteStyle: handlePasteStyle,
+            pasteStyle: (elementIds: string[]) => setStylePasteModal({ targetIds: elementIds }),
             exportCanvas: handleExportCanvas,
             exportArtboard: (elementId: string) => {
                 const artboard = elements.find(e => e.id === elementId) as ArtboardElement;
@@ -1163,6 +1166,17 @@ const App: React.FC = () => {
           isGrouped={!!isGrouped}
           isLocked={isLocked}
           isVisible={isVisible}
+        />
+      )}
+
+      {stylePasteModal && copiedStyle && (
+        <StylePasteModal
+          analysis={copiedStyle.analysis}
+          onApply={(selectedKeys) => {
+            handleApplyStyle(stylePasteModal.targetIds, selectedKeys);
+            setStylePasteModal(null);
+          }}
+          onClose={() => setStylePasteModal(null)}
         />
       )}
 

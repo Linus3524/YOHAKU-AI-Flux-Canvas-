@@ -29,7 +29,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
     const [outpaintingState, setOutpaintingState] = useState<OutpaintingState | null>(null);
-    const [copiedStyle, setCopiedStyle] = useState<{ text: string, mode: 'texture' | 'artistic' } | null>(null);
+    const [copiedStyle, setCopiedStyle] = useState<{ analysis: import('../components/StylePasteModal').StyleAnalysisResult } | null>(null);
     const [imageStyle, setImageStyle] = useState<string>('Default');
     const [imageAspectRatio, setImageAspectRatio] = useState<string>('Original');
     const [preserveTransparency, setPreserveTransparency] = useState(true);
@@ -135,45 +135,44 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
         }
     }, [apiKey, setHasApiKey, showToast]);
 
-    const handleCopyStyle = useCallback(async (elementId: string, mode: 'texture' | 'artistic') => {
+    const handleCopyStyle = useCallback(async (elementId: string) => {
         const element = elements.find(el => el.id === elementId);
         if (!element || element.type !== 'image') return;
 
         setIsGenerating(true);
-        showToast(mode === 'texture' ? "正在分析紋理風格..." : "正在深度分析藝術樣式...");
-        
+        showToast("正在全面分析圖片風格...");
+
         try {
             const genAI = createAiClient();
             const [header, data] = element.src.split(',');
             const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
             const imagePart = { inlineData: { data, mimeType } };
-            
-            let prompt = "";
-            if (mode === 'texture') {
-                prompt = `Analyze ONLY the artistic rendering technique of this image — ignore colors, lighting, and subject matter completely.
-Focus exclusively on: brushwork style, paint application method, texture quality, line characteristics, surface finish.
-Output format: a comma-separated list of at least 8 specific technical descriptors.
-Example format: "thick impasto strokes, visible bristle marks, layered glazing, rough canvas texture, gestural marks, dry brush edges, palette knife application, unblended pigment"
-Do NOT include any color names, mood descriptions, or subject descriptions.`;
-            } else {
-                prompt = `Perform a comprehensive artistic style analysis of this image. Structure your response with these exact categories:
-COLOR PALETTE: [describe dominant colors, temperature, saturation level]
-LIGHTING: [describe light source, direction, quality, contrast]
-ARTISTIC MEDIUM: [identify the medium — oil, watercolor, digital, etc.]
-RENDERING STYLE: [describe brushwork, texture, level of detail]
-MOOD & ATMOSPHERE: [describe emotional tone and visual atmosphere]
-Provide 2-3 sentences per category. Be specific and technical.`;
-            }
+
+            const prompt = `Analyze this image comprehensively across all visual dimensions. Return ONLY a raw JSON object (no markdown, no code block) with exactly these keys:
+{
+  "color": "2-3 sentences about color tone and palette (dominant colors, temperature, saturation)",
+  "lighting": "2-3 sentences about lighting quality (light source, direction, shadows, contrast)",
+  "artStyle": "2-3 sentences about art style and medium (illustration style, brushwork, rendering technique)",
+  "composition": "2-3 sentences about composition and camera angle (framing, perspective, focal point)",
+  "texture": "2-3 sentences about surface texture and detail quality (material feel, finish, detail level)",
+  "pose": "2-3 sentences about character pose and action. Write 'Not applicable' if no character present.",
+  "expression": "2-3 sentences about facial expression and emotion. Write 'Not applicable' if no face present.",
+  "clothing": "2-3 sentences about clothing and outfit style. Write 'Not applicable' if no character present.",
+  "background": "2-3 sentences about background environment (setting, depth, atmosphere)",
+  "hair": "2-3 sentences about hairstyle design. Write 'Not applicable' if no character present.",
+  "typography": "2-3 sentences about text or font style visible in the image. Write 'Not applicable' if no text present."
+}`;
 
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: { parts: [imagePart, { text: prompt }] },
             }));
 
-            const styleDescription = response.text ? response.text.trim() : "";
-            setCopiedStyle({ text: styleDescription, mode });
-            
-            showToast(mode === 'texture' ? "風格紋理已複製！" : "藝術樣式已複製！");
+            const rawText = response.text?.trim() || '{}';
+            const jsonText = rawText.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
+            const analysis = JSON.parse(jsonText);
+            setCopiedStyle({ analysis });
+            showToast("✅ 風格已複製！右鍵選「貼上風格」套用。");
 
         } catch (error: any) {
             handleAIError(error, "風格分析");
@@ -182,12 +181,109 @@ Provide 2-3 sentences per category. Be specific and technical.`;
         }
     }, [elements, showToast, apiKey, setHasApiKey]);
 
+    const handleApplyStyle = useCallback(async (targetElementIds: string[], selectedKeys: string[]) => {
+        if (!copiedStyle?.analysis) {
+            showToast("沒有複製的風格！請先右鍵「複製風格」。");
+            return;
+        }
+        const targetElements = elements.filter(el => targetElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
+        if (targetElements.length === 0) return;
+
+        setIsGenerating(true);
+        showToast(`正在應用風格...`);
+
+        const keyLabels: Record<string, string> = {
+            color: '色調/配色 (Color Palette)',
+            lighting: '光影/打光 (Lighting)',
+            artStyle: '畫風/藝術風格 (Art Style)',
+            composition: '視角/構圖 (Composition & Camera Angle)',
+            texture: '色彩細節/紋理 (Texture & Detail)',
+            pose: '人物姿勢/動作 (Pose & Action)',
+            expression: '面部表情/情緒 (Facial Expression)',
+            clothing: '服裝/穿著 (Clothing)',
+            background: '背景環境 (Background)',
+            hair: '髮型設計 (Hairstyle)',
+            typography: '字體風格 (Typography)',
+        };
+
+        const analysis = copiedStyle.analysis as Record<string, string>;
+        const selectedParts = selectedKeys
+            .filter(k => analysis[k] && !analysis[k].toLowerCase().includes('not applicable'))
+            .map(k => `${keyLabels[k]}: ${analysis[k]}`);
+
+        if (selectedParts.length === 0) {
+            showToast("所選元素在原圖中均不適用，請重新選擇。");
+            setIsGenerating(false);
+            return;
+        }
+
+        const styleDescription = selectedParts.join('\n');
+
+        const basePrompt = `Apply a style transfer to this image based on the following specific elements. Only transform what is listed — anything not mentioned should remain as close to the original as possible.
+
+STYLE ELEMENTS TO APPLY:
+${styleDescription}
+
+ALWAYS PRESERVE:
+- Subject identity (the main subject must remain recognizable)
+- Overall composition and spatial relationships between elements`;
+
+        try {
+            const genAI = createAiClient();
+            for (const element of targetElements) {
+                try {
+                    const [header, data] = element.src.split(',');
+                    const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                    const imagePart = { inlineData: { data, mimeType } };
+
+                    const transparencyOverride = preserveTransparency
+                        ? `\n\n---FINAL OVERRIDE---\nThe input image has a transparent background. OUTPUT REQUIREMENT: Place the subject on a PURE WHITE (#FFFFFF) background. No gradients, no shadows behind subject, no environmental backgrounds.`
+                        : '';
+
+                    const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                        model: 'gemini-3.1-flash-image-preview',
+                        contents: { parts: [imagePart, { text: basePrompt + transparencyOverride }] },
+                    }));
+
+                    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                    if (part?.inlineData) {
+                        const generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
+                        let finalSrc = generatedSrc;
+
+                        if (preserveTransparency) {
+                            try {
+                                const similarity = await checkCompositionSimilarity(element.src, generatedSrc);
+                                if (similarity > 0.75) {
+                                    finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
+                                } else {
+                                    showToast("構圖已變化，正在重新去背...");
+                                    finalSrc = await executeDynamicRemoval(generatedSrc, genAI);
+                                }
+                            } catch (e) {
+                                console.warn("Failed to restore transparency:", e);
+                            }
+                        }
+
+                        setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
+                    }
+                } catch (err: any) {
+                    throw err;
+                }
+            }
+            showToast("風格應用完成！✨");
+        } catch (error) {
+            handleAIError(error, "風格應用");
+        } finally {
+            setIsGenerating(false);
+        }
+    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey]);
+
+    // handlePasteStyle: 僅供 Style Library 預設風格使用（styleOverride 一定存在）
     const handlePasteStyle = useCallback(async (targetElementIds: string[], styleOverride?: string) => {
-        const styleToApply = styleOverride || copiedStyle?.text;
-        const mode = copiedStyle?.mode || 'texture'; 
-        
+        const styleToApply = styleOverride;
+
         if (!styleToApply) {
-            showToast("沒有複製的風格！請先複製或選擇預設風格。");
+            showToast("沒有指定風格！");
             return;
         }
         
@@ -195,7 +291,7 @@ Provide 2-3 sentences per category. Be specific and technical.`;
         if (targetElements.length === 0) return;
 
         setIsGenerating(true);
-        showToast(`正在應用${mode === 'artistic' ? '藝術樣式' : '風格'}...`);
+        showToast(`正在應用預設風格...`);
         setShowStyleLibrary(false);
 
         try {
@@ -207,46 +303,16 @@ Provide 2-3 sentences per category. Be specific and technical.`;
                     const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
                     const imagePart = { inlineData: { data, mimeType } };
 
-                    let prompt = "";
-                    if (styleOverride) {
-                        const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
-                        if (presetMatch?.prompt) {
-                            prompt = `${presetMatch.prompt} Maintain the original composition and subject placement.`;
-                        } else {
-                            prompt = `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
-                        }
-                    } else if (mode === 'texture') {
-                        prompt = `You are applying a texture/technique transfer. Follow these rules in strict priority order:
+                    // Style library presets: styleOverride is always provided
+                    const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
+                    let prompt = presetMatch?.prompt
+                        ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
+                        : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
 
-RULE 1 (HIGHEST PRIORITY — DO NOT VIOLATE):
-The color palette, lighting direction, brightness, and subject structure of the input image must remain 100% identical. Do not shift any colors. Do not change any shadows or highlights.
-
-RULE 2 (APPLY THIS):
-Transform the surface rendering technique using this style: "${styleToApply}"
-Change ONLY: brushwork, stroke texture, paint application method, surface finish.
-
-RULE 3: The subject's position, proportions, and identity must not change.`;
-                    } else {
-                        prompt = `Reimagine this image in a new artistic style. Follow these rules:
-
-TRANSFORM (change these freely):
-- Color palette and tones → adopt from the style description below
-- Lighting quality and mood → adopt from the style description below
-- Artistic medium and rendering technique → adopt from the style description below
-
-PRESERVE (do not change these):
-- Subject position: the main subject must stay in the same location and occupy the same relative area
-- Subject identity: the subject must remain recognizable as the same object/person
-- Overall composition structure: foreground/background relationship must be maintained
-
-STYLE TO APPLY:
-${styleToApply}`;
-                    }
-
-                    const transparencyOverride = preserveTransparency 
+                    const transparencyOverride = preserveTransparency
                         ? `\n\n---FINAL OVERRIDE (supersedes all instructions above)---\nThe input image has a transparent background.\nOUTPUT REQUIREMENT: Place the subject on a PURE WHITE (#FFFFFF) background.\nPROHIBITED: gradients, shadows behind subject, environmental backgrounds, textures, any non-white background.\nThis background requirement overrides all style instructions above.`
                         : '';
-                    
+
                     prompt = prompt + transparencyOverride;
 
                     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
@@ -905,6 +971,7 @@ STRICT RULES:
         showStyleLibrary,
         setShowStyleLibrary,
         handleCopyStyle,
+        handleApplyStyle,
         handlePasteStyle,
         handleCameraAngle,
         handleRemoveBackground,

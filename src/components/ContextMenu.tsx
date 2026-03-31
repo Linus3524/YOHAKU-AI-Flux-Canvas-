@@ -29,7 +29,7 @@ interface ContextMenuProps {
     changeColor: (color: string) => void;
     downloadImage: (elementId: string) => void;
     exportArtboard: (elementId: string) => void;
-    copyStyle: (elementId: string, mode: 'texture' | 'artistic') => void;
+    copyStyle: (elementId: string) => void;
     pasteStyle: (elementIds: string[]) => void;
     exportCanvas: () => void;
     importCanvas: () => void;
@@ -319,11 +319,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                 <MenuItem icon={<MenuIcons.Search />} onClick={() => handleAction(() => actions.extractPrompt(menuData.elementId!))}>
                                     提取提示詞
                                 </MenuItem>
-                                <MenuItem icon={<MenuIcons.Magic />} onClick={() => handleAction(() => actions.copyStyle(menuData.elementId!, 'texture'))}>
-                                    複製風格 (紋理/保留原色)
-                                </MenuItem>
-                                <MenuItem icon={<MenuIcons.ArtPalette />} onClick={() => handleAction(() => actions.copyStyle(menuData.elementId!, 'artistic'))}>
-                                    複製藝術樣式 (深度轉換)
+                                <MenuItem icon={<MenuIcons.Magic />} onClick={() => handleAction(() => actions.copyStyle(menuData.elementId!))}>
+                                    複製風格
                                 </MenuItem>
                                 <MenuItem 
                                     icon={<MenuIcons.Paste />}
