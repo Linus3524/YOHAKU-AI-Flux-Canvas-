@@ -271,8 +271,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
           <div className="w-52 flex-shrink-0 border-r border-gray-200 bg-white/50 flex flex-col p-5">
             {/* Logo */}
             <div className="mb-6">
-              <h1 className="text-xl font-bold tracking-tighter text-gray-800" style={{ fontFamily: "'Noto Serif JP', serif" }}>YOHAKU</h1>
-              <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400 mt-0.5">AI Flux Canvas</p>
+              <img src="/yohaku-logo.png" alt="YOHAKU AI Flux Canvas" className="w-full h-auto opacity-90" />
             </div>
 
             {/* Nav */}
