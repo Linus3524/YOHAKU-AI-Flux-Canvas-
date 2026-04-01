@@ -299,43 +299,105 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
           {/* Content Area */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {activeTab === 'about' ? (
-              <div className="p-5 overflow-y-auto scrollbar-hide h-full space-y-3 text-[13px] text-[#1D1D1F] leading-relaxed">
-                <p className="font-bold text-[15px]">YOHAKU | AI Flux Canvas 無限畫布</p>
-                <p>哈囉大家，我是 Linus。一位旅居日本的台灣平面設計師，同時也是一位不動產仲介。</p>
-                <p>歡迎使用 YOHAKU | AI Flux Canvas 無限畫布。</p>
-                <p>之所以取名為 YOHAKU，是取自日語中的「余白（よはく）」。無限畫布就像靈感的原野，無論你如何填滿、如何創作，這裡永遠為創意無限的人留白。</p>
-                <p>這個軟體源自 @prompt_case 的 Nano Banana Infinite Canvas。我以其為基礎，運用 Gemini 最新模型進行了徹底的重製與功能擴充。無限畫布的自由度，一直是我最喜歡的創作方式之一，我希望 YOHAKU 能陪你從靈感到作品一氣呵成。</p>
-                <p>我以設計師的視角重新構思了工作流。YOHAKU 的定位並非取代現有的主流軟體（如 Adobe、Figma 或 Canva），而是要在原有的工作流上為設計師「如虎添翼」。同時，我也希望讓非設計專業的使用者（如行銷人員、社群編輯），能透過這套萬用工具簡單上手，實現專業級的視覺產出。</p>
+              <div className="p-5 overflow-y-auto scrollbar-hide h-full text-[12px] text-[#6e6e73] leading-relaxed">
+                {/* 介紹 */}
+                <p className="font-bold text-[14px] text-[#1D1D1F] mb-3">YOHAKU | AI Flux Canvas 無限畫布</p>
+                <div className="space-y-2 mb-4">
+                  <p>哈囉大家，我是 Linus。一位旅居日本的台灣平面設計師，同時也是一位不動產仲介。</p>
+                  <p>歡迎使用 YOHAKU | AI Flux Canvas 無限畫布。</p>
+                  <p>之所以取名為 YOHAKU，是取自日語中的「余白（よはく）」。無限畫布就像靈感的原野，無論你如何填滿、如何創作，這裡永遠為創意無限的人留白。</p>
+                  <p>這個軟體源自 @prompt_case 的 Nano Banana Infinite Canvas。我以其為基礎，運用 Gemini 最新模型進行了徹底的重製與功能擴充。希望 YOHAKU 能陪你從靈感到作品一氣呵成。</p>
+                  <p>YOHAKU 的定位並非取代主流軟體（如 Adobe、Figma 或 Canva），而是在原有工作流上為設計師「如虎添翼」，也讓行銷人員、社群編輯等非設計背景的使用者輕鬆上手。</p>
+                </div>
 
-                <hr className="border-gray-200 my-1" />
+                <hr className="border-gray-100 mb-4" />
 
-                <p className="font-bold text-[13px] text-[#1D1D1F]">【 YOHAKU 五大核心特色 】</p>
-                <div className="space-y-3">
+                {/* 五大核心特色 */}
+                <p className="text-[10px] font-bold text-[#86868B] uppercase tracking-widest mb-3">YOHAKU 五大核心特色</p>
+                <div className="space-y-3 mb-4">
+                  {[
+                    { icon: '✨', title: 'Gemini AI 全程輔助', desc: '懸浮「靈感助手」隨時待命。從提示詞優化、AI 生圖到風格分析，所有繁瑣的過程都在畫布上直接完成。' },
+                    { icon: '📐', title: '專業工作區域系統 (Artboards)', desc: '建立多個獨立設計版面，內建 IG、A4、名片等常用尺寸預設，並支援一鍵同時匯出多個工作區域。' },
+                    { icon: '📸', title: '設計師級影像處理', desc: '包含風格複製、圖片調和、AI 去背、高畫質放大、外擴繪圖、局部重繪。讓 Moodboard 製作效率倍增。' },
+                    { icon: '📝', title: '便利貼即是 AI 指令', desc: '便利貼不只是記事，更是生圖的起點。支援上傳最多 4 張參考圖，直接將想法轉化為視覺素材。' },
+                    { icon: '🖋️', title: '完整排版工具', desc: '支援多字體、彎曲文字、精細行距字距調整、邊框陰影光暈，讓文字排版也能設計到底。' },
+                  ].map((item, i) => (
+                    <div key={i}>
+                      <p className="font-semibold text-[12px] text-[#1D1D1F] mb-0.5">{item.icon} {item.title}</p>
+                      <p>{item.desc}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <hr className="border-gray-100 mb-4" />
+
+                {/* 安全性說明 */}
+                <p className="text-[10px] font-bold text-[#86868B] uppercase tracking-widest mb-2">🔒 安全性說明 · Security</p>
+                <div className="space-y-1.5 mb-4">
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">在地化存儲：</span>API 金鑰僅儲存於個人瀏覽器 LocalStorage，不會傳送至開發者伺服器。</p>
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">持久化設定：</span>關閉頁面後設定仍保留（無痕模式除外）。</p>
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">用戶責任：</span>請妥善保管 API 金鑰，切勿洩漏給他人。</p>
+                </div>
+
+                {/* API 費用 */}
+                <p className="text-[10px] font-bold text-[#86868B] uppercase tracking-widest mb-2">💰 關於 API 使用費用</p>
+                <div className="space-y-1.5 mb-4">
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">軟體授權：</span>YOHAKU 目前完全免費提供。</p>
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">第三方計費：</span>Gemini API 費用由您的 Google 帳號直接扣款，依 Google 官方政策計費。</p>
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">本軟體使用模型：</span></p>
+                  <p className="pl-5">・<span className="font-semibold text-[#374151]">gemini-2.5-flash-lite：</span>提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</p>
+                  <p className="pl-5">・<span className="font-semibold text-[#374151]">gemini-2.0-flash-preview-image-generation：</span>AI 生圖、編輯圖片。需付費使用。</p>
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">溫馨提示：</span>建議至 Google Cloud Console 設定預算警示，掌控使用成本。</p>
+                </div>
+
+                {/* 運作環境 */}
+                <p className="text-[10px] font-bold text-[#86868B] uppercase tracking-widest mb-2">🌐 運作環境</p>
+                <div className="space-y-1.5 mb-4">
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">推薦瀏覽器：</span>Chrome、Edge、Safari（請更新至最新版本）。</p>
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">支援裝置：</span>最佳體驗建議使用電腦或平板電腦。</p>
+                </div>
+
+                <hr className="border-gray-100 mb-4" />
+
+                {/* 服務條款 */}
+                <p className="text-[10px] font-bold text-[#86868B] uppercase tracking-widest mb-3">⚖️ 服務條款與免責聲明 · Terms & Disclaimer</p>
+                <div className="space-y-3 mb-4">
+                  {[
+                    { title: '1. 關於服務提供', body: '本軟體以「現狀（As-Is）」提供，開發者不保證服務之絕對準確性或特定目的之適用性，並保留隨時變更、中斷或終止服務之權利。' },
+                    { title: '2. 費用責任免責', body: '所有因 API 使用產生之費用均由用戶自行負擔。開發者對任何非預期扣款、超額費用或計費糾紛概不負賠償責任。' },
+                    { title: '5. 禁止事項', body: '嚴禁利用本軟體進行違法、色情、歧視或侵害他人權利之行為，禁止對本軟體進行惡意逆向工程或系統攻擊。' },
+                    { title: '6. 損害賠償免責', body: '對於因使用本軟體導致之數據丟失、業務中斷或 API 費用損失，開發者不負賠償責任。' },
+                  ].map((item, i) => (
+                    <div key={i}>
+                      <p className="font-semibold text-[12px] text-[#1D1D1F] mb-0.5">{item.title}</p>
+                      <p>{item.body}</p>
+                    </div>
+                  ))}
                   <div>
-                    <p className="font-semibold">✨ Gemini AI 全程輔助</p>
-                    <p className="text-[#6e6e73]">懸浮「靈感助手」隨時待命。從提示詞優化、AI 生圖到風格分析，所有繁瑣的過程都在畫布上直接完成。</p>
+                    <p className="font-semibold text-[12px] text-[#1D1D1F] mb-1">3. 數據與隱私保護</p>
+                    <p className="pl-2">・<span className="font-semibold text-[#374151]">影像處理：</span>上傳之影像將發送至 Google 伺服器，遵循 Google AI Studio 條款。請勿上傳機密資訊。</p>
+                    <p className="pl-2 mt-1">・<span className="font-semibold text-[#374151]">版權責任：</span>用戶應確保上傳圖片擁有合法使用權，侵權糾紛由用戶自負法律責任。</p>
                   </div>
                   <div>
-                    <p className="font-semibold">📐 專業工作區域系統 (Artboards)</p>
-                    <p className="text-[#6e6e73]">建立多個獨立設計版面，內建 IG、A4、名片等常用尺寸預設，並支援一鍵同時匯出多個工作區域。</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold">📸 設計師級影像處理</p>
-                    <p className="text-[#6e6e73]">包含風格複製、圖片調和、AI 去背、高畫質放大、外擴繪圖、局部重繪。讓素材整合與 Moodboard 製作效率倍增。</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold">📝 便利貼即是 AI 指令</p>
-                    <p className="text-[#6e6e73]">便利貼不只是記事，更是生圖的起點。支援上傳最多 4 張參考圖，直接將你的想法轉化為視覺素材。</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold">🖋️ 完整排版工具</p>
-                    <p className="text-[#6e6e73]">支援多字體、彎曲文字、精細行距字距調整、邊框陰影光暈，讓文字排版也能設計到底。</p>
+                    <p className="font-semibold text-[12px] text-[#1D1D1F] mb-1">4. 智慧財產權 · Intellectual Property</p>
+                    <p className="pl-2">・<span className="font-semibold text-[#374151]">本軟體主權：</span>YOHAKU 之程式碼邏輯、UI 設計及品牌版權歸開發者 LINUS (Nice Day Japan) 所有。</p>
+                    <p className="pl-2 mt-1">・<span className="font-semibold text-[#374151]">開源致敬：</span>本軟體衍生自 @prompt_case 之 Nano Banana Infinite Canvas，並獲授權重製發佈。</p>
+                    <p className="pl-2 mt-1">・<span className="font-semibold text-[#374151]">生成內容：</span>AI 生成內容之權利歸屬依各國法律及 Google 條款判定，商用前請諮詢法律意見。</p>
                   </div>
                 </div>
 
-                <p className="pt-1">盡情享受這片餘白（YOHAKU），把你的想像力填進去吧！✨</p>
+                {/* 準據法 */}
+                <p className="text-[10px] font-bold text-[#86868B] uppercase tracking-widest mb-2">🔄 準據法與管轄權</p>
+                <div className="space-y-1.5 mb-4">
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">準據法：</span>本條款之解釋與適用，以日本國法律為準。</p>
+                  <p className="pl-2">・<span className="font-semibold text-[#374151]">管轄法院：</span>因本服務產生之爭議，雙方合意以東京地方裁判所為第一審專屬合意管轄法院。</p>
+                </div>
 
-                <hr className="border-gray-200 my-1" />
+                <hr className="border-gray-100 mb-3" />
+
+                <p className="text-[12px] text-[#6e6e73] mb-3">盡情享受這片餘白（YOHAKU），把你的想像力填進去吧！✨</p>
+
+                <hr className="border-gray-100 mb-3" />
 
                 <p className="text-[10px] font-light text-[#a0a0a5] leading-relaxed">
                   © 2026 LINUS Nice Day Japan (CHANG CHIN WEI) @linus3524. All Rights Reserved.<br />

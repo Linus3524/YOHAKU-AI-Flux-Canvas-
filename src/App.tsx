@@ -125,6 +125,8 @@ const App: React.FC = () => {
   // --- API Key Management ---
   const [userApiKey, setUserApiKey] = useState<string | null>(() => localStorage.getItem('yohaku_api_key'));
   const [showKeyModal, setShowKeyModal] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showStoragePopover, setShowStoragePopover] = useState(false);
 
   // The 'effectiveApiKey' holds the string value (strictly local storage for BYOK).
   const effectiveApiKey = userApiKey;
@@ -208,7 +210,9 @@ const App: React.FC = () => {
       handleRasterizeShape,
       handleRasterizeArrow,
       handleExportCanvas: originalExportCanvas,
-      handleImportCanvas: originalImportCanvas
+      handleImportCanvas: originalImportCanvas,
+      storageStatus,
+      clearStorage,
   } = useCanvas(showToast);
 
   const [isDraggingOnCanvas, setIsDraggingOnCanvas] = useState(false);
@@ -885,8 +889,33 @@ const App: React.FC = () => {
           <ApiKeyModal onSubmit={handleSaveManualKey} onClose={() => setShowKeyModal(false)} />
       )}
 
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[6000] animate-fade-in-down">
-          <button 
+      {showClearConfirm && (
+          <div className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/30 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-gray-100 p-6 w-80 flex flex-col gap-4">
+                  <div>
+                      <p className="text-[15px] font-bold text-[#1D1D1F] mb-1">確定清除存檔？</p>
+                      <p className="text-xs text-[#6e6e73] leading-relaxed">清除後畫布將重置為空白，此操作無法復原。建議先匯出 JSON 備份，再執行清除。</p>
+                  </div>
+                  <div className="flex gap-2">
+                      <button
+                          onClick={() => { originalExportCanvas(); }}
+                          className="flex-1 py-2 text-xs font-bold bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
+                      >先匯出備份</button>
+                      <button
+                          onClick={() => { clearStorage(); setShowClearConfirm(false); }}
+                          className="flex-1 py-2 text-xs font-bold bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
+                      >確定清除</button>
+                  </div>
+                  <button
+                      onClick={() => setShowClearConfirm(false)}
+                      className="text-xs text-gray-400 hover:text-gray-600 transition-colors text-center"
+                  >取消</button>
+              </div>
+          </div>
+      )}
+
+      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[6000] animate-fade-in-down flex items-center gap-2">
+          <button
               onClick={() => setShowKeyModal(true)}
               className="group flex items-center gap-2 px-4 py-1.5 bg-black/5 hover:bg-white backdrop-blur-sm rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:shadow-lg border border-white/20 transition-all duration-300"
           >
@@ -898,6 +927,55 @@ const App: React.FC = () => {
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 group-hover:text-[#1D1D1F] opacity-0 group-hover:opacity-100 transition-all -ml-1"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
               )}
           </button>
+
+          {/* Storage Status */}
+          {storageStatus === 'full' || storageStatus === 'critical' ? (
+              <div className="relative">
+                  <button
+                      onClick={() => setShowStoragePopover(v => !v)}
+                      className={`flex items-center gap-2 px-4 py-1.5 backdrop-blur-sm rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.05)] border transition-all duration-300
+                          ${storageStatus === 'full'
+                              ? 'bg-red-50 border-red-200 hover:bg-red-100'
+                              : 'bg-orange-50 border-orange-200 hover:bg-orange-100'}`}
+                  >
+                      <div className={`w-2 h-2 rounded-full ${storageStatus === 'full' ? 'bg-red-500 animate-pulse' : 'bg-orange-400'}`}></div>
+                      <span className={`text-[10px] font-bold tracking-wide ${storageStatus === 'full' ? 'text-red-500' : 'text-orange-500'}`}>
+                          {storageStatus === 'full' ? '存檔已滿' : '容量警告'}
+                      </span>
+                  </button>
+                  {/* Popover */}
+                  {showStoragePopover && (
+                      <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-68 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 p-4 z-[6001]" style={{width: '272px'}}>
+                          <div className="flex justify-between items-start mb-2">
+                              <p className="text-xs font-bold text-[#1D1D1F]">
+                                  {storageStatus === 'full' ? '存檔已滿' : '儲存空間不足'}
+                              </p>
+                              <button onClick={() => setShowStoragePopover(false)} className="text-gray-300 hover:text-gray-500 text-sm leading-none ml-2">✕</button>
+                          </div>
+                          <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                              {storageStatus === 'full'
+                                  ? '瀏覽器儲存空間已滿（上限 5MB），最新變更未能自動存檔。'
+                                  : '儲存空間即將用盡（上限 5MB，目前使用超過 90%），建議立即備份。'}
+                          </p>
+                          <div className="flex gap-2">
+                              <button
+                                  onClick={originalExportCanvas}
+                                  className="flex-1 py-1.5 text-[11px] font-bold bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+                              >匯出 JSON 備份</button>
+                              <button
+                                  onClick={() => { setShowStoragePopover(false); setShowClearConfirm(true); }}
+                                  className="flex-1 py-1.5 text-[11px] font-bold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                              >清除存檔</button>
+                          </div>
+                      </div>
+                  )}
+              </div>
+          ) : storageStatus === 'warning' ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-full" title="儲存空間使用超過 70%，建議匯出 JSON 備份">
+                  <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
+                  <span className="text-[10px] font-bold text-yellow-600">容量偏高</span>
+              </div>
+          ) : null}
       </div>
 
       {showStyleLibrary && (

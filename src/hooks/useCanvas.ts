@@ -19,18 +19,29 @@ import { trimCanvas, wrapTextCanvas, loadImage, createShapeDataUrl, createArrowD
 import { drawTextOnCanvas } from '../utils/textCanvas'; // ✅ 修改
 import type { CanvasApi } from '../components/InfiniteCanvas';
 
-// Initial Elements
-const INITIAL_ELEMENTS: CanvasElement[] = [];
+// LocalStorage
+const STORAGE_KEY = 'yohaku_canvas';
+const MAX_STORAGE_BYTES = 5 * 1024 * 1024; // 5MB
+
+const loadInitialElements = (): CanvasElement[] => {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) return JSON.parse(saved) as CanvasElement[];
+    } catch {}
+    return [];
+};
+
+export type StorageStatus = 'saved' | 'warning' | 'critical' | 'full';
 
 export const useCanvas = (showToast: (msg: string) => void) => {
-    const { 
-        state: elements, 
-        setState: setElements, 
-        undo, 
-        redo, 
-        canUndo, 
-        canRedo 
-    } = useHistoryState<CanvasElement[]>(INITIAL_ELEMENTS);
+    const {
+        state: elements,
+        setState: setElements,
+        undo,
+        redo,
+        canUndo,
+        canRedo
+    } = useHistoryState<CanvasElement[]>(loadInitialElements());
 
     const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
     const [clipboardElements, setClipboardElements] = useState<CanvasElement[]>([]);
@@ -38,8 +49,41 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     const [activeShapeTool, setActiveShapeTool] = useState<ShapeType | null>(null);
     const [creatingShapeId, setCreatingShapeId] = useState<string | null>(null);
     const shapeStartPointRef = useRef<Point | null>(null);
-    const zIndexCounter = useRef(INITIAL_ELEMENTS.length + 1);
+    const zIndexCounter = useRef(1);
     const canvasApiRef = useRef<CanvasApi>(null);
+
+    // --- LocalStorage Auto-Save ---
+    const [storageStatus, setStorageStatus] = useState<StorageStatus>('saved');
+    const hasMountedRef = useRef(false);
+
+    useEffect(() => {
+        // Skip first render (initial load from localStorage)
+        if (!hasMountedRef.current) {
+            hasMountedRef.current = true;
+            return;
+        }
+        const timer = setTimeout(() => {
+            try {
+                const json = JSON.stringify(elements);
+                const bytes = new Blob([json]).size;
+                const ratio = bytes / MAX_STORAGE_BYTES;
+                localStorage.setItem(STORAGE_KEY, json);
+                if (ratio > 0.9) setStorageStatus('critical');
+                else if (ratio > 0.7) setStorageStatus('warning');
+                else setStorageStatus('saved');
+            } catch {
+                setStorageStatus('full');
+            }
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [elements]);
+
+    const clearStorage = useCallback(() => {
+        localStorage.removeItem(STORAGE_KEY);
+        setElements([]);
+        setStorageStatus('saved');
+        showToast('存檔已清除，畫布重置');
+    }, [setElements, showToast]);
 
     // --- Core Add Functions ---
     const getCenterOfViewport = useCallback((): Point => {
@@ -1342,6 +1386,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         handleRasterizeShape,
         handleRasterizeArrow,
         handleExportCanvas,
-        handleImportCanvas
+        handleImportCanvas,
+        storageStatus,
+        clearStorage,
     };
 };
