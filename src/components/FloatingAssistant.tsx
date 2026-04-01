@@ -42,8 +42,8 @@ const FEATURE_DOCS = [
       { title: "一鍵生成圖片", desc: "框選圖片、手繪或便利貼，AI 根據內容生成高品質圖片。" },
       { title: "圖片逆向分析", desc: "右鍵點擊圖片選「提取提示詞」，AI 生成中英對照的詠唱咒語。" },
       { title: "Magic Style 風格庫", desc: "內建 36+ 種藝術風格（賽博龐克、水彩、浮世繪等），一鍵套用至選取圖片。" },
-      { title: "風格複製 (Magic Copy)", desc: "AI 解構色彩、光影、畫風等 10 個維度，提供紋理模式/藝術樣式/手動三種方式貼上。" },
-      { title: "擴展圖片 (Outpainting)", desc: "拖曳外框定義擴展區域，AI 無縫填補空白處（支援自動發想提示詞）。" },
+      { title: "風格複製", desc: "AI 解構色彩、光影、畫風等 10 個維度，提供紋理模式/藝術樣式/手動三種方式貼上。" },
+      { title: "擴展圖片", desc: "拖曳外框定義擴展區域，AI 無縫填補空白處（支援自動發想提示詞）。" },
       { title: "智慧去背", desc: "自動分析主體，去除背景並修復邊緣細節（Edge Repair）。" },
       { title: "影像調和", desc: "選取多張圖片，AI 調整光影與色調，融合為一張自然的圖片（支援 2K 高清）。" },
       { title: "視角轉換 & 智能放大", desc: "改變拍攝角度，或進行 2x/4x 智能放大，透明圖片自動處理背景。" }
@@ -73,7 +73,7 @@ const FEATURE_DOCS = [
     category: "7. 系統功能 (SYSTEM)",
     color: "text-gray-800",
     items: [
-      { title: "轉換為圖片 (Rasterize)", desc: "對文字、形狀、箭頭右鍵轉換，採用 3 倍超取樣確保清晰銳利。" },
+      { title: "轉換為圖片", desc: "對文字、形狀、箭頭右鍵轉換，採用 3 倍超取樣確保清晰銳利。" },
       { title: "復原/重做 & 匯出匯入", desc: "完整歷史記錄支援，並可將畫布匯出為 JSON 備份或匯入還原。" }
     ]
   },
@@ -108,7 +108,7 @@ interface FloatingAssistantProps {
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; purple?: boolean }[] = [
   {
     id: 'about',
-    label: '關於我們',
+    label: '關於 YOHAKU',
     icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
   },
   {
@@ -129,7 +129,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; purple?: b
   },
   {
     id: 'security',
-    label: '安全性 & 費用',
+    label: '安全性與費用',
     icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
   },
   {
@@ -318,8 +318,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
 
             {/* Copyright */}
             <div className="pt-3 border-t border-gray-100 text-[9px] text-gray-400 leading-relaxed mt-2">
-              <p>© 2026 LINUS Nice Day Japan (CHANG CHIN WEI)</p>
-              <p className="mt-0.5">Based on Nano Banana by @prompt_case</p>
+              <p>© 2026 LINUS Nice Day Japan (CHANG CHIN WEI) @linus3524 All Rights Reserved.</p>
+              <p className="mt-0.5">Based on Nano Banana Infinite Canvas by @prompt_case</p>
             </div>
           </div>
 
@@ -330,18 +330,23 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
             {activeSection === 'about' && (
               <div className="p-8">
                 <span className="inline-block px-3 py-1 bg-black text-white text-[9px] tracking-widest rounded mb-4 uppercase">Introduction</span>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4" style={{ fontFamily: "'Noto Serif JP', serif" }}>余白に、創造を。</h2>
-                <p className="text-gray-600 leading-relaxed mb-4 text-sm">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4 leading-snug" style={{ fontFamily: "'Noto Serif JP', serif" }}>
+                  余白に、創造を。<br />餘白，是靈感的原野。
+                </h2>
+                <p className="text-gray-600 leading-loose tracking-wide mb-6 text-[13px]">
                   哈囉大家，我是 <span className="font-bold text-black border-b border-gray-400">Linus</span>。一位旅居日本的台灣平面設計師，同時也是一位不動產仲介。
                 </p>
-                <p className="text-gray-600 leading-relaxed mb-4 text-sm">
-                  之所以取名為 <span className="font-semibold text-gray-800">YOHAKU</span>，是取自日語中的「余白（よはく）」。無限畫布就像靈感的原野，無論你如何填滿、如何創作，這裡永遠為創意無限的人留白。
+                <p className="italic text-gray-500 leading-loose tracking-wide mb-6 text-sm border-l-2 border-gray-200 pl-4">
+                  「YOHAKU」取自日語中的「余白（よはく）」。無限畫布就像靈感的原野，無論你如何填滿、如何創作，這裡永遠為創意無限的人留白。
                 </p>
-                <div className="bg-white/80 rounded-xl p-5 text-sm text-gray-600 border border-gray-100 shadow-sm mb-6">
-                  <p className="mb-2">這個軟體源自 @prompt_case 的 Nano Banana Infinite Canvas。我以其為基礎，運用 Gemini 最新模型進行了徹底的重製與功能擴充。YOHAKU 的定位並非取代 Adobe、Figma 或 Canva，而是在原有工作流上為設計師「如虎添翼」——同時讓行銷人員、社群編輯等非設計背景的使用者也能輕鬆上手。</p>
-                </div>
+                <p className="text-gray-600 leading-loose tracking-wide mb-4 text-[13px]">
+                  這個軟體源自 @prompt_case 的 Nano Banana Infinite Canvas。我以其為基礎，運用 Gemini 最新模型進行了徹底的重製與功能擴充。希望 YOHAKU 能陪你從靈感到作品一氣呵成。
+                </p>
+                <p className="text-gray-600 leading-loose tracking-wide mb-8 text-[13px]">
+                  YOHAKU 的定位並非取代主流軟體（如 Adobe、Figma 或 Canva），而是在原有工作流上為設計師「如虎添翼」，也讓行銷人員、社群編輯等非設計背景的使用者輕鬆上手。
+                </p>
                 <div className="pt-2 text-center">
-                  <p className="text-[13px] text-gray-800 font-bold">盡情享受這片餘白（YOHAKU），把你的想像力填進去吧！✨</p>
+                  <p className="text-[15px] tracking-wider text-gray-800 font-bold">盡情享受這片餘白（YOHAKU），把你的想像力填進去吧！✨</p>
                 </div>
               </div>
             )}
@@ -493,8 +498,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <div>
                         <span className="text-sm font-bold text-gray-800 block mb-2">本軟體使用模型：</span>
                         <ul className="text-xs text-gray-500 space-y-2 leading-relaxed">
-                          <li>・ <span className="font-bold text-gray-700">gemini-2.5-flash-lite</span> — 提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
-                          <li>・ <span className="font-bold text-gray-700">gemini-2.0-flash-preview-image-generation</span> — AI 生圖、編輯圖片。需付費使用。</li>
+                          <li>・ <span className="font-bold text-gray-700">gemini-3.1-flash-lite</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
+                          <li>・ <span className="font-bold text-gray-700">gemini-3.1-flash-preview-image-generation</span>：AI 生圖、編輯圖片。需付費使用。</li>
                         </ul>
                       </div>
                       <div className="p-3 bg-rose-50 rounded-lg text-xs text-rose-600 border border-rose-100">
@@ -517,39 +522,38 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
             {activeSection === 'legal' && (
               <div className="p-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6" style={{ fontFamily: "'Noto Serif JP', serif" }}>服務條款 & 免責聲明</h2>
-                <div className="text-sm text-gray-600 space-y-5 bg-white/80 p-6 rounded-xl border border-gray-100 shadow-sm">
-                  {[
-                    { title: '1. 關於服務提供', body: '本軟體以「現狀（As-Is）」提供，開發者不保證服務之絕對準確性或特定目的之適用性，並保留隨時變更、中斷或終止服務之權利。' },
-                    { title: '2. 費用責任免責', body: '所有因 API 使用產生之費用均由用戶自行負擔。開發者對任何非預期扣款、超額費用或計費糾紛概不負賠償責任。' },
-                    { title: '5. 禁止事項', body: '嚴禁利用本軟體進行違法、色情、歧視或侵害他人權利之行為，禁止對本軟體進行惡意逆向工程或系統攻擊。' },
-                    { title: '6. 損害賠償免責', body: '對於因使用本軟體導致之數據丟失、業務中斷或 API 費用損失，開發者不負賠償責任。' },
-                  ].map((item, i) => (
-                    <div key={i}>
-                      <h3 className="font-bold text-gray-800 text-sm mb-1">{item.title}</h3>
-                      <p className="leading-relaxed text-gray-500">{item.body}</p>
-                    </div>
-                  ))}
+                <div className="space-y-5 bg-white/80 p-6 rounded-xl border border-gray-100 shadow-sm">
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-sm mb-1">1. 關於服務提供</h3>
+                    <p className="leading-relaxed text-gray-500 text-xs">本軟體以「現狀（As-Is）」提供，開發者不保證服務之絕對準確性或特定目的之適用性，並保留隨時變更、中斷或終止服務之權利。</p>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-sm mb-1">2. 費用責任與損害賠償免責</h3>
+                    <p className="leading-relaxed text-gray-500 text-xs mb-2">所有因 API 使用產生之費用均由用戶自行負擔。開發者對任何非預期扣款、超額費用或計費糾紛概不負賠償責任。</p>
+                    <p className="leading-relaxed text-gray-500 text-xs">對於因使用本軟體導致之數據丟失、業務中斷或 API 費用損失，開發者不負賠償責任。</p>
+                  </div>
                   <div>
                     <h3 className="font-bold text-gray-800 text-sm mb-2">3. 數據與隱私保護</h3>
-                    <ul className="space-y-1.5 text-gray-500">
-                      <li>・ <span className="font-bold text-gray-700">影像處理：</span>上傳之影像將發送至 Google 伺服器，遵循 Google AI Studio 條款，請勿上傳機密資訊。</li>
+                    <ul className="space-y-1.5 text-gray-500 text-xs">
+                      <li>・ <span className="font-bold text-gray-700">影像處理：</span>上傳之影像將發送至 Google 伺服器，遵循 Google AI Studio 條款。請勿上傳機密資訊。</li>
                       <li>・ <span className="font-bold text-gray-700">版權責任：</span>用戶應確保上傳圖片擁有合法使用權，侵權糾紛由用戶自負法律責任。</li>
                     </ul>
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-800 text-sm mb-2">4. 智慧財產權 · Intellectual Property</h3>
-                    <ul className="space-y-1.5 text-gray-500">
-                      <li>・ <span className="font-bold text-gray-700">本軟體主權：</span>YOHAKU 之程式碼邏輯、UI 設計及品牌版權歸開發者 LINUS (Nice Day Japan / CHANG CHIN WEI) 所有。</li>
+                    <h3 className="font-bold text-gray-800 text-sm mb-2">4. 智慧財產權</h3>
+                    <ul className="space-y-1.5 text-gray-500 text-xs">
+                      <li>・ <span className="font-bold text-gray-700">本軟體主權：</span>YOHAKU 之程式碼邏輯、UI 設計及品牌版權歸開發者 LINUS Nice Day Japan (CHANG CHIN WEI) @linus3524 所有。</li>
                       <li>・ <span className="font-bold text-gray-700">開源致敬：</span>本軟體衍生自 @prompt_case 之 Nano Banana Infinite Canvas，並獲授權重製發佈。</li>
                       <li>・ <span className="font-bold text-gray-700">生成內容：</span>AI 生成內容之權利歸屬依各國法律及 Google 條款判定，商用前請諮詢法律意見。</li>
                     </ul>
                   </div>
-                  <div className="pt-2 border-t border-gray-100">
-                    <h3 className="font-bold text-gray-800 text-sm mb-2">🔄 準據法與管轄權</h3>
-                    <ul className="space-y-1.5 text-gray-500">
-                      <li>・ <span className="font-bold text-gray-700">準據法：</span>本條款之解釋與適用，以日本國法律為準。</li>
-                      <li>・ <span className="font-bold text-gray-700">管轄法院：</span>因本服務產生之爭議，雙方合意以東京地方裁判所為第一審專屬合意管轄法院。</li>
-                    </ul>
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-sm mb-1">5. 禁止事項</h3>
+                    <p className="leading-relaxed text-gray-500 text-xs">嚴禁利用本軟體進行違法、色情、歧視或侵害他人權利之行為，禁止對本軟體進行惡意逆向工程或系統攻擊。</p>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-sm mb-1">6. 準據法與管轄權</h3>
+                    <p className="leading-relaxed text-gray-500 text-xs">本條款之解釋與適用，以日本國法律為準。因本服務產生之爭議，雙方合意以東京地方裁判所為第一審專屬合意管轄法院。</p>
                   </div>
                 </div>
               </div>
