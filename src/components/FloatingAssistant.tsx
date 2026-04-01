@@ -16,15 +16,15 @@ const FEATURE_DOCS = [
     category: "2. 工作區域 (Artboard)",
     items: [
       { title: "建立工作區域", desc: "在畫布上建立固定尺寸的設計框，適合製作有明確邊界的作品（如海報、貼文）。從工具列新增，或右鍵選擇「加入工作區域」。" },
-      { title: "預設尺寸", desc: "內建 A4、A3、Instagram 方形、16:9 橫版、9:16 直版等多種常用尺寸，也可自訂寬高。" },
+      { title: "預設尺寸", desc: "內建四大分類：社群媒體（IG 貼文 1:1、IG 直式 4:5、IG 限時動態 9:16、Threads 直式、Facebook 封面）、網頁（Web 1920/1440、手機 375）、印刷（A4 直/橫式、A5 直式、名片，以 300dpi 計算），以及自訂尺寸。" },
       { title: "命名與管理", desc: "點擊工作區域可開啟設定面板，自訂名稱、調整尺寸，方便多個工作區域同時作業。" },
-      { title: "匯出工作區域", desc: "在設定面板點擊「匯出」，或右鍵選擇「匯出此工作區域」，將框內所有物件（含效果）合成為高清圖片輸出。" }
+      { title: "匯出工作區域", desc: "在設定面板點擊「匯出」，或右鍵選擇「匯出此工作區域」，將框內所有物件（含效果）合成為高清圖片輸出。在圖層面板中同時選取 2 個以上工作區域時，可一鍵批次匯出全部為獨立 PNG 檔。" }
     ]
   },
   {
     category: "3. 創作工具 (Creation Tools)",
     items: [
-      { title: "便利貼", desc: "快速記錄想法或作為 AI 生成的提示詞來源。" },
+      { title: "便利貼", desc: "快速記錄想法或作為 AI 生成的提示詞來源。支援上傳最多 4 張參考圖（①②③④），AI 生成時會同時參考這些圖片的視覺風格或構圖。" },
       { title: "文字工具", desc: "支援橫書/直書切換、曲線文字、行距/字距調整。進階效果包含：邊框（顏色/粗細）、背景色、文字陰影（顏色/模糊）、光暈效果（顏色/強度）。右鍵可「轉換為圖片」並自動套用 3x 高清解析度。" },
       { title: "手繪工具", desc: "自由繪製草圖，具有筆刷與橡皮擦功能，支援透明背景繪圖。" },
       { title: "線條/箭頭", desc: "連接物件，支援直線、單向/雙向箭頭、圓點端點，可自訂虛線與顏色。右鍵可「轉換為圖片」。" },
@@ -38,7 +38,7 @@ const FEATURE_DOCS = [
       { title: "一鍵生成圖片", desc: "框選圖片、手繪或便利貼，AI 根據內容生成高品質圖片。" },
       { title: "圖片逆向分析", desc: "右鍵點擊圖片選擇「提取提示詞」，AI 將分析畫面風格與文字，生成中英對照的詠唱咒語。" },
       { title: "Magic Style 風格庫", desc: "內建 36+ 種藝術風格 (如：賽博龐克、水彩、浮世繪)，一鍵套用至選取圖片。" },
-      { title: "風格複製 (Magic Copy)", desc: "AI 分析來源圖片的紋理或藝術筆觸，並「貼上」到目標圖片，實現風格遷移。" },
+      { title: "風格複製 (Magic Copy)", desc: "AI 分析來源圖片，解構色彩、光影、畫風、紋理、構圖等 10 個風格維度，再「貼上」到目標圖片。提供兩種快速模式：「紋理模式」（套用畫風＋紋理）和「藝術樣式」（套用色調＋光影＋畫風＋紋理＋背景），或自行手動勾選套用元素。" },
       { title: "擴展圖片 (Outpainting)", desc: "拖曳外框定義擴展區域，AI 會無縫填補空白處 (支援自動發想提示詞)。" },
       { title: "智慧去背", desc: "自動分析主體，去除背景並修復邊緣細節 (Edge Repair)。" },
       { title: "影像調和", desc: "選取多張圖片，AI 會調整光影與色調，使其融合為一張自然的圖片 (支援 2K 高清)。" },
@@ -104,7 +104,7 @@ interface FloatingAssistantProps {
 export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, onCreateSticky }) => {
   // State
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'features' | 'ai'>('features');
+  const [activeTab, setActiveTab] = useState<'features' | 'ai' | 'about'>('features');
   
   // Position
   const [position, setPosition] = useState({ x: 24, y: 24 });
@@ -278,21 +278,71 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
           <div className="flex p-1.5 bg-gray-100/50 border-b border-gray-200/50 m-2 rounded-2xl flex-shrink-0">
             <button
               onClick={() => setActiveTab('features')}
-              className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'features' ? 'bg-white shadow-sm text-[#1D1D1F]' : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'}`}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === 'features' ? 'bg-white shadow-sm text-[#1D1D1F]' : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'}`}
             >
               📖 功能指南
             </button>
             <button
               onClick={() => setActiveTab('ai')}
-              className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'ai' ? 'bg-white shadow-sm text-[#AF52DE]' : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'}`}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === 'ai' ? 'bg-white shadow-sm text-[#AF52DE]' : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'}`}
             >
-              ✨ 靈感顧問
+              💡 靈感顧問
+            </button>
+            <button
+              onClick={() => setActiveTab('about')}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === 'about' ? 'bg-white shadow-sm text-[#FF6B35]' : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'}`}
+            >
+              ©️ 關於我們
             </button>
           </div>
 
           {/* Content Area */}
           <div className="flex-1 overflow-hidden flex flex-col">
-            {activeTab === 'features' ? (
+            {activeTab === 'about' ? (
+              <div className="p-5 overflow-y-auto scrollbar-hide h-full space-y-3 text-[13px] text-[#1D1D1F] leading-relaxed">
+                <p className="font-bold text-[15px]">YOHAKU | AI Flux Canvas 無限畫布</p>
+                <p>哈囉大家，我是 Linus。一位旅居日本的台灣平面設計師，同時也是一位不動產仲介。</p>
+                <p>歡迎使用 YOHAKU | AI Flux Canvas 無限畫布。</p>
+                <p>之所以取名為 YOHAKU，是取自日語中的「余白（よはく）」。無限畫布就像靈感的原野，無論你如何填滿、如何創作，這裡永遠為創意無限的人留白。</p>
+                <p>這個軟體源自 @prompt_case 的 Nano Banana Infinite Canvas。我以其為基礎，運用 Gemini 最新模型進行了徹底的重製與功能擴充。無限畫布的自由度，一直是我最喜歡的創作方式之一，我希望 YOHAKU 能陪你從靈感到作品一氣呵成。</p>
+                <p>我以設計師的視角重新構思了工作流。YOHAKU 的定位並非取代現有的主流軟體（如 Adobe、Figma 或 Canva），而是要在原有的工作流上為設計師「如虎添翼」。同時，我也希望讓非設計專業的使用者（如行銷人員、社群編輯），能透過這套萬用工具簡單上手，實現專業級的視覺產出。</p>
+
+                <hr className="border-gray-200 my-1" />
+
+                <p className="font-bold text-[13px] text-[#1D1D1F]">【 YOHAKU 五大核心特色 】</p>
+                <div className="space-y-3">
+                  <div>
+                    <p className="font-semibold">✨ Gemini AI 全程輔助</p>
+                    <p className="text-[#6e6e73]">懸浮「靈感助手」隨時待命。從提示詞優化、AI 生圖到風格分析，所有繁瑣的過程都在畫布上直接完成。</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">📐 專業工作區域系統 (Artboards)</p>
+                    <p className="text-[#6e6e73]">建立多個獨立設計版面，內建 IG、A4、名片等常用尺寸預設，並支援一鍵同時匯出多個工作區域。</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">📸 設計師級影像處理</p>
+                    <p className="text-[#6e6e73]">包含風格複製、圖片調和、AI 去背、高畫質放大、外擴繪圖、局部重繪。讓素材整合與 Moodboard 製作效率倍增。</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">📝 便利貼即是 AI 指令</p>
+                    <p className="text-[#6e6e73]">便利貼不只是記事，更是生圖的起點。支援上傳最多 4 張參考圖，直接將你的想法轉化為視覺素材。</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">🖋️ 完整排版工具</p>
+                    <p className="text-[#6e6e73]">支援多字體、彎曲文字、精細行距字距調整、邊框陰影光暈，讓文字排版也能設計到底。</p>
+                  </div>
+                </div>
+
+                <p className="pt-1">盡情享受這片餘白（YOHAKU），把你的想像力填進去吧！✨</p>
+
+                <hr className="border-gray-200 my-1" />
+
+                <p className="text-[10px] font-light text-[#a0a0a5] leading-relaxed">
+                  © 2026 LINUS Nice Day Japan (CHANG CHIN WEI) @linus3524. All Rights Reserved.<br />
+                  Based on Nano Banana Infinite Canvas by @prompt_case.
+                </p>
+              </div>
+            ) : activeTab === 'features' ? (
               <div className="p-4 space-y-6 overflow-y-auto scrollbar-hide h-full">
                 {FEATURE_DOCS.map((section, idx) => (
                   <div key={idx} className="space-y-3">
