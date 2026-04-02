@@ -577,6 +577,10 @@ const App: React.FC = () => {
       );
   };
 
+  const handleSnapshotTextElement = useCallback(() => {
+      setElements(prev => prev, { addToHistory: true });
+  }, [setElements]);
+
   const handleUpdateShapeElement = (updates: Partial<ShapeElement>) => {
       if (!selectedShapeElement) return;
       setElements(prev => prev.map(el => (el.id === selectedShapeElement.id && el.type === 'shape') ? { ...el, ...updates } : el));
@@ -1146,9 +1150,10 @@ const App: React.FC = () => {
       )}
 
       {!isFocusMode && selectedTextElement && (
-          <TextPropertyPanel 
+          <TextPropertyPanel
              element={selectedTextElement}
              onUpdate={handleUpdateTextElement}
+             onSnapshot={handleSnapshotTextElement}
              onClose={() => setSelectedElementIds([])}
           />
       )}

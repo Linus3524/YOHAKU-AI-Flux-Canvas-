@@ -5,6 +5,7 @@ import type { TextElement } from '../types';
 interface TextPropertyPanelProps {
   element: TextElement;
   onUpdate: (updates: Partial<TextElement>, options?: { addToHistory?: boolean }) => void;
+  onSnapshot: () => void;
   onClose: () => void;
 }
 
@@ -96,7 +97,7 @@ const Icons = {
 }
 
 // Simple Slider Control
-const SliderControl = ({ label, value, onChange, onCommit, min, max, step = 1, unit = "", decimals }: { label: string, value: number, onChange: (val: number) => void, onCommit?: (val: number) => void, min: number, max: number, step?: number, unit?: string, decimals?: number }) => (
+const SliderControl = ({ label, value, onChange, onDragStart, min, max, step = 1, unit = "", decimals }: { label: string, value: number, onChange: (val: number) => void, onDragStart?: () => void, min: number, max: number, step?: number, unit?: string, decimals?: number }) => (
     <div className="flex flex-col gap-1 w-full">
         <div className="flex justify-between items-center">
              <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">{label}</span>
@@ -108,9 +109,9 @@ const SliderControl = ({ label, value, onChange, onCommit, min, max, step = 1, u
             max={max}
             step={step}
             value={value}
+            onMouseDown={() => onDragStart?.()}
+            onTouchStart={() => onDragStart?.()}
             onChange={(e) => onChange(Number(e.target.value))}
-            onMouseUp={(e) => onCommit?.(Number(e.currentTarget.value))}
-            onTouchEnd={(e) => onCommit?.(Number(e.currentTarget.value))}
             className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#007AFF]"
         />
     </div>
@@ -164,7 +165,7 @@ const ColorPickerButton = ({ color, onChange, label }: { color: string | undefin
 }
 
 
-export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, onUpdate, onClose }) => {
+export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, onUpdate, onSnapshot, onClose }) => {
     const initialElementState = useRef<TextElement>(element);
     const [showMore, setShowMore] = useState(false);
     
@@ -343,9 +344,9 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                             </div>
 
                             {/* Sliders */}
-                            <SliderControl label="行距" value={element.lineHeight} onChange={(val) => onUpdate({ lineHeight: val }, { addToHistory: false })} onCommit={(val) => onUpdate({ lineHeight: val }, { addToHistory: true })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
-                            <SliderControl label="字距" value={element.letterSpacing || 0} onChange={(val) => onUpdate({ letterSpacing: val }, { addToHistory: false })} onCommit={(val) => onUpdate({ letterSpacing: val }, { addToHistory: true })} min={-20} max={100} step={1} unit="px" decimals={0} />
-                            <SliderControl label="彎曲" value={(element as any).curveStrength || 0} onChange={(val) => onUpdate({ curveStrength: val } as any, { addToHistory: false })} onCommit={(val) => onUpdate({ curveStrength: val } as any, { addToHistory: true })} min={-100} max={100} step={1} unit="" decimals={0} />
+                            <SliderControl label="行距" value={element.lineHeight} onDragStart={onSnapshot} onChange={(val) => onUpdate({ lineHeight: val }, { addToHistory: false })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
+                            <SliderControl label="字距" value={element.letterSpacing || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ letterSpacing: val }, { addToHistory: false })} min={-20} max={100} step={1} unit="px" decimals={0} />
+                            <SliderControl label="彎曲" value={(element as any).curveStrength || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ curveStrength: val } as any, { addToHistory: false })} min={-100} max={100} step={1} unit="" decimals={0} />
                         </div>
 
                         {/* ── Vertical divider ── */}
@@ -356,17 +357,17 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                             {/* 邊框 */}
                             <div className="flex items-center gap-2">
                                 <ColorPickerButton label="邊框" color={element.strokeColor ?? '#FF3B30'} onChange={(c) => onUpdate({ strokeColor: c })} />
-                                <SliderControl label="粗細" value={element.strokeWidth || 0} onChange={(val) => onUpdate({ strokeWidth: val }, { addToHistory: false })} onCommit={(val) => onUpdate({ strokeWidth: val }, { addToHistory: true })} min={0} max={20} />
+                                <SliderControl label="粗細" value={element.strokeWidth || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ strokeWidth: val }, { addToHistory: false })} min={0} max={20} />
                             </div>
                             {/* 陰影 */}
                             <div className="flex items-center gap-2">
                                 <ColorPickerButton label="陰影" color={element.shadowColor} onChange={(c) => onUpdate({ shadowColor: c })} />
-                                <SliderControl label="模糊" value={element.shadowBlur || 0} onChange={(val) => onUpdate({ shadowBlur: val }, { addToHistory: false })} onCommit={(val) => onUpdate({ shadowBlur: val }, { addToHistory: true })} min={0} max={50} />
+                                <SliderControl label="模糊" value={element.shadowBlur || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ shadowBlur: val }, { addToHistory: false })} min={0} max={50} />
                             </div>
                             {/* 光暈 */}
                             <div className="flex items-center gap-2">
                                 <ColorPickerButton label="光暈" color={element.glowColor} onChange={(c) => onUpdate({ glowColor: c })} />
-                                <SliderControl label="強度" value={element.glowBlur || 0} onChange={(val) => onUpdate({ glowBlur: val }, { addToHistory: false })} onCommit={(val) => onUpdate({ glowBlur: val }, { addToHistory: true })} min={0} max={50} />
+                                <SliderControl label="強度" value={element.glowBlur || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ glowBlur: val }, { addToHistory: false })} min={0} max={50} />
                             </div>
                         </div>
 
