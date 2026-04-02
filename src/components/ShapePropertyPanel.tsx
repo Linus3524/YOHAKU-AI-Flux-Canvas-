@@ -106,27 +106,31 @@ export const ShapePropertyPanel: React.FC<ShapePropertyPanelProps> = ({ element,
                     onMouseDown={(e) => e.stopPropagation()}
                 >
                     {PRESET_COLORS.map(c => (
-                        <button
-                            key={c}
-                            onClick={() => { onChange(c); toggle(); }}
-                            className={`w-6 h-6 rounded-full border border-black/5 hover:scale-110 transition-transform ${currentColor === c ? 'ring-2 ring-black ring-offset-1' : ''}`}
-                            style={{ backgroundColor: c }}
-                            title={c === 'transparent' ? '透明' : c}
-                        >
-                            {c === 'transparent' && (
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full text-red-500 p-1">
-                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                </svg>
-                            )}
-                        </button>
+                        c === 'transparent' ? (
+                            <button
+                                key={c}
+                                onClick={() => { onChange(c); toggle(); }}
+                                className={`w-6 h-6 rounded-full border border-black/5 hover:scale-110 transition-transform overflow-hidden ${currentColor === c ? 'ring-2 ring-black ring-offset-1' : ''}`}
+                                style={{ background: 'repeating-conic-gradient(#D1D1D6 0% 25%, #FFFFFF 0% 50%) 0 0 / 6px 6px' }}
+                                title="透明（無色）"
+                            />
+                        ) : (
+                            <button
+                                key={c}
+                                onClick={() => { onChange(c); toggle(); }}
+                                className={`w-6 h-6 rounded-full border border-black/5 hover:scale-110 transition-transform ${currentColor === c ? 'ring-2 ring-black ring-offset-1' : ''}`}
+                                style={{ backgroundColor: c }}
+                                title={c}
+                            />
+                        )
                     ))}
-                    <label className="w-6 h-6 rounded-full border border-gray-200 bg-white flex items-center justify-center cursor-pointer hover:bg-gray-50 text-[10px] text-black">
+                    <label className="w-6 h-6 rounded-full border border-gray-200 bg-white flex items-center justify-center cursor-pointer hover:bg-gray-50 text-[10px] text-black relative overflow-hidden">
                         +
-                        <input 
-                            type="color" 
-                            value={currentColor === 'transparent' ? '#ffffff' : currentColor} 
+                        <input
+                            type="color"
+                            value={currentColor === 'transparent' ? '#ffffff' : currentColor}
                             onChange={(e) => onChange(e.target.value)}
-                            className="hidden"
+                            style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
                         />
                     </label>
                 </div>

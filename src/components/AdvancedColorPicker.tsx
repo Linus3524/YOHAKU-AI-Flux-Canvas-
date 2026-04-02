@@ -100,26 +100,32 @@ export const AdvancedColorPicker: React.FC<AdvancedColorPickerProps> = ({ value,
 
           {/* 純色模式 */}
           {mode === 'solid' && (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-[#86868B]">自訂顏色</span>
-                <input 
-                  type="color" 
-                  value={solidColor === 'transparent' ? '#ffffff' : solidColor} 
+            <div className="grid grid-cols-4 gap-2">
+              {/* 自訂顏色 */}
+              <label className="w-8 h-8 rounded-full border border-black/10 bg-white flex items-center justify-center cursor-pointer hover:scale-110 transition-transform mx-auto relative overflow-hidden">
+                <span className="text-sm text-[#86868B] font-light leading-none">+</span>
+                <input
+                  type="color"
+                  value={solidColor === 'transparent' ? '#ffffff' : solidColor}
                   onChange={(e) => handleSolidChange(e.target.value)}
-                  className="w-8 h-8 cursor-pointer rounded border-0 p-0"
+                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
                 />
-              </div>
-              <div className="grid grid-cols-4 gap-2">
-                {COMMON_COLORS.map(c => (
-                  <button 
-                    key={c}
-                    className="w-8 h-8 rounded-full border border-black/10 hover:scale-110 transition-transform mx-auto"
-                    style={{ backgroundColor: c }}
-                    onClick={() => handleSolidChange(c)}
-                  />
-                ))}
-              </div>
+              </label>
+              {/* 透明選項 */}
+              <button
+                className={`w-8 h-8 rounded-full border border-black/10 hover:scale-110 transition-transform mx-auto overflow-hidden ${solidColor === 'transparent' ? 'ring-2 ring-black ring-offset-1' : ''}`}
+                style={{ background: 'repeating-conic-gradient(#D1D1D6 0% 25%, #FFFFFF 0% 50%) 0 0 / 8px 8px' }}
+                onClick={() => handleSolidChange('transparent')}
+                title="透明（無色）"
+              />
+              {COMMON_COLORS.map(c => (
+                <button
+                  key={c}
+                  className={`w-8 h-8 rounded-full border border-black/10 hover:scale-110 transition-transform mx-auto ${solidColor === c ? 'ring-2 ring-black ring-offset-1' : ''}`}
+                  style={{ backgroundColor: c }}
+                  onClick={() => handleSolidChange(c)}
+                />
+              ))}
             </div>
           )}
 
