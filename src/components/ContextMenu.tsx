@@ -217,10 +217,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     isVisible
 }) => {
     const menuRef = useRef<HTMLDivElement>(null);
-    const [colorSubMenuVisible, setColorSubMenuVisible] = useState(false);
-    const [frameSubMenuVisible, setFrameSubMenuVisible] = useState(false);
-    const [layerOrderSubMenuVisible, setLayerOrderSubMenuVisible] = useState(false);
-    const [layoutSubMenuVisible, setLayoutSubMenuVisible] = useState(false);
+    type SubMenuType = 'color' | 'frame' | 'layerOrder' | 'layout' | null;
+    const [activeSubMenu, setActiveSubMenu] = useState<SubMenuType>(null);
+    const toggleSubMenu = (name: SubMenuType) =>
+        setActiveSubMenu(prev => (prev === name ? null : name));
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -242,18 +242,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         onClose();
     };
     
-    const handleColorSubMenu = (e: React.MouseEvent) => {
-        if (!canChangeColor) return;
-        e.stopPropagation();
-        setColorSubMenuVisible(true);
-        setFrameSubMenuVisible(false);
-    };
-
-    const handleFrameSubMenu = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setFrameSubMenuVisible(true);
-        setColorSubMenuVisible(false);
-    };
 
     const menuStyle: React.CSSProperties = {
         position: 'absolute',
@@ -372,18 +360,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                         {elementType === 'image' && (
                              <>
                                 {/* 佈局 submenu */}
-                                <div className="relative" onMouseLeave={() => setLayoutSubMenuVisible(false)}>
+                                <div className="relative">
                                     <button
-                                        onMouseEnter={() => { setLayoutSubMenuVisible(true); setLayerOrderSubMenuVisible(false); setColorSubMenuVisible(false); setFrameSubMenuVisible(false); }}
-                                        className="w-full flex justify-between items-center text-left px-4 py-2.5 text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group"
+                                        onClick={(e) => { e.stopPropagation(); toggleSubMenu('layout'); }}
+                                        className={`w-full flex justify-between items-center text-left px-4 py-2.5 text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group ${activeSubMenu === 'layout' ? 'bg-[#F5F5F7]' : ''}`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <span className="text-[#86868B] group-hover:text-[#1D1D1F] transition-colors"><MenuIcons.Layout /></span>
                                             <span>佈局</span>
                                         </div>
-                                        <span className="text-xs text-[#86868B]">▶</span>
+                                        <span className="text-xs text-[#86868B]">{activeSubMenu === 'layout' ? '▼' : '▶'}</span>
                                     </button>
-                                    {layoutSubMenuVisible && (
+                                    {activeSubMenu === 'layout' && (
                                         <div style={subMenuStyle} className="w-44 rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-2 ring-1 ring-black/5">
                                             <MenuItem icon={<MenuIcons.FlipH />} onClick={() => handleAction(() => actions.flipHorizontal(menuData.elementId!))}>水平翻轉</MenuItem>
                                             <MenuItem icon={<MenuIcons.FlipV />} onClick={() => handleAction(() => actions.flipVertical(menuData.elementId!))}>垂直翻轉</MenuItem>
@@ -435,19 +423,19 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                         
                         {canChangeColor && (
                             <>
-                                <div className="relative" onMouseLeave={() => setColorSubMenuVisible(false)}>
+                                <div className="relative">
                                     <button
-                                        onMouseEnter={handleColorSubMenu}
-                                        className="w-full flex justify-between items-center text-left px-4 py-2.5 text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group"
+                                        onClick={(e) => { if (!canChangeColor) return; e.stopPropagation(); toggleSubMenu('color'); }}
+                                        className={`w-full flex justify-between items-center text-left px-4 py-2.5 text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group ${activeSubMenu === 'color' ? 'bg-[#F5F5F7]' : ''}`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <span className="text-[#86868B] group-hover:text-[#1D1D1F] transition-colors"><MenuIcons.Palette /></span>
                                             <span>變更顏色</span>
                                         </div>
-                                        <span className="text-xs text-[#86868B]">▶</span>
+                                        <span className="text-xs text-[#86868B]">{activeSubMenu === 'color' ? '▼' : '▶'}</span>
                                     </button>
-                                    {colorSubMenuVisible && (
-                                        <div 
+                                    {activeSubMenu === 'color' && (
+                                        <div
                                             style={subMenuStyle}
                                             className="w-52 rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-2 ring-1 ring-black/5"
                                         >
@@ -470,18 +458,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                         
                         <div className="px-4 py-1.5 text-[10px] font-bold text-[#86868B] uppercase tracking-wider opacity-60">圖層與整理</div>
                         {/* 圖層排序 submenu */}
-                        <div className="relative" onMouseLeave={() => setLayerOrderSubMenuVisible(false)}>
+                        <div className="relative">
                             <button
-                                onMouseEnter={() => { setLayerOrderSubMenuVisible(true); setLayoutSubMenuVisible(false); setColorSubMenuVisible(false); setFrameSubMenuVisible(false); }}
-                                className="w-full flex justify-between items-center text-left px-4 py-2.5 text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group"
+                                onClick={(e) => { e.stopPropagation(); toggleSubMenu('layerOrder'); }}
+                                className={`w-full flex justify-between items-center text-left px-4 py-2.5 text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group ${activeSubMenu === 'layerOrder' ? 'bg-[#F5F5F7]' : ''}`}
                             >
                                 <div className="flex items-center gap-3">
                                     <span className="text-[#86868B] group-hover:text-[#1D1D1F] transition-colors"><MenuIcons.Reorder /></span>
                                     <span>圖層排序</span>
                                 </div>
-                                <span className="text-xs text-[#86868B]">▶</span>
+                                <span className="text-xs text-[#86868B]">{activeSubMenu === 'layerOrder' ? '▼' : '▶'}</span>
                             </button>
-                            {layerOrderSubMenuVisible && (
+                            {activeSubMenu === 'layerOrder' && (
                                 <div style={subMenuStyle} className="w-44 rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-2 ring-1 ring-black/5">
                                     <MenuItem icon={<MenuIcons.LayerUp />} onClick={() => handleAction(actions.bringToFront)}>移至最前</MenuItem>
                                     <MenuItem icon={<MenuIcons.LayerUpOne />} onClick={() => handleAction(actions.bringForward)}>前移一層</MenuItem>
@@ -505,18 +493,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     <div className="border-t my-1 border-gray-100/50" />
                     <MenuItem icon={<MenuIcons.Image />} onClick={() => handleAction(() => actions.addImage(menuData.worldPoint))}>新增圖片</MenuItem>
                     
-                     <div className="relative" onMouseLeave={() => setFrameSubMenuVisible(false)}>
+                     <div className="relative">
                         <button
-                            onMouseEnter={handleFrameSubMenu}
-                            className="w-full flex justify-between items-center text-left px-4 py-2.5 text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group"
+                            onClick={(e) => { e.stopPropagation(); toggleSubMenu('frame'); }}
+                            className={`w-full flex justify-between items-center text-left px-4 py-2.5 text-sm text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group ${activeSubMenu === 'frame' ? 'bg-[#F5F5F7]' : ''}`}
                         >
                             <div className="flex items-center gap-3">
                                 <span className="text-[#86868B] group-hover:text-[#1D1D1F] transition-colors"><MenuIcons.Frame /></span>
                                 <span>新增畫框</span>
                             </div>
-                            <span className="text-xs text-[#86868B]">▶</span>
+                            <span className="text-xs text-[#86868B]">{activeSubMenu === 'frame' ? '▼' : '▶'}</span>
                         </button>
-                        {frameSubMenuVisible && (
+                        {activeSubMenu === 'frame' && (
                             <div 
                                 style={subMenuStyle}
                                 className="w-48 rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-2 ring-1 ring-black/5"
