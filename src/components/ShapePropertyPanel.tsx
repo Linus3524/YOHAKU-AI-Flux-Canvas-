@@ -9,7 +9,7 @@ interface ShapePropertyPanelProps {
   onClose: () => void;
 }
 
-const PRESET_COLORS = ['#1D1D1F', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#AF52DE', '#8E8E93', '#FFFFFF', 'transparent'];
+const PRESET_COLORS = ['#1D1D1F', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#AF52DE', '#8E8E93', '#E5E5EA', '#FFFFFF', 'transparent'];
 
 const Icons = {
     Grip: () => <svg width="8" height="16" viewBox="0 0 8 16" fill="currentColor" className="text-black/10"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="6" cy="2" r="1.5"/><circle cx="6" cy="8" r="1.5"/><circle cx="6" cy="14" r="1.5"/></svg>,

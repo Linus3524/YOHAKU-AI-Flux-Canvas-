@@ -8,8 +8,9 @@ interface AdvancedColorPickerProps {
 }
 
 const COMMON_COLORS = [
-  '#000000', '#8E8E93', '#E5E5EA', '#FFFFFF',
-  '#FF3B30', '#FF9500', '#34C759', '#007AFF'
+  '#1D1D1F', '#FF3B30', '#FF9500', '#FFCC00',
+  '#34C759', '#007AFF', '#AF52DE', '#8E8E93',
+  '#E5E5EA', '#FFFFFF'
 ];
 
 export const AdvancedColorPicker: React.FC<AdvancedColorPickerProps> = ({ value, onChange, label }) => {
