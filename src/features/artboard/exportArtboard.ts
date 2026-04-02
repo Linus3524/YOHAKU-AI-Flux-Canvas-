@@ -1,6 +1,6 @@
 import type { CanvasElement, ArtboardElement, ImageElement, TextElement, ShapeElement } from '../../types';
 import { loadImage, createShapeDataUrl } from '../../utils/helpers';
-import { drawTextOnCanvas } from '../../utils/textCanvas'; // ✅ 修改
+import { drawTextOnCanvas } from '../../utils/textCanvas';
 
 // 判斷元素是否與工作區域有交集 (Bounding Box Intersection)
 export const isElementInArtboard = (el: CanvasElement, ab: ArtboardElement): boolean => {
@@ -252,11 +252,13 @@ export const exportArtboardAsImage = async (
 
             } else if (el.type === 'text') {
                 const textEl = el as TextElement;
-                offCtx.save();
-                // ✅ 修改：座標系配合現有其他元素的 translate 方式
-                if (textEl.rotation) offCtx.rotate((textEl.rotation * Math.PI) / 180);
+                const shadowOverflow = textEl.shadowBlur ? Math.ceil(textEl.shadowBlur + 8) : 0;
+                const glowOverflow   = textEl.glowBlur   ? Math.ceil(textEl.glowBlur * 1.5) : 0;
+                const strokeOverflow = Math.ceil((textEl.strokeWidth || 0) / 2);
+                const ep = Math.max(shadowOverflow, glowOverflow, strokeOverflow, 0);
+
+                await document.fonts.ready;
                 drawTextOnCanvas(offCtx, textEl, -textEl.width / 2, -textEl.height / 2);
-                offCtx.restore();
 
             } else if (el.type === 'note') {
                 const noteEl = el as any;

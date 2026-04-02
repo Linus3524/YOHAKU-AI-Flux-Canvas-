@@ -26,6 +26,7 @@ import { useCanvas } from './hooks/useCanvas';
 import { useAI } from './hooks/useAI';
 import { STYLE_PRESETS, COLORS, isCJK, wrapTextCanvas, loadImage, createShapeDataUrl, restoreOriginalAlpha, getClosestAspectRatio, measureTextVisualBounds, renderImageElementToDataUrl } from './utils/helpers';
 import { drawTextOnCanvas } from './utils/textCanvas'; // ✅ 新增
+import { captureTextElementAsImage } from './utils/svgCapture'; // ✅ 彎曲文字轉圖片用
 import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
@@ -430,49 +431,55 @@ const App: React.FC = () => {
 
       try {
           const scale = 3;
+          const isCurved = Math.abs((element as any).curveStrength || 0) > 0.1;
 
-          // Calculate effect overflow for canvas padding (effects need space to render into)
           const shadowOverflow = element.shadowBlur
-              ? Math.ceil(element.shadowBlur + Math.abs(4) + 4)
+              ? Math.ceil(element.shadowBlur + 4)
               : 0;
           const glowOverflow = element.glowBlur
-              ? Math.ceil(element.glowBlur * 1.5)
+              ? Math.ceil(element.glowBlur)
               : 0;
           const strokeOverflow = Math.ceil((element.strokeWidth || 0) / 2);
           const effectPadding = Math.max(shadowOverflow, glowOverflow, strokeOverflow, 0);
 
-          // Canvas includes padding for effects to render into
-          const canvasWidth  = Math.ceil(element.width)  + effectPadding * 2;
-          const canvasHeight = Math.ceil(element.height) + effectPadding * 2;
+          const canvasWidth  = element.width  + effectPadding * 2;
+          const canvasHeight = element.height + effectPadding * 2;
 
-          const canvas = document.createElement('canvas');
-          canvas.width  = canvasWidth  * scale;
-          canvas.height = canvasHeight * scale;
+          let newSrc: string;
 
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return;
+          if (isCurved) {
+              // 彎曲文字：直接捕捉 DOM 中的 SVG，確保像素完全吻合螢幕顯示
+              // （canvas 重繪可能因字符寬度測量誤差導致弧心偏移）
+              newSrc = await captureTextElementAsImage(
+                  element.id,
+                  element.width,
+                  element.height,
+                  effectPadding,
+                  scale,
+                  (element.backgroundColor && element.backgroundColor !== 'transparent')
+                      ? element.backgroundColor
+                      : undefined,
+                  element.fontFamily,
+                  element.text
+              );
+          } else {
+              const offCanvas = document.createElement('canvas');
+              offCanvas.width  = canvasWidth  * scale;
+              offCanvas.height = canvasHeight * scale;
+              const offCtx = offCanvas.getContext('2d')!;
+              offCtx.scale(scale, scale);
+              await document.fonts.ready;
+              drawTextOnCanvas(offCtx, element, effectPadding, effectPadding);
+              newSrc = offCanvas.toDataURL('image/png');
+          }
 
-          ctx.scale(scale, scale);
-
-          // Wait for fonts to load so measureText uses the same metrics as SVG display
-          await document.fonts.ready;
-
-          // Draw text at offset position so effects have room to overflow
-          drawTextOnCanvas(ctx, element, effectPadding, effectPadding);
-
-          const newSrc = canvas.toDataURL('image/png');
-
-          // Image element keeps the SAME size and position as the original text element.
-          // The image source is larger (includes effect overflow), but the element
-          // dimensions match the original so the bounding box stays the same.
-          // Effects will naturally overflow the element bounds (overflow: visible).
           const newImage: ImageElement = {
               id: element.id,
               type: 'image',
               src: newSrc,
               position: {
-                  x: element.position.x - effectPadding,
-                  y: element.position.y - effectPadding,
+                  x: element.position.x,
+                  y: element.position.y,
               },
               width:    canvasWidth,
               height:   canvasHeight,
