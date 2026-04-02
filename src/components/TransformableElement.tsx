@@ -689,7 +689,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                         if (isEditing) e.stopPropagation();
                                     }}
                                     className={`flex-1 min-h-0 bg-transparent text-[#1D1D1F] px-6 py-4 resize-none border-none focus:outline-none placeholder-[#1D1D1F]/40 ${isEditing ? 'cursor-text' : (el.isLocked ? 'cursor-not-allowed' : 'cursor-move')} ${el.textAlign === 'center' ? 'text-center' : 'text-left'}`}
-                                    style={{ fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.6' }}
+                                    style={{ fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.6', fontWeight: 300 }}
                                     placeholder={el.isLocked ? "" : "請輸入內容..."}
                                 />
                             </div>

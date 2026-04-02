@@ -199,11 +199,20 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
   onAddArtboard
 }) => {
   // Initialize at bottom center
-  const [position, setPosition] = useState(() => ({ 
-    x: window.innerWidth / 2 - 310, // Adjusted width
-    y: window.innerHeight - 100 
+  const [position, setPosition] = useState(() => ({
+    x: window.innerWidth / 2 - 310,
+    y: window.innerHeight - 100
   }));
-  
+
+  // Mount 後量測實際寬度，精確水平置中
+  useEffect(() => {
+    if (toolbarRef.current) {
+      const w = toolbarRef.current.offsetWidth;
+      setPosition(prev => ({ ...prev, x: window.innerWidth / 2 - w / 2 }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [isDragging, setIsDragging] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showPatternsMenu, setShowPatternsMenu] = useState(false);

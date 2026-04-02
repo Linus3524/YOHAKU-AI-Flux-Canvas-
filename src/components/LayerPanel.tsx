@@ -93,7 +93,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
     const isResizingRef = useRef(false);
 
     // Draggable Window State
-    const [position, setPosition] = useState(() => ({ x: window.innerWidth - 280, y: 24 }));
+    const [position, setPosition] = useState(() => ({ x: window.innerWidth - 296, y: 16 }));
     const [isDragging, setIsDragging] = useState(false);
     
     // Refs

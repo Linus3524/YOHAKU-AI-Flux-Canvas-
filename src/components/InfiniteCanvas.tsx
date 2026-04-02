@@ -424,6 +424,7 @@ interface MarqueeRect {
 
 export interface CanvasApi {
   screenToWorld: (screenPoint: Point) => Point;
+  fitToScreen: () => void;
 }
 
 const MIN_ZOOM = 0.1;
@@ -557,10 +558,6 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
           y: worldPoint.y * zoom + pan.y
       };
   }, [pan, zoom]);
-
-  useImperativeHandle(ref, () => ({
-    screenToWorld,
-  }), [screenToWorld]);
 
   useEffect(() => {
     if (outpaintingState?.element.id) {
@@ -777,6 +774,11 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
       setPan({ x: newPanX, y: newPanY });
 
   }, [elements]);
+
+  useImperativeHandle(ref, () => ({
+    screenToWorld,
+    fitToScreen: handleFitToScreen,
+  }), [screenToWorld, handleFitToScreen]);
 
   const selectionBounds = useMemo(() => {
       if (selectedElementIds.length === 0) return null;

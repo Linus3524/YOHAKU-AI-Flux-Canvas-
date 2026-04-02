@@ -23,12 +23,31 @@ import type { CanvasApi } from '../components/InfiniteCanvas';
 const STORAGE_KEY = 'yohaku_canvas';
 const MAX_STORAGE_BYTES = 5 * 1024 * 1024; // 5MB
 
+const DEFAULT_WELCOME_NOTE: CanvasElement = {
+    id: 'welcome-note',
+    type: 'note',
+    position: { x: -200, y: -150 },
+    width: 400,
+    height: 300,
+    rotation: 0,
+    content: '輸入想法，框選後生成圖片 ✦\n圖片可直接拖曳進畫布編輯',
+    color: '#FEFCE8',
+    zIndex: 1,
+    isVisible: true,
+    isLocked: false,
+    name: 'Note 1',
+    groupId: null,
+};
+
 const loadInitialElements = (): CanvasElement[] => {
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) return JSON.parse(saved) as CanvasElement[];
+        if (saved) {
+            const parsed = JSON.parse(saved) as CanvasElement[];
+            if (parsed.length > 0) return parsed;
+        }
     } catch {}
-    return [];
+    return [DEFAULT_WELCOME_NOTE];
 };
 
 export type StorageStatus = 'saved' | 'warning' | 'critical' | 'full';

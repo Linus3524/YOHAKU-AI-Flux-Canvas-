@@ -143,7 +143,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; purple?: b
 export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, onCreateSticky }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<Section>('about');
-  const [position, setPosition] = useState({ x: 24, y: 24 });
+  const [position, setPosition] = useState({ x: 16, y: 16 });
   const [isDragging, setIsDragging] = useState(false);
   const hasMovedRef = useRef(false);
   const offsetRef = useRef({ x: 0, y: 0 });

@@ -510,6 +510,17 @@ const App: React.FC = () => {
   const lastImagePosition = useRef<Point | null>(null);
   const dragCounter = useRef(0);
 
+  // 新畫布時（只有歡迎便利貼）自動 fit to screen 對齊畫面
+  useEffect(() => {
+    if (elements.length === 1 && elements[0].id === 'welcome-note') {
+      const timer = setTimeout(() => {
+        canvasApiRef.current?.fitToScreen();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 只在 mount 時執行一次
+
   const isFocusMode = !!editingImage || !!editingDrawing;
 
   const handleInteractionEnd = useCallback(() => {
