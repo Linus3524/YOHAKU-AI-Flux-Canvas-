@@ -70,10 +70,13 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
 
         // Draw text content on offscreen canvas (NO shadow)
         // Two-pass: stroke first (all chars), then fill (all chars) — prevents right chars covering left chars' stroke
+        // -1px vertical correction for straight text: canvas textBaseline='middle' renders ~1px lower than SVG dominant-baseline='middle'
+        // Curved text: no adjustment — arc center must stay at y + el.height/2 to match SVG boxCenterY = el.height/2
+        const yAdj = isCurved ? y : y - 1;
         if (el.strokeWidth && el.strokeWidth > 0) {
-            drawTextContent(offCtx, el, x, y, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'strokeOnly');
+            drawTextContent(offCtx, el, x, yAdj, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'strokeOnly');
         }
-        drawTextContent(offCtx, el, x, y, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'fillOnly');
+        drawTextContent(offCtx, el, x, yAdj, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'fillOnly');
 
         // Now composite the offscreen canvas onto main canvas with shadow effects
         // Reset transform for drawImage (pixel-level operation)
@@ -81,9 +84,10 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
         ctx.setTransform(1, 0, 0, 1, 0, 0);
 
         // Pass 1: Shadow (if present)
+        // Canvas shadowBlur σ = blur/2; CSS drop-shadow blur = σ directly → multiply by 2 to match
         if (hasShadow) {
             ctx.shadowColor = el.shadowColor!;
-            ctx.shadowBlur = el.shadowBlur! * currentTransform.a; // Scale blur with canvas scale
+            ctx.shadowBlur = el.shadowBlur! * currentTransform.a * 2;
             ctx.shadowOffsetX = 4 * currentTransform.a;
             ctx.shadowOffsetY = 4 * currentTransform.d;
             ctx.drawImage(offCanvas, 0, 0);
@@ -92,7 +96,7 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
         // Pass 2: Glow (if present)
         if (hasGlow) {
             ctx.shadowColor = el.glowColor!;
-            ctx.shadowBlur = el.glowBlur! * currentTransform.a;
+            ctx.shadowBlur = el.glowBlur! * currentTransform.a * 2;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;
             ctx.drawImage(offCanvas, 0, 0);
@@ -114,10 +118,11 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
         ctx.lineCap = 'round';
         ctx.fillStyle = el.color;
         ctx.textBaseline = 'middle';
+        const yAdj = isCurved ? y : y - 1;
         if (el.strokeWidth && el.strokeWidth > 0) {
-            drawTextContent(ctx, el, x, y, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'strokeOnly');
+            drawTextContent(ctx, el, x, yAdj, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'strokeOnly');
         }
-        drawTextContent(ctx, el, x, y, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'fillOnly');
+        drawTextContent(ctx, el, x, yAdj, lines, lineHeightPx, isVertical, isCurved, curveStrength, spacingPx, textPadding, padding, 'fillOnly');
     }
 };
 
@@ -130,6 +135,15 @@ const drawTextContent = (
 ): void => {
     const doStroke = (mode === 'strokeOnly' || mode === 'both') && !!(el.strokeWidth && el.strokeWidth > 0);
     const doFill = mode === 'fillOnly' || mode === 'both';
+
+    // 1x measurement context for arc radius calculations — ensures measureText matches SVG's measureCtx
+    // (ctx may be scaled 3x; measureText behaviour under transform varies by browser)
+    const _mc = document.createElement('canvas').getContext('2d')!;
+    _mc.font = ctx.font;
+    // @ts-ignore
+    _mc.letterSpacing = '0px';
+    const measure1x = (c: string) => _mc.measureText(c).width;
+
     if (isVertical) {
         // --- Vertical Text Drawing ---
         const totalTextWidth = lines.length * lineHeightPx;
@@ -214,7 +228,7 @@ const drawTextContent = (
                         if (doStroke) ctx.strokeText(char, 0, 0);
                         if (doFill) ctx.fillText(char, 0, 0);
                         ctx.restore();
-                        const charW = ctx.measureText(char).width;
+                        const charW = measure1x(char);
                         advanceY = charW;
                     }
                     currentY += advanceY + spacingPx;
@@ -233,7 +247,7 @@ const drawTextContent = (
 
         lines.forEach((line, lineIdx) => {
             const chars = line.split('');
-            const charWidths = chars.map(c => ctx.measureText(c).width);
+            const charWidths = chars.map(c => measure1x(c));
             // n spacings (not n-1): ensures wrap-point gap = spacingPx at ±100
             const totalLineWidth = charWidths.reduce((sum, w) => sum + w, 0) + chars.length * spacingPx;
 
@@ -283,7 +297,7 @@ const drawTextContent = (
             const chars = line.split('');
 
             // Calculate total line width for alignment
-            const lineWidth = chars.reduce((sum, c) => sum + ctx.measureText(c).width, 0)
+            const lineWidth = chars.reduce((sum, c) => sum + measure1x(c), 0)
                 + Math.max(0, chars.length - 1) * spacingPx;
 
             let cx: number;
@@ -292,7 +306,7 @@ const drawTextContent = (
             else cx = x + textPadding;
 
             chars.forEach(char => {
-                const charW = ctx.measureText(char).width;
+                const charW = measure1x(char);
                 if (doStroke) ctx.strokeText(char, cx, ly);
                 if (doFill) ctx.fillText(char, cx, ly);
                 cx += charW + spacingPx;

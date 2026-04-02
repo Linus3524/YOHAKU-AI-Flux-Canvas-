@@ -545,6 +545,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
     return (
         <div
             ref={elementRef}
+            data-element-id={element.id}
             className={`absolute group ${pointerEventsClass} select-none`}
             style={{
                 left: element.position.x,
