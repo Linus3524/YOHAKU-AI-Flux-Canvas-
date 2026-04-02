@@ -260,11 +260,13 @@ export const exportArtboardAsImage = async (
 
             } else if (el.type === 'note') {
                 const noteEl = el as any;
-                const bgColor = noteEl.color?.match(/bg-\[(.*?)\]/)?.[1] || '#FFFDE7';
-                offCtx.fillStyle = bgColor;
-                offCtx.beginPath();
-                offCtx.roundRect(-el.width / 2, -el.height / 2, el.width, el.height, 8);
-                offCtx.fill();
+                if (noteEl.color !== 'bg-transparent') {
+                    const bgColor = noteEl.color?.match(/bg-\[(.*?)\]/)?.[1] || '#FFFDE7';
+                    offCtx.fillStyle = bgColor;
+                    offCtx.beginPath();
+                    offCtx.roundRect(-el.width / 2, -el.height / 2, el.width, el.height, 8);
+                    offCtx.fill();
+                }
                 offCtx.fillStyle = '#1D1D1F';
                 offCtx.font = '14px -apple-system, sans-serif';
                 offCtx.textBaseline = 'top';

@@ -31,7 +31,7 @@ const DEFAULT_WELCOME_NOTE: CanvasElement = {
     height: 300,
     rotation: 0,
     content: '輸入想法，框選後生成圖片 ✦\n圖片可直接拖曳進畫布編輯',
-    color: '#FEFCE8',
+    color: 'bg-[#FEFCE8]',
     zIndex: 1,
     isVisible: true,
     isLocked: false,
@@ -170,7 +170,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
           height: 100,
           rotation: 0,
           content: '新筆記',
-          color: COLORS[Math.floor(Math.random() * COLORS.length)].bg,
+          color: COLORS.filter(c => c.name !== '透明')[Math.floor(Math.random() * (COLORS.length - 1))].bg,
         });
     }, [addElement, getCenterOfViewport]);
 
@@ -675,11 +675,13 @@ export const useCanvas = (showToast: (msg: string) => void) => {
 
                 } else if (el.type === 'note') {
                     const noteEl = el as any;
-                    const bgColor = noteEl.color?.match(/bg-\[(.*?)\]/)?.[1] || '#FFFDE7';
-                    offCtx.fillStyle = bgColor;
-                    offCtx.beginPath();
-                    offCtx.roundRect(-el.width / 2, -el.height / 2, el.width, el.height, 8);
-                    offCtx.fill();
+                    if (noteEl.color !== 'bg-transparent') {
+                        const bgColor = noteEl.color?.match(/bg-\[(.*?)\]/)?.[1] || '#FFFDE7';
+                        offCtx.fillStyle = bgColor;
+                        offCtx.beginPath();
+                        offCtx.roundRect(-el.width / 2, -el.height / 2, el.width, el.height, 8);
+                        offCtx.fill();
+                    }
                     offCtx.fillStyle = '#1D1D1F';
                     offCtx.font = '14px -apple-system, sans-serif';
                     offCtx.textBaseline = 'top';

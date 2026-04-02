@@ -441,12 +441,22 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                         >
                                             <div className="p-3 grid grid-cols-4 gap-2">
                                                 {COLORS.map(color => (
-                                                    <button
-                                                        key={color.name}
-                                                        onClick={() => handleAction(() => actions.changeColor(color.bg))}
-                                                        className={`w-8 h-8 rounded-full ${color.bg} border-2 border-white ring-1 ring-black/5 shadow-sm hover:scale-110 transition-transform`}
-                                                        aria-label={`變更顏色為 ${color.name}`}
-                                                    />
+                                                    color.name === '透明' ? (
+                                                        <button
+                                                            key={color.name}
+                                                            onClick={() => handleAction(() => actions.changeColor(color.bg))}
+                                                            className="w-8 h-8 rounded-full border-2 border-white ring-1 ring-black/5 shadow-sm hover:scale-110 transition-transform overflow-hidden"
+                                                            aria-label="透明（無背景色）"
+                                                            style={{ background: 'repeating-conic-gradient(#D1D1D6 0% 25%, #FFFFFF 0% 50%) 0 0 / 8px 8px' }}
+                                                        />
+                                                    ) : (
+                                                        <button
+                                                            key={color.name}
+                                                            onClick={() => handleAction(() => actions.changeColor(color.bg))}
+                                                            className={`w-8 h-8 rounded-full ${color.bg} border-2 border-white ring-1 ring-black/5 shadow-sm hover:scale-110 transition-transform`}
+                                                            aria-label={`變更顏色為 ${color.name}`}
+                                                        />
+                                                    )
                                                 ))}
                                             </div>
                                         </div>

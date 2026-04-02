@@ -11,6 +11,7 @@ export const COLORS = [
   { name: '淺橘', bg: 'bg-[#FFF3E0]', text: 'text-[#1D1D1F]' },
   { name: '淺黃', bg: 'bg-[#FFFDE7]', text: 'text-[#1D1D1F]' },
   { name: '淺綠', bg: 'bg-[#E8F5E9]', text: 'text-[#1D1D1F]' },
+  { name: '透明', bg: 'bg-transparent', text: 'text-[#1D1D1F]' },
 ];
 
 // 36+ Magic Style Presets (Restored Full List)
