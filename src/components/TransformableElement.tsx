@@ -52,6 +52,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
   const [isEditing, setIsEditing] = useState(false);
   const elementRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const hasMovedRef = useRef(false);
 
   useEffect(() => {
     if (!isSelected) {
@@ -218,15 +219,20 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
           interactionDetails.center = { x: centerX, y: centerY };
           interactionDetails.startAngle = Math.atan2(startPoint.y - centerY, startPoint.x - centerX);
       }
+      hasMovedRef.current = false;
       setInteraction(interactionDetails);
     }, [element, onSelect, isOutpainting]);
-    
+
     const handleInteractionMove = useCallback((e: MouseEvent) => {
         if (!interaction) return;
 
         const { type, startPoint, startElement } = interaction;
         const dx = (e.clientX - startPoint.x) / zoom;
         const dy = (e.clientY - startPoint.y) / zoom;
+
+        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+            hasMovedRef.current = true;
+        }
 
         if (type === 'drag') {
             const newPosition = { x: startElement.position.x + dx, y: startElement.position.y + dy };
@@ -358,9 +364,10 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
         if (interaction?.type === 'drag') {
             onDragEnd?.();
         }
-        if (interaction) {
+        if (interaction && hasMovedRef.current) {
           onInteractionEnd();
         }
+        hasMovedRef.current = false;
         setInteraction(null);
     }, [interaction, onDragEnd, onInteractionEnd]);
 

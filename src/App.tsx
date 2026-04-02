@@ -569,9 +569,12 @@ const App: React.FC = () => {
   const selectedArrowElement = selectedElements.length === 1 && selectedElements[0].type === 'arrow' ? (selectedElements[0] as ArrowElement) : null;
   const selectedArtboard = selectedElements.length === 1 && selectedElements[0].type === 'artboard' ? (selectedElements[0] as ArtboardElement) : null;
 
-  const handleUpdateTextElement = (updates: Partial<TextElement>) => {
+  const handleUpdateTextElement = (updates: Partial<TextElement>, options?: { addToHistory?: boolean }) => {
       if (!selectedTextElement) return;
-      setElements(prev => prev.map(el => (el.id === selectedTextElement.id && el.type === 'text') ? { ...el, ...updates } : el));
+      setElements(
+          prev => prev.map(el => (el.id === selectedTextElement.id && el.type === 'text') ? { ...el, ...updates } : el),
+          { addToHistory: options?.addToHistory ?? true }
+      );
   };
 
   const handleUpdateShapeElement = (updates: Partial<ShapeElement>) => {
