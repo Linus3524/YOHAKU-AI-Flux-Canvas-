@@ -167,11 +167,11 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                 model: 'gemini-3.1-flash-lite-preview',
                 contents: { parts: [imagePart, { text: prompt }] },
+                generationConfig: { responseMimeType: 'application/json' },
             }));
 
             const rawText = response.text?.trim() || '{}';
-            const jsonText = rawText.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
-            const analysis = JSON.parse(jsonText);
+            const analysis = JSON.parse(rawText);
             setCopiedStyle({ analysis });
             showToast("✅ 風格已複製！右鍵選「貼上風格」套用。");
 
@@ -209,13 +209,20 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
 
         const analysis = copiedStyle.analysis as Record<string, string>;
         const selectedParts = selectedKeys
-            .filter(k => analysis[k] && !analysis[k].toLowerCase().includes('not applicable'))
+            .filter(k => analysis[k] && analysis[k].trim() !== '' && !analysis[k].toLowerCase().includes('not applicable'))
             .map(k => `${keyLabels[k]}: ${analysis[k]}`);
 
         if (selectedParts.length === 0) {
-            showToast("所選元素在原圖中均不適用，請重新選擇。");
-            setIsGenerating(false);
-            return;
+            // 所有欄位均不適用時，改用全部有值的欄位作 fallback，不直接失敗
+            const fallbackParts = selectedKeys
+                .filter(k => analysis[k] && analysis[k].trim() !== '')
+                .map(k => `${keyLabels[k]}: ${analysis[k]}`);
+            if (fallbackParts.length === 0) {
+                showToast("所選元素在原圖中均不適用，請重新選擇。");
+                setIsGenerating(false);
+                return;
+            }
+            selectedParts.push(...fallbackParts);
         }
 
         const styleDescription = selectedParts.join('\n');

@@ -376,7 +376,13 @@ export function wrapTextCanvas(ctx: CanvasRenderingContext2D, text: string, maxD
 
 export async function callGeminiWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
     try { return await fn(); } catch (error: any) {
-        if (retries > 0 && (error.status === 503 || error.code === 503 || (error.message && error.message.includes('503')))) {
+        const isRetryable =
+            retries > 0 && (
+                error.status === 503 || error.code === 503 || (error.message && error.message.includes('503')) ||
+                error.status === 429 || error.code === 429 || (error.message && error.message.includes('429')) ||
+                error instanceof TypeError
+            );
+        if (isRetryable) {
             await new Promise(resolve => setTimeout(resolve, delay));
             return callGeminiWithRetry(fn, retries - 1, delay * 2);
         }
