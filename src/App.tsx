@@ -120,7 +120,7 @@ const App: React.FC = () => {
   
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000); 
+    setTimeout(() => setToastMessage(null), 3000);
   }, []);
 
   // --- API Key Management ---
@@ -923,7 +923,7 @@ const App: React.FC = () => {
       />
 
       {toastMessage && (
-        <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[2002]">
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[2002]">
           <div className="px-6 py-3 bg-black/80 backdrop-blur-md text-white text-sm font-medium rounded-full shadow-lg animate-fade-in-down">
             {toastMessage}
           </div>
