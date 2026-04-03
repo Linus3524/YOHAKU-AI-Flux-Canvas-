@@ -923,8 +923,10 @@ const App: React.FC = () => {
       />
 
       {toastMessage && (
-        <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[2002] px-6 py-3 bg-black/80 backdrop-blur-md text-white text-sm font-medium rounded-full shadow-lg animate-fade-in-down">
-          {toastMessage}
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[2002]">
+          <div className="px-6 py-3 bg-black/80 backdrop-blur-md text-white text-sm font-medium rounded-full shadow-lg animate-fade-in-down">
+            {toastMessage}
+          </div>
         </div>
       )}
 
@@ -959,7 +961,8 @@ const App: React.FC = () => {
           </div>
       )}
 
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[6000] animate-fade-in-down flex items-center gap-2">
+      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[6000]">
+      <div className="animate-fade-in-down flex items-center gap-2">
           <button
               onClick={() => setShowKeyModal(true)}
               className="group flex items-center gap-2 px-4 py-1.5 bg-black/5 hover:bg-white backdrop-blur-sm rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:shadow-lg border border-white/20 transition-all duration-300"
@@ -1021,6 +1024,7 @@ const App: React.FC = () => {
                   <span className="text-[10px] font-bold text-yellow-600">容量偏高</span>
               </div>
           ) : null}
+      </div>
       </div>
 
       {showStyleLibrary && (

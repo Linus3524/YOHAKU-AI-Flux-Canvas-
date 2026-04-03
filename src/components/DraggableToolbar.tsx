@@ -365,9 +365,10 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
             active={showPatternsMenu}
           />
           {showPatternsMenu && (
-              <div 
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4">
+              <div
                 ref={patternsMenuRef}
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-72 bg-white/95 backdrop-blur-2xl rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-white/50 p-3 flex flex-col gap-3 animate-fade-in-up origin-bottom"
+                className="w-72 bg-white/95 backdrop-blur-2xl rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-white/50 p-3 flex flex-col gap-3 animate-fade-in-up origin-bottom"
               >
                   {/* Lines Section */}
                   <div>
@@ -420,11 +421,12 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
                       </div>
                   </div>
               </div>
+              </div>
           )}
       </div>
 
       <div className="relative no-drag">
-          <ToolButton 
+          <ToolButton
             onClick={handleAddMenuClick} 
             icon={<Icons.Add />} 
             label="新增" 
@@ -433,9 +435,10 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
           
           {/* Add Menu Popover */}
           {showAddMenu && (
-            <div 
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4">
+            <div
                 ref={addMenuRef}
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-[320px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.1)] p-4 flex flex-col animate-fade-in-up origin-bottom max-h-[70vh] overflow-y-auto"
+                className="w-[320px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.1)] p-4 flex flex-col animate-fade-in-up origin-bottom max-h-[70vh] overflow-y-auto"
             >
                 {/* 新增畫框 */}
                 <div className="text-[10px] font-semibold text-yohaku-text-muted uppercase tracking-[0.06em] mb-2">新增畫框</div>
@@ -516,6 +519,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
                         匯入畫布
                     </button>
                 </div>
+            </div>
             </div>
           )}
       </div>
