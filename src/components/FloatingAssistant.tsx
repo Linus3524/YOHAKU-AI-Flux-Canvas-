@@ -37,7 +37,7 @@ const FEATURE_DOCS = [
   },
   {
     category: "4. AI 生成 (GENERATIVE AI)",
-    color: "text-emerald-700",
+    color: "text-yohaku-text-main",
     items: [
       { title: "一鍵生成圖片", desc: "框選圖片、手繪或便利貼，AI 根據內容生成高品質圖片。" },
       { title: "圖片逆向分析", desc: "右鍵點擊圖片選「提取提示詞」，AI 生成中英對照的詠唱咒語。" },
@@ -51,7 +51,7 @@ const FEATURE_DOCS = [
   },
   {
     category: "5. 圖片編輯 (IMAGE EDITING)",
-    color: "text-rose-700",
+    color: "text-yohaku-text-main",
     items: [
       { title: "局部重繪", desc: "使用筆刷塗抹遮罩區域，輸入提示詞替換或移除物件。" },
       { title: "基礎/進階調整", desc: "亮度、對比、飽和度、色溫、亮部、陰影、銳化。" },
@@ -288,7 +288,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           : 'bg-black/5 text-yohaku-text-main font-bold border-r-[3px] border-gray-800 rounded-r-none'
                         : item.purple
                           ? 'text-purple-600 hover:bg-purple-50'
-                          : 'text-yohaku-text-muted hover:bg-gray-100 hover:text-gray-700'
+                          : 'text-yohaku-text-muted hover:bg-gray-100 hover:text-yohaku-text-main'
                       }`}
                   >
                     <span className={activeSection === item.id && item.purple ? 'text-purple-600' : 'text-yohaku-text-muted'}>{item.icon}</span>
@@ -335,7 +335,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                 <p className="text-gray-600 leading-loose tracking-wide mb-6 text-[13px]">
                   哈囉大家，我是 <span className="font-bold text-black border-b border-gray-400">Linus</span>。一位旅居日本的台灣平面設計師，同時也是一位不動產仲介。
                 </p>
-                <p className="italic text-yohaku-text-muted leading-loose tracking-wide mb-6 text-sm border-l-2 border-gray-200 pl-4">
+                <p className="italic text-gray-600 leading-loose tracking-wide mb-6 text-sm border-l-2 border-gray-200 pl-4">
                   「YOHAKU」取自日語中的「余白（よはく）」。無限畫布就像靈感的原野，無論你如何填滿、如何創作，這裡永遠為創意無限的人留白。
                 </p>
                 <p className="text-gray-600 leading-loose tracking-wide mb-4 text-[13px]">
@@ -366,7 +366,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <div className={`w-10 h-10 flex-shrink-0 ${item.color} rounded-lg flex items-center justify-center text-xl`}>{item.emoji}</div>
                       <div>
                         <h3 className="font-bold text-yohaku-text-main mb-1 text-sm">{item.title}</h3>
-                        <p className="text-xs text-yohaku-text-muted leading-relaxed">{item.desc}</p>
+                        <p className="text-xs text-gray-600 leading-relaxed">{item.desc}</p>
                       </div>
                     </div>
                   ))}
@@ -387,19 +387,19 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         {section.items.map((item, i) => (
                           <div key={i}>
                             <h4 className={`font-bold text-sm mb-1 ${section.color}`}>{item.title}</h4>
-                            <p className="text-xs text-yohaku-text-muted leading-relaxed">{item.desc}</p>
+                            <p className="text-xs text-gray-600 leading-relaxed">{item.desc}</p>
                           </div>
                         ))}
                       </div>
                     </div>
                   ))}
                   {/* Shortcuts */}
-                  <div className="bg-gray-800 rounded-xl p-6 shadow-sm">
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-6 shadow-sm">
                     <h3 className="text-[11px] font-bold text-yohaku-text-muted tracking-widest mb-4 uppercase">8. 常用快捷鍵 (SHORTCUTS)</h3>
                     <div className="grid grid-cols-4 gap-3 text-center">
                       {SHORTCUTS.map((s, i) => (
                         <div key={i}>
-                          <div className="bg-gray-700 rounded py-1.5 font-mono text-[10px] text-white mb-1">{s.key}</div>
+                          <div className="bg-white border border-gray-200 rounded py-1.5 font-mono text-[10px] text-yohaku-text-main mb-1">{s.key}</div>
                           <span className="text-[9px] text-yohaku-text-muted">{s.label}</span>
                         </div>
                       ))}
@@ -462,7 +462,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   />
                   <button onClick={handleSend} disabled={isThinking || !inputValue.trim()}
                     className={`absolute bottom-2.5 right-2.5 w-8 h-8 rounded-xl flex items-center justify-center transition-all
-                      ${inputValue.trim() ? 'bg-gray-900 text-white hover:bg-gray-700 shadow-md' : 'bg-gray-100 text-yohaku-text-muted cursor-not-allowed'}`}>
+                      ${inputValue.trim() ? 'bg-gray-900 text-white hover:bg-gray-700 shadow-md' : 'bg-gray-100 text-gray-600 cursor-not-allowed'}`}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                   </button>
                 </div>
@@ -473,10 +473,10 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
             {/* SECURITY */}
             {activeSection === 'security' && (
               <div className="p-8">
-                <h2 className="text-2xl font-bold text-yohaku-text-main mb-6" style={{ fontFamily: "'Noto Serif JP', serif" }}>安全性 & 費用</h2>
+                <h2 className="text-2xl font-bold text-yohaku-text-main mb-6" style={{ fontFamily: "'Noto Serif JP', serif" }}>安全性與費用</h2>
                 <div className="space-y-5">
                   <div className="bg-blue-50/80 border border-blue-100 rounded-xl p-6">
-                    <h3 className="text-blue-900 font-bold mb-3 flex items-center gap-2 text-sm">🔒 安全性說明 · Security</h3>
+                    <h3 className="text-blue-900 font-bold mb-3 flex items-center gap-2 text-sm">🔒 安全性說明</h3>
                     <ul className="text-sm text-blue-800 space-y-2 opacity-80">
                       <li>・ <span className="font-bold">在地化存儲：</span>API 金鑰僅儲存於個人瀏覽器 LocalStorage，不會傳送至開發者伺服器。</li>
                       <li>・ <span className="font-bold">持久化設定：</span>關閉頁面後設定仍保留（無痕模式除外）。</li>
@@ -492,13 +492,13 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       </div>
                       <div className="pb-3 border-b border-yohaku-border-light">
                         <span className="text-sm font-medium block mb-1">第三方計費</span>
-                        <span className="text-xs text-yohaku-text-muted">Gemini API 費用由您的 Google 帳號直接扣款，依 Google 官方政策計費。</span>
+                        <span className="text-xs text-gray-600">Gemini API 費用由您的 Google 帳號直接扣款，依 Google 官方政策計費。</span>
                       </div>
                       <div>
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">本軟體使用模型：</span>
-                        <ul className="text-xs text-yohaku-text-muted space-y-2 leading-relaxed">
-                          <li>・ <span className="font-bold text-gray-700">gemini-3.1-flash-lite</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
-                          <li>・ <span className="font-bold text-gray-700">gemini-3.1-flash-preview-image-generation</span>：AI 生圖、編輯圖片。需付費使用。</li>
+                        <ul className="text-xs text-gray-600 space-y-2 leading-relaxed">
+                          <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-lite</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
+                          <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-preview-image-generation</span>：AI 生圖、編輯圖片。需付費使用。</li>
                         </ul>
                       </div>
                       <div className="p-3 bg-rose-50 rounded-lg text-xs text-rose-600 border border-rose-100">
@@ -524,35 +524,35 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                 <div className="space-y-5 bg-white/80 p-6 rounded-xl border border-yohaku-border-light shadow-sm">
                   <div>
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-1">1. 關於服務提供</h3>
-                    <p className="leading-relaxed text-yohaku-text-muted text-xs">本軟體以「現狀（As-Is）」提供，開發者不保證服務之絕對準確性或特定目的之適用性，並保留隨時變更、中斷或終止服務之權利。</p>
+                    <p className="leading-relaxed text-gray-600 text-xs">本軟體以「現狀（As-Is）」提供，開發者不保證服務之絕對準確性或特定目的之適用性，並保留隨時變更、中斷或終止服務之權利。</p>
                   </div>
                   <div>
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-1">2. 費用責任與損害賠償免責</h3>
-                    <p className="leading-relaxed text-yohaku-text-muted text-xs mb-2">所有因 API 使用產生之費用均由用戶自行負擔。開發者對任何非預期扣款、超額費用或計費糾紛概不負賠償責任。</p>
-                    <p className="leading-relaxed text-yohaku-text-muted text-xs">對於因使用本軟體導致之數據丟失、業務中斷或 API 費用損失，開發者不負賠償責任。</p>
+                    <p className="leading-relaxed text-gray-600 text-xs mb-2">所有因 API 使用產生之費用均由用戶自行負擔。開發者對任何非預期扣款、超額費用或計費糾紛概不負賠償責任。</p>
+                    <p className="leading-relaxed text-gray-600 text-xs">對於因使用本軟體導致之數據丟失、業務中斷或 API 費用損失，開發者不負賠償責任。</p>
                   </div>
                   <div>
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-2">3. 數據與隱私保護</h3>
-                    <ul className="space-y-1.5 text-yohaku-text-muted text-xs">
-                      <li>・ <span className="font-bold text-gray-700">影像處理：</span>上傳之影像將發送至 Google 伺服器，遵循 Google AI Studio 條款。請勿上傳機密資訊。</li>
-                      <li>・ <span className="font-bold text-gray-700">版權責任：</span>用戶應確保上傳圖片擁有合法使用權，侵權糾紛由用戶自負法律責任。</li>
+                    <ul className="space-y-1.5 text-gray-600 text-xs">
+                      <li>・ <span className="font-bold text-gray-600">影像處理：</span>上傳之影像將發送至 Google 伺服器，遵循 Google AI Studio 條款。請勿上傳機密資訊。</li>
+                      <li>・ <span className="font-bold text-gray-600">版權責任：</span>用戶應確保上傳圖片擁有合法使用權，侵權糾紛由用戶自負法律責任。</li>
                     </ul>
                   </div>
                   <div>
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-2">4. 智慧財產權</h3>
-                    <ul className="space-y-1.5 text-yohaku-text-muted text-xs">
-                      <li>・ <span className="font-bold text-gray-700">本軟體主權：</span>YOHAKU 之程式碼邏輯、UI 設計及品牌版權歸開發者 LINUS Nice Day Japan (CHANG CHIN WEI) @linus3524 所有。</li>
-                      <li>・ <span className="font-bold text-gray-700">開源致敬：</span>本軟體衍生自 @prompt_case 之 Nano Banana Infinite Canvas，並獲授權重製發佈。</li>
-                      <li>・ <span className="font-bold text-gray-700">生成內容：</span>AI 生成內容之權利歸屬依各國法律及 Google 條款判定，商用前請諮詢法律意見。</li>
+                    <ul className="space-y-1.5 text-gray-600 text-xs">
+                      <li>・ <span className="font-bold text-gray-600">本軟體主權：</span>YOHAKU 之程式碼邏輯、UI 設計及品牌版權歸開發者 LINUS Nice Day Japan (CHANG CHIN WEI) @linus3524 所有。</li>
+                      <li>・ <span className="font-bold text-gray-600">開源致敬：</span>本軟體衍生自 @prompt_case 之 Nano Banana Infinite Canvas，並獲授權重製發佈。</li>
+                      <li>・ <span className="font-bold text-gray-600">生成內容：</span>AI 生成內容之權利歸屬依各國法律及 Google 條款判定，商用前請諮詢法律意見。</li>
                     </ul>
                   </div>
                   <div>
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-1">5. 禁止事項</h3>
-                    <p className="leading-relaxed text-yohaku-text-muted text-xs">嚴禁利用本軟體進行違法、色情、歧視或侵害他人權利之行為，禁止對本軟體進行惡意逆向工程或系統攻擊。</p>
+                    <p className="leading-relaxed text-gray-600 text-xs">嚴禁利用本軟體進行違法、色情、歧視或侵害他人權利之行為，禁止對本軟體進行惡意逆向工程或系統攻擊。</p>
                   </div>
                   <div>
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-1">6. 準據法與管轄權</h3>
-                    <p className="leading-relaxed text-yohaku-text-muted text-xs">本條款之解釋與適用，以日本國法律為準。因本服務產生之爭議，雙方合意以東京地方裁判所為第一審專屬合意管轄法院。</p>
+                    <p className="leading-relaxed text-gray-600 text-xs">本條款之解釋與適用，以日本國法律為準。因本服務產生之爭議，雙方合意以東京地方裁判所為第一審專屬合意管轄法院。</p>
                   </div>
                 </div>
               </div>

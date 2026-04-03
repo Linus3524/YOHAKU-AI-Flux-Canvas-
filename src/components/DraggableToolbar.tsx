@@ -410,7 +410,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
                             <button
                                 key={shape.type}
                                 onClick={() => { onSelectShapeTool(shape.type as ShapeType); setShowPatternsMenu(false); }}
-                                className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors gap-1 text-yohaku-text-main"
+                                className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors gap-1 text-yohaku-text-muted hover:text-yohaku-text-main"
                                 title={shape.label}
                             >
                                 <div className="scale-75">{shape.icon}</div>
@@ -559,7 +559,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
           `}>
                 {!isProcessing && <Icons.Magic />}
           </div>
-          <span className={`text-[10px] font-medium leading-none tracking-tight ${isProcessing ? 'text-gray-400' : 'text-yohaku-text-muted group-hover:text-[#AF52DE]'}`}>
+          <span className={`text-[10px] font-medium leading-none tracking-tight ${isProcessing ? 'text-yohaku-text-muted' : 'text-yohaku-text-muted group-hover:text-[#AF52DE]'}`}>
               Magic
           </span>
         </button>

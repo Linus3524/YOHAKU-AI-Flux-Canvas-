@@ -25,7 +25,7 @@
               yohaku: {
                 'bg-main':      '#F5F5F7',
                 'text-main':    '#1D1D1F',
-                'text-muted':   '#86868B',
+                'text-muted':   '#A1A1A6',
                 'accent':       '#007AFF',
                 'danger':       '#FF3B30',
                 'border-light': 'rgba(0,0,0,0.05)',
@@ -71,6 +71,45 @@
         background-color: #F5F5F7;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
+
+      /* ── YOHAKU Design System Tokens ─────────────────────────────────────
+         CDN Tailwind JIT cannot scan Vite-compiled ESM modules, so custom
+         token classes are declared here as static CSS to guarantee they load.
+      ──────────────────────────────────────────────────────────────────── */
+      .text-yohaku-text-main   { color: #1D1D1F; }
+      .text-yohaku-text-muted  { color: #A1A1A6; }
+      .text-yohaku-accent      { color: #007AFF; }
+      .text-yohaku-danger      { color: #FF3B30; }
+      .bg-yohaku-bg-main       { background-color: #F5F5F7; }
+      .border-yohaku-accent    { border-color: #007AFF; }
+      .border-yohaku-border-light { border-color: rgba(0,0,0,0.05); }
+      .accent-yohaku-accent    { accent-color: #007AFF; }
+
+      /* Hover overrides */
+      .hover\:text-yohaku-text-main:hover  { color: #1D1D1F; }
+      .hover\:text-yohaku-text-muted:hover { color: #A1A1A6; }
+
+      /* ── Entrance Animations ─────────────────────────────────────────── */
+      @keyframes fade-in-up {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes fade-in-down {
+        from { opacity: 0; transform: translateY(-10px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes fade-in {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+      @keyframes fade-in-right {
+        from { opacity: 0; transform: translateX(-10px); }
+        to   { opacity: 1; transform: translateX(0); }
+      }
+      .animate-fade-in-up    { animation: fade-in-up    0.2s ease-out both; }
+      .animate-fade-in-down  { animation: fade-in-down  0.2s ease-out both; }
+      .animate-fade-in       { animation: fade-in       0.2s ease-out both; }
+      .animate-fade-in-right { animation: fade-in-right 0.2s ease-out both; }
       /* Cubic 11 俐方體 via jsDelivr */
       @font-face {
         font-family: 'Cubic 11';

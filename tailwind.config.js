@@ -13,7 +13,7 @@ module.exports = {
         yohaku: {
           'bg-main':      '#F5F5F7',   // app background / input surfaces
           'text-main':    '#1D1D1F',   // primary text
-          'text-muted':   '#86868B',   // labels, secondary text, placeholders
+          'text-muted':   '#A1A1A6',   // labels, secondary text, placeholders
           'accent':       '#007AFF',   // interactive blue (buttons, links, sliders)
           'danger':       '#FF3B30',   // destructive actions, error states
           'border-light': 'rgba(0,0,0,0.05)',  // subtle dividers
