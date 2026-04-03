@@ -371,7 +371,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
               >
                   {/* Lines Section */}
                   <div>
-                      <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider pl-1 mb-1 block">線條 (Lines)</span>
+                      <span className="text-[10px] font-bold text-yohaku-text-muted uppercase tracking-wider pl-1 mb-1 block">線條 (Lines)</span>
                       <div className="grid grid-cols-3 gap-1">
                           <button
                             onClick={() => { onAddArrow({ startArrowhead: 'none', endArrowhead: 'none' }); setShowPatternsMenu(false); }}
@@ -404,13 +404,13 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
 
                   {/* Shapes Section */}
                   <div>
-                      <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider pl-1 mb-1 block">形狀 (Shapes)</span>
+                      <span className="text-[10px] font-bold text-yohaku-text-muted uppercase tracking-wider pl-1 mb-1 block">形狀 (Shapes)</span>
                       <div className="grid grid-cols-4 gap-1">
                         {SHAPES.map((shape) => (
                             <button
                                 key={shape.type}
                                 onClick={() => { onSelectShapeTool(shape.type as ShapeType); setShowPatternsMenu(false); }}
-                                className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors gap-1 text-[#1D1D1F]"
+                                className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors gap-1 text-yohaku-text-main"
                                 title={shape.label}
                             >
                                 <div className="scale-75">{shape.icon}</div>
@@ -438,7 +438,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
                 className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-[320px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.1)] p-4 flex flex-col animate-fade-in-up origin-bottom max-h-[70vh] overflow-y-auto"
             >
                 {/* 新增畫框 */}
-                <div className="text-[10px] font-semibold text-[#86868B] uppercase tracking-[0.06em] mb-2">新增畫框</div>
+                <div className="text-[10px] font-semibold text-yohaku-text-muted uppercase tracking-[0.06em] mb-2">新增畫框</div>
                 <div className="grid grid-cols-3 gap-1.5 mb-0">
                     {ASPECT_RATIOS.map(ratio => (
                         <button
@@ -453,7 +453,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
                                     height: ratio.value >= 1 ? `${16 / ratio.value}px` : '16px'
                                 }}
                             />
-                            <div className="text-xs font-semibold text-[#1D1D1F]">{ratio.label}</div>
+                            <div className="text-xs font-semibold text-yohaku-text-main">{ratio.label}</div>
                         </button>
                     ))}
                 </div>
@@ -461,13 +461,13 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
                 <div className="h-px bg-[#f0f0f0] my-3" />
 
                 {/* 工作區域 Tab */}
-                <div className="text-[10px] font-semibold text-[#86868B] uppercase tracking-[0.06em] mb-2">工作區域</div>
-                <div className="flex gap-[3px] bg-[#f5f5f7] rounded-lg p-[3px] mb-2.5">
+                <div className="text-[10px] font-semibold text-yohaku-text-muted uppercase tracking-[0.06em] mb-2">工作區域</div>
+                <div className="flex gap-[3px] bg-yohaku-bg-main rounded-lg p-[3px] mb-2.5">
                     {Object.keys(getPresetsByGroup()).filter(g => g !== '自訂').map(group => (
                         <button
                             key={group}
                             onClick={() => setActiveTab(group as any)}
-                            className={`flex-1 py-1.5 px-1 rounded-md text-[11px] font-medium text-center cursor-pointer transition-all ${activeTab === group ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
+                            className={`flex-1 py-1.5 px-1 rounded-md text-[11px] font-medium text-center cursor-pointer transition-all ${activeTab === group ? 'bg-white text-yohaku-text-main shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'text-yohaku-text-muted hover:text-yohaku-text-main'}`}
                         >
                             {group}
                         </button>
@@ -479,17 +479,17 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
                         <button
                             key={preset.name}
                             onClick={() => { onAddArtboard(preset); setShowAddMenu(false); }}
-                            className="border border-[#e8e8e8] rounded-xl py-2 px-2.5 text-[11px] text-[#1D1D1F] bg-[#fafafa] cursor-pointer text-center hover:bg-gray-100 transition-colors"
+                            className="border border-[#e8e8e8] rounded-xl py-2 px-2.5 text-[11px] text-yohaku-text-main bg-[#fafafa] cursor-pointer text-center hover:bg-gray-100 transition-colors"
                         >
                             <div className="font-medium text-xs truncate">{preset.name}</div>
-                            <div className="text-[10px] text-[#86868B] mt-0.5">{preset.w} × {preset.h}</div>
+                            <div className="text-[10px] text-yohaku-text-muted mt-0.5">{preset.w} × {preset.h}</div>
                         </button>
                     ))}
                     {getPresetsByGroup()['自訂']?.map(preset => (
                         <button
                             key={preset.name}
                             onClick={() => { onAddArtboard(preset); setShowAddMenu(false); }}
-                            className="border-[1.5px] border-dashed border-[#007AFF] rounded-xl py-2 px-2.5 text-[11px] text-[#007AFF] bg-[#f0f7ff] cursor-pointer text-center hover:bg-blue-50 transition-colors"
+                            className="border-[1.5px] border-dashed border-yohaku-accent rounded-xl py-2 px-2.5 text-[11px] text-yohaku-accent bg-[#f0f7ff] cursor-pointer text-center hover:bg-blue-50 transition-colors"
                         >
                             <div className="font-medium text-xs">{preset.name}</div>
                             <div className="text-[10px] mt-0.5">輸入寬 × 高</div>
@@ -503,14 +503,14 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
                 <div className="flex gap-2 mt-0">
                     <button 
                         onClick={() => { onExportCanvas(); setShowAddMenu(false); }}
-                        className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-[#1D1D1F] text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                        className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
                     >
                         <Icons.Export />
                         匯出畫布
                     </button>
                     <button 
                         onClick={() => { onImportCanvas(); setShowAddMenu(false); }}
-                        className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-[#1D1D1F] text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                        className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
                     >
                         <Icons.Import />
                         匯入畫布
@@ -559,7 +559,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
           `}>
                 {!isProcessing && <Icons.Magic />}
           </div>
-          <span className={`text-[10px] font-medium leading-none tracking-tight ${isProcessing ? 'text-gray-400' : 'text-[#86868B] group-hover:text-[#AF52DE]'}`}>
+          <span className={`text-[10px] font-medium leading-none tracking-tight ${isProcessing ? 'text-gray-400' : 'text-yohaku-text-muted group-hover:text-[#AF52DE]'}`}>
               Magic
           </span>
         </button>
@@ -579,7 +579,7 @@ const ToolButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React
         ? 'opacity-30 cursor-not-allowed' 
         : active 
             ? 'bg-black text-white shadow-lg shadow-black/20'
-            : 'hover:bg-black/5 text-[#86868B] hover:text-[#1D1D1F] active:scale-95'}
+            : 'hover:bg-black/5 text-yohaku-text-muted hover:text-yohaku-text-main active:scale-95'}
       min-w-[60px]
     `}
   >

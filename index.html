@@ -16,6 +16,49 @@
     <meta property="og:description" content="基於 Gemini 3 Pro 的無限畫布創作工具。便利貼即是 AI 畫筆，讓創意自由流動。" />
     <meta property="og:site_name" content="YOHAKU" />
 
+    <script>
+      // YOHAKU Design System — mirrored from tailwind.config.js
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              yohaku: {
+                'bg-main':      '#F5F5F7',
+                'text-main':    '#1D1D1F',
+                'text-muted':   '#86868B',
+                'accent':       '#007AFF',
+                'danger':       '#FF3B30',
+                'border-light': 'rgba(0,0,0,0.05)',
+              },
+            },
+            keyframes: {
+              'fade-in-up': {
+                '0%':   { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)'    },
+              },
+              'fade-in-down': {
+                '0%':   { opacity: '0', transform: 'translateY(-10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)'     },
+              },
+              'fade-in': {
+                '0%':   { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              'fade-in-right': {
+                '0%':   { opacity: '0', transform: 'translateX(-10px)' },
+                '100%': { opacity: '1', transform: 'translateX(0)'     },
+              },
+            },
+            animation: {
+              'fade-in-up':    'fade-in-up    0.2s ease-out both',
+              'fade-in-down':  'fade-in-down  0.2s ease-out both',
+              'fade-in':       'fade-in       0.2s ease-out both',
+              'fade-in-right': 'fade-in-right 0.2s ease-out both',
+            },
+          },
+        },
+      }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

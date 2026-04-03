@@ -100,8 +100,8 @@ const Icons = {
 const SliderControl = ({ label, value, onChange, onDragStart, min, max, step = 1, unit = "", decimals }: { label: string, value: number, onChange: (val: number) => void, onDragStart?: () => void, min: number, max: number, step?: number, unit?: string, decimals?: number }) => (
     <div className="flex flex-col gap-1 w-full">
         <div className="flex justify-between items-center">
-             <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">{label}</span>
-             <span className="text-[10px] font-mono text-[#1D1D1F]">{value.toFixed(decimals ?? (step < 1 ? 2 : 0))}{unit}</span>
+             <span className="text-[10px] font-bold text-yohaku-text-muted uppercase tracking-wider">{label}</span>
+             <span className="text-[10px] font-mono text-yohaku-text-main">{value.toFixed(decimals ?? (step < 1 ? 2 : 0))}{unit}</span>
         </div>
         <input
             type="range"
@@ -112,7 +112,7 @@ const SliderControl = ({ label, value, onChange, onDragStart, min, max, step = 1
             onMouseDown={() => onDragStart?.()}
             onTouchStart={() => onDragStart?.()}
             onChange={(e) => onChange(Number(e.target.value))}
-            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#007AFF]"
+            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-yohaku-accent"
         />
     </div>
 );
@@ -123,7 +123,7 @@ const ColorPickerButton = ({ color, onChange, label }: { color: string | undefin
     
     return (
         <div className="relative flex flex-col gap-1">
-             {label && <span className="text-[9px] font-bold text-[#86868B] uppercase tracking-wider">{label}</span>}
+             {label && <span className="text-[9px] font-bold text-yohaku-text-muted uppercase tracking-wider">{label}</span>}
             <button 
                 onClick={() => setIsOpen(!isOpen)}
                 onMouseDown={(e) => e.stopPropagation()}
@@ -137,8 +137,8 @@ const ColorPickerButton = ({ color, onChange, label }: { color: string | undefin
                     onMouseDown={(e) => e.stopPropagation()}
                 >
                      <div className="col-span-5 flex justify-between items-center mb-1">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">Select Color</span>
-                        <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-black">&times;</button>
+                        <span className="text-[10px] font-bold text-yohaku-text-muted uppercase">Select Color</span>
+                        <button onClick={() => setIsOpen(false)} className="text-yohaku-text-muted hover:text-black">&times;</button>
                      </div>
                     {PRESET_COLORS.map(c => (
                         <button
@@ -255,7 +255,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                         value={element.fontFamily}
                         onChange={(e) => onUpdate({ fontFamily: e.target.value })}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="appearance-none bg-[#F5F5F7] hover:bg-gray-100 text-[#1D1D1F] text-sm font-medium rounded-lg pl-3 pr-8 py-2 outline-none cursor-pointer w-44 truncate transition-colors"
+                        className="appearance-none bg-yohaku-bg-main hover:bg-gray-100 text-yohaku-text-main text-sm font-medium rounded-lg pl-3 pr-8 py-2 outline-none cursor-pointer w-44 truncate transition-colors"
                         style={{ fontFamily: element.fontFamily }}
                     >
                         {FONT_GROUPS.map(group => (
@@ -268,7 +268,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                             </optgroup>
                         ))}
                     </select>
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-yohaku-text-muted">
                         <Icons.ChevronDown />
                     </div>
                 </div>
@@ -283,7 +283,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                         if (!isNaN(val)) onUpdate({ fontSize: val });
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className="bg-[#F5F5F7] hover:bg-gray-100 text-[#1D1D1F] text-sm font-medium rounded-lg px-2 py-2 outline-none w-16 text-center transition-colors"
+                    className="bg-yohaku-bg-main hover:bg-gray-100 text-yohaku-text-main text-sm font-medium rounded-lg px-2 py-2 outline-none w-16 text-center transition-colors"
                 />
 
                 <div className="w-px h-8 bg-gray-200" />
@@ -299,7 +299,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                 <button
                     onClick={() => setShowMore(!showMore)}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-[#1D1D1F] transition-colors ${showMore ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-yohaku-text-main transition-colors ${showMore ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
                 >
                     <Icons.More />
                 </button>
@@ -323,23 +323,23 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                             {/* Row: Writing mode + Align + B/I/U on one line */}
                             <div className="flex items-center gap-1.5">
                                 {/* 直/橫書 */}
-                                <div className="flex bg-[#F5F5F7] rounded-lg p-0.5">
-                                    <button onClick={() => handleWritingModeChange('horizontal')} className={`p-1.5 rounded-md transition-all ${(!element.writingMode || element.writingMode === 'horizontal') ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.TextHorizontal /></button>
-                                    <button onClick={() => handleWritingModeChange('vertical')} className={`p-1.5 rounded-md transition-all ${element.writingMode === 'vertical' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.TextVertical /></button>
+                                <div className="flex bg-yohaku-bg-main rounded-lg p-0.5">
+                                    <button onClick={() => handleWritingModeChange('horizontal')} className={`p-1.5 rounded-md transition-all ${(!element.writingMode || element.writingMode === 'horizontal') ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.TextHorizontal /></button>
+                                    <button onClick={() => handleWritingModeChange('vertical')} className={`p-1.5 rounded-md transition-all ${element.writingMode === 'vertical' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.TextVertical /></button>
                                 </div>
                                 <div className="w-px h-4 bg-gray-200" />
                                 {/* 對齊 */}
-                                <div className="flex bg-[#F5F5F7] rounded-lg p-0.5">
-                                    <button onClick={() => onUpdate({ align: 'left' })} className={`p-1.5 rounded-md transition-all ${element.align === 'left' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.AlignLeft /></button>
-                                    <button onClick={() => onUpdate({ align: 'center' })} className={`p-1.5 rounded-md transition-all ${element.align === 'center' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.AlignCenter /></button>
-                                    <button onClick={() => onUpdate({ align: 'right' })} className={`p-1.5 rounded-md transition-all ${element.align === 'right' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.AlignRight /></button>
+                                <div className="flex bg-yohaku-bg-main rounded-lg p-0.5">
+                                    <button onClick={() => onUpdate({ align: 'left' })} className={`p-1.5 rounded-md transition-all ${element.align === 'left' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.AlignLeft /></button>
+                                    <button onClick={() => onUpdate({ align: 'center' })} className={`p-1.5 rounded-md transition-all ${element.align === 'center' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.AlignCenter /></button>
+                                    <button onClick={() => onUpdate({ align: 'right' })} className={`p-1.5 rounded-md transition-all ${element.align === 'right' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.AlignRight /></button>
                                 </div>
                                 <div className="w-px h-4 bg-gray-200" />
                                 {/* B / I / U */}
                                 <div className="flex gap-0.5">
-                                    <button onClick={() => onUpdate({ isBold: !element.isBold })} className={`p-1.5 rounded-lg transition-all ${element.isBold ? 'bg-black text-white' : 'hover:bg-gray-100 text-[#1D1D1F]'}`}><Icons.Bold /></button>
-                                    <button onClick={() => onUpdate({ isItalic: !element.isItalic })} className={`p-1.5 rounded-lg transition-all ${element.isItalic ? 'bg-black text-white' : 'hover:bg-gray-100 text-[#1D1D1F]'}`}><Icons.Italic /></button>
-                                    <button onClick={() => onUpdate({ isUnderline: !element.isUnderline })} className={`p-1.5 rounded-lg transition-all ${element.isUnderline ? 'bg-black text-white' : 'hover:bg-gray-100 text-[#1D1D1F]'}`}><Icons.Underline /></button>
+                                    <button onClick={() => onUpdate({ isBold: !element.isBold })} className={`p-1.5 rounded-lg transition-all ${element.isBold ? 'bg-black text-white' : 'hover:bg-gray-100 text-yohaku-text-main'}`}><Icons.Bold /></button>
+                                    <button onClick={() => onUpdate({ isItalic: !element.isItalic })} className={`p-1.5 rounded-lg transition-all ${element.isItalic ? 'bg-black text-white' : 'hover:bg-gray-100 text-yohaku-text-main'}`}><Icons.Italic /></button>
+                                    <button onClick={() => onUpdate({ isUnderline: !element.isUnderline })} className={`p-1.5 rounded-lg transition-all ${element.isUnderline ? 'bg-black text-white' : 'hover:bg-gray-100 text-yohaku-text-main'}`}><Icons.Underline /></button>
                                 </div>
                             </div>
 
