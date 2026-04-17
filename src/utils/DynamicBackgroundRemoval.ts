@@ -203,7 +203,7 @@ const hasFringe = async (src: string, targetHex: string): Promise<boolean> => {
 };
 
 // --- 3. Main Handler Logic ---
-export const executeDynamicRemoval = async (imageSrc: string, genAI: GoogleGenAI, onProgress?: (msg: string) => void): Promise<string> => {
+export const executeDynamicRemoval = async (imageSrc: string, genAI: GoogleGenAI, onProgress?: (msg: string) => void, imageModel = 'gemini-3.1-flash-image-preview'): Promise<string> => {
     // 1. Analyze Color
     const { hex, name } = await analyzeDominantHue(imageSrc);
     if(onProgress) onProgress(`智慧去背: 分析完成，選用 ${name} 背景`);
@@ -228,7 +228,7 @@ export const executeDynamicRemoval = async (imageSrc: string, genAI: GoogleGenAI
     try {
         if(onProgress) onProgress(`智慧去背: ${name} 隔離生成...`);
         const response = await genAI.models.generateContent({
-            model: 'gemini-3.1-flash-image-preview',
+            model: imageModel,
             contents: {
                 parts: [
                     { inlineData: { data, mimeType } },
@@ -262,7 +262,7 @@ export const executeDynamicRemoval = async (imageSrc: string, genAI: GoogleGenAI
             const prompt2 = `Redraw the subject's edges to restore their natural colors. Remove any ${name} color cast or halos. Keep the subject on a white background. Keep lighting strictly NEUTRAL.`;
             
             const response2 = await genAI.models.generateContent({
-                model: 'gemini-3.1-flash-image-preview',
+                model: imageModel,
                 contents: {
                     parts: [
                         { inlineData: { data: d2, mimeType: m2 } },

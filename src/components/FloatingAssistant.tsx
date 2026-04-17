@@ -496,10 +496,42 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       </div>
                       <div>
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">本軟體使用模型：</span>
-                        <ul className="text-xs text-gray-600 space-y-2 leading-relaxed">
-                          <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-lite</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
-                          <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-preview-image-generation</span>：AI 生圖、編輯圖片。需付費使用。</li>
+                        <ul className="text-xs text-gray-600 space-y-2 leading-relaxed mb-4">
+                          <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-lite-preview</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
+                          <li>・ <span className="font-bold text-gray-600">生圖模型</span>：可在頂部狀態欄切換 Flash / Pro，依需求選擇。需付費使用。</li>
                         </ul>
+                        <span className="text-xs font-bold text-yohaku-text-main block mb-2">生圖模型比較：</span>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[10px] text-gray-600 border-collapse">
+                            <thead>
+                              <tr className="border-b border-gray-200">
+                                <th className="text-left py-1.5 pr-3 font-medium text-yohaku-text-muted w-1/3">維度</th>
+                                <th className="text-left py-1.5 pr-3 font-medium text-yohaku-text-main">Nano Banana 2 (Flash)</th>
+                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">Nano Banana Pro</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {[
+                                ['底層架構', 'gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'],
+                                ['生成速度', '4–6 秒', '8–12 秒'],
+                                ['輸出解析度', '512 / 1K / 2K / 4K', '1K / 2K / 4K'],
+                                ['文字渲染', '短句・標籤準確', '長句・複雜排版精準'],
+                                ['提示詞理解', '視覺直覺・大眾描述', '精確參數（焦距・材質）'],
+                              ].map(([dim, flash, pro]) => (
+                                <tr key={dim}>
+                                  <td className="py-1.5 pr-3 text-yohaku-text-muted">{dim}</td>
+                                  <td className="py-1.5 pr-3 text-gray-600">{flash}</td>
+                                  <td className="py-1.5 text-gray-600">{pro}</td>
+                                </tr>
+                              ))}
+                              <tr>
+                                <td className="py-1.5 pr-3 text-yohaku-text-muted align-top">物件連續性</td>
+                                <td className="py-1.5 pr-3 text-gray-600 align-top">每次獨立生成<br/>跨圖角色外觀易跑掉</td>
+                                <td className="py-1.5 text-gray-600 align-top">鎖定角色視覺特徵<br/>跨圖外觀一致・最多 14 物件</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                       <div className="p-3 bg-rose-50 rounded-lg text-xs text-rose-600 border border-rose-100">
                         <b>溫馨提示：</b>建議至 Google Cloud Console 設定預算警示，以精確掌控您的使用成本。

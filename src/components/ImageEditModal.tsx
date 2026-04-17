@@ -35,6 +35,7 @@ interface ImageEditModalProps {
   onSave: (elementId: string, dataUrl: string, originalElement?: ImageElement) => void;
   onClose: () => void;
   apiKey: string | null;
+  imageModel?: string;
 }
 
 interface GenerationContext {
@@ -148,7 +149,7 @@ const CollapsibleSection: React.FC<{
 };
 
 
-export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey }) => {
+export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-3.1-flash-image-preview' }) => {
   const imageRef = useRef<HTMLImageElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -750,7 +751,7 @@ TASK: GENERATIVE EDITING
       // ── 呼叫 API ──────────────────────────────────────────
       // ✅ 修改 4：用 callGeminiWithRetry 包裝，與其他功能一致，遇 503 自動重試
       const response = await callGeminiWithRetry(() => ai.models.generateContent({
-        model: 'gemini-3.1-flash-image-preview',
+        model: imageModel,
         contents: { parts: [originalImagePart, maskImagePart, { text: textPrompt }] },
       }));
 

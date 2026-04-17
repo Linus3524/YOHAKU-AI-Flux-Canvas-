@@ -22,10 +22,11 @@ interface UseAIProps {
     selectedElementIds: string[];
     showToast: (msg: string) => void;
     setHasApiKey: (isValid: boolean) => void;
-    apiKey?: string | null; 
+    apiKey?: string | null;
+    imageModel?: string;
 }
 
-export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey }: UseAIProps) => {
+export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview' }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
     const [outpaintingState, setOutpaintingState] = useState<OutpaintingState | null>(null);
@@ -167,7 +168,7 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                 model: 'gemini-3.1-flash-lite-preview',
                 contents: { parts: [imagePart, { text: prompt }] },
-                generationConfig: { responseMimeType: 'application/json' },
+                config: { responseMimeType: 'application/json' },
             }));
 
             const rawText = response.text?.trim() || '{}';
@@ -249,7 +250,7 @@ ALWAYS PRESERVE:
                         : '';
 
                     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                        model: 'gemini-3.1-flash-image-preview',
+                        model: imageModel,
                         contents: { parts: [imagePart, { text: basePrompt + transparencyOverride }] },
                     }));
 
@@ -265,7 +266,7 @@ ALWAYS PRESERVE:
                                     finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
                                 } else {
                                     showToast("構圖已變化，正在重新去背...");
-                                    finalSrc = await executeDynamicRemoval(generatedSrc, genAI);
+                                    finalSrc = await executeDynamicRemoval(generatedSrc, genAI, undefined, imageModel);
                                 }
                             } catch (e) {
                                 console.warn("Failed to restore transparency:", e);
@@ -324,7 +325,7 @@ ALWAYS PRESERVE:
                     prompt = prompt + transparencyOverride;
 
                     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                        model: 'gemini-3.1-flash-image-preview',
+                        model: imageModel,
                         contents: { parts: [imagePart, { text: prompt }] },
                     }));
 
@@ -340,7 +341,7 @@ ALWAYS PRESERVE:
                                      finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
                                  } else {
                                      showToast("構圖已變化，正在重新去背...");
-                                     finalSrc = await executeDynamicRemoval(generatedSrc, genAI);
+                                     finalSrc = await executeDynamicRemoval(generatedSrc, genAI, undefined, imageModel);
                                  }
                              } catch (e) {
                                  console.warn("Failed to restore transparency for style transfer:", e);
@@ -409,7 +410,7 @@ STRICT RULES:
                 
                 while (attempt < 3) {
                     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                        model: 'gemini-3.1-flash-image-preview',
+                        model: imageModel,
                         contents: { parts: [imagePart, { text: currentPrompt }] },
                     }));
                     
@@ -446,7 +447,7 @@ STRICT RULES:
                                     finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
                                 } else {
                                     showToast("構圖已變化，正在重新去背...");
-                                    finalSrc = await executeDynamicRemoval(generatedSrc, genAI);
+                                    finalSrc = await executeDynamicRemoval(generatedSrc, genAI, undefined, imageModel);
                                 }
                             } else {
                                 finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
@@ -480,7 +481,7 @@ STRICT RULES:
                  if (!element.src || element.src.length < 100) continue;
     
                 try {
-                    const processedSrc = await executeDynamicRemoval(element.src, genAI, showToast);
+                    const processedSrc = await executeDynamicRemoval(element.src, genAI, showToast, imageModel);
                     setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: processedSrc } : el));
                 } catch (err: any) {
                     throw err;
@@ -573,7 +574,7 @@ STRICT RULES:
     
             const genAI = createAiClient();
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-3.1-flash-image-preview',
+                model: imageModel,
                 contents: { parts: [imagePart, { text: promptText }] },
                 config: { 
                     imageConfig: { aspectRatio: targetAspectRatio, imageSize: '2K' }
@@ -674,7 +675,7 @@ STRICT RULES:
   
             const genAI = createAiClient();
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-3.1-flash-image-preview',
+                model: imageModel,
                 contents: { parts: [imagePart, { text: textPrompt }] },
                 config: {
                     imageConfig: {
@@ -764,7 +765,7 @@ STRICT RULES:
             Enhance details and sharpness significantly while keeping the structure identical.`;
     
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-3.1-flash-image-preview',
+                model: imageModel,
                 contents: { parts: [imagePart, { text: prompt }] },
                 config: {
                     imageConfig: { 
@@ -784,7 +785,7 @@ STRICT RULES:
                          
                          if (isTransparent) {
                              showToast("正在為放大後的圖片進行智慧去背...");
-                             resultSrc = await executeDynamicRemoval(resultSrc, genAI);
+                             resultSrc = await executeDynamicRemoval(resultSrc, genAI, undefined, imageModel);
                          }
                      } catch(e) {
                          console.warn("Transparency processing for upscale failed", e);
@@ -881,7 +882,7 @@ STRICT RULES:
                   if (!['1:1', '3:4', '4:3', '9:16', '16:9'].includes(targetRatio)) targetRatio = '1:1'; 
                   
                   const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                    model: 'gemini-3.1-flash-image-preview',
+                    model: imageModel,
                     contents: { parts: [...refParts, textPart] },
                     config: { imageConfig: { aspectRatio: targetRatio, imageSize } },
                   }));
@@ -948,7 +949,7 @@ STRICT RULES:
           
           const generateSingleImage = async () => {
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-3.1-flash-image-preview',
+                model: imageModel,
                 contents: { parts },
                 config: { imageConfig: { aspectRatio: targetAspectRatio, imageSize } },
             }));
@@ -965,7 +966,7 @@ STRICT RULES:
                                      resultSrc = await restoreOriginalAlpha(originalSrc, resultSrc);
                                  } else {
                                      showToast("構圖已變化，正在重新去背...");
-                                     resultSrc = await executeDynamicRemoval(resultSrc, genAI);
+                                     resultSrc = await executeDynamicRemoval(resultSrc, genAI, undefined, imageModel);
                                  }
                              }
                          } catch (e) {

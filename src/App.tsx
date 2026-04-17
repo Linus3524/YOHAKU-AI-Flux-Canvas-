@@ -123,6 +123,15 @@ const App: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3000);
   }, []);
 
+  // --- Image Model Selection ---
+  const [imageModel, setImageModel] = useState<string>(
+    () => localStorage.getItem('yohaku_image_model') || 'gemini-3.1-flash-image-preview'
+  );
+  const handleSetImageModel = (model: string) => {
+    localStorage.setItem('yohaku_image_model', model);
+    setImageModel(model);
+  };
+
   // --- API Key Management ---
   const [userApiKey, setUserApiKey] = useState<string | null>(() => localStorage.getItem('yohaku_api_key'));
   const [showKeyModal, setShowKeyModal] = useState(false);
@@ -250,13 +259,14 @@ const App: React.FC = () => {
       handleAIUpscale,
       handleGenerate,
       handleAskAI 
-  } = useAI({ 
-      elements, 
-      setElements, 
-      selectedElementIds, 
-      showToast, 
+  } = useAI({
+      elements,
+      setElements,
+      selectedElementIds,
+      showToast,
       setHasApiKey: handleAuthError,
-      apiKey: effectiveApiKey 
+      apiKey: effectiveApiKey,
+      imageModel,
   });
 
   // --- WRAPPED updateElements to Sync Outpainting Frame ---
@@ -976,6 +986,32 @@ const App: React.FC = () => {
               )}
           </button>
 
+          {/* Model Toggle */}
+          {isKeyValid && (
+            <div className="flex items-center bg-black/5 backdrop-blur-sm rounded-full border border-white/20 p-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
+              <button
+                onClick={() => handleSetImageModel('gemini-3.1-flash-image-preview')}
+                className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide transition-all duration-200 ${
+                  imageModel === 'gemini-3.1-flash-image-preview'
+                    ? 'bg-white text-[#1D1D1F] shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Flash
+              </button>
+              <button
+                onClick={() => handleSetImageModel('gemini-3-pro-image-preview')}
+                className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide transition-all duration-200 ${
+                  imageModel === 'gemini-3-pro-image-preview'
+                    ? 'bg-white text-[#1D1D1F] shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Pro
+              </button>
+            </div>
+          )}
+
           {/* Storage Status */}
           {storageStatus === 'full' || storageStatus === 'critical' ? (
               <div className="relative">
@@ -1251,7 +1287,8 @@ const App: React.FC = () => {
           element={editingImage}
           onSave={handleSaveImageEdit}
           onClose={() => setEditingImage(null)}
-          apiKey={effectiveApiKey} // Pass string here
+          apiKey={effectiveApiKey}
+          imageModel={imageModel}
         />
       )}
 
