@@ -466,13 +466,43 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         const height = maxY - minY;
     
         if (width <= 0 || height <= 0) return;
-    
+
+        // ── 預載所有圖片，計算最佳 SCALE（用原始解析度 / 顯示尺寸，最高 6x，最低 2x）
+        const imageCache = new Map<string, HTMLImageElement>();
+        let maxPixelDensity = 2;
+        for (const el of targetElements) {
+            if (el.type === 'image' || el.type === 'drawing') {
+                const src = (el as any).src as string;
+                if (src && !imageCache.has(src)) {
+                    try {
+                        const img = await loadImage(src);
+                        imageCache.set(src, img);
+                        const density = Math.max(
+                            img.naturalWidth  / el.width,
+                            img.naturalHeight / el.height
+                        );
+                        if (density > maxPixelDensity) maxPixelDensity = density;
+                    } catch { /* skip broken images */ }
+                }
+            }
+        }
+        // 用像素面積上限取代固定倍率上限，小畫布可享更高 SCALE
+        const desiredScale = Math.ceil(maxPixelDensity);
+        const MAX_CANVAS_PIXELS = 4096 * 4096; // ~16MP，避免瀏覽器記憶體崩潰
+        const areaAtDesired = width * desiredScale * (height * desiredScale);
+        const SCALE = areaAtDesired > MAX_CANVAS_PIXELS
+            ? Math.max(2, Math.floor(Math.sqrt(MAX_CANVAS_PIXELS / (width * height))))
+            : Math.max(2, desiredScale);
+
         const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = width * SCALE;
+        canvas.height = height * SCALE;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-    
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high'; // 關鍵：Lanczos 高品質縮放
+        ctx.scale(SCALE, SCALE);
+
         // Render Elements
         for (const el of targetElements) {
             ctx.save();
@@ -484,15 +514,19 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             // 建立離屏畫布以隔離效果 (解決淡出遮罩與混合模式衝突)
             const offCanvas = document.createElement('canvas');
             const offPadding = 100; // 預留緩衝，避免陰影或粗線條被裁切
-            offCanvas.width = el.width + offPadding * 2;
-            offCanvas.height = el.height + offPadding * 2;
+            offCanvas.width = (el.width + offPadding * 2) * SCALE;
+            offCanvas.height = (el.height + offPadding * 2) * SCALE;
             const offCtx = offCanvas.getContext('2d');
             if (!offCtx) { ctx.restore(); continue; }
-            offCtx.translate(offCanvas.width / 2, offCanvas.height / 2);
+            offCtx.imageSmoothingEnabled = true;
+            offCtx.imageSmoothingQuality = 'high'; // 高品質縮放插值
+            offCtx.scale(SCALE, SCALE);
+            offCtx.translate((el.width + offPadding * 2) / 2, (el.height + offPadding * 2) / 2);
 
             try {
                 if (el.type === 'image' || el.type === 'drawing') {
-                    const img = await loadImage((el as any).src);
+                    const src = (el as any).src as string;
+                    const img = imageCache.get(src) ?? await loadImage(src);
 
                     // 套用陰影（canvas shadow 在 drawImage 前設定）
                     if ((el as any).shadowEnabled) {
@@ -697,7 +731,9 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 const blendMode = (el as any).blendMode === 'normal' ? 'source-over' : ((el as any).blendMode ?? 'source-over');
                 ctx.globalCompositeOperation = blendMode as GlobalCompositeOperation;
                 
-                ctx.drawImage(offCanvas, -offCanvas.width / 2, -offCanvas.height / 2);
+                // 繪回主畫布：座標用邏輯像素（ctx 已 scale，offCanvas 實際像素需除以 SCALE）
+                ctx.drawImage(offCanvas, -(el.width + offPadding * 2) / 2, -(el.height + offPadding * 2) / 2,
+                    el.width + offPadding * 2, el.height + offPadding * 2);
 
             } catch(e) {
                 console.error('Failed to draw element:', el.id, el.type, e);
@@ -711,18 +747,21 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             return;
         }
     
-        const worldLeft = minX + trimmed.x;
-        const worldTop = minY + trimmed.y;
-        const centerX = worldLeft + trimmed.width / 2;
-        const centerY = worldTop + trimmed.height / 2;
-    
+        // trimmed.x/y/width/height 是 canvas 像素座標（已 SCALE 倍），需除回邏輯像素
+        const worldLeft = minX + trimmed.x / SCALE;
+        const worldTop = minY + trimmed.y / SCALE;
+        const logicalWidth = trimmed.width / SCALE;
+        const logicalHeight = trimmed.height / SCALE;
+        const centerX = worldLeft + logicalWidth / 2;
+        const centerY = worldTop + logicalHeight / 2;
+
         const mergedElement: ImageElement = {
             id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             type: 'image',
             src: trimmed.dataUrl,
             position: { x: centerX, y: centerY },
-            width: trimmed.width,
-            height: trimmed.height,
+            width: logicalWidth,
+            height: logicalHeight,
             rotation: 0,
             zIndex: targetElements[targetElements.length - 1].zIndex, // Inherit top zIndex
             isVisible: true,
