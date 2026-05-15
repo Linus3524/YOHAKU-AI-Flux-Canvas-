@@ -1300,7 +1300,7 @@ const App: React.FC = () => {
       )}
 
       {isGenerating && (
-        <div className="fixed inset-0 z-[2001] bg-white/40 backdrop-blur-md flex flex-col items-center justify-center text-[#1D1D1F]">
+        <div className="fixed inset-0 z-[6000] bg-white/40 backdrop-blur-md flex flex-col items-center justify-center text-[#1D1D1F]">
             <div className="p-8 bg-white rounded-3xl shadow-2xl flex flex-col items-center animate-pulse">
                 <svg className="animate-spin h-10 w-10 text-black mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
