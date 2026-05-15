@@ -1042,6 +1042,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 <option value="gemini">Gemini 3 Pro（預設）</option>
                                                 <option value="gpt-image-2" disabled={!hasAtlasKey}>GPT Image 2{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
                                                 <option value="seedream-v4.5" disabled={!hasAtlasKey}>即夢 Seedream v4.5{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
+                                                <option value="seedream-v5" disabled={!hasAtlasKey}>即夢 Seedream v5 Lite{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
+                                                <option value="flux-dev" disabled={!hasAtlasKey}>Flux Dev{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
                                             </select>
                                             <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#86868B]">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
