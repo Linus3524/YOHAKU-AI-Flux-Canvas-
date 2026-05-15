@@ -492,15 +492,20 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       </div>
                       <div className="pb-3 border-b border-yohaku-border-light">
                         <span className="text-sm font-medium block mb-1">第三方計費</span>
-                        <span className="text-xs text-gray-600">Gemini API 費用由您的 Google 帳號直接扣款，依 Google 官方政策計費。</span>
+                        <ul className="text-xs text-gray-600 space-y-1">
+                          <li>・ <span className="font-bold">Gemini API：</span>費用由您的 Google 帳號直接扣款，依 Google 官方政策計費。</li>
+                          <li>・ <span className="font-bold">Atlas Cloud API：</span>費用由您的 Atlas Cloud 帳號扣款，依使用模型與次數計費。</li>
+                        </ul>
                       </div>
-                      <div>
-                        <span className="text-sm font-bold text-yohaku-text-main block mb-2">本軟體使用模型：</span>
-                        <ul className="text-xs text-gray-600 space-y-2 leading-relaxed mb-4">
+
+                      {/* Gemini 模型 */}
+                      <div className="pb-3 border-b border-yohaku-border-light">
+                        <span className="text-sm font-bold text-yohaku-text-main block mb-2">🔵 Gemini 生圖模型（需 Gemini API Key）</span>
+                        <ul className="text-xs text-gray-600 space-y-2 leading-relaxed mb-3">
                           <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-lite-preview</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
                           <li>・ <span className="font-bold text-gray-600">生圖模型</span>：可在頂部狀態欄切換 Flash / Pro，依需求選擇。需付費使用。</li>
                         </ul>
-                        <span className="text-xs font-bold text-yohaku-text-main block mb-2">生圖模型比較：</span>
+                        <span className="text-xs font-bold text-yohaku-text-main block mb-2">Gemini 生圖模型比較：</span>
                         <div className="overflow-x-auto">
                           <table className="w-full text-[10px] text-gray-600 border-collapse">
                             <thead>
@@ -533,8 +538,48 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           </table>
                         </div>
                       </div>
+
+                      {/* Atlas Cloud 模型 */}
+                      <div>
+                        <span className="text-sm font-bold text-yohaku-text-main block mb-2">🟠 Atlas Cloud 生圖模型（需 Atlas Cloud Key）</span>
+                        <p className="text-xs text-gray-500 mb-3">由 Atlas Cloud 代理的多家頂級生圖模型，於生成設定面板中選擇，純文字轉圖片，一次輸出 2 張結果。</p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[10px] text-gray-600 border-collapse">
+                            <thead>
+                              <tr className="border-b border-gray-200">
+                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-muted" style={{width:'22%'}}>模型</th>
+                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-main" style={{width:'18%'}}>開發商</th>
+                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">特色與適用場景</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">OpenAI</td>
+                                <td className="py-2 text-gray-600 align-top">指令跟隨能力最強，精細文字可精確入畫，適合需要精確排版、產品圖、廣告素材的場景。</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">即夢 Seedream v4.5</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">ByteDance</td>
+                                <td className="py-2 text-gray-600 align-top">速度快、亞洲美學強項，擅長東方風格插圖與人物生成，中文提示詞理解佳。<span className="font-bold text-gray-700">生成中文標準字（設計師字型、特色標題字）表現突出</span>，適合需要在圖片中嵌入正確中文字的設計場景。</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">即夢 Seedream v5 Lite</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">ByteDance</td>
+                                <td className="py-2 text-gray-600 align-top">v4.5 升級版，畫面細節更豐富、構圖更穩定，文字渲染提升，兼顧速度與品質。</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">Flux Dev</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">Black Forest Labs</td>
+                                <td className="py-2 text-gray-600 align-top">藝術風格強烈、色彩層次豐富，適合創意插圖、概念設計與風格化視覺作品。</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
                       <div className="p-3 bg-rose-50 rounded-lg text-xs text-rose-600 border border-rose-100">
-                        <b>溫馨提示：</b>建議至 Google Cloud Console 設定預算警示，以精確掌控您的使用成本。
+                        <b>溫馨提示：</b>建議至 Google Cloud Console 設定預算警示（Gemini），並定期於 Atlas Cloud 後台確認餘額，以精確掌控使用成本。
                       </div>
                     </div>
                   </div>

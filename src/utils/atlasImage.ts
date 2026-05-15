@@ -18,7 +18,7 @@ interface ModelConfig {
 const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
     'gpt-image-2':   { id: 'openai/gpt-image-2/text-to-image',    useInputWrapper: false },
     'seedream-v4.5': { id: 'bytedance/seedream-v4.5/sequential',   useInputWrapper: false },
-    'seedream-v5':   { id: 'bytedance/seedream-v5.0-lite',         useInputWrapper: true  },
+    'seedream-v5':   { id: 'bytedance/seedream-v5.0-lite',         useInputWrapper: false },
     'flux-dev':      { id: 'black-forest-labs/flux-dev',           useInputWrapper: true  },
 };
 

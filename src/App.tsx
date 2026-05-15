@@ -107,7 +107,7 @@ const ApiKeyModal = ({
                                 placeholder="apikey-..."
                                 className="w-full px-4 py-3 bg-[#F5F5F7] border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
                             />
-                            <a href="https://atlascloud.ai" target="_blank" rel="noopener noreferrer"
+                            <a href="https://www.atlascloud.ai?ref=3G2WHU" target="_blank" rel="noopener noreferrer"
                                 className="text-[10px] text-[#007AFF] hover:underline mt-1 inline-block">
                                 沒有 Atlas Key？點此取得 →
                             </a>
