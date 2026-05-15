@@ -15,6 +15,7 @@ import {
     checkCompositionSimilarity
 } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
+import { callAtlasGenerate, type AtlasGenerationModel } from '../utils/atlasImage';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -24,9 +25,11 @@ interface UseAIProps {
     setHasApiKey: (isValid: boolean) => void;
     apiKey?: string | null;
     imageModel?: string;
+    atlasApiKey?: string | null;
+    generationModel?: string;
 }
 
-export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview' }: UseAIProps) => {
+export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel = 'gemini' }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
     const [outpaintingState, setOutpaintingState] = useState<OutpaintingState | null>(null);
@@ -827,7 +830,7 @@ STRICT RULES:
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
         const noteElements = selectedElements.filter(el => el.type === 'note' || el.type === 'text') as (NoteElement | TextElement)[];
         const frameElements = selectedElements.filter(el => el.type === 'frame') as FrameElement[];
-    
+
         if (frameElements.length > 0 && noteElements.length === 0) {
             showToast("畫框需要搭配便利貼輸入提示詞後才可生成 ⚠️");
             return;
@@ -835,7 +838,33 @@ STRICT RULES:
             alert("請至少選擇一張圖片、手繪或便利貼以提供生成內容的參考。");
             return;
         }
-    
+
+        // --- Atlas Cloud routing (GPT Image 2 / 即夢 Seedream) ---
+        if (generationModel !== 'gemini') {
+            if (imageElements.length > 0) {
+                showToast("GPT Image 2 / 即夢模型僅支援文字生圖，請改用便利貼提示詞 ⚠️");
+                return;
+            }
+            if (!atlasApiKey) {
+                showToast("請先在設定中輸入 Atlas Cloud Key 🔑");
+                return;
+            }
+            const prompt = noteElements.map(n => n.type === 'note' ? n.content : (n as TextElement).text).join(' ');
+            setIsGenerating(true);
+            setGeneratedImages(null);
+            try {
+                const images = await callAtlasGenerate(prompt, generationModel as AtlasGenerationModel, atlasApiKey, 2);
+                if (images.length === 0) throw new Error('未收到任何圖片');
+                setGeneratedImages(images);
+            } catch (e: any) {
+                showToast(`生成失敗：${e.message}`);
+            } finally {
+                setIsGenerating(false);
+            }
+            return;
+        }
+
+        // --- Gemini path (default) ---
         setIsGenerating(true);
         setGeneratedImages(null);
         
@@ -989,7 +1018,7 @@ STRICT RULES:
         } finally {
           setIsGenerating(false);
         }
-      }, [imageStyle, imageAspectRatio, preserveTransparency, setElements, showToast, setHasApiKey, apiKey]);
+      }, [imageStyle, imageAspectRatio, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModel]);
 
     return {
         createAiClient,

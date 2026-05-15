@@ -34,14 +34,19 @@ import type {
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 
 // --- API Key Modal Component ---
-const ApiKeyModal = ({ 
-    onSubmit, 
-    onClose 
-}: { 
-    onSubmit: (key: string) => void; 
-    onClose: () => void 
+const ApiKeyModal = ({
+    onSubmit,
+    onClose,
+    atlasKey: initialAtlasKey,
+    onSubmitAtlas,
+}: {
+    onSubmit: (key: string) => void;
+    onClose: () => void;
+    atlasKey?: string;
+    onSubmitAtlas?: (key: string) => void;
 }) => {
     const [key, setKey] = useState('');
+    const [atlasKey, setAtlasKey] = useState(initialAtlasKey || '');
 
     return (
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fade-in">
@@ -74,38 +79,55 @@ const ApiKeyModal = ({
                         為了啟用 AI 功能，請輸入您的 Gemini API Key。
                     </p>
 
-                    <div className="w-full space-y-4">
-                        <div className="relative">
-                            <input 
-                                type="password" 
+                    <div className="w-full space-y-3">
+                        {/* Gemini Key */}
+                        <div>
+                            <p className="text-[11px] font-medium text-gray-500 mb-1 text-left">Gemini API Key（必填）</p>
+                            <input
+                                type="password"
                                 value={key}
                                 onChange={(e) => setKey(e.target.value)}
-                                placeholder="貼上您的 API Key (AIza...)"
+                                placeholder="AIza..."
                                 className="w-full px-4 py-3 bg-[#F5F5F7] border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all text-sm"
                                 autoFocus
                             />
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"
+                                className="text-[10px] text-[#007AFF] hover:underline mt-1 inline-block">
+                                沒有 Gemini Key？點此免費獲取 →
+                            </a>
                         </div>
-                        
-                        <button 
-                            onClick={() => key && onSubmit(key)}
-                            disabled={!key}
+
+                        {/* Atlas Key */}
+                        <div>
+                            <p className="text-[11px] font-medium text-gray-500 mb-1 text-left">Atlas Cloud Key（選填・GPT Image 2 / 即夢生圖用）</p>
+                            <input
+                                type="password"
+                                value={atlasKey}
+                                onChange={(e) => setAtlasKey(e.target.value)}
+                                placeholder="apikey-..."
+                                className="w-full px-4 py-3 bg-[#F5F5F7] border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                            />
+                            <a href="https://atlascloud.ai" target="_blank" rel="noopener noreferrer"
+                                className="text-[10px] text-[#007AFF] hover:underline mt-1 inline-block">
+                                沒有 Atlas Key？點此取得 →
+                            </a>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                if (key) onSubmit(key);
+                                if (atlasKey && onSubmitAtlas) onSubmitAtlas(atlasKey);
+                                if (key || atlasKey) onClose();
+                            }}
+                            disabled={!key && !atlasKey}
                             className="w-full py-3 bg-black text-white font-bold rounded-xl shadow-lg shadow-black/10 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            開始創作
+                            儲存設定
                         </button>
                     </div>
 
-                    <div className="mt-6 pt-4 border-t border-gray-100 w-full">
-                        <a 
-                            href="https://aistudio.google.com/app/apikey" 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-xs text-[#007AFF] hover:underline flex items-center justify-center gap-1"
-                        >
-                            <span>沒有 API Key？點此免費獲取</span>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                        </a>
-                        <p className="text-[10px] text-gray-400 mt-2">
+                    <div className="mt-4 pt-4 border-t border-gray-100 w-full">
+                        <p className="text-[10px] text-gray-400">
                             您的 Key 僅儲存於本地瀏覽器，不會上傳至伺服器。
                         </p>
                     </div>
@@ -130,6 +152,24 @@ const App: React.FC = () => {
   const handleSetImageModel = (model: string) => {
     localStorage.setItem('yohaku_image_model', model);
     setImageModel(model);
+  };
+
+  // --- Atlas Cloud Key ---
+  const [atlasApiKey, setAtlasApiKey] = useState<string | null>(
+    () => localStorage.getItem('yohaku_atlas_key')
+  );
+  const handleSaveAtlasKey = (key: string) => {
+    localStorage.setItem('yohaku_atlas_key', key);
+    setAtlasApiKey(key);
+  };
+
+  // --- Generation Model (Gemini / GPT Image 2 / Seedream) ---
+  const [generationModel, setGenerationModel] = useState<string>(
+    () => localStorage.getItem('yohaku_gen_model') || 'gemini'
+  );
+  const handleSetGenerationModel = (model: string) => {
+    localStorage.setItem('yohaku_gen_model', model);
+    setGenerationModel(model);
   };
 
   // --- API Key Management ---
@@ -267,6 +307,8 @@ const App: React.FC = () => {
       setHasApiKey: handleAuthError,
       apiKey: effectiveApiKey,
       imageModel,
+      atlasApiKey,
+      generationModel,
   });
 
   // --- WRAPPED updateElements to Sync Outpainting Frame ---
@@ -943,7 +985,12 @@ const App: React.FC = () => {
       <FloatingAssistant onCreateSticky={handleAiCreateSticky} onAskAI={handleAskAI} />
 
       {showKeyModal && (
-          <ApiKeyModal onSubmit={handleSaveManualKey} onClose={() => setShowKeyModal(false)} />
+          <ApiKeyModal
+              onSubmit={handleSaveManualKey}
+              onClose={() => setShowKeyModal(false)}
+              atlasKey={atlasApiKey || ''}
+              onSubmitAtlas={handleSaveAtlasKey}
+          />
       )}
 
       {showClearConfirm && (
@@ -1161,6 +1208,9 @@ const App: React.FC = () => {
             onExportCanvas={handleExportCanvas}
             onImportCanvas={triggerImportCanvas}
             onAddArtboard={(preset) => addArtboard(preset, getCenterOfViewport())}
+            generationModel={generationModel}
+            onSetGenerationModel={handleSetGenerationModel}
+            hasAtlasKey={!!atlasApiKey}
         />
       )}
       
