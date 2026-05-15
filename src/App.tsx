@@ -154,6 +154,9 @@ const App: React.FC = () => {
     setImageModel(model);
   };
 
+  // --- Artboard Panel persistent tracking ---
+  const [lastSelectedArtboardId, setLastSelectedArtboardId] = useState<string | null>(null);
+
   // --- Atlas Cloud Key ---
   const [atlasApiKey, setAtlasApiKey] = useState<string | null>(
     () => localStorage.getItem('yohaku_atlas_key')
@@ -627,6 +630,16 @@ const App: React.FC = () => {
   const selectedShapeElement = selectedElements.length === 1 && selectedElements[0].type === 'shape' ? (selectedElements[0] as ShapeElement) : null;
   const selectedArrowElement = selectedElements.length === 1 && selectedElements[0].type === 'arrow' ? (selectedElements[0] as ArrowElement) : null;
   const selectedArtboard = selectedElements.length === 1 && selectedElements[0].type === 'artboard' ? (selectedElements[0] as ArtboardElement) : null;
+
+  // 記住最後選取的工作區域，讓面板在取消選取後仍保持可見
+  useEffect(() => {
+    if (selectedArtboard) setLastSelectedArtboardId(selectedArtboard.id);
+  }, [selectedArtboard]);
+
+  const artboardForPanel = selectedArtboard
+    ?? (elements.find(el => el.type === 'artboard' && el.id === lastSelectedArtboardId) as ArtboardElement | undefined)
+    ?? (elements.find(el => el.type === 'artboard') as ArtboardElement | undefined)
+    ?? null;
 
   const handleUpdateTextElement = (updates: Partial<TextElement>, options?: { addToHistory?: boolean }) => {
       if (!selectedTextElement) return;
@@ -1275,13 +1288,13 @@ const App: React.FC = () => {
           />
       )}
 
-      {!isFocusMode && selectedArtboard && (
+      {!isFocusMode && artboardForPanel && (
           <ArtboardPanel
-              element={selectedArtboard}
+              element={artboardForPanel}
               onUpdate={(updates) => setElements(prev => prev.map(el =>
-                  el.id === selectedArtboard.id ? { ...el, ...updates } : el
+                  el.id === artboardForPanel.id ? { ...el, ...updates } : el
               ))}
-              onExport={() => downloadArtboard(selectedArtboard, elements)}
+              onExport={() => downloadArtboard(artboardForPanel, elements)}
               onClose={() => setSelectedElementIds([])}
           />
       )}

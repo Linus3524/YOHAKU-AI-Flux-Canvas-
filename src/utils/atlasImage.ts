@@ -42,23 +42,45 @@ interface AtlasApiResponse {
     error?: string;
 }
 
+async function blobToBase64(blob: Blob, fallback: string): Promise<string> {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result as string) || fallback);
+        reader.onerror  = () => resolve(fallback);
+        reader.readAsDataURL(blob);
+    });
+}
+
 async function downloadImageAsBase64(url: string): Promise<string> {
     if (url.startsWith('data:')) return url; // 已是 base64，直接回傳
+
+    // 1️⃣ 嘗試直接 CORS fetch（Gemini / 有 CORS 頭的來源）
     try {
         const res = await fetch(url, { mode: 'cors' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            // 不管成功或失敗，reader 無法讀取時就退回 URL
-            reader.onloadend = () => resolve((reader.result as string) || url);
-            reader.onerror = () => resolve(url);
-            reader.readAsDataURL(blob);
-        });
-    } catch {
-        // CORS / 網路問題：直接用 URL，<img src> 仍可顯示
-        return url;
+        return await blobToBase64(await res.blob(), url);
+    } catch { /* 繼續嘗試 proxy */ }
+
+    // 2️⃣ 自架 Vercel proxy（生產環境）／第三方 proxy（本機開發）
+    // import.meta.env.DEV = true 時為本機，直接用 corsproxy.io
+    const isLocal = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV === true;
+    const proxyUrls = isLocal
+        ? [`https://corsproxy.io/?url=${encodeURIComponent(url)}`]
+        : [
+            `/api/image-proxy?url=${encodeURIComponent(url)}`,
+            `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+          ];
+
+    for (const proxyUrl of proxyUrls) {
+        try {
+            const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+            return await blobToBase64(await res.blob(), url);
+        } catch { /* 繼續下一個 */ }
     }
+
+    // 4️⃣ 最後手段：直接用 URL（<img src> 可顯示，但重新整理後可能失效）
+    return url;
 }
 
 async function pollPrediction(predictionId: string, atlasKey: string): Promise<string[]> {
