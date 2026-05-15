@@ -1163,6 +1163,9 @@ const App: React.FC = () => {
         onSetImageSize={setImageSize}
         preserveTransparency={preserveTransparency}
         onSetPreserveTransparency={setPreserveTransparency}
+        generationModel={generationModel}
+        onSetGenerationModel={handleSetGenerationModel}
+        hasAtlasKey={!!atlasApiKey}
         outpaintingState={outpaintingState}
         onUpdateOutpaintingFrame={handleUpdateOutpaintingFrame}
         onCancelOutpainting={handleCancelOutpainting}

@@ -552,88 +552,31 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
 
       <div className="w-px h-8 bg-black/5 mx-1" />
 
-      {/* Magic Button + Generation Model Dropdown */}
+      {/* Magic Button */}
       {selectedElement?.type !== 'artboard' && (
-        <div className="flex items-center gap-0.5 relative">
-          {/* Magic / Style Library button */}
-          <button
-            onClick={(e) => {
-                e.stopPropagation();
-                onOpenStyleLibrary();
-            }}
-            disabled={isProcessing}
-            className={`
-                group flex flex-col items-center justify-center gap-1.5 px-4 py-2 rounded-2xl transition-all duration-200
-                ${isProcessing
-                    ? 'opacity-50 cursor-wait'
-                    : 'hover:bg-purple-50 active:scale-95'}
-            `}
-          >
-            <div className={`
-                flex items-center justify-center w-5 h-5 transition-all
-                ${isProcessing ? 'animate-spin border-2 border-[#AF52DE] border-t-transparent rounded-full' : 'text-[#AF52DE]'}
-            `}>
-                  {!isProcessing && <Icons.Magic />}
-            </div>
-            <span className={`text-[10px] font-medium leading-none tracking-tight ${isProcessing ? 'text-yohaku-text-muted' : 'text-yohaku-text-muted group-hover:text-[#AF52DE]'}`}>
-                Magic
-            </span>
-          </button>
-
-          {/* Generation model picker chevron */}
-          <div className="relative">
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowModelMenu(v => !v); }}
-              title="切換生圖模型"
-              className="flex flex-col items-center justify-center gap-1.5 px-1.5 py-2 rounded-xl hover:bg-purple-50 transition-all active:scale-95"
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="text-[#AF52DE]">
-                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span className="text-[9px] font-medium leading-none text-[#AF52DE] whitespace-nowrap">
-                {generationModel === 'gemini' ? 'Gemini' : generationModel === 'gpt-image-2' ? 'GPT-4o' : '即夢'}
-              </span>
-            </button>
-
-            {showModelMenu && (
-              <div
-                className="absolute bottom-full mb-2 right-0 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.14)] border border-gray-100 overflow-hidden z-[3000] min-w-[160px]"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="px-3 pt-3 pb-1">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">生圖模型</p>
-                </div>
-                {[
-                  { id: 'gemini',        label: 'Gemini 3 Pro',         sub: 'Gemini（預設）',  available: true },
-                  { id: 'gpt-image-2',   label: 'GPT Image 2',          sub: 'Atlas Cloud Key 必填', available: hasAtlasKey },
-                  { id: 'seedream-v4.5', label: '即夢 Seedream v4.5',   sub: 'Atlas Cloud Key 必填', available: hasAtlasKey },
-                ].map(opt => (
-                  <button
-                    key={opt.id}
-                    disabled={!opt.available}
-                    onClick={() => { onSetGenerationModel?.(opt.id); setShowModelMenu(false); }}
-                    className={`
-                      w-full text-left px-3 py-2.5 flex items-center gap-2.5 transition-colors
-                      ${!opt.available ? 'opacity-40 cursor-not-allowed' : 'hover:bg-purple-50'}
-                      ${generationModel === opt.id ? 'bg-purple-50' : ''}
-                    `}
-                  >
-                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${generationModel === opt.id ? 'bg-[#AF52DE]' : 'bg-gray-200'}`} />
-                    <div>
-                      <p className="text-[12px] font-semibold text-[#1D1D1F] leading-tight">{opt.label}</p>
-                      <p className="text-[10px] text-gray-400 leading-tight">{opt.sub}</p>
-                    </div>
-                  </button>
-                ))}
-                {!hasAtlasKey && (
-                  <div className="px-3 py-2 border-t border-gray-100">
-                    <p className="text-[10px] text-gray-400 leading-snug">需在設定中輸入 Atlas Cloud Key 才可使用 GPT / 即夢模型</p>
-                  </div>
-                )}
-              </div>
-            )}
+        <button
+          onClick={(e) => {
+              e.stopPropagation();
+              onOpenStyleLibrary();
+          }}
+          disabled={isProcessing}
+          className={`
+              group flex flex-col items-center justify-center gap-1.5 px-4 py-2 rounded-2xl transition-all duration-200
+              ${isProcessing
+                  ? 'opacity-50 cursor-wait'
+                  : 'hover:bg-purple-50 active:scale-95'}
+          `}
+        >
+          <div className={`
+              flex items-center justify-center w-5 h-5 transition-all
+              ${isProcessing ? 'animate-spin border-2 border-[#AF52DE] border-t-transparent rounded-full' : 'text-[#AF52DE]'}
+          `}>
+                {!isProcessing && <Icons.Magic />}
           </div>
-        </div>
+          <span className={`text-[10px] font-medium leading-none tracking-tight ${isProcessing ? 'text-yohaku-text-muted' : 'text-yohaku-text-muted group-hover:text-[#AF52DE]'}`}>
+              Magic
+          </span>
+        </button>
       )}
 
     </div>
