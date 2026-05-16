@@ -10,15 +10,29 @@ const MAX_WAIT_MS = 120000; // 2 minutes
 
 export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'flux-dev';
 
+/** 各比例對應的 Atlas 像素尺寸（Seedream 2K / 4K） */
+export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
+    { ratio: '1:1',  label: '1:1',  w2k: '2048*2048', w4k: '4096*4096' },
+    { ratio: '4:3',  label: '4:3',  w2k: '2304*1728', w4k: '4704*3520' },
+    { ratio: '3:4',  label: '3:4',  w2k: '1728*2304', w4k: '3520*4704' },
+    { ratio: '16:9', label: '16:9', w2k: '2848*1600', w4k: '5504*3040' },
+    { ratio: '9:16', label: '9:16', w2k: '1600*2848', w4k: '3040*5504' },
+    { ratio: '3:2',  label: '3:2',  w2k: '2496*1664', w4k: '4992*3328' },
+    { ratio: '2:3',  label: '2:3',  w2k: '1664*2496', w4k: '3328*4992' },
+    { ratio: '21:9', label: '21:9', w2k: '3136*1344', w4k: '6240*2656' },
+];
+
 interface ModelConfig {
     // 文生圖
     id: string;
     useInputWrapper: boolean;
+    sizeParam?: string;          // API 尺寸欄位名稱（e.g. 'size'）
+    supportsBase64Output?: boolean; // 支援 enable_base64_output
     // 圖生圖
     img2imgId?: string;
     img2imgUseInputWrapper?: boolean;
-    img2imgImageParam?: string;   // 圖片欄位名稱
-    img2imgImageIsArray?: boolean; // true = ['url'], false = 'url'
+    img2imgImageParam?: string;
+    img2imgImageIsArray?: boolean;
 }
 
 const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
@@ -33,6 +47,8 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
     'seedream-v4.5': {
         id: 'bytedance/seedream-v4.5/sequential',
         useInputWrapper: false,
+        sizeParam: 'size',
+        supportsBase64Output: true,
         img2imgId: 'bytedance/seedream-v4.5/edit',
         img2imgUseInputWrapper: false,
         img2imgImageParam: 'images',
@@ -41,6 +57,8 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
     'seedream-v5': {
         id: 'bytedance/seedream-v5.0-lite',
         useInputWrapper: false,
+        sizeParam: 'size',
+        supportsBase64Output: true,
         img2imgId: 'bytedance/seedream-v5.0-lite/edit',
         img2imgUseInputWrapper: false,
         img2imgImageParam: 'images',
@@ -50,11 +68,18 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         id: 'black-forest-labs/flux-dev',
         useInputWrapper: true,
         img2imgId: 'black-forest-labs/flux-kontext-dev',
-        img2imgUseInputWrapper: false, // 頂層格式，不需 input wrapper
-        img2imgImageParam: 'image',    // 單數字串，非陣列
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'image',
         img2imgImageIsArray: false,
     },
 };
+
+/** ratio ('1:1' etc.) + quality ('2K'|'4K') → Atlas size string */
+function resolveAtlasSize(ratio: string, quality: '2K' | '4K'): string | undefined {
+    const entry = ATLAS_SIZES.find(s => s.ratio === ratio);
+    if (!entry) return undefined;
+    return quality === '4K' ? entry.w4k : entry.w2k;
+}
 
 interface AtlasPredictionData {
     id: string;
@@ -191,7 +216,20 @@ async function postGeneration(body: Record<string, unknown>, atlasKey: string): 
 
 // ── 文生圖 ─────────────────────────────────────────────
 
-function buildT2IBody(config: ModelConfig, prompt: string, extra?: Record<string, unknown>) {
+interface AtlasCallOptions {
+    ratio?: string;       // '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '3:2' | '2:3' | '21:9'
+    quality?: '2K' | '4K';
+}
+
+function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOptions) {
+    const extra: Record<string, unknown> = {};
+    if (config.sizeParam && options?.ratio) {
+        const size = resolveAtlasSize(options.ratio, options.quality ?? '2K');
+        if (size) extra[config.sizeParam] = size;
+    }
+    if (config.supportsBase64Output) {
+        extra['enable_base64_output'] = true;
+    }
     return config.useInputWrapper
         ? { model: config.id, input: { prompt, ...extra } }
         : { model: config.id, prompt, ...extra };
@@ -202,12 +240,13 @@ export async function callAtlasGenerate(
     prompt: string,
     model: AtlasGenerationModel,
     atlasKey: string,
-    count: number = 2
+    count: number = 2,
+    options?: AtlasCallOptions
 ): Promise<string[]> {
     const config = MODEL_CONFIGS[model];
     const predIds = await Promise.all(
         Array.from({ length: count }, () =>
-            postGeneration(buildT2IBody(config, prompt), atlasKey)
+            postGeneration(buildT2IBody(config, prompt, options), atlasKey)
         )
     );
     const results = await Promise.all(predIds.map(id => pollPrediction(id, atlasKey)));
@@ -216,11 +255,18 @@ export async function callAtlasGenerate(
 
 // ── 圖生圖 ─────────────────────────────────────────────
 
-function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, extra?: Record<string, unknown>) {
-    const imgParam  = config.img2imgImageParam  ?? 'images';
-    const isArray   = config.img2imgImageIsArray ?? true;
-    const imgValue  = isArray ? [imageBase64] : imageBase64;
-
+function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, options?: AtlasCallOptions) {
+    const imgParam = config.img2imgImageParam  ?? 'images';
+    const isArray  = config.img2imgImageIsArray ?? true;
+    const imgValue = isArray ? [imageBase64] : imageBase64;
+    const extra: Record<string, unknown> = {};
+    if (config.sizeParam && options?.ratio) {
+        const size = resolveAtlasSize(options.ratio, options.quality ?? '2K');
+        if (size) extra[config.sizeParam] = size;
+    }
+    if (config.supportsBase64Output) {
+        extra['enable_base64_output'] = true;
+    }
     return config.img2imgUseInputWrapper
         ? { model: config.img2imgId, input: { prompt, [imgParam]: imgValue, ...extra } }
         : { model: config.img2imgId, prompt, [imgParam]: imgValue, ...extra };
@@ -237,14 +283,15 @@ export async function callAtlasImg2Img(
     model: AtlasGenerationModel,
     atlasKey: string,
     referenceImageBase64: string,
-    count: number = 2
+    count: number = 2,
+    options?: AtlasCallOptions
 ): Promise<string[]> {
     const config = MODEL_CONFIGS[model];
     if (!config.img2imgId) throw new Error(`${model} 不支援圖生圖`);
 
     const predIds = await Promise.all(
         Array.from({ length: count }, () =>
-            postGeneration(buildI2IBody(config, prompt, referenceImageBase64), atlasKey)
+            postGeneration(buildI2IBody(config, prompt, referenceImageBase64, options), atlasKey)
         )
     );
     const results = await Promise.all(predIds.map(id => pollPrediction(id, atlasKey)));

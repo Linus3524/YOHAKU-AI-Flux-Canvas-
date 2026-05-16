@@ -891,8 +891,10 @@ STRICT RULES:
                 setGeneratingElementIds(firstImg ? [firstImg.id] : []);
                 setIsGenerating(true);
                 setGeneratedImages(null);
+                const atlasQuality = imageSize === '4K' ? '4K' : '2K';
+                const atlasRatio = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
                 try {
-                    const images = await callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2);
+                    const images = await callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2, { ratio: atlasRatio, quality: atlasQuality });
                     if (images.length === 0) throw new Error('未收到任何圖片');
                     setGeneratedImages(images);
                 } catch (e: any) {
@@ -912,8 +914,10 @@ STRICT RULES:
             setGeneratingElementIds([]);
             setIsGenerating(true);
             setGeneratedImages(null);
+            const atlasQuality2 = imageSize === '4K' ? '4K' : '2K';
+            const atlasRatio2 = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
             try {
-                const images = await callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 2);
+                const images = await callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 2, { ratio: atlasRatio2, quality: atlasQuality2 });
                 if (images.length === 0) throw new Error('未收到任何圖片');
                 setGeneratedImages(images);
             } catch (e: any) {

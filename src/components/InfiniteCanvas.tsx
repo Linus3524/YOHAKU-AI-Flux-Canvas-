@@ -4,6 +4,7 @@ import type { Point, CanvasElement, ImageElement, ShapeType, ShapeElement } from
 import type { OutpaintingState } from '../types';
 import { TransformableElement } from './TransformableElement';
 import { AppearancePanel } from './AppearancePanel';
+import { ATLAS_SIZES } from '../utils/atlasImage';
 
 interface OutpaintingFrameProps {
   outpaintingState: OutpaintingState;
@@ -1123,27 +1124,56 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
 
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-xs font-semibold text-[#1D1D1F]">輸出比例</label>
-                                        <div className="relative">
-                                            <select
-                                                value={imageAspectRatio}
-                                                onChange={(e) => onSetImageAspectRatio(e.target.value)}
-                                                className="w-full bg-[#F5F5F7] border-none rounded-lg px-3 py-2 text-sm text-[#1D1D1F] focus:ring-2 focus:ring-black/5 cursor-pointer appearance-none"
-                                            >
-                                                {ASPECT_RATIOS.map(ratio => (
-                                                    <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
-                                                ))}
-                                            </select>
-                                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#86868B]">
+                                        {generationModel && generationModel !== 'gemini' ? (
+                                            // Atlas 模型：顯示比例 + 像素尺寸
+                                            <div className="grid grid-cols-2 gap-1">
+                                                {ATLAS_SIZES.map(s => {
+                                                    const px = imageSize === '4K' ? s.w4k : s.w2k;
+                                                    const [w, h] = px.split('*');
+                                                    const isSelected = imageAspectRatio === s.ratio;
+                                                    return (
+                                                        <button
+                                                            key={s.ratio}
+                                                            onClick={() => onSetImageAspectRatio(s.ratio)}
+                                                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                                                isSelected
+                                                                    ? 'bg-[#1D1D1F] text-white border-[#1D1D1F]'
+                                                                    : 'bg-[#F5F5F7] text-[#1D1D1F] border-transparent hover:border-black/20'
+                                                            }`}
+                                                        >
+                                                            <span className="font-bold">{s.ratio}</span>
+                                                            <span className={`text-[10px] ml-1 ${isSelected ? 'text-white/70' : 'text-[#86868B]'}`}>{w}×{h}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            // Gemini：原本下拉選單
+                                            <div className="relative">
+                                                <select
+                                                    value={imageAspectRatio}
+                                                    onChange={(e) => onSetImageAspectRatio(e.target.value)}
+                                                    className="w-full bg-[#F5F5F7] border-none rounded-lg px-3 py-2 text-sm text-[#1D1D1F] focus:ring-2 focus:ring-black/5 cursor-pointer appearance-none"
+                                                >
+                                                    {ASPECT_RATIOS.map(ratio => (
+                                                        <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#86868B]">
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                                                 </div>
-                                        </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* 輸出解析度 */}
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-xs font-semibold text-[#1D1D1F]">輸出解析度</label>
                                         <div className="flex gap-2">
-                                            {(['1K', '2K', '4K'] as const).map(size => (
+                                            {(generationModel && generationModel !== 'gemini'
+                                                ? (['2K', '4K'] as const)
+                                                : (['1K', '2K', '4K'] as const)
+                                            ).map(size => (
                                                 <button
                                                     key={size}
                                                     onClick={() => onSetImageSize(size)}
