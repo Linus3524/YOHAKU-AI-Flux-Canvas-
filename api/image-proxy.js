@@ -2,6 +2,8 @@
  * Vercel Serverless Function — Image CORS Proxy
  * GET /api/image-proxy?url=<encoded-image-url>
  * Fetches the image server-side (no CORS restriction) and streams it back.
+ *
+ * 安全性：只允許 https 圖片 URL，不允許 localhost / 內網 IP
  */
 export default async function handler(req, res) {
     const { url } = req.query;
@@ -13,38 +15,39 @@ export default async function handler(req, res) {
     let targetUrl;
     try {
         targetUrl = decodeURIComponent(url);
-        new URL(targetUrl); // validate
+        const parsed = new URL(targetUrl);
+
+        // 只允許 HTTPS，拒絕 localhost / 內網
+        if (parsed.protocol !== 'https:') {
+            return res.status(403).json({ error: 'Only HTTPS URLs allowed' });
+        }
+        const host = parsed.hostname;
+        if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.endsWith('.local')) {
+            return res.status(403).json({ error: 'Internal addresses not allowed' });
+        }
     } catch {
         return res.status(400).json({ error: 'Invalid url' });
     }
 
-    // 只允許 Atlas CDN 網域，避免被當作開放 proxy 濫用
-    const allowedHosts = [
-        'atlas-img.oss-us-west-1.aliyuncs.com',
-        'tos-ap-southeast-1.volces.com',
-        'tos-cn-beijing.volces.com',
-        'cdn.atlascloud.ai',
-        'replicate.delivery',
-        'pbxt.replicate.delivery',
-    ];
-    const hostname = new URL(targetUrl).hostname;
-    const isAllowed = allowedHosts.some(h => hostname.endsWith(h));
-    if (!isAllowed) {
-        return res.status(403).json({ error: 'Domain not allowed' });
-    }
-
     try {
-        const upstream = await fetch(targetUrl);
+        const upstream = await fetch(targetUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; YOHAKU-Proxy/1.0)' }
+        });
         if (!upstream.ok) {
             return res.status(upstream.status).json({ error: `Upstream error: ${upstream.status}` });
         }
 
-        const contentType = upstream.headers.get('content-type') || 'image/png';
+        // 只允許圖片類型的回應
+        const contentType = upstream.headers.get('content-type') || '';
+        if (!contentType.startsWith('image/') && !contentType.startsWith('application/octet')) {
+            return res.status(415).json({ error: 'Not an image' });
+        }
+
         const buffer = await upstream.arrayBuffer();
 
-        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Type', contentType || 'image/png');
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cache-Control', 'public, max-age=86400'); // 快取 1 天
+        res.setHeader('Cache-Control', 'public, max-age=86400');
         return res.status(200).send(Buffer.from(buffer));
     } catch (e) {
         return res.status(500).json({ error: String(e) });
