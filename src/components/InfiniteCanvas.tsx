@@ -1135,91 +1135,105 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-semibold text-[#1D1D1F]">輸出比例</label>
-                                        {generationModel && generationModel !== 'gemini' ? (() => {
-                                            // Atlas 模型：自訂下拉，組合比例 + 解析度
+                                    {/* ── 輸出比例（所有模型統一自訂下拉） ── */}
+                                    {(() => {
+                                        const isAtlas = generationModel && generationModel !== 'gemini';
+
+                                        // 矩形 icon：依比例字串計算尺寸（最大 18×14px）
+                                        const RatioBox = ({ ratio, active }: { ratio: string; active: boolean }) => {
+                                            if (!ratio.includes(':')) {
+                                                // 'Original'：用虛線正方形
+                                                return <span style={{ width: 14, height: 14, flexShrink: 0 }}
+                                                             className={`inline-block border-2 border-dashed rounded-[1.5px] ${active ? 'border-[#5B5BF6]' : 'border-[#86868B]'}`} />;
+                                            }
+                                            const [rw, rh] = ratio.split(':').map(Number);
+                                            const maxW = 18, maxH = 14;
+                                            let iw: number, ih: number;
+                                            if (rw / rh > maxW / maxH) { iw = maxW; ih = Math.max(2, Math.round(maxW * rh / rw)); }
+                                            else { ih = maxH; iw = Math.max(2, Math.round(maxH * rw / rh)); }
+                                            return <span style={{ width: iw, height: ih, flexShrink: 0 }}
+                                                         className={`inline-block border-2 rounded-[1.5px] ${active ? 'border-[#5B5BF6]' : 'border-[#86868B]'}`} />;
+                                        };
+
+                                        // 觸發按鈕顯示文字
+                                        let triggerLabel = imageAspectRatio;
+                                        let triggerSub = '';
+                                        if (isAtlas) {
                                             const sizes = getModelSizes(generationModel as any);
-                                            const curEntry = sizes.find(s => s.ratio === imageAspectRatio) ?? sizes[0];
-                                            const curPx = imageSize === '4K' ? curEntry.w4k : curEntry.w2k;
-                                            const [cw, ch] = curPx.includes('x') ? curPx.split('x') : curPx.split('*');
+                                            const cur = sizes.find(s => s.ratio === imageAspectRatio) ?? sizes[0];
+                                            const px = imageSize === '4K' ? cur.w4k : cur.w2k;
+                                            const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
+                                            triggerLabel = cur.ratio;
+                                            triggerSub = `${pw}×${ph}`;
+                                        } else {
+                                            const cur = ASPECT_RATIOS.find(r => r.value === imageAspectRatio);
+                                            triggerLabel = cur?.label ?? imageAspectRatio;
+                                        }
 
-                                            // 根據比例字串計算矩形 icon 寬高（最大 18×14px）
-                                            const ratioIcon = (ratio: string, active: boolean) => {
-                                                const [rw, rh] = ratio.split(':').map(Number);
-                                                const maxW = 18, maxH = 14;
-                                                let iw: number, ih: number;
-                                                if (rw / rh > maxW / maxH) { iw = maxW; ih = Math.max(2, Math.round(maxW * rh / rw)); }
-                                                else { ih = maxH; iw = Math.max(2, Math.round(maxH * rw / rh)); }
-                                                return (
-                                                    <span style={{ width: iw, height: ih, flexShrink: 0 }}
-                                                          className={`inline-block border-2 rounded-[1.5px] ${active ? 'border-[#5B5BF6]' : 'border-[#86868B]'}`} />
-                                                );
-                                            };
-
-                                            return (
+                                        return (
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-xs font-semibold text-[#1D1D1F]">輸出比例</label>
                                                 <div className="relative" ref={ratioDropdownRef}>
                                                     {/* 觸發按鈕 */}
                                                     <button
                                                         onClick={() => setRatioDropdownOpen(v => !v)}
                                                         className="w-full flex items-center gap-2 px-3 py-2 bg-[#F5F5F7] rounded-lg text-sm border border-transparent hover:border-black/10 transition-all"
                                                     >
-                                                        {ratioIcon(imageAspectRatio, true)}
-                                                        <span className="font-semibold text-[#1D1D1F]">{imageAspectRatio}</span>
-                                                        <span className="text-[#86868B] text-xs">{cw}×{ch}</span>
-                                                        <svg className={`ml-auto w-3.5 h-3.5 text-[#86868B] transition-transform ${ratioDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                                                        <RatioBox ratio={imageAspectRatio} active={true} />
+                                                        <span className="font-medium text-[#1D1D1F] truncate">{triggerLabel}</span>
+                                                        {triggerSub && <span className="text-[#86868B] text-xs flex-shrink-0">{triggerSub}</span>}
+                                                        <svg className={`ml-auto w-3.5 h-3.5 text-[#86868B] flex-shrink-0 transition-transform ${ratioDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
                                                     </button>
 
-                                                    {/* 下拉列表 */}
+                                                    {/* 下拉列表（往下展開） */}
                                                     {ratioDropdownOpen && (
-                                                        <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-xl shadow-2xl border border-black/8 py-1.5 z-[200] max-h-72 overflow-y-auto">
-                                                            {(['2K', '4K'] as const).map(tier => (
-                                                                <div key={tier}>
-                                                                    <div className="px-3 pt-1.5 pb-0.5 text-[11px] font-semibold text-[#86868B] uppercase tracking-wide">{tier}</div>
-                                                                    {sizes.map(s => {
-                                                                        const px = tier === '4K' ? s.w4k : s.w2k;
-                                                                        const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
-                                                                        const isSelected = imageAspectRatio === s.ratio && imageSize === tier;
-                                                                        return (
-                                                                            <button
-                                                                                key={s.ratio + tier}
-                                                                                onClick={() => { onSetImageAspectRatio(s.ratio); onSetImageSize(tier); setRatioDropdownOpen(false); }}
-                                                                                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-[#F5F5F7] transition-colors ${isSelected ? 'text-[#1D1D1F]' : 'text-[#1D1D1F]'}`}
-                                                                            >
-                                                                                {/* checkmark */}
-                                                                                <span className="w-3.5 text-[#5B5BF6] flex-shrink-0 text-xs">
-                                                                                    {isSelected ? '✓' : ''}
-                                                                                </span>
-                                                                                {ratioIcon(s.ratio, isSelected)}
-                                                                                <span className={`w-10 font-medium ${isSelected ? 'text-[#5B5BF6]' : ''}`}>{s.ratio}</span>
-                                                                                <span className="ml-auto text-[#86868B] text-xs tabular-nums">{pw}×{ph}</span>
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            ))}
+                                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-black/8 py-1.5 z-[200] max-h-72 overflow-y-auto">
+                                                            {isAtlas ? (
+                                                                // Atlas：分 2K / 4K 兩區，帶像素尺寸
+                                                                (['2K', '4K'] as const).map(tier => {
+                                                                    const sizes = getModelSizes(generationModel as any);
+                                                                    return (
+                                                                        <div key={tier}>
+                                                                            <div className="px-3 pt-1.5 pb-0.5 text-[11px] font-semibold text-[#86868B] uppercase tracking-wide">{tier}</div>
+                                                                            {sizes.map(s => {
+                                                                                const px = tier === '4K' ? s.w4k : s.w2k;
+                                                                                const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
+                                                                                const isSelected = imageAspectRatio === s.ratio && imageSize === tier;
+                                                                                return (
+                                                                                    <button key={s.ratio + tier}
+                                                                                        onClick={() => { onSetImageAspectRatio(s.ratio); onSetImageSize(tier); setRatioDropdownOpen(false); }}
+                                                                                        className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#F5F5F7] transition-colors">
+                                                                                        <span className="w-3.5 text-[#5B5BF6] flex-shrink-0 text-xs">{isSelected ? '✓' : ''}</span>
+                                                                                        <RatioBox ratio={s.ratio} active={isSelected} />
+                                                                                        <span className={`w-10 text-sm font-medium ${isSelected ? 'text-[#5B5BF6]' : 'text-[#1D1D1F]'}`}>{s.ratio}</span>
+                                                                                        <span className="ml-auto text-[#86868B] text-xs tabular-nums">{pw}×{ph}</span>
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                // Gemini：平鋪列表，無像素尺寸
+                                                                ASPECT_RATIOS.map(r => {
+                                                                    const isSelected = imageAspectRatio === r.value;
+                                                                    return (
+                                                                        <button key={r.value}
+                                                                            onClick={() => { onSetImageAspectRatio(r.value); setRatioDropdownOpen(false); }}
+                                                                            className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#F5F5F7] transition-colors">
+                                                                            <span className="w-3.5 text-[#5B5BF6] flex-shrink-0 text-xs">{isSelected ? '✓' : ''}</span>
+                                                                            <RatioBox ratio={r.value} active={isSelected} />
+                                                                            <span className={`text-sm ${isSelected ? 'text-[#5B5BF6] font-medium' : 'text-[#1D1D1F]'}`}>{r.label}</span>
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
-                                            );
-                                        })() : (
-                                            // Gemini：原本下拉選單
-                                            <div className="relative">
-                                                <select
-                                                    value={imageAspectRatio}
-                                                    onChange={(e) => onSetImageAspectRatio(e.target.value)}
-                                                    className="w-full bg-[#F5F5F7] border-none rounded-lg px-3 py-2 text-sm text-[#1D1D1F] focus:ring-2 focus:ring-black/5 cursor-pointer appearance-none"
-                                                >
-                                                    {ASPECT_RATIOS.map(ratio => (
-                                                        <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
-                                                    ))}
-                                                </select>
-                                                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#86868B]">
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                </div>
                                             </div>
-                                        )}
-                                    </div>
+                                        );
+                                    })()}
 
                                     {/* 輸出解析度（Gemini 才顯示，Atlas 已整合進比例下拉） */}
                                     {(generationModel === 'gemini' || !generationModel) && <div className="flex flex-col gap-1.5">
