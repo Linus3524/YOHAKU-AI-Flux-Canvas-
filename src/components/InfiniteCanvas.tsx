@@ -1174,12 +1174,17 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         let triggerRatio = imageAspectRatio;
                                         let triggerDims = '';
                                         if (isAtlas) {
-                                            const sizes = getModelSizes(generationModel as any);
-                                            const cur = sizes.find(s => s.ratio === imageAspectRatio) ?? sizes[0];
-                                            const px = imageSize === '4K' ? cur.w4k : cur.w2k;
-                                            const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
-                                            triggerRatio = cur.ratio;
-                                            triggerDims = `${pw}×${ph}`;
+                                            if (imageAspectRatio === 'Original') {
+                                                triggerRatio = '原圖比例';
+                                                triggerDims = '依原圖';
+                                            } else {
+                                                const sizes = getModelSizes(generationModel as any);
+                                                const cur = sizes.find(s => s.ratio === imageAspectRatio) ?? sizes[0];
+                                                const px = imageSize === '4K' ? cur.w4k : cur.w2k;
+                                                const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
+                                                triggerRatio = cur.ratio;
+                                                triggerDims = `${pw}×${ph}`;
+                                            }
                                         } else {
                                             triggerDims = geminiDims(imageAspectRatio);
                                         }
@@ -1199,33 +1204,52 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                         <svg className={`ml-auto w-4 h-4 text-[#86868B] flex-shrink-0 transition-transform duration-150 ${ratioOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
                                                     </button>
 
-                                                    {/* 下拉列表 — 往下展開 */}
+                                                    {/* 下拉列表 — 往下展開，阻止滾輪冒泡到畫布 */}
                                                     {ratioOpen && (
-                                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-black/10 rounded-xl shadow-lg py-1 z-[300] max-h-64 overflow-y-auto">
+                                                        <div
+                                                            className="absolute top-full left-0 right-0 mt-1 bg-white border border-black/10 rounded-xl shadow-lg py-1 z-[300] max-h-64 overflow-y-auto"
+                                                            onWheel={e => e.stopPropagation()}
+                                                        >
                                                             {isAtlas ? (
-                                                                (['2K', '4K'] as const).map(tier => {
-                                                                    const sizes = getModelSizes(generationModel as any);
-                                                                    return (
-                                                                        <div key={tier}>
-                                                                            <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-[#86868B] tracking-widest uppercase">{tier}</div>
-                                                                            {sizes.map(s => {
-                                                                                const px = tier === '4K' ? s.w4k : s.w2k;
-                                                                                const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
-                                                                                const isSel = imageAspectRatio === s.ratio && imageSize === tier;
-                                                                                return (
-                                                                                    <button key={s.ratio + tier}
-                                                                                        onClick={() => { onSetImageAspectRatio(s.ratio); onSetImageSize(tier); setRatioOpen(false); }}
-                                                                                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm transition-colors ${isSel ? 'bg-[#F5F5F7]' : 'hover:bg-[#F5F5F7]'}`}>
-                                                                                        <RatioSVG ratio={s.ratio} selected={isSel} />
-                                                                                        <span className={`font-medium w-9 ${isSel ? 'text-[#5B5BF6]' : 'text-[#1D1D1F]'}`}>{s.ratio}</span>
-                                                                                        <span className="ml-auto text-[#86868B] text-xs tabular-nums">{pw}×{ph}</span>
-                                                                                        {isSel && <svg className="w-3.5 h-3.5 text-[#5B5BF6] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>}
-                                                                                    </button>
-                                                                                );
-                                                                            })}
-                                                                        </div>
-                                                                    );
-                                                                })
+                                                                <>
+                                                                    {/* 原圖比例 */}
+                                                                    {(() => {
+                                                                        const isSel = imageAspectRatio === 'Original';
+                                                                        return (
+                                                                            <button
+                                                                                onClick={() => { onSetImageAspectRatio('Original'); setRatioOpen(false); }}
+                                                                                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm transition-colors ${isSel ? 'bg-[#F5F5F7]' : 'hover:bg-[#F5F5F7]'}`}>
+                                                                                <RatioSVG ratio="Original" selected={isSel} />
+                                                                                <span className={`${isSel ? 'text-[#5B5BF6] font-medium' : 'text-[#1D1D1F]'}`}>原圖比例</span>
+                                                                                <span className="ml-auto text-[#86868B] text-xs">依原圖</span>
+                                                                                {isSel && <svg className="w-3.5 h-3.5 text-[#5B5BF6] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>}
+                                                                            </button>
+                                                                        );
+                                                                    })()}
+                                                                    {(['2K', '4K'] as const).map(tier => {
+                                                                        const sizes = getModelSizes(generationModel as any);
+                                                                        return (
+                                                                            <div key={tier}>
+                                                                                <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-[#86868B] tracking-widest uppercase">{tier}</div>
+                                                                                {sizes.map(s => {
+                                                                                    const px = tier === '4K' ? s.w4k : s.w2k;
+                                                                                    const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
+                                                                                    const isSel = imageAspectRatio === s.ratio && imageSize === tier;
+                                                                                    return (
+                                                                                        <button key={s.ratio + tier}
+                                                                                            onClick={() => { onSetImageAspectRatio(s.ratio); onSetImageSize(tier); setRatioOpen(false); }}
+                                                                                            className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm transition-colors ${isSel ? 'bg-[#F5F5F7]' : 'hover:bg-[#F5F5F7]'}`}>
+                                                                                            <RatioSVG ratio={s.ratio} selected={isSel} />
+                                                                                            <span className={`font-medium w-9 ${isSel ? 'text-[#5B5BF6]' : 'text-[#1D1D1F]'}`}>{s.ratio}</span>
+                                                                                            <span className="ml-auto text-[#86868B] text-xs tabular-nums">{pw}×{ph}</span>
+                                                                                            {isSel && <svg className="w-3.5 h-3.5 text-[#5B5BF6] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>}
+                                                                                        </button>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </>
                                                             ) : (
                                                                 ASPECT_RATIOS.map(r => {
                                                                     const isSel = imageAspectRatio === r.value;

@@ -258,7 +258,7 @@ function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
 
 function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOptions) {
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
-    if (config.sizeParam && options?.ratio) {
+    if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
         const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes);
         if (size) extra[config.sizeParam] = size;
     }
@@ -298,7 +298,7 @@ function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, 
     const isArray  = config.img2imgImageIsArray ?? true;
     const imgValue = isArray ? [imageBase64] : imageBase64;
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
-    if (config.sizeParam && options?.ratio) {
+    if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
         const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes);
         if (size) extra[config.sizeParam] = size;
     }
