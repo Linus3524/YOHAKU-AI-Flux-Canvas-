@@ -31,6 +31,7 @@ interface UseAIProps {
 
 export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel = 'gemini' }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
+    const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
     const [outpaintingState, setOutpaintingState] = useState<OutpaintingState | null>(null);
     const [copiedStyle, setCopiedStyle] = useState<{ analysis: import('../components/StylePasteModal').StyleAnalysisResult } | null>(null);
@@ -194,6 +195,7 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
         const targetElements = elements.filter(el => targetElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
         if (targetElements.length === 0) return;
 
+        setGeneratingElementIds(targetElements.map(el => el.id));
         setIsGenerating(true);
         showToast(`正在應用風格...`);
 
@@ -223,6 +225,7 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
                 .map(k => `${keyLabels[k]}: ${analysis[k]}`);
             if (fallbackParts.length === 0) {
                 showToast("所選元素在原圖中均不適用，請重新選擇。");
+                setGeneratingElementIds([]);
                 setIsGenerating(false);
                 return;
             }
@@ -286,6 +289,7 @@ ALWAYS PRESERVE:
         } catch (error) {
             handleAIError(error, "風格應用");
         } finally {
+            setGeneratingElementIds([]);
             setIsGenerating(false);
         }
     }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey]);
@@ -302,6 +306,7 @@ ALWAYS PRESERVE:
         const targetElements = elements.filter(el => targetElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
         if (targetElements.length === 0) return;
 
+        setGeneratingElementIds(targetElements.map(el => el.id));
         setIsGenerating(true);
         showToast(`正在應用預設風格...`);
         setShowStyleLibrary(false);
@@ -362,6 +367,7 @@ ALWAYS PRESERVE:
         } catch (error) {
             handleAIError(error, "風格應用");
         } finally {
+            setGeneratingElementIds([]);
             setIsGenerating(false);
         }
     }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey]);
@@ -370,6 +376,7 @@ ALWAYS PRESERVE:
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
         if (targetElements.length === 0) return;
 
+        setGeneratingElementIds([targetElements[0].id]);
         setIsGenerating(true);
         showToast(`正在轉換視角...`);
     
@@ -464,25 +471,27 @@ STRICT RULES:
                 }
             }
             showToast("視角轉換完成！✨");
-        } catch (error) { 
-            handleAIError(error, "視角轉換"); 
-        } finally { 
-            setIsGenerating(false); 
+        } catch (error) {
+            handleAIError(error, "視角轉換");
+        } finally {
+            setGeneratingElementIds([]);
+            setIsGenerating(false);
         }
     }, [selectedElementIds, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey]);
 
     const handleRemoveBackground = useCallback(async (mode: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
         if (targetElements.length === 0) return;
-    
+
+        setGeneratingElementIds(targetElements.map(el => el.id));
         setIsGenerating(true);
-        
+
         try {
             const genAI = createAiClient();
-            
+
             for (const element of targetElements) {
                  if (!element.src || element.src.length < 100) continue;
-    
+
                 try {
                     const processedSrc = await executeDynamicRemoval(element.src, genAI, showToast, imageModel);
                     setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: processedSrc } : el));
@@ -491,10 +500,11 @@ STRICT RULES:
                 }
             }
             showToast("智慧去背處理完成！✨");
-    
+
         } catch (error) {
             handleAIError(error, "去背處理");
         } finally {
+            setGeneratingElementIds([]);
             setIsGenerating(false);
         }
     }, [selectedElementIds, elements, setElements, showToast, setHasApiKey, apiKey]);
@@ -513,8 +523,9 @@ STRICT RULES:
             return;
         }
 
-        const baseElement = visualElements[0]; 
-    
+        const baseElement = visualElements[0];
+
+        setGeneratingElementIds(visualElements.map(el => el.id));
         setIsGenerating(true);
         showToast("正在進行智慧影像調和 (以底圖為基準)...");
     
@@ -623,6 +634,7 @@ STRICT RULES:
         } catch (error: any) {
             handleAIError(error, "影像調和");
         } finally {
+            setGeneratingElementIds([]);
             setIsGenerating(false);
         }
     }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey]);
@@ -744,7 +756,8 @@ STRICT RULES:
     const handleAIUpscale = useCallback(async (factor: number) => {
         const element = elements.find(el => el.id === selectedElementIds[0]);
         if (!element || element.type !== 'image') return;
-        
+
+        setGeneratingElementIds([element.id]);
         setIsGenerating(true);
         // Request higher resolution depending on factor
         const requestedResolution = factor >= 4 ? '4K' : '2K';
@@ -819,10 +832,11 @@ STRICT RULES:
                 setElements(prev => [...prev, newElement]);
                 showToast("放大完成！✨");
             }
-        } catch (e: any) { 
+        } catch (e: any) {
             handleAIError(e, "放大");
-        } finally { 
-            setIsGenerating(false); 
+        } finally {
+            setGeneratingElementIds([]);
+            setIsGenerating(false);
         }
     }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, preserveTransparency]);
 
@@ -865,10 +879,16 @@ STRICT RULES:
                     return;
                 }
                 const firstImg = imageElements.find(el => el.type === 'image' || el.type === 'drawing') as (ImageElement | DrawingElement) | undefined;
-                const refImage = firstImg?.src ?? '';
+                let refImage = firstImg?.src ?? '';
                 if (!refImage) { showToast("請選取一張圖片作為參考 ⚠️"); return; }
+                // 若參考圖是 URL（非 base64），先透過 proxy 轉換
+                if (!refImage.startsWith('data:')) {
+                    refImage = await downloadImageAsBase64(refImage);
+                    if (!refImage.startsWith('data:')) { showToast("無法讀取參考圖片，請確認圖片已正確載入 ⚠️"); return; }
+                }
                 // 如果沒有任何提示詞，給一個保留原構圖的預設
                 const img2imgPrompt = atlasPrompt || 'Keep the overall composition, enhance details and quality';
+                setGeneratingElementIds(firstImg ? [firstImg.id] : []);
                 setIsGenerating(true);
                 setGeneratedImages(null);
                 try {
@@ -878,6 +898,7 @@ STRICT RULES:
                 } catch (e: any) {
                     showToast(`圖生圖失敗：${e.message}`);
                 } finally {
+                    setGeneratingElementIds([]);
                     setIsGenerating(false);
                 }
                 return;
@@ -888,6 +909,7 @@ STRICT RULES:
                 showToast("文生圖需要便利貼提示詞，或選取圖片使用圖生圖模式 ⚠️");
                 return;
             }
+            setGeneratingElementIds([]);
             setIsGenerating(true);
             setGeneratedImages(null);
             try {
@@ -897,12 +919,14 @@ STRICT RULES:
             } catch (e: any) {
                 showToast(`生成失敗：${e.message}`);
             } finally {
+                setGeneratingElementIds([]);
                 setIsGenerating(false);
             }
             return;
         }
 
         // --- Gemini path (default) ---
+        // generatingElementIds will be set per-branch below
         setIsGenerating(true);
         setGeneratedImages(null);
         
@@ -941,6 +965,7 @@ STRICT RULES:
           }
 
           if (frameElements.length > 0) {
+              setGeneratingElementIds(frameElements.map(f => f.id));
               const generatePromises = frameElements.map(async (frame) => {
                   const promptText = `Generate an image based on this description: "${promptWithRefHint}".`;
                   const refParts = noteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
@@ -970,10 +995,14 @@ STRICT RULES:
                   }));
                   showToast(`成功生成 ${validNewImages.length} 張圖片並填入畫框！✨`);
               }
+              setGeneratingElementIds([]);
               setIsGenerating(false);
-              return; 
+              return;
           }
     
+          // Set shimmer targets: img2img → highlight source elements; text-to-image → top progress bar
+          setGeneratingElementIds(imageElements.length > 0 ? imageElements.map(el => el.id) : []);
+
           let parts: ({ inlineData: { data: string; mimeType: string; }; } | { text: string; })[];
           let targetAspectRatio = imageAspectRatio;
           if (imageAspectRatio === 'Original' && imageElements.length > 0) {
@@ -988,8 +1017,13 @@ STRICT RULES:
                   let src = '';
                   if (el.type === 'shape') src = await createShapeDataUrl(el as ShapeElement);
                   else if ('src' in el) src = (el as any).src;
-                  
+
                   if (!src) return null;
+                  // 如果是 URL（非 base64），嘗試透過 proxy 轉換後再送給 Gemini
+                  if (!src.startsWith('data:')) {
+                      src = await downloadImageAsBase64(src);
+                      if (!src.startsWith('data:')) return null; // 轉換失敗則跳過
+                  }
                   const [header, data] = src.split(',');
                   const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
                   return { inlineData: { data, mimeType } };
@@ -1054,6 +1088,7 @@ STRICT RULES:
         } catch (error: any) {
           handleAIError(error, "圖片生成");
         } finally {
+          setGeneratingElementIds([]);
           setIsGenerating(false);
         }
       }, [imageStyle, imageAspectRatio, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModel]);
@@ -1062,6 +1097,7 @@ STRICT RULES:
         createAiClient,
         isGenerating,
         setIsGenerating,
+        generatingElementIds,
         generatedImages,
         setGeneratedImages,
         outpaintingState,

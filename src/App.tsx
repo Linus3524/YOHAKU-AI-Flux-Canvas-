@@ -28,6 +28,7 @@ import { STYLE_PRESETS, COLORS, isCJK, wrapTextCanvas, loadImage, createShapeDat
 import { drawTextOnCanvas } from './utils/textCanvas'; // ✅ 新增
 import { captureTextElementAsImage } from './utils/svgCapture'; // ✅ 彎曲文字轉圖片用
 import { analyzeImagePrompt } from './utils/ImageAnalysisService';
+import { downloadImageAsBase64 } from './utils/atlasImage';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -275,6 +276,7 @@ const App: React.FC = () => {
   const {
       isGenerating,
       setIsGenerating,
+      generatingElementIds,
       generatedImages,
       setGeneratedImages,
       outpaintingState,
@@ -663,9 +665,10 @@ const App: React.FC = () => {
       setElements(prev => prev.map(el => (el.id === selectedArrowElement.id && el.type === 'arrow') ? { ...el, ...updates } : el));
   };
 
-  const addGeneratedImageToCanvas = useCallback((imageUrl: string) => {
+  const addGeneratedImageToCanvas = useCallback(async (imageUrl: string) => {
     if (!imageUrl) return;
-    const src = imageUrl;
+    // 確保存入畫布的一定是 base64（避免 Atlas CDN URL 過期後無法給 Gemini 使用）
+    const src = imageUrl.startsWith('data:') ? imageUrl : await downloadImageAsBase64(imageUrl);
     const img = new Image();
     img.referrerPolicy = 'no-referrer';
     img.onload = () => {
@@ -1190,6 +1193,7 @@ const App: React.FC = () => {
         onRemoveBackground={handleRemoveBackground}
         onHarmonize={handleHarmonize}
         isGenerating={isGenerating}
+        generatingElementIds={generatingElementIds}
         croppingElementId={croppingElementId}
         onCancelCrop={handleCancelCrop}
         onApplyCrop={handleApplyCrop}
@@ -1299,16 +1303,12 @@ const App: React.FC = () => {
           />
       )}
 
-      {isGenerating && (
-        <div className="fixed inset-0 z-[6000] bg-white/40 backdrop-blur-md flex flex-col items-center justify-center text-[#1D1D1F]">
-            <div className="p-8 bg-white rounded-3xl shadow-2xl flex flex-col items-center animate-pulse">
-                <svg className="animate-spin h-10 w-10 text-black mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p className="text-lg font-semibold tracking-tight">AI 正在運算中...</p>
-                <p className="text-sm text-[#86868B] mt-1">正在雲端進行處理，請稍候。</p>
-            </div>
+      {isGenerating && generatingElementIds.length === 0 && (
+        <div className="fixed top-0 left-0 right-0 z-[6000] pointer-events-none">
+          <div className="h-[3px] w-full animate-progress-bar" />
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-black/75 text-white text-xs font-medium px-3 py-1 rounded-full backdrop-blur-sm whitespace-nowrap shadow-lg">
+            AI 正在生成圖片...
+          </div>
         </div>
       )}
 

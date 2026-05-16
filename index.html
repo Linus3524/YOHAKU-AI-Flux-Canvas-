@@ -110,6 +110,25 @@
       .animate-fade-in-down  { animation: fade-in-down  0.2s ease-out both; }
       .animate-fade-in       { animation: fade-in       0.2s ease-out both; }
       .animate-fade-in-right { animation: fade-in-right 0.2s ease-out both; }
+      /* ── AI Generating Shimmer ───────────────────────────────────── */
+      @keyframes shimmer {
+        0%   { background-position: -200% 0; }
+        100% { background-position:  200% 0; }
+      }
+      @keyframes progress-bar {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      .animate-shimmer {
+        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s ease-in-out infinite;
+      }
+      .animate-progress-bar {
+        background: linear-gradient(90deg, #AF52DE, #007AFF, #34C759, #007AFF, #AF52DE);
+        background-size: 200% 100%;
+        animation: progress-bar 2s linear infinite;
+      }
       /* Cubic 11 俐方體 via jsDelivr */
       @font-face {
         font-family: 'Cubic 11';
