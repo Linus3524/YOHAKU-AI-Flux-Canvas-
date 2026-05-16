@@ -546,6 +546,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [showAppearance, setShowAppearance] = useState(true); // ✅ 新增
   const menuDragStartRef = useRef<Point>({ x: 0, y: 0 });
   const [upscaleFactor, setUpscaleFactor] = useState<number>(2);
+  const [ratioOpen, setRatioOpen] = useState(false);
+  const ratioRef = useRef<HTMLDivElement>(null);
   const isArtboardSelected = useMemo(() => elements.some(el => selectedElementIds.includes(el.id) && el.type === 'artboard'), [elements, selectedElementIds]);
   const isOnlyArrowSelected = useMemo(() => {
       const selected = elements.filter(el => selectedElementIds.includes(el.id));
@@ -574,7 +576,15 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
     }
   }, [outpaintingState?.element.id]);
 
-  
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+        if (ratioRef.current && !ratioRef.current.contains(e.target as Node)) setRatioOpen(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+
   useEffect(() => {
       if (selectedElementIds.length === 0) {
           setMenuOffset({ x: 20, y: 0 });
@@ -1123,19 +1133,34 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         </div>
                                     </div>
 
-                                    {/* ── 輸出比例（native select，統一灰底+系統滾軸） ── */}
+                                    {/* ── 輸出比例（統一自訂下拉，SVG icon，往下展開） ── */}
                                     {(() => {
                                         const isAtlas = generationModel && generationModel !== 'gemini';
 
-                                        // 比例 → unicode 矩形字元
-                                        const ratioIcon = (ratio: string) => {
-                                            if (!ratio.includes(':')) return '◻';
+                                        // SVG 矩形 icon：固定 20×14 viewport，比例縮放到框內
+                                        const RatioSVG = ({ ratio, selected }: { ratio: string; selected: boolean }) => {
+                                            const color = selected ? '#5B5BF6' : '#86868B';
+                                            if (!ratio.includes(':')) {
+                                                return (
+                                                    <svg width="20" height="14" viewBox="0 0 20 14" className="flex-shrink-0">
+                                                        <rect x="2.5" y="0.5" width="15" height="13" fill="none" stroke={color} strokeWidth="1.5" strokeDasharray="3 2" rx="1"/>
+                                                    </svg>
+                                                );
+                                            }
                                             const [rw, rh] = ratio.split(':').map(Number);
-                                            if (rw === rh) return '□';
-                                            return rw > rh ? '▭' : '▯';
+                                            const maxW = 18, maxH = 12;
+                                            let iw: number, ih: number;
+                                            if (rw / rh > maxW / maxH) { iw = maxW; ih = Math.max(3, Math.round(maxW * rh / rw)); }
+                                            else { ih = maxH; iw = Math.max(3, Math.round(maxH * rw / rh)); }
+                                            const x = (20 - iw) / 2, y = (14 - ih) / 2;
+                                            return (
+                                                <svg width="20" height="14" viewBox="0 0 20 14" className="flex-shrink-0">
+                                                    <rect x={x + 0.5} y={y + 0.5} width={iw - 1} height={ih - 1} fill="none" stroke={color} strokeWidth="1.5" rx="0.5"/>
+                                                </svg>
+                                            );
                                         };
 
-                                        // Gemini 估算像素尺寸（以較長邊為基準）
+                                        // 估算 Gemini 像素（較長邊 = base）
                                         const geminiDims = (ratio: string) => {
                                             if (ratio === 'Original') return '依原圖';
                                             const base = imageSize === '4K' ? 4096 : imageSize === '2K' ? 2048 : 1024;
@@ -1145,62 +1170,79 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                             return `${w}×${h}`;
                                         };
 
-                                        const selectClass = "w-full bg-[#F5F5F7] border-none rounded-lg px-3 py-2 text-sm text-[#1D1D1F] focus:ring-2 focus:ring-black/5 cursor-pointer appearance-none";
-                                        const chevron = (
-                                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#86868B]">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
-                                            </div>
-                                        );
+                                        // 目前選項的顯示文字
+                                        let triggerRatio = imageAspectRatio;
+                                        let triggerDims = '';
+                                        if (isAtlas) {
+                                            const sizes = getModelSizes(generationModel as any);
+                                            const cur = sizes.find(s => s.ratio === imageAspectRatio) ?? sizes[0];
+                                            const px = imageSize === '4K' ? cur.w4k : cur.w2k;
+                                            const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
+                                            triggerRatio = cur.ratio;
+                                            triggerDims = `${pw}×${ph}`;
+                                        } else {
+                                            triggerDims = geminiDims(imageAspectRatio);
+                                        }
 
                                         return (
                                             <div className="flex flex-col gap-1.5">
                                                 <label className="text-xs font-semibold text-[#1D1D1F]">輸出比例</label>
-                                                <div className="relative">
-                                                    {isAtlas ? (
-                                                        // Atlas：optgroup 分 2K / 4K，value = "tier:ratio"
-                                                        <select
-                                                            className={selectClass}
-                                                            value={`${imageSize}:${imageAspectRatio}`}
-                                                            onChange={e => {
-                                                                const idx = e.target.value.indexOf(':');
-                                                                const tier = e.target.value.slice(0, idx) as '2K' | '4K';
-                                                                const ratio = e.target.value.slice(idx + 1);
-                                                                onSetImageSize(tier);
-                                                                onSetImageAspectRatio(ratio);
-                                                            }}
-                                                        >
-                                                            {(['2K', '4K'] as const).map(tier => {
-                                                                const sizes = getModelSizes(generationModel as any);
-                                                                return (
-                                                                    <optgroup key={tier} label={tier}>
-                                                                        {sizes.map(s => {
-                                                                            const px = tier === '4K' ? s.w4k : s.w2k;
-                                                                            const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
-                                                                            return (
-                                                                                <option key={s.ratio} value={`${tier}:${s.ratio}`}>
-                                                                                    {ratioIcon(s.ratio)}  {s.ratio}  {pw}×{ph}
-                                                                                </option>
-                                                                            );
-                                                                        })}
-                                                                    </optgroup>
-                                                                );
-                                                            })}
-                                                        </select>
-                                                    ) : (
-                                                        // Gemini：平鋪 + 估算像素
-                                                        <select
-                                                            className={selectClass}
-                                                            value={imageAspectRatio}
-                                                            onChange={e => onSetImageAspectRatio(e.target.value)}
-                                                        >
-                                                            {ASPECT_RATIOS.map(r => (
-                                                                <option key={r.value} value={r.value}>
-                                                                    {ratioIcon(r.value)}  {r.label}  {geminiDims(r.value)}
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                <div className="relative" ref={ratioRef}>
+                                                    {/* 觸發按鈕 — 跟其他 select 同樣灰底樣式 */}
+                                                    <button
+                                                        onClick={() => setRatioOpen(v => !v)}
+                                                        className="w-full flex items-center gap-2 px-3 py-2 bg-[#F5F5F7] rounded-lg text-sm cursor-pointer"
+                                                    >
+                                                        <RatioSVG ratio={triggerRatio} selected={true} />
+                                                        <span className="font-medium text-[#1D1D1F]">{triggerRatio}</span>
+                                                        <span className="text-[#86868B] text-xs">{triggerDims}</span>
+                                                        <svg className={`ml-auto w-4 h-4 text-[#86868B] flex-shrink-0 transition-transform duration-150 ${ratioOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                                                    </button>
+
+                                                    {/* 下拉列表 — 往下展開 */}
+                                                    {ratioOpen && (
+                                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-black/10 rounded-xl shadow-lg py-1 z-[300] max-h-64 overflow-y-auto">
+                                                            {isAtlas ? (
+                                                                (['2K', '4K'] as const).map(tier => {
+                                                                    const sizes = getModelSizes(generationModel as any);
+                                                                    return (
+                                                                        <div key={tier}>
+                                                                            <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-[#86868B] tracking-widest uppercase">{tier}</div>
+                                                                            {sizes.map(s => {
+                                                                                const px = tier === '4K' ? s.w4k : s.w2k;
+                                                                                const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
+                                                                                const isSel = imageAspectRatio === s.ratio && imageSize === tier;
+                                                                                return (
+                                                                                    <button key={s.ratio + tier}
+                                                                                        onClick={() => { onSetImageAspectRatio(s.ratio); onSetImageSize(tier); setRatioOpen(false); }}
+                                                                                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm transition-colors ${isSel ? 'bg-[#F5F5F7]' : 'hover:bg-[#F5F5F7]'}`}>
+                                                                                        <RatioSVG ratio={s.ratio} selected={isSel} />
+                                                                                        <span className={`font-medium w-9 ${isSel ? 'text-[#5B5BF6]' : 'text-[#1D1D1F]'}`}>{s.ratio}</span>
+                                                                                        <span className="ml-auto text-[#86868B] text-xs tabular-nums">{pw}×{ph}</span>
+                                                                                        {isSel && <svg className="w-3.5 h-3.5 text-[#5B5BF6] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                ASPECT_RATIOS.map(r => {
+                                                                    const isSel = imageAspectRatio === r.value;
+                                                                    return (
+                                                                        <button key={r.value}
+                                                                            onClick={() => { onSetImageAspectRatio(r.value); setRatioOpen(false); }}
+                                                                            className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm transition-colors ${isSel ? 'bg-[#F5F5F7]' : 'hover:bg-[#F5F5F7]'}`}>
+                                                                            <RatioSVG ratio={r.value} selected={isSel} />
+                                                                            <span className={`${isSel ? 'text-[#5B5BF6] font-medium' : 'text-[#1D1D1F]'}`}>{r.label}</span>
+                                                                            <span className="ml-auto text-[#86868B] text-xs tabular-nums">{geminiDims(r.value)}</span>
+                                                                            {isSel && <svg className="w-3.5 h-3.5 text-[#5B5BF6] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>}
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            )}
+                                                        </div>
                                                     )}
-                                                    {chevron}
                                                 </div>
                                             </div>
                                         );
