@@ -394,8 +394,16 @@ export const loadImage = (src: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.crossOrigin = "anonymous";
+        img.referrerPolicy = "no-referrer";
         img.onload = () => resolve(img);
-        img.onerror = reject;
+        img.onerror = () => {
+            // CORS 失敗時改用無 crossOrigin 模式（可顯示但 canvas export 可能受限）
+            const img2 = new Image();
+            img2.referrerPolicy = "no-referrer";
+            img2.onload = () => resolve(img2);
+            img2.onerror = reject;
+            img2.src = src;
+        };
         img.src = src;
     });
 };

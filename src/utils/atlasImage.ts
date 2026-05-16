@@ -11,15 +11,49 @@ const MAX_WAIT_MS = 120000; // 2 minutes
 export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'flux-dev';
 
 interface ModelConfig {
+    // 文生圖
     id: string;
-    useInputWrapper: boolean; // true = { input: { prompt } }, false = { prompt } 頂層
+    useInputWrapper: boolean;
+    // 圖生圖
+    img2imgId?: string;
+    img2imgUseInputWrapper?: boolean;
+    img2imgImageParam?: string;   // 圖片欄位名稱
+    img2imgImageIsArray?: boolean; // true = ['url'], false = 'url'
 }
 
 const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
-    'gpt-image-2':   { id: 'openai/gpt-image-2/text-to-image',    useInputWrapper: false },
-    'seedream-v4.5': { id: 'bytedance/seedream-v4.5/sequential',   useInputWrapper: false },
-    'seedream-v5':   { id: 'bytedance/seedream-v5.0-lite',         useInputWrapper: false },
-    'flux-dev':      { id: 'black-forest-labs/flux-dev',           useInputWrapper: true  },
+    'gpt-image-2': {
+        id: 'openai/gpt-image-2/text-to-image',
+        useInputWrapper: false,
+        img2imgId: 'openai/gpt-image-2/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
+    },
+    'seedream-v4.5': {
+        id: 'bytedance/seedream-v4.5/sequential',
+        useInputWrapper: false,
+        img2imgId: 'bytedance/seedream-v4.5/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
+    },
+    'seedream-v5': {
+        id: 'bytedance/seedream-v5.0-lite',
+        useInputWrapper: false,
+        img2imgId: 'bytedance/seedream-v5.0-lite/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
+    },
+    'flux-dev': {
+        id: 'black-forest-labs/flux-dev',
+        useInputWrapper: true,
+        img2imgId: 'black-forest-labs/flux-kontext-dev',
+        img2imgUseInputWrapper: false, // 頂層格式，不需 input wrapper
+        img2imgImageParam: 'image',    // 單數字串，非陣列
+        img2imgImageIsArray: false,
+    },
 };
 
 interface AtlasPredictionData {
@@ -35,7 +69,6 @@ interface AtlasApiResponse {
     code?: number;
     message?: string;
     data?: AtlasPredictionData;
-    // 相容舊格式（直接頂層）
     id?: string;
     status?: string;
     output?: string | string[];
@@ -51,18 +84,17 @@ async function blobToBase64(blob: Blob, fallback: string): Promise<string> {
     });
 }
 
-async function downloadImageAsBase64(url: string): Promise<string> {
-    if (url.startsWith('data:')) return url; // 已是 base64，直接回傳
+export async function downloadImageAsBase64(url: string): Promise<string> {
+    if (url.startsWith('data:')) return url;
 
-    // 1️⃣ 嘗試直接 CORS fetch（Gemini / 有 CORS 頭的來源）
+    // 1️⃣ 直接 CORS fetch
     try {
         const res = await fetch(url, { mode: 'cors' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await blobToBase64(await res.blob(), url);
-    } catch { /* 繼續嘗試 proxy */ }
+    } catch { /* 繼續 */ }
 
-    // 2️⃣ 自架 Vercel proxy（生產環境）／第三方 proxy（本機開發）
-    // import.meta.env.DEV = true 時為本機，直接用 corsproxy.io
+    // 2️⃣ 自架 Vercel proxy（生產）or corsproxy.io（本機）
     const isLocal = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV === true;
     const proxyUrls = isLocal
         ? [`https://corsproxy.io/?url=${encodeURIComponent(url)}`]
@@ -76,10 +108,10 @@ async function downloadImageAsBase64(url: string): Promise<string> {
             const res = await fetch(proxyUrl);
             if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
             return await blobToBase64(await res.blob(), url);
-        } catch { /* 繼續下一個 */ }
+        } catch { /* 繼續 */ }
     }
 
-    // 4️⃣ 最後手段：直接用 URL（<img src> 可顯示，但重新整理後可能失效）
+    // 3️⃣ 最後手段：直接用 URL（重新整理後可能失效）
     return url;
 }
 
@@ -96,12 +128,10 @@ async function pollPrediction(predictionId: string, atlasKey: string): Promise<s
         if (!res.ok) throw new Error(`Atlas poll error: ${res.status}`);
 
         const json: AtlasApiResponse = await res.json();
-        // 相容 { data: {...} } 或直接頂層
         const pred = json.data ?? (json as unknown as AtlasPredictionData);
         const status = pred.status;
 
         if (status === 'completed' || status === 'succeeded' || status === 'success') {
-            // 從各種可能欄位提取圖片 URL
             const rawOutput =
                 pred.outputs ??
                 pred.output ??
@@ -133,23 +163,12 @@ async function pollPrediction(predictionId: string, atlasKey: string): Promise<s
         if (status === 'failed' || status === 'error') {
             throw new Error(`Atlas 生成失敗: ${pred.error || '未知錯誤'}`);
         }
-        // pending / processing → 繼續輪詢
     }
 
     throw new Error('Atlas 生成逾時（超過 2 分鐘），請稍後再試');
 }
 
-async function submitGeneration(
-    modelId: string,
-    prompt: string,
-    atlasKey: string,
-    useInputWrapper: boolean,
-    extraInput?: Record<string, unknown>
-): Promise<string> {
-    const body = useInputWrapper
-        ? { model: modelId, input: { prompt, ...extraInput } }
-        : { model: modelId, prompt, ...extraInput };
-
+async function postGeneration(body: Record<string, unknown>, atlasKey: string): Promise<string> {
     const res = await fetch(`${ATLAS_BASE_URL}/model/generateImage`, {
         method: 'POST',
         headers: {
@@ -165,27 +184,68 @@ async function submitGeneration(
     }
 
     const json: AtlasApiResponse = await res.json();
-    // 相容 { data: { id } } 或直接頂層 { id }
     const predId = json.data?.id ?? json.id;
     if (!predId) throw new Error(`Atlas 未回傳 prediction ID，回應：${JSON.stringify(json)}`);
     return predId;
 }
 
-/**
- * Generate images using Atlas Cloud.
- * Returns array of base64 data URLs.
- */
+// ── 文生圖 ─────────────────────────────────────────────
+
+function buildT2IBody(config: ModelConfig, prompt: string, extra?: Record<string, unknown>) {
+    return config.useInputWrapper
+        ? { model: config.id, input: { prompt, ...extra } }
+        : { model: config.id, prompt, ...extra };
+}
+
+/** 文生圖：回傳 base64 陣列（count 張） */
 export async function callAtlasGenerate(
     prompt: string,
     model: AtlasGenerationModel,
     atlasKey: string,
     count: number = 2
 ): Promise<string[]> {
-    const { id: modelId, useInputWrapper } = MODEL_CONFIGS[model];
-
-    // 所有模型都送 count 個獨立請求，各取第 1 張結果
+    const config = MODEL_CONFIGS[model];
     const predIds = await Promise.all(
-        Array.from({ length: count }, () => submitGeneration(modelId, prompt, atlasKey, useInputWrapper))
+        Array.from({ length: count }, () =>
+            postGeneration(buildT2IBody(config, prompt), atlasKey)
+        )
+    );
+    const results = await Promise.all(predIds.map(id => pollPrediction(id, atlasKey)));
+    return results.map(r => r[0]).filter(Boolean) as string[];
+}
+
+// ── 圖生圖 ─────────────────────────────────────────────
+
+function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, extra?: Record<string, unknown>) {
+    const imgParam  = config.img2imgImageParam  ?? 'images';
+    const isArray   = config.img2imgImageIsArray ?? true;
+    const imgValue  = isArray ? [imageBase64] : imageBase64;
+
+    return config.img2imgUseInputWrapper
+        ? { model: config.img2imgId, input: { prompt, [imgParam]: imgValue, ...extra } }
+        : { model: config.img2imgId, prompt, [imgParam]: imgValue, ...extra };
+}
+
+/** 某模型是否支援圖生圖 */
+export function atlasModelSupportsImg2Img(model: AtlasGenerationModel): boolean {
+    return !!MODEL_CONFIGS[model].img2imgId;
+}
+
+/** 圖生圖：傳入參考圖 base64，回傳生成結果 base64 陣列 */
+export async function callAtlasImg2Img(
+    prompt: string,
+    model: AtlasGenerationModel,
+    atlasKey: string,
+    referenceImageBase64: string,
+    count: number = 2
+): Promise<string[]> {
+    const config = MODEL_CONFIGS[model];
+    if (!config.img2imgId) throw new Error(`${model} 不支援圖生圖`);
+
+    const predIds = await Promise.all(
+        Array.from({ length: count }, () =>
+            postGeneration(buildI2IBody(config, prompt, referenceImageBase64), atlasKey)
+        )
     );
     const results = await Promise.all(predIds.map(id => pollPrediction(id, atlasKey)));
     return results.map(r => r[0]).filter(Boolean) as string[];
@@ -195,7 +255,7 @@ export function isValidAtlasKey(key: string): boolean {
     return key.startsWith('apikey-') && key.length > 10;
 }
 
-/** 除錯用：直接查詢已知 prediction ID 的完整回傳 JSON（不消耗額度） */
+/** 除錯用：查詢已知 prediction ID */
 export async function debugFetchPrediction(predictionId: string, atlasKey: string): Promise<string> {
     const res = await fetch(`${ATLAS_BASE_URL}/model/prediction/${predictionId}`, {
         headers: { Authorization: `Bearer ${atlasKey}` },

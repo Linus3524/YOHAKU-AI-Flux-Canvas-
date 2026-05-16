@@ -15,7 +15,7 @@ import {
     checkCompositionSimilarity
 } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
-import { callAtlasGenerate, type AtlasGenerationModel } from '../utils/atlasImage';
+import { callAtlasGenerate, callAtlasImg2Img, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -369,7 +369,48 @@ ALWAYS PRESERVE:
     const handleCameraAngle = useCallback(async (anglePrompt: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
         if (targetElements.length === 0) return;
-    
+
+        // Atlas 模式：Atlas img2img 算視角 → 若勾選保留透明則 Gemini 去背 → 直接貼畫布
+        if (generationModel !== 'gemini' && atlasApiKey) {
+            const atlasModel = generationModel as AtlasGenerationModel;
+            if (atlasModelSupportsImg2Img(atlasModel)) {
+                const element = targetElements[0];
+                setIsGenerating(true);
+                showToast(`正在轉換視角（${atlasModel}）...`);
+                try {
+                    // 1️⃣ Atlas 圖生圖，只取 1 張直接用
+                    const images = await callAtlasImg2Img(anglePrompt, atlasModel, atlasApiKey, element.src, 1);
+                    if (images.length === 0) throw new Error('未收到圖片');
+
+                    // 2️⃣ 確保是 base64（URL 在畫布上會因 CORS/過期而破圖）
+                    let finalSrc = images[0];
+                    if (!finalSrc.startsWith('data:')) {
+                        finalSrc = await downloadImageAsBase64(finalSrc);
+                    }
+
+                    // 3️⃣ 若勾選保留透明背景 → 用 Gemini 去背
+                    if (preserveTransparency) {
+                        showToast('正在去背...');
+                        try {
+                            const genAI = createAiClient();
+                            finalSrc = await executeDynamicRemoval(finalSrc, genAI, undefined, imageModel);
+                        } catch (e) {
+                            console.warn('去背失敗，使用原圖', e);
+                        }
+                    }
+
+                    // 4️⃣ 直接取代畫布上的原圖
+                    setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
+                    showToast('視角轉換完成！✨');
+                } catch (e: any) {
+                    showToast(`視角轉換失敗：${e.message}`);
+                } finally {
+                    setIsGenerating(false);
+                }
+                return;
+            }
+        }
+
         setIsGenerating(true);
         showToast(`正在轉換視角...`);
     
@@ -469,7 +510,7 @@ STRICT RULES:
         } finally { 
             setIsGenerating(false); 
         }
-    }, [selectedElementIds, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey]);
+    }, [selectedElementIds, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModel, atlasApiKey]);
 
     const handleRemoveBackground = useCallback(async (mode: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
@@ -839,21 +880,59 @@ STRICT RULES:
             return;
         }
 
-        // --- Atlas Cloud routing (GPT Image 2 / 即夢 Seedream) ---
+        // --- Atlas Cloud routing ---
         if (generationModel !== 'gemini') {
-            if (imageElements.length > 0) {
-                showToast("GPT Image 2 / 即夢模型僅支援文字生圖，請改用便利貼提示詞 ⚠️");
-                return;
-            }
             if (!atlasApiKey) {
                 showToast("請先在設定中輸入 Atlas Cloud Key 🔑");
                 return;
             }
-            const prompt = noteElements.map(n => n.type === 'note' ? n.content : (n as TextElement).text).join(' ');
+
+            const atlasModel = generationModel as AtlasGenerationModel;
+            const hasImages = imageElements.length > 0;
+
+            // 組合 prompt：便利貼內容 + 參考風格（兩者皆選填）
+            const noteText = noteElements.map(n => n.type === 'note' ? n.content : (n as TextElement).text).join(' ').trim();
+            let atlasPrompt = noteText;
+            if (imageStyle && imageStyle !== 'Default') {
+                const styleObj = STYLE_PRESETS.find(s => s.label === imageStyle || s.name === imageStyle);
+                const styleLabel = styleObj ? styleObj.label : imageStyle;
+                atlasPrompt = atlasPrompt ? `${atlasPrompt}, ${styleLabel} style` : `${styleLabel} style`;
+            }
+
+            // 圖生圖：有選取圖片
+            if (hasImages) {
+                if (!atlasModelSupportsImg2Img(atlasModel)) {
+                    showToast(`${atlasModel} 不支援圖生圖，請改用 Gemini 模式 ⚠️`);
+                    return;
+                }
+                const firstImg = imageElements.find(el => el.type === 'image' || el.type === 'drawing') as (ImageElement | DrawingElement) | undefined;
+                const refImage = firstImg?.src ?? '';
+                if (!refImage) { showToast("請選取一張圖片作為參考 ⚠️"); return; }
+                // 如果沒有任何提示詞，給一個保留原構圖的預設
+                const img2imgPrompt = atlasPrompt || 'Keep the overall composition, enhance details and quality';
+                setIsGenerating(true);
+                setGeneratedImages(null);
+                try {
+                    const images = await callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2);
+                    if (images.length === 0) throw new Error('未收到任何圖片');
+                    setGeneratedImages(images);
+                } catch (e: any) {
+                    showToast(`圖生圖失敗：${e.message}`);
+                } finally {
+                    setIsGenerating(false);
+                }
+                return;
+            }
+
+            // 文生圖：便利貼必填（無圖片參考時）
+            if (!atlasPrompt) {
+                showToast("文生圖需要便利貼提示詞，或選取圖片使用圖生圖模式 ⚠️");
+                return;
+            }
             setIsGenerating(true);
             setGeneratedImages(null);
             try {
-                const images = await callAtlasGenerate(prompt, generationModel as AtlasGenerationModel, atlasApiKey, 2);
+                const images = await callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 2);
                 if (images.length === 0) throw new Error('未收到任何圖片');
                 setGeneratedImages(images);
             } catch (e: any) {
