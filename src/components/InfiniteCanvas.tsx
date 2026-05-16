@@ -1141,9 +1141,13 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         const RatioSVG = ({ ratio, selected }: { ratio: string; selected: boolean }) => {
                                             const color = selected ? '#5B5BF6' : '#86868B';
                                             if (!ratio.includes(':')) {
+                                                // 原圖比例：四角括號，裁切框風格
                                                 return (
                                                     <svg width="20" height="14" viewBox="0 0 20 14" className="flex-shrink-0">
-                                                        <rect x="2.5" y="0.5" width="15" height="13" fill="none" stroke={color} strokeWidth="1.5" strokeDasharray="3 2" rx="1"/>
+                                                        <path d="M3 5.5 L3 2.5 L6 2.5" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                        <path d="M14 2.5 L17 2.5 L17 5.5" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                        <path d="M3 8.5 L3 11.5 L6 11.5" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                        <path d="M14 11.5 L17 11.5 L17 8.5" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                                                     </svg>
                                                 );
                                             }

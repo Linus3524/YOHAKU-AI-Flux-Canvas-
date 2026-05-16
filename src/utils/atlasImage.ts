@@ -313,6 +313,26 @@ function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, 
         : { model: config.img2imgId, prompt, [imgParam]: imgValue, ...extra };
 }
 
+/** 從 base64 圖片偵測實際尺寸，回傳最接近的 ATLAS_SIZES 比例字串 */
+async function detectClosestRatio(base64: string): Promise<string> {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const targetRatio = img.naturalWidth / img.naturalHeight;
+            let closest = ATLAS_SIZES[0].ratio;
+            let minDiff = Infinity;
+            for (const s of ATLAS_SIZES) {
+                const [rw, rh] = s.ratio.split(':').map(Number);
+                const diff = Math.abs(rw / rh - targetRatio);
+                if (diff < minDiff) { minDiff = diff; closest = s.ratio; }
+            }
+            resolve(closest);
+        };
+        img.onerror = () => resolve('1:1');
+        img.src = base64;
+    });
+}
+
 /** 某模型是否支援圖生圖 */
 export function atlasModelSupportsImg2Img(model: AtlasGenerationModel): boolean {
     return !!MODEL_CONFIGS[model].img2imgId;
@@ -330,9 +350,16 @@ export async function callAtlasImg2Img(
     const config = MODEL_CONFIGS[model];
     if (!config.img2imgId) throw new Error(`${model} 不支援圖生圖`);
 
+    // 「原圖比例」→ 自動偵測參考圖實際比例，換算成最接近的 Atlas 比例字串
+    let resolvedOptions = options;
+    if (options?.ratio === 'Original') {
+        const detectedRatio = await detectClosestRatio(referenceImageBase64);
+        resolvedOptions = { ...options, ratio: detectedRatio };
+    }
+
     const predIds = await Promise.all(
         Array.from({ length: count }, () =>
-            postGeneration(buildI2IBody(config, prompt, referenceImageBase64, options), atlasKey)
+            postGeneration(buildI2IBody(config, prompt, referenceImageBase64, resolvedOptions), atlasKey)
         )
     );
     const results = await Promise.all(predIds.map(id => pollPrediction(id, atlasKey)));
