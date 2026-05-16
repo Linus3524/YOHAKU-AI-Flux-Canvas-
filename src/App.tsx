@@ -29,6 +29,7 @@ import { drawTextOnCanvas } from './utils/textCanvas'; // ✅ 新增
 import { captureTextElementAsImage } from './utils/svgCapture'; // ✅ 彎曲文字轉圖片用
 import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import { downloadImageAsBase64 } from './utils/atlasImage';
+import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -270,6 +271,13 @@ const App: React.FC = () => {
       storageStatus,
       clearStorage,
   } = useCanvas(showToast);
+
+  // Wrap handleDeleteLayer to also clean up IndexedDB cache
+  const handleDeleteLayerWithCache = useCallback((id: string) => {
+    const el = elements.find(e => e.id === id);
+    if (el && el.type === 'image') deleteCachedImage(id);
+    handleDeleteLayer(id);
+  }, [elements, handleDeleteLayer]);
 
   const [isDraggingOnCanvas, setIsDraggingOnCanvas] = useState(false);
   // --- AI State Hooks ---
@@ -585,6 +593,25 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在 mount 時執行一次
 
+  // Restore Atlas images from IndexedDB cache when they are broken URLs
+  useEffect(() => {
+    const restoreFromCache = async () => {
+      const imageElements = elements.filter(
+        el => el.type === 'image' && (el as any).src && !(el as any).src.startsWith('data:')
+      );
+      if (imageElements.length === 0) return;
+
+      for (const el of imageElements) {
+        const cached = await getCachedImage(el.id);
+        if (cached) {
+          setElements(prev => prev.map(e => e.id === el.id ? { ...e, src: cached } : e));
+        }
+      }
+    };
+    restoreFromCache();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only on mount
+
   const isFocusMode = !!editingImage || !!editingDrawing;
 
   const handleInteractionEnd = useCallback(() => {
@@ -678,7 +705,11 @@ const App: React.FC = () => {
         if (width > height) { height = (height / width) * MAX_DIMENSION; width = MAX_DIMENSION; }
         else { width = (width / height) * MAX_DIMENSION; height = MAX_DIMENSION; }
       }
-      addElement({ type: 'image', position: getCenterOfViewport(), src, width, height, rotation: 0, });
+      const elementId = addElement({ type: 'image', position: getCenterOfViewport(), src, width, height, rotation: 0, });
+      // Cache the base64 image in IndexedDB so it survives page reload even if Atlas CDN URL expires
+      if (src.startsWith('data:') && elementId) {
+        cacheImage(elementId, src);
+      }
     };
     img.src = src;
   }, [addElement, getCenterOfViewport]);
@@ -739,9 +770,15 @@ const App: React.FC = () => {
   const deleteElement = useCallback(() => {
     if (selectedElementIds.length === 0) return;
     const selectedSet = new Set(selectedElementIds);
+    // Clean up IndexedDB cache for deleted image elements
+    elements.forEach(el => {
+      if (selectedSet.has(el.id) && !el.isLocked && el.type === 'image') {
+        deleteCachedImage(el.id);
+      }
+    });
     setElements(prev => prev.filter(el => !selectedSet.has(el.id) || el.isLocked));
     setSelectedElementIds([]);
-  }, [selectedElementIds, setElements, setSelectedElementIds]);
+  }, [selectedElementIds, elements, setElements, setSelectedElementIds]);
 
   const canChangeColor = selectedElements.some(el => el.type === 'note' || el.type === 'arrow');
   const handleColorChange = (colorBg: string) => {
@@ -1254,7 +1291,7 @@ const App: React.FC = () => {
             onRename={handleRename}
             onGroup={handleGroup}
             onUngroup={handleUngroup}
-            onDelete={handleDeleteLayer}
+            onDelete={handleDeleteLayerWithCache}
             onMerge={handleMergeLayersOverride}
             onExportMultiple={(ids) => {
                 const artboardsToExport = ids
