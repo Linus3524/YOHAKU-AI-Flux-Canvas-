@@ -370,47 +370,6 @@ ALWAYS PRESERVE:
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
         if (targetElements.length === 0) return;
 
-        // Atlas 模式：Atlas img2img 算視角 → 若勾選保留透明則 Gemini 去背 → 直接貼畫布
-        if (generationModel !== 'gemini' && atlasApiKey) {
-            const atlasModel = generationModel as AtlasGenerationModel;
-            if (atlasModelSupportsImg2Img(atlasModel)) {
-                const element = targetElements[0];
-                setIsGenerating(true);
-                showToast(`正在轉換視角（${atlasModel}）...`);
-                try {
-                    // 1️⃣ Atlas 圖生圖，只取 1 張直接用
-                    const images = await callAtlasImg2Img(anglePrompt, atlasModel, atlasApiKey, element.src, 1);
-                    if (images.length === 0) throw new Error('未收到圖片');
-
-                    // 2️⃣ 確保是 base64（URL 在畫布上會因 CORS/過期而破圖）
-                    let finalSrc = images[0];
-                    if (!finalSrc.startsWith('data:')) {
-                        finalSrc = await downloadImageAsBase64(finalSrc);
-                    }
-
-                    // 3️⃣ 若勾選保留透明背景 → 用 Gemini 去背
-                    if (preserveTransparency) {
-                        showToast('正在去背...');
-                        try {
-                            const genAI = createAiClient();
-                            finalSrc = await executeDynamicRemoval(finalSrc, genAI, undefined, imageModel);
-                        } catch (e) {
-                            console.warn('去背失敗，使用原圖', e);
-                        }
-                    }
-
-                    // 4️⃣ 直接取代畫布上的原圖
-                    setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
-                    showToast('視角轉換完成！✨');
-                } catch (e: any) {
-                    showToast(`視角轉換失敗：${e.message}`);
-                } finally {
-                    setIsGenerating(false);
-                }
-                return;
-            }
-        }
-
         setIsGenerating(true);
         showToast(`正在轉換視角...`);
     
@@ -510,7 +469,7 @@ STRICT RULES:
         } finally { 
             setIsGenerating(false); 
         }
-    }, [selectedElementIds, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModel, atlasApiKey]);
+    }, [selectedElementIds, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey]);
 
     const handleRemoveBackground = useCallback(async (mode: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
