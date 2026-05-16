@@ -89,7 +89,7 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
     'flux-dev': {
         id: 'black-forest-labs/flux-dev',
         useInputWrapper: true,
-        sizeParam: 'image_size',
+        sizeParam: 'size',
         supportsBase64Output: true,
         img2imgId: 'black-forest-labs/flux-kontext-dev',
         img2imgUseInputWrapper: false,
