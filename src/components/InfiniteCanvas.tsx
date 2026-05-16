@@ -4,7 +4,7 @@ import type { Point, CanvasElement, ImageElement, ShapeType, ShapeElement } from
 import type { OutpaintingState } from '../types';
 import { TransformableElement } from './TransformableElement';
 import { AppearancePanel } from './AppearancePanel';
-import { ATLAS_SIZES } from '../utils/atlasImage';
+import { getModelSizes } from '../utils/atlasImage';
 
 interface OutpaintingFrameProps {
   outpaintingState: OutpaintingState;
@@ -1127,9 +1127,10 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         {generationModel && generationModel !== 'gemini' ? (
                                             // Atlas 模型：顯示比例 + 像素尺寸
                                             <div className="grid grid-cols-2 gap-1">
-                                                {ATLAS_SIZES.map(s => {
+                                                {getModelSizes(generationModel as any).map(s => {
                                                     const px = imageSize === '4K' ? s.w4k : s.w2k;
-                                                    const [w, h] = px.split('*');
+                                                    // GPT Image 2 uses 'x', others use '*'
+                                                    const [w, h] = px.includes('x') ? px.split('x') : px.split('*');
                                                     const isSelected = imageAspectRatio === s.ratio;
                                                     return (
                                                         <button

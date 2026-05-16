@@ -10,7 +10,7 @@ const MAX_WAIT_MS = 120000; // 2 minutes
 
 export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'flux-dev';
 
-/** 各比例對應的 Atlas 像素尺寸（Seedream 2K / 4K） */
+/** Seedream v4.5 / v5 / Flux Dev — 8 種比例 × 2K/4K（使用 * 分隔符） */
 export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
     { ratio: '1:1',  label: '1:1',  w2k: '2048*2048', w4k: '4096*4096' },
     { ratio: '4:3',  label: '4:3',  w2k: '2304*1728', w4k: '4704*3520' },
@@ -22,12 +22,30 @@ export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: stri
     { ratio: '21:9', label: '21:9', w2k: '3136*1344', w4k: '6240*2656' },
 ];
 
+/** GPT Image 2 — 使用 x 分隔符，quality 控制解析度 */
+export const GPT_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
+    { ratio: '1:1',  label: '1:1',  w2k: '1024x1024', w4k: '1024x1024' },
+    { ratio: '4:3',  label: '4:3',  w2k: '1536x1024', w4k: '1536x1024' },
+    { ratio: '3:4',  label: '3:4',  w2k: '1024x1536', w4k: '1024x1536' },
+    { ratio: '16:9', label: '16:9', w2k: '2560x1440', w4k: '3840x2160' },
+    { ratio: '9:16', label: '9:16', w2k: '1440x2560', w4k: '2160x3840' },
+    { ratio: '3:2',  label: '3:2',  w2k: '1536x1024', w4k: '1536x1024' },
+    { ratio: '2:3',  label: '2:3',  w2k: '1024x1536', w4k: '1024x1536' },
+];
+
+/** 依模型取對應的尺寸表（供 UI 使用） */
+export function getModelSizes(model: AtlasGenerationModel) {
+    return model === 'gpt-image-2' ? GPT_SIZES : ATLAS_SIZES;
+}
+
 interface ModelConfig {
     // 文生圖
     id: string;
     useInputWrapper: boolean;
-    sizeParam?: string;          // API 尺寸欄位名稱（e.g. 'size'）
+    sizeParam?: string;           // API 尺寸欄位名稱（e.g. 'size', 'image_size'）
+    useGptSizes?: boolean;        // true = 使用 GPT_SIZES（x 分隔）；false/undefined = ATLAS_SIZES（* 分隔）
     supportsBase64Output?: boolean; // 支援 enable_base64_output
+    extraParams?: Record<string, unknown>; // 固定附加參數
     // 圖生圖
     img2imgId?: string;
     img2imgUseInputWrapper?: boolean;
@@ -39,6 +57,10 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
     'gpt-image-2': {
         id: 'openai/gpt-image-2/text-to-image',
         useInputWrapper: false,
+        sizeParam: 'size',
+        useGptSizes: true,
+        supportsBase64Output: true,
+        extraParams: { output_format: 'png' },
         img2imgId: 'openai/gpt-image-2/edit',
         img2imgUseInputWrapper: false,
         img2imgImageParam: 'images',
@@ -67,6 +89,8 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
     'flux-dev': {
         id: 'black-forest-labs/flux-dev',
         useInputWrapper: true,
+        sizeParam: 'image_size',
+        supportsBase64Output: true,
         img2imgId: 'black-forest-labs/flux-kontext-dev',
         img2imgUseInputWrapper: false,
         img2imgImageParam: 'image',
@@ -74,9 +98,14 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
     },
 };
 
-/** ratio ('1:1' etc.) + quality ('2K'|'4K') → Atlas size string */
-function resolveAtlasSize(ratio: string, quality: '2K' | '4K'): string | undefined {
-    const entry = ATLAS_SIZES.find(s => s.ratio === ratio);
+/** ratio ('1:1' etc.) + quality ('2K'|'4K') + sizes table → size string */
+function resolveSize(
+    ratio: string,
+    quality: '2K' | '4K',
+    useGptSizes?: boolean,
+): string | undefined {
+    const table = useGptSizes ? GPT_SIZES : ATLAS_SIZES;
+    const entry = table.find(s => s.ratio === ratio);
     if (!entry) return undefined;
     return quality === '4K' ? entry.w4k : entry.w2k;
 }
@@ -146,7 +175,7 @@ async function pollPrediction(predictionId: string, atlasKey: string): Promise<s
     while (Date.now() - startTime < MAX_WAIT_MS) {
         await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
 
-        const res = await fetch(`${ATLAS_BASE_URL}/model/prediction/${predictionId}`, {
+        const res = await fetch(`${ATLAS_BASE_URL}/model/result/${predictionId}`, {
             headers: { Authorization: `Bearer ${atlasKey}` },
         });
 
@@ -222,9 +251,9 @@ interface AtlasCallOptions {
 }
 
 function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOptions) {
-    const extra: Record<string, unknown> = {};
+    const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
     if (config.sizeParam && options?.ratio) {
-        const size = resolveAtlasSize(options.ratio, options.quality ?? '2K');
+        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes);
         if (size) extra[config.sizeParam] = size;
     }
     if (config.supportsBase64Output) {
@@ -259,9 +288,9 @@ function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, 
     const imgParam = config.img2imgImageParam  ?? 'images';
     const isArray  = config.img2imgImageIsArray ?? true;
     const imgValue = isArray ? [imageBase64] : imageBase64;
-    const extra: Record<string, unknown> = {};
+    const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
     if (config.sizeParam && options?.ratio) {
-        const size = resolveAtlasSize(options.ratio, options.quality ?? '2K');
+        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes);
         if (size) extra[config.sizeParam] = size;
     }
     if (config.supportsBase64Output) {
@@ -304,7 +333,7 @@ export function isValidAtlasKey(key: string): boolean {
 
 /** 除錯用：查詢已知 prediction ID */
 export async function debugFetchPrediction(predictionId: string, atlasKey: string): Promise<string> {
-    const res = await fetch(`${ATLAS_BASE_URL}/model/prediction/${predictionId}`, {
+    const res = await fetch(`${ATLAS_BASE_URL}/model/result/${predictionId}`, {
         headers: { Authorization: `Bearer ${atlasKey}` },
     });
     const json = await res.json();
