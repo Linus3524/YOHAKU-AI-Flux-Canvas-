@@ -683,20 +683,8 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
 
     setIsLoading(true);
     try {
-      // ── 準備原始圖片 ──────────────────────────────────────
-      let finalBaseImageSrc = context.baseImageSrc;
-      if (context.type === 'remove') {
-          // ✅ 修改 2：動態選擇填充色，避免與背景撞色
-          // 分析遮罩區域附近的主色，選最不衝突的顏色填充
-          const fillColor = await analyzeDominantColor(context.baseImageSrc);
-          const safeFillColor = fillColor.name === 'GREEN' ? '#FF00FF'   // 主色是綠 → 用洋紅
-                              : fillColor.name === 'BLUE'  ? '#00FF00'   // 主色是藍 → 用綠
-                              : '#808080';                                // 其他 → 用灰（原本邏輯）
-          // @ts-ignore: createPrefilledImage currently only accepts 2 arguments
-          finalBaseImageSrc = await createPrefilledImage(context.baseImageSrc, context.maskDataUrl, safeFillColor);
-      }
-      
-      const [baseHeader, baseData] = finalBaseImageSrc.split(',');
+      // ── 準備原始圖片（直接使用原圖，不做灰色填充） ──────────
+      const [baseHeader, baseData] = context.baseImageSrc.split(',');
       const baseMimeType = baseHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
       const originalImagePart = { inlineData: { data: baseData, mimeType: baseMimeType } };
 
@@ -707,45 +695,38 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       const maskImagePart = { inlineData: { data: maskData, mimeType: maskMimeType } };
 
       // ── 建構 Prompt ───────────────────────────────────────
-      // ✅ 修改 3：加入明確的圖片錨點標籤，提升多圖理解穩定性
-      const instructionPrefix = `
-You are provided with TWO images:
-- IMAGE 1 (Original): The base image to be edited.
-- IMAGE 2 (Mask): A black-and-white mask where WHITE pixels mark the region to modify, and BLACK pixels mark regions that must remain 100% unchanged.
-      `.trim();
-      
+      const instructionPrefix = `You are provided with TWO images:
+- IMAGE 1: The original photo to edit.
+- IMAGE 2: A black-and-white mask. WHITE = region to change. BLACK = must remain pixel-perfect identical to IMAGE 1.`;
+
       let textPrompt = '';
 
       if (context.type === 'remove') {
-        let specificInstruction = `The white masked region in IMAGE 1 has been pre-filled with a solid color to hide the original content. 
-Your task: completely remove this filled area and seamlessly reconstruct the missing background texture, pattern, or scenery behind it.`;
-        
-        if (context.prompt && context.prompt.trim()) {
-            specificInstruction += `\nAdditional user instruction: ${context.prompt}.`;
-        } else {
-            specificInstruction += `\nEnsure no text, watermarks, or artifacts remain. The reconstructed area must blend perfectly with surrounding pixels.`;
-        }
+        const userHint = context.prompt?.trim()
+          ? `\nAdditional context from user: "${context.prompt}".`
+          : '';
 
-        textPrompt = `
-${instructionPrefix}
+        textPrompt = `${instructionPrefix}
 
-TASK: INPAINTING & OBJECT REMOVAL
-1. Refer to IMAGE 2 to identify the WHITE masked region.
-2. ${specificInstruction}
-3. ABSOLUTE CONSTRAINT: Every pixel corresponding to BLACK areas in IMAGE 2 must be identical to IMAGE 1 — do not alter them in any way.
-4. The final output must be seamless with natural continuity of texture, lighting, and color.
-        `.trim();
+TASK: SEAMLESS OBJECT REMOVAL & BACKGROUND RECONSTRUCTION
+
+Step 1 – Identify: Use IMAGE 2 to locate the WHITE masked region in IMAGE 1. This is the object or area to erase.
+Step 2 – Analyze surroundings: Study the texture, color, pattern, lighting, and structure of the pixels immediately surrounding the masked area.
+Step 3 – Heal: Fill the masked region by naturally extending those surrounding textures and structures inward — as if you are using a content-aware healing brush. The result must look like the masked object was never there.
+Step 4 – Blend: Ensure seamless transitions at the mask boundary. Match grain, perspective, and light direction of the surrounding area.${userHint}
+
+ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identical to IMAGE 1. Do not alter anything outside the white mask.`.trim();
 
       } else {
-        textPrompt = `
-${instructionPrefix}
+        textPrompt = `${instructionPrefix}
 
 TASK: GENERATIVE EDITING
-1. Refer to IMAGE 2 to identify the WHITE masked region.
-2. Within this region in IMAGE 1, apply the following edit: ${context.prompt}.
-3. Ensure the result matches the original image's lighting direction, perspective, and color temperature.
-4. ABSOLUTE CONSTRAINT: Every pixel corresponding to BLACK areas in IMAGE 2 must be identical to IMAGE 1 — do not alter them in any way.
-        `.trim();
+
+Step 1 – Identify: Use IMAGE 2 to locate the WHITE masked region in IMAGE 1.
+Step 2 – Edit: Within that region, apply this change: ${context.prompt}.
+Step 3 – Integrate: Match the surrounding image's lighting direction, color temperature, perspective, and texture so the edit feels native to the photo.
+
+ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identical to IMAGE 1. Do not alter anything outside the white mask.`.trim();
       }
 
       // ── 呼叫 API ──────────────────────────────────────────
