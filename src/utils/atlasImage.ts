@@ -69,7 +69,7 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         img2imgImageIsArray: true,
     },
     'seedream-v4.5': {
-        id: 'bytedance/seedream-v4.5/sequential',
+        id: 'bytedance/seedream-v4.5',
         useInputWrapper: false,
         sizeParam: 'size',
         supportsBase64Output: true,
@@ -197,17 +197,29 @@ async function pollPrediction(predictionId: string, atlasKey: string): Promise<s
                 null;
 
             let urls: string[] = [];
-            const isValidOutput = (u: any): u is string =>
-                typeof u === 'string' && (u.startsWith('http') || u.startsWith('data:'));
+
+            // 將各種格式統一成可用的圖片字串（URL 或 data URI）
+            const normalizeOutput = (u: any): string | null => {
+                if (typeof u !== 'string' || !u) return null;
+                if (u.startsWith('http') || u.startsWith('data:')) return u;
+                // 裸 base64（JPEG: /9j/、PNG: iVBOR、WebP: UklG 等）
+                if (u.startsWith('/9j/') || u.startsWith('iVBOR') || u.startsWith('UklG') || u.length > 100) {
+                    // 猜測 MIME：/9j/ = jpeg，其餘預設 png
+                    const mime = u.startsWith('/9j/') ? 'image/jpeg' : 'image/png';
+                    return `data:${mime};base64,${u}`;
+                }
+                return null;
+            };
 
             if (Array.isArray(rawOutput)) {
-                urls = rawOutput.filter(isValidOutput);
-            } else if (typeof rawOutput === 'string' && isValidOutput(rawOutput)) {
-                urls = [rawOutput];
+                urls = rawOutput.map(normalizeOutput).filter(Boolean) as string[];
+            } else if (typeof rawOutput === 'string') {
+                const n = normalizeOutput(rawOutput);
+                if (n) urls = [n];
             } else if (rawOutput && typeof rawOutput === 'object') {
                 const inner = (rawOutput as any).images ?? (rawOutput as any).url ?? (rawOutput as any).urls;
-                if (Array.isArray(inner)) urls = inner.filter((u: any) => typeof u === 'string');
-                else if (typeof inner === 'string') urls = [inner];
+                if (Array.isArray(inner)) urls = inner.map(normalizeOutput).filter(Boolean) as string[];
+                else if (typeof inner === 'string') { const n = normalizeOutput(inner); if (n) urls = [n]; }
             }
 
             if (urls.length === 0) {
@@ -364,6 +376,84 @@ export async function callAtlasImg2Img(
     );
     const results = await Promise.all(predIds.map(id => pollPrediction(id, atlasKey)));
     return results.map(r => r[0]).filter(Boolean) as string[];
+}
+
+/**
+ * 將遮罩區域設為透明（alpha=0），回傳帶透明度的 PNG base64
+ * GPT Image 2 Edit 原生支援透明遮罩：透明區域 = 要重新生成的區域
+ */
+async function createTransparentMaskedImage(imageBase64: string, maskBase64: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const maskImg = new Image();
+            maskImg.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d')!;
+                ctx.drawImage(img, 0, 0);
+
+                const maskCanvas = document.createElement('canvas');
+                maskCanvas.width = maskImg.naturalWidth;
+                maskCanvas.height = maskImg.naturalHeight;
+                const maskCtx = maskCanvas.getContext('2d')!;
+                maskCtx.drawImage(maskImg, 0, 0);
+                const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                for (let y = 0; y < canvas.height; y++) {
+                    for (let x = 0; x < canvas.width; x++) {
+                        const mx = Math.floor(x * maskCanvas.width / canvas.width);
+                        const my = Math.floor(y * maskCanvas.height / canvas.height);
+                        const maskIdx = (my * maskCanvas.width + mx) * 4;
+                        if (maskData.data[maskIdx] > 128) {
+                            const idx = (y * canvas.width + x) * 4;
+                            imgData.data[idx + 3] = 0; // 透明
+                        }
+                    }
+                }
+                ctx.putImageData(imgData, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            maskImg.onerror = reject;
+            maskImg.src = maskBase64;
+        };
+        img.onerror = reject;
+        img.src = imageBase64;
+    });
+}
+
+/**
+ * Inpainting via GPT Image 2 Edit
+ * 策略：遮罩區域設透明 → 送 GPT Image 2 Edit（原生支援透明遮罩 inpainting）
+ * mask: B&W 圖（白=填充區域、黑=保留區域）
+ */
+export async function callAtlasInpaint(
+    prompt: string,
+    imageBase64: string,
+    maskBase64: string,
+    atlasKey: string,
+): Promise<string> {
+    // 透明遮罩圖：讓 GPT Image 2 Edit 知道哪裡需要重新生成
+    const transparentImage = await createTransparentMaskedImage(imageBase64, maskBase64);
+
+    const isRemove = !prompt.trim();
+    const editPrompt = isRemove
+        ? 'Seamlessly reconstruct the transparent area to match the surrounding background. Extend the nearby textures, colors, and patterns naturally inward so the result looks like the object was never there.'
+        : `In the transparent area only: ${prompt.trim()}. Make it look natural, matching the surrounding lighting, color temperature, and texture.`;
+
+    const body: Record<string, unknown> = {
+        model: 'openai/gpt-image-2/edit',
+        prompt: editPrompt,
+        images: [transparentImage],
+        enable_base64_output: true,
+        output_format: 'png',
+    };
+    const predId = await postGeneration(body, atlasKey);
+    const results = await pollPrediction(predId, atlasKey);
+    if (!results[0]) throw new Error('Atlas GPT Image 2 Inpaint 未回傳圖片');
+    return results[0];
 }
 
 export function isValidAtlasKey(key: string): boolean {

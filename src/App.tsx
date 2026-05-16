@@ -1398,6 +1398,7 @@ const App: React.FC = () => {
           onClose={() => setEditingImage(null)}
           apiKey={effectiveApiKey}
           imageModel={imageModel}
+          atlasKey={atlasApiKey}
         />
       )}
 

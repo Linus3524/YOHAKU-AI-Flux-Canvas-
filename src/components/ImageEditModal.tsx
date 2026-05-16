@@ -4,6 +4,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import type { ImageElement, Point } from '../types';
 import { callGeminiWithRetry, analyzeDominantColor } from '../utils/helpers';
 import { rgbToHsl, hslToRgb, compositeImagesPixelPerfect, createPrefilledImage } from '../utils/imageProcessing';
+import { callAtlasInpaint } from '../utils/atlasImage';
 
 // Helper: Simple debounce hook
 const useDebounce = (callback: (...args: any[]) => void, delay: number) => {
@@ -36,6 +37,7 @@ interface ImageEditModalProps {
   onClose: () => void;
   apiKey: string | null;
   imageModel?: string;
+  atlasKey?: string | null;
 }
 
 interface GenerationContext {
@@ -149,7 +151,7 @@ const CollapsibleSection: React.FC<{
 };
 
 
-export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-3.1-flash-image-preview' }) => {
+export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasKey }) => {
   const imageRef = useRef<HTMLImageElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -673,39 +675,61 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
 
 
   const runGeneration = async (context: GenerationContext) => {
-    if (!apiKey) {
-      // ✅ 修改 1：改用 showToast（如果 Modal 沒有 showToast prop，保留 alert）
-      alert("請先輸入 API Key。");
-      return;
-    }
-    
-    const ai = new GoogleGenAI({ apiKey: apiKey });
-
+    // ── 準備黑白遮罩（兩條路都需要） ──────────────────────────
     setIsLoading(true);
     try {
-      // ── 準備原始圖片（直接使用原圖，不做灰色填充） ──────────
+      const bwMaskBase64Url = await createBlackAndWhiteMask(context.baseImageSrc, context.maskDataUrl);
+
+      // ══ 路線 A：Atlas Flux Fill（優先，有 atlasKey 時） ══════
+      if (atlasKey) {
+        const fluxPrompt = context.type === 'remove'
+          ? (context.prompt?.trim()
+              ? `Remove the selected object. Background hint: ${context.prompt}. Seamlessly fill with natural background.`
+              : 'Remove the selected object. Seamlessly reconstruct the background with natural texture and lighting.')
+          : context.prompt;
+
+        const generatedBase64 = await callAtlasInpaint(
+          fluxPrompt,
+          context.baseImageSrc,
+          bwMaskBase64Url,
+          atlasKey,
+        );
+
+        // 用 compositeImagesPixelPerfect 確保遮罩外像素完全一致
+        const finalImageSrc = await compositeImagesPixelPerfect(
+          context.baseImageSrc,
+          generatedBase64,
+          bwMaskBase64Url,
+        );
+        setPreviewImageSrc(finalImageSrc);
+        return;
+      }
+
+      // ══ 路線 B：Gemini fallback ════════════════════════════
+      if (!apiKey) {
+        alert("請先設定 API Key 或 Atlas Key。");
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey: apiKey });
+
       const [baseHeader, baseData] = context.baseImageSrc.split(',');
       const baseMimeType = baseHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
       const originalImagePart = { inlineData: { data: baseData, mimeType: baseMimeType } };
 
-      // ── 準備黑白遮罩 ──────────────────────────────────────
-      const bwMaskBase64Url = await createBlackAndWhiteMask(context.baseImageSrc, context.maskDataUrl);
       const [maskHeader, maskData] = bwMaskBase64Url.split(',');
       const maskMimeType = maskHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
       const maskImagePart = { inlineData: { data: maskData, mimeType: maskMimeType } };
 
-      // ── 建構 Prompt ───────────────────────────────────────
       const instructionPrefix = `You are provided with TWO images:
 - IMAGE 1: The original photo to edit.
 - IMAGE 2: A black-and-white mask. WHITE = region to change. BLACK = must remain pixel-perfect identical to IMAGE 1.`;
 
       let textPrompt = '';
-
       if (context.type === 'remove') {
         const userHint = context.prompt?.trim()
           ? `\nAdditional context from user: "${context.prompt}".`
           : '';
-
         textPrompt = `${instructionPrefix}
 
 TASK: SEAMLESS OBJECT REMOVAL & BACKGROUND RECONSTRUCTION
@@ -716,7 +740,6 @@ Step 3 – Heal: Fill the masked region by naturally extending those surrounding
 Step 4 – Blend: Ensure seamless transitions at the mask boundary. Match grain, perspective, and light direction of the surrounding area.${userHint}
 
 ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identical to IMAGE 1. Do not alter anything outside the white mask.`.trim();
-
       } else {
         textPrompt = `${instructionPrefix}
 
@@ -729,8 +752,6 @@ Step 3 – Integrate: Match the surrounding image's lighting direction, color te
 ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identical to IMAGE 1. Do not alter anything outside the white mask.`.trim();
       }
 
-      // ── 呼叫 API ──────────────────────────────────────────
-      // ✅ 修改 4：用 callGeminiWithRetry 包裝，與其他功能一致，遇 503 自動重試
       const response = await callGeminiWithRetry(() => ai.models.generateContent({
         model: imageModel,
         contents: { parts: [originalImagePart, maskImagePart, { text: textPrompt }] },
@@ -740,8 +761,8 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
         if (part.inlineData) {
           const generatedBase64 = `data:image/png;base64,${part.inlineData.data}`;
           const finalImageSrc = await compositeImagesPixelPerfect(
-            context.baseImageSrc, 
-            generatedBase64, 
+            context.baseImageSrc,
+            generatedBase64,
             bwMaskBase64Url
           );
           setPreviewImageSrc(finalImageSrc);
@@ -752,14 +773,13 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
 
     } catch (error: any) {
       console.error("Error editing image:", error);
-      // ✅ 修改 1：改用 showToast，與其他功能一致 (此處保留 alert)
       const msg = error?.message?.toLowerCase() || '';
       if (msg.includes('503') || msg.includes('overloaded')) {
         alert("⏳ 伺服器暫時過載，請稍後再試。");
       } else if (msg.includes('api key') || msg.includes('invalid')) {
         alert("🔑 API Key 無效，請重新設定。");
       } else {
-        alert(`編輯失敗：${error?.message?.slice(0, 50) || '未知錯誤'}`);
+        alert(`編輯失敗：${error?.message?.slice(0, 100) || '未知錯誤'}`);
       }
     } finally {
       setIsLoading(false);
