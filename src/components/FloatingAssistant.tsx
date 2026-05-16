@@ -542,7 +542,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {/* Atlas Cloud 模型 */}
                       <div>
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">🟠 Atlas Cloud 生圖模型（需 Atlas Cloud Key）</span>
-                        <p className="text-xs text-gray-500 mb-3">由 Atlas Cloud 代理的多家頂級生圖模型，於生成設定面板中選擇，純文字轉圖片，一次輸出 2 張結果。</p>
+                        <p className="text-xs text-gray-500 mb-3">由 Atlas Cloud 代理的多家頂級生圖模型，於生成設定面板中選擇，支援文生圖與圖生圖，一次輸出 2 張結果。</p>
                         <div className="overflow-x-auto">
                           <table className="w-full text-[10px] text-gray-600 border-collapse">
                             <thead>
@@ -556,25 +556,30 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">OpenAI</td>
-                                <td className="py-2 text-gray-600 align-top">指令跟隨能力最強，精細文字可精確入畫，適合需要精確排版、產品圖、廣告素材的場景。</td>
+                                <td className="py-2 text-gray-600 align-top">指令跟隨能力最強，精細文字可精確入畫，適合需要精確排版、產品圖、廣告素材的場景。支援<span className="font-bold text-orange-600">圖生圖</span>。</td>
                               </tr>
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">即夢 Seedream v4.5</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">ByteDance</td>
-                                <td className="py-2 text-gray-600 align-top">速度快、亞洲美學強項，擅長東方風格插圖與人物生成，中文提示詞理解佳。<span className="font-bold text-gray-700">生成中文標準字（設計師字型、特色標題字）表現突出</span>，適合需要在圖片中嵌入正確中文字的設計場景。</td>
+                                <td className="py-2 text-gray-600 align-top">速度快、亞洲美學強項，擅長東方風格插圖與人物生成，中文提示詞理解佳。<span className="font-bold text-gray-700">生成中文標準字（設計師字型、特色標題字）表現突出</span>，適合需要在圖片中嵌入正確中文字的設計場景。支援<span className="font-bold text-orange-600">圖生圖</span>。</td>
                               </tr>
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">即夢 Seedream v5 Lite</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">ByteDance</td>
-                                <td className="py-2 text-gray-600 align-top">v4.5 升級版，畫面細節更豐富、構圖更穩定，文字渲染提升，兼顧速度與品質。</td>
+                                <td className="py-2 text-gray-600 align-top">v4.5 升級版，畫面細節更豐富、構圖更穩定，文字渲染提升，兼顧速度與品質。支援<span className="font-bold text-orange-600">圖生圖</span>。</td>
                               </tr>
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">Flux Dev</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">Black Forest Labs</td>
-                                <td className="py-2 text-gray-600 align-top">藝術風格強烈、色彩層次豐富，適合創意插圖、概念設計與風格化視覺作品。</td>
+                                <td className="py-2 text-gray-600 align-top">藝術風格強烈、色彩層次豐富，適合創意插圖、概念設計與風格化視覺作品。支援<span className="font-bold text-orange-600">圖生圖</span>（Flux Kontext Dev）。</td>
                               </tr>
                             </tbody>
                           </table>
+                        </div>
+                        <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                          <p className="text-[10px] text-blue-700 leading-relaxed">
+                            <span className="font-bold">🎨 局部重繪 / 圖片編輯：</span>設定 Atlas Cloud Key 後，自動升級為 <span className="font-bold">GPT Image 2 Edit</span>（OpenAI 原生 inpainting 模型，透明遮罩精準填充）。未設定 Atlas Key 時，使用 <span className="font-bold">Gemini</span> 作為預設引擎。
+                          </p>
                         </div>
                       </div>
 
