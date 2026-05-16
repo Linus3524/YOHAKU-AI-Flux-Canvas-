@@ -546,6 +546,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [showAppearance, setShowAppearance] = useState(true); // ✅ 新增
   const menuDragStartRef = useRef<Point>({ x: 0, y: 0 });
   const [upscaleFactor, setUpscaleFactor] = useState<number>(2);
+  const [ratioDropdownOpen, setRatioDropdownOpen] = useState(false);
+  const ratioDropdownRef = useRef<HTMLDivElement>(null);
   const isArtboardSelected = useMemo(() => elements.some(el => selectedElementIds.includes(el.id) && el.type === 'artboard'), [elements, selectedElementIds]);
   const isOnlyArrowSelected = useMemo(() => {
       const selected = elements.filter(el => selectedElementIds.includes(el.id));
@@ -573,6 +575,17 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
         setOutpaintingPrompt('');
     }
   }, [outpaintingState?.element.id]);
+
+  // 點擊外部關閉比例下拉選單
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+        if (ratioDropdownRef.current && !ratioDropdownRef.current.contains(e.target as Node)) {
+            setRatioDropdownOpen(false);
+        }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
   
   useEffect(() => {
       if (selectedElementIds.length === 0) {
@@ -1124,31 +1137,72 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
 
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-xs font-semibold text-[#1D1D1F]">輸出比例</label>
-                                        {generationModel && generationModel !== 'gemini' ? (
-                                            // Atlas 模型：顯示比例 + 像素尺寸
-                                            <div className="grid grid-cols-2 gap-1">
-                                                {getModelSizes(generationModel as any).map(s => {
-                                                    const px = imageSize === '4K' ? s.w4k : s.w2k;
-                                                    // GPT Image 2 uses 'x', others use '*'
-                                                    const [w, h] = px.includes('x') ? px.split('x') : px.split('*');
-                                                    const isSelected = imageAspectRatio === s.ratio;
-                                                    return (
-                                                        <button
-                                                            key={s.ratio}
-                                                            onClick={() => onSetImageAspectRatio(s.ratio)}
-                                                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                                                isSelected
-                                                                    ? 'bg-[#1D1D1F] text-white border-[#1D1D1F]'
-                                                                    : 'bg-[#F5F5F7] text-[#1D1D1F] border-transparent hover:border-black/20'
-                                                            }`}
-                                                        >
-                                                            <span className="font-bold">{s.ratio}</span>
-                                                            <span className={`text-[10px] ml-1 ${isSelected ? 'text-white/70' : 'text-[#86868B]'}`}>{w}×{h}</span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
+                                        {generationModel && generationModel !== 'gemini' ? (() => {
+                                            // Atlas 模型：自訂下拉，組合比例 + 解析度
+                                            const sizes = getModelSizes(generationModel as any);
+                                            const curEntry = sizes.find(s => s.ratio === imageAspectRatio) ?? sizes[0];
+                                            const curPx = imageSize === '4K' ? curEntry.w4k : curEntry.w2k;
+                                            const [cw, ch] = curPx.includes('x') ? curPx.split('x') : curPx.split('*');
+
+                                            // 根據比例字串計算矩形 icon 寬高（最大 18×14px）
+                                            const ratioIcon = (ratio: string, active: boolean) => {
+                                                const [rw, rh] = ratio.split(':').map(Number);
+                                                const maxW = 18, maxH = 14;
+                                                let iw: number, ih: number;
+                                                if (rw / rh > maxW / maxH) { iw = maxW; ih = Math.max(2, Math.round(maxW * rh / rw)); }
+                                                else { ih = maxH; iw = Math.max(2, Math.round(maxH * rw / rh)); }
+                                                return (
+                                                    <span style={{ width: iw, height: ih, flexShrink: 0 }}
+                                                          className={`inline-block border-2 rounded-[1.5px] ${active ? 'border-[#5B5BF6]' : 'border-[#86868B]'}`} />
+                                                );
+                                            };
+
+                                            return (
+                                                <div className="relative" ref={ratioDropdownRef}>
+                                                    {/* 觸發按鈕 */}
+                                                    <button
+                                                        onClick={() => setRatioDropdownOpen(v => !v)}
+                                                        className="w-full flex items-center gap-2 px-3 py-2 bg-[#F5F5F7] rounded-lg text-sm border border-transparent hover:border-black/10 transition-all"
+                                                    >
+                                                        {ratioIcon(imageAspectRatio, true)}
+                                                        <span className="font-semibold text-[#1D1D1F]">{imageAspectRatio}</span>
+                                                        <span className="text-[#86868B] text-xs">{cw}×{ch}</span>
+                                                        <svg className={`ml-auto w-3.5 h-3.5 text-[#86868B] transition-transform ${ratioDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                                                    </button>
+
+                                                    {/* 下拉列表 */}
+                                                    {ratioDropdownOpen && (
+                                                        <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-xl shadow-2xl border border-black/8 py-1.5 z-[200] max-h-72 overflow-y-auto">
+                                                            {(['2K', '4K'] as const).map(tier => (
+                                                                <div key={tier}>
+                                                                    <div className="px-3 pt-1.5 pb-0.5 text-[11px] font-semibold text-[#86868B] uppercase tracking-wide">{tier}</div>
+                                                                    {sizes.map(s => {
+                                                                        const px = tier === '4K' ? s.w4k : s.w2k;
+                                                                        const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
+                                                                        const isSelected = imageAspectRatio === s.ratio && imageSize === tier;
+                                                                        return (
+                                                                            <button
+                                                                                key={s.ratio + tier}
+                                                                                onClick={() => { onSetImageAspectRatio(s.ratio); onSetImageSize(tier); setRatioDropdownOpen(false); }}
+                                                                                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-[#F5F5F7] transition-colors ${isSelected ? 'text-[#1D1D1F]' : 'text-[#1D1D1F]'}`}
+                                                                            >
+                                                                                {/* checkmark */}
+                                                                                <span className="w-3.5 text-[#5B5BF6] flex-shrink-0 text-xs">
+                                                                                    {isSelected ? '✓' : ''}
+                                                                                </span>
+                                                                                {ratioIcon(s.ratio, isSelected)}
+                                                                                <span className={`w-10 font-medium ${isSelected ? 'text-[#5B5BF6]' : ''}`}>{s.ratio}</span>
+                                                                                <span className="ml-auto text-[#86868B] text-xs tabular-nums">{pw}×{ph}</span>
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })() : (
                                             // Gemini：原本下拉選單
                                             <div className="relative">
                                                 <select
@@ -1167,14 +1221,11 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         )}
                                     </div>
 
-                                    {/* 輸出解析度 */}
-                                    <div className="flex flex-col gap-1.5">
+                                    {/* 輸出解析度（Gemini 才顯示，Atlas 已整合進比例下拉） */}
+                                    {(generationModel === 'gemini' || !generationModel) && <div className="flex flex-col gap-1.5">
                                         <label className="text-xs font-semibold text-[#1D1D1F]">輸出解析度</label>
                                         <div className="flex gap-2">
-                                            {(generationModel && generationModel !== 'gemini'
-                                                ? (['2K', '4K'] as const)
-                                                : (['1K', '2K', '4K'] as const)
-                                            ).map(size => (
+                                            {(['1K', '2K', '4K'] as const).map(size => (
                                                 <button
                                                     key={size}
                                                     onClick={() => onSetImageSize(size)}
@@ -1193,7 +1244,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 {imageSize === '2K' ? '較高畫質，費用約 1.7x' : '最高畫質，費用約 2.5x'}
                                             </p>
                                         )}
-                                    </div>
+                                    </div>}
                                 </div>
                             )}
 
