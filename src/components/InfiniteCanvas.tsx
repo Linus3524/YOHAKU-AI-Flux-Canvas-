@@ -1089,7 +1089,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 onChange={(e) => onSetGenerationModel?.(e.target.value)}
                                                 className="w-full bg-[#F5F5F7] border-none rounded-lg px-3 py-2 text-sm text-[#1D1D1F] focus:ring-2 focus:ring-black/5 cursor-pointer appearance-none"
                                             >
-                                                <option value="gemini">Gemini 3 Pro（預設）</option>
+                                                <option value="gemini">Gemini 3 Flash / Pro（預設）</option>
                                                 <option value="gpt-image-2" disabled={!hasAtlasKey}>GPT Image 2{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
                                                 <option value="seedream-v4.5" disabled={!hasAtlasKey}>即夢 Seedream v4.5{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
                                                 <option value="seedream-v5" disabled={!hasAtlasKey}>即夢 Seedream v5 Lite{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>

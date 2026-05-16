@@ -511,8 +511,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                             <thead>
                               <tr className="border-b border-gray-200">
                                 <th className="text-left py-1.5 pr-3 font-medium text-yohaku-text-muted w-1/3">維度</th>
-                                <th className="text-left py-1.5 pr-3 font-medium text-yohaku-text-main">Nano Banana 2 (Flash)</th>
-                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">Nano Banana Pro</th>
+                                <th className="text-left py-1.5 pr-3 font-medium text-yohaku-text-main">Gemini 3 Flash（預設）</th>
+                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">Gemini 3 Pro</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
