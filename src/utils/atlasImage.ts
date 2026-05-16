@@ -45,6 +45,7 @@ interface ModelConfig {
     sizeParam?: string;           // API 尺寸欄位名稱（e.g. 'size', 'image_size'）
     useGptSizes?: boolean;        // true = 使用 GPT_SIZES（x 分隔）；false/undefined = ATLAS_SIZES（* 分隔）
     supportsBase64Output?: boolean; // 支援 enable_base64_output
+    supportsQualityParam?: boolean; // 支援 quality: low/medium/high（GPT Image 2）
     extraParams?: Record<string, unknown>; // 固定附加參數
     // 圖生圖
     img2imgId?: string;
@@ -60,6 +61,7 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         sizeParam: 'size',
         useGptSizes: true,
         supportsBase64Output: true,
+        supportsQualityParam: true,
         extraParams: { output_format: 'png' },
         img2imgId: 'openai/gpt-image-2/edit',
         img2imgUseInputWrapper: false,
@@ -250,11 +252,18 @@ interface AtlasCallOptions {
     quality?: '2K' | '4K';
 }
 
+function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
+    return q === '4K' ? 'high' : 'medium';
+}
+
 function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOptions) {
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
     if (config.sizeParam && options?.ratio) {
         const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes);
         if (size) extra[config.sizeParam] = size;
+    }
+    if (config.supportsQualityParam) {
+        extra['quality'] = qualityToGpt(options?.quality);
     }
     if (config.supportsBase64Output) {
         extra['enable_base64_output'] = true;
@@ -292,6 +301,9 @@ function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, 
     if (config.sizeParam && options?.ratio) {
         const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes);
         if (size) extra[config.sizeParam] = size;
+    }
+    if (config.supportsQualityParam) {
+        extra['quality'] = qualityToGpt(options?.quality);
     }
     if (config.supportsBase64Output) {
         extra['enable_base64_output'] = true;
