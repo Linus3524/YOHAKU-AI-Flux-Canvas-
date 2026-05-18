@@ -572,8 +572,59 @@ STRICT RULES:
             const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
             const imagePart = { inlineData: { data, mimeType } };
     
-            let promptText = `Act as a professional VFX compositor. Harmonize this composite image. Adjust lighting and shadows to make it cohesive. Do NOT change composition.`;
-            
+            // ── Pass 1：用 Flash Lite 分析底圖視覺特徵（快速免費）────────
+            const [baseHeader, baseData] = baseElement.src.split(',');
+            const baseMime = baseHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
+            const baseImagePart = { inlineData: { data: baseData, mimeType: baseMime } };
+
+            let baseAnalysis = '';
+            try {
+                const liteClient = createAiClient();
+                const analysisRes = await callGeminiWithRetry<GenerateContentResponse>(() =>
+                    liteClient.models.generateContent({
+                        model: 'gemini-3.1-flash-lite-preview',
+                        contents: {
+                            parts: [
+                                baseImagePart,
+                                { text: `Analyze this image's visual characteristics for VFX compositing. Be brief and technical. Report:
+- Light source: direction, angle, soft/hard quality
+- Color temperature: warm/cool, dominant color cast
+- Exposure & contrast level
+- Shadow: direction, intensity, color
+- Overall color grade and mood
+- Any atmospheric effects (haze, glow, vignette)` }
+                            ]
+                        },
+                    })
+                );
+                baseAnalysis = analysisRes.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || '';
+            } catch {
+                // 分析失敗不影響調和流程，跳過
+            }
+
+            // ── Pass 2：用 imageModel 調和合成圖 ──────────────────────
+            let promptText = `You are a professional photo retoucher and VFX compositor.
+
+This composite image contains multiple elements layered together. Make them look like they were photographed together in the same scene.`;
+
+            if (baseAnalysis) {
+                promptText += `\n\nBASE IMAGE ANALYSIS (match all elements to these characteristics):\n${baseAnalysis}`;
+            }
+
+            promptText += `\n\nApply these adjustments:
+1. COLOR TEMPERATURE — match white balance across all elements to the base image's light source
+2. EXPOSURE & CONTRAST — even out brightness so no element looks out of place
+3. SHADOWS — ensure shadows fall in a consistent direction with consistent intensity
+4. COLOR GRADING — unify saturation, hue, and overall tone across all elements
+5. EDGE BLENDING — soften hard edges where elements meet their surroundings
+6. ATMOSPHERE — add subtle ambient color cast consistent with the scene mood
+
+CONSTRAINTS:
+- Do NOT move, resize, or reposition any element
+- Do NOT add or remove any subject or object
+- Preserve all fine detail and textures
+- Keep the exact same composition and framing`;
+
             const userInstructions = instructionElements.map(el => {
                  if (el.type === 'note') return (el as NoteElement).content;
                  if (el.type === 'text') return (el as TextElement).text;
@@ -581,17 +632,19 @@ STRICT RULES:
             }).join(' ').trim();
 
             if (userInstructions) {
-                promptText += `\nIMPORTANT User Instructions: ${userInstructions}`;
+                promptText += `\n\nIMPORTANT User Instructions: ${userInstructions}`;
             }
 
             const targetAspectRatio = getClosestAspectRatio(width, height);
-    
+            // 依底圖實際像素大小自動選擇輸出解析度
+            const imageSize = (baseImg.naturalWidth >= 2000 || baseImg.naturalHeight >= 2000) ? '4K' : '2K';
+
             const genAI = createAiClient();
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                 model: imageModel,
                 contents: { parts: [imagePart, { text: promptText }] },
-                config: { 
-                    imageConfig: { aspectRatio: targetAspectRatio, imageSize: '2K' }
+                config: {
+                    imageConfig: { aspectRatio: targetAspectRatio, imageSize }
                 },
             }));
     
