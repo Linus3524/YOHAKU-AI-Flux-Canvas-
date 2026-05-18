@@ -74,6 +74,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     // --- LocalStorage Auto-Save ---
     const [storageStatus, setStorageStatus] = useState<StorageStatus>('saved');
     const hasMountedRef = useRef(false);
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         // Skip first render (initial load from localStorage)
@@ -81,7 +82,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             hasMountedRef.current = true;
             return;
         }
-        const timer = setTimeout(() => {
+        saveTimerRef.current = setTimeout(() => {
             try {
                 const json = JSON.stringify(elements);
                 const bytes = new Blob([json]).size;
@@ -94,11 +95,19 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 setStorageStatus('full');
             }
         }, 1000);
-        return () => clearTimeout(timer);
+        return () => {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        };
     }, [elements]);
 
     const clearStorage = useCallback(() => {
-        localStorage.removeItem(STORAGE_KEY);
+        // Cancel any pending debounced auto-save immediately (prevents race condition
+        // where old data could be written to localStorage after removeItem)
+        if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+        }
+        localStorage.setItem(STORAGE_KEY, '[]'); // Write empty synchronously so it survives fast tab close
         setElements([]);
         setStorageStatus('saved');
         showToast('存檔已清除，畫布重置');

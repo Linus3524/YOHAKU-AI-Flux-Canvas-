@@ -146,6 +146,7 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
         if (!element || element.type !== 'image') return;
 
         setIsGenerating(true);
+        setGeneratingElementIds([elementId]); // Show badge on source image during analysis
         showToast("正在全面分析圖片風格...");
 
         try {
@@ -184,6 +185,7 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
             handleAIError(error, "風格分析");
         } finally {
             setIsGenerating(false);
+            setGeneratingElementIds([]);
         }
     }, [elements, showToast, apiKey, setHasApiKey]);
 
@@ -708,6 +710,7 @@ CONSTRAINTS:
 
     const handleOutpaintingGenerate = useCallback(async (prompt: string) => {
         if (!outpaintingState) return;
+        setGeneratingElementIds([outpaintingState.element.id]); // Show badge on source image
         setIsGenerating(true);
         try {
             const { element, frame } = outpaintingState;
@@ -782,6 +785,7 @@ CONSTRAINTS:
             handleAIError(e, "擴圖");
         } finally {
             setIsGenerating(false);
+            setGeneratingElementIds([]);
         }
     }, [outpaintingState, elements, setElements, showToast, setHasApiKey, apiKey]);
   
@@ -1155,6 +1159,7 @@ CONSTRAINTS:
         isGenerating,
         setIsGenerating,
         generatingElementIds,
+        setGeneratingElementIds,
         generatedImages,
         setGeneratedImages,
         outpaintingState,

@@ -285,6 +285,7 @@ const App: React.FC = () => {
       isGenerating,
       setIsGenerating,
       generatingElementIds,
+      setGeneratingElementIds,
       generatedImages,
       setGeneratedImages,
       outpaintingState,
@@ -394,6 +395,7 @@ const App: React.FC = () => {
       }
 
       setIsGenerating(true);
+      setGeneratingElementIds([elementId]); // Show badge on the target image
       showToast("🔍 正在進行圖片逆向分析...");
 
       try {
@@ -464,8 +466,9 @@ const App: React.FC = () => {
           showToast("分析失敗，請檢查 API Key 權限或網絡連線");
       } finally {
           setIsGenerating(false);
+          setGeneratingElementIds([]);
       }
-  }, [elements, effectiveApiKey, setElements, showToast, zIndexCounter]);
+  }, [elements, effectiveApiKey, setElements, showToast, zIndexCounter, setGeneratingElementIds]);
 
   // --- Callback for Floating Assistant Sticky Note Creation ---
   const handleAiCreateSticky = useCallback((text: string) => {
@@ -1344,7 +1347,7 @@ const App: React.FC = () => {
         <div className="fixed top-0 left-0 right-0 z-[6000] pointer-events-none">
           <div className="h-[3px] w-full animate-progress-bar" />
           <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-black/75 text-white text-xs font-medium px-3 py-1 rounded-full backdrop-blur-sm whitespace-nowrap shadow-lg">
-            AI 正在生成圖片...
+            AI 正在生圖...
           </div>
         </div>
       )}
