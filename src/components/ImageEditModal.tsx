@@ -38,7 +38,10 @@ interface ImageEditModalProps {
   apiKey: string | null;
   imageModel?: string;
   atlasKey?: string | null;
+  canvasImages?: { id: string; src: string; name?: string }[];
 }
+
+const MAX_REFERENCE_IMAGES = 3;
 
 interface GenerationContext {
   baseImageSrc: string;
@@ -151,7 +154,7 @@ const CollapsibleSection: React.FC<{
 };
 
 
-export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasKey }) => {
+export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasKey, canvasImages = [] }) => {
   const imageRef = useRef<HTMLImageElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -183,6 +186,11 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
   const [editorSetupKey, setEditorSetupKey] = useState(0);
   const [generationContext, setGenerationContext] = useState<GenerationContext | null>(null);
   const [adjustments, setAdjustments] = useState<ImageAdjustments>(defaultAdjustments);
+
+  // Reference images (max 3)
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [showCanvasPicker, setShowCanvasPicker] = useState(false);
+  const refFileInputRef = useRef<HTMLInputElement>(null);
 
   const saveMaskState = useCallback(() => {
     const maskCtx = maskCanvasRef.current?.getContext('2d');
@@ -693,6 +701,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
           context.baseImageSrc,
           bwMaskBase64Url,
           atlasKey,
+          referenceImages.length > 0 ? referenceImages : undefined,
         );
 
         // 用 compositeImagesPixelPerfect 確保遮罩外像素完全一致
@@ -752,9 +761,19 @@ Step 3 – Integrate: Match the surrounding image's lighting direction, color te
 ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identical to IMAGE 1. Do not alter anything outside the white mask.`.trim();
       }
 
+      // Attach reference images if any (Gemini multi-image)
+      const refParts = referenceImages.map(refSrc => {
+        const [refHeader, refData] = refSrc.split(',');
+        const refMime = refHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
+        return { inlineData: { data: refData, mimeType: refMime } };
+      });
+      const refHint = referenceImages.length > 0
+        ? `\n\nReference images are provided after the mask image. Use them to fill the WHITE masked region: if they show a specific object or subject, place it naturally into the scene; if they show a style, texture, or aesthetic, apply that to the fill. In either case, adapt lighting, shadows, color temperature, and perspective to seamlessly match the surrounding image.`
+        : '';
+
       const response = await callGeminiWithRetry(() => ai.models.generateContent({
         model: imageModel,
-        contents: { parts: [originalImagePart, maskImagePart, { text: textPrompt }] },
+        contents: { parts: [originalImagePart, maskImagePart, ...refParts, { text: textPrompt + refHint }] },
       }));
 
       for (const part of response.candidates[0].content.parts) {
@@ -787,9 +806,9 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
   };
 
   const handleSubmit = async (type: 'remove' | 'edit') => {
-    // For 'edit', prompt is required. For 'remove', prompt is optional but useful.
-    if (type === 'edit' && !prompt.trim()) {
-      alert("請輸入編輯描述。");
+    // For 'edit', prompt is required unless reference images are provided
+    if (type === 'edit' && !prompt.trim() && referenceImages.length === 0) {
+      alert("請輸入編輯描述，或上傳參考圖。");
       return;
     }
     const maskCanvas = maskCanvasRef.current;
@@ -1084,35 +1103,169 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
                 </div>
               </div>
 
-              <div className="w-full flex items-center gap-3 mt-1">
-                <input
-                  type="text"
+              {/* Prompt + action buttons */}
+              <div className="w-full flex items-start gap-3 mt-1">
+                <textarea
+                  rows={3}
                   value={prompt}
-                  onChange={e => setPrompt(e.target.value)}
+                  onChange={e => {
+                    setPrompt(e.target.value);
+                    e.target.style.height = 'auto';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
+                  }}
                   placeholder={
-                    pendingAction === 'remove'
+                    referenceImages.length > 0
+                      ? '✨ 已有參考圖，可額外補充描述（選填）：例如「調整成暖色調」...'
+                      : pendingAction === 'remove'
                       ? '✨ 描述移除後希望填補的背景內容（選填）...'
                       : pendingAction === 'edit'
-                      ? '✨ 描述想要的編輯效果，例如：換成藍色背景...'
-                      : '✨ 先點選右側「編輯」或「移除」按鈕，或直接輸入描述...'
+                      ? '✨ 描述想要替換的內容，或上傳參考圖直接指定物件...'
+                      : '✨ 輸入描述，或上傳參考圖指定替換物件，再點選右側按鈕...'
                   }
-                  className="flex-grow p-3 bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-black/10 focus:ring-4 focus:ring-black/5 rounded-xl transition-all outline-none text-sm"
+                  className="flex-grow p-3 bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-black/10 focus:ring-4 focus:ring-black/5 rounded-xl transition-all outline-none text-sm resize-none leading-relaxed"
+                  style={{ minHeight: '76px' }}
                 />
-                <button
-                  onClick={() => { setPendingAction('edit'); handleSubmit('edit'); }}
-                  disabled={isLoading || isBaking}
-                  className="px-5 py-2.5 text-sm font-semibold text-white bg-[#AF52DE] hover:bg-[#9F42CE] rounded-full transition-all shadow-md disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
-                >
-                  編輯物件
-                </button>
-                <button
-                  onClick={() => { setPendingAction('remove'); handleSubmit('remove'); }}
-                  disabled={isLoading || isBaking}
-                  className="px-5 py-2.5 text-sm font-semibold text-[#FF3B30] bg-white border border-[#FF3B30]/40 hover:bg-[#FF3B30]/5 rounded-full transition-all disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
-                >
-                  移除物件
-                </button>
+                <div className="flex flex-col gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => { setPendingAction('edit'); handleSubmit('edit'); }}
+                    disabled={isLoading || isBaking}
+                    className="px-5 py-2.5 text-sm font-semibold text-white bg-[#AF52DE] hover:bg-[#9F42CE] rounded-full transition-all shadow-md disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
+                  >
+                    編輯物件
+                  </button>
+                  <button
+                    onClick={() => { setPendingAction('remove'); handleSubmit('remove'); }}
+                    disabled={isLoading || isBaking}
+                    className="px-5 py-2.5 text-sm font-semibold text-[#FF3B30] bg-white border border-[#FF3B30]/40 hover:bg-[#FF3B30]/5 rounded-full transition-all disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
+                  >
+                    移除物件
+                  </button>
+                </div>
               </div>
+
+              {/* Reference images row */}
+              <div className="w-full flex items-center gap-2 mt-1 relative">
+                <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide flex-shrink-0">參考圖</span>
+                <div className="flex items-center gap-2">
+                  {/* Existing reference thumbnails */}
+                  {referenceImages.map((src, idx) => (
+                    <div key={idx} className="relative w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden border border-gray-200 group">
+                      <img src={src} alt={`參考圖 ${idx + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setReferenceImages(prev => prev.filter((_, i) => i !== idx))}
+                        className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold rounded-lg"
+                        title="移除"
+                      >×</button>
+                    </div>
+                  ))}
+
+                  {/* Add buttons */}
+                  {referenceImages.length < MAX_REFERENCE_IMAGES && (
+                    <>
+                      <button
+                        onClick={() => refFileInputRef.current?.click()}
+                        className="h-10 px-3 flex items-center gap-1.5 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 text-gray-500 hover:text-gray-600 transition-colors text-xs font-medium whitespace-nowrap"
+                        title="從本機上傳圖片"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        上傳
+                      </button>
+                      {canvasImages.filter(img => img.id !== element.id).length > 0 && (
+                        <button
+                          onClick={() => setShowCanvasPicker(true)}
+                          className="h-10 px-3 flex items-center gap-1.5 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 text-gray-500 hover:text-gray-600 transition-colors text-xs font-medium whitespace-nowrap"
+                          title="從畫布現有圖片選取"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                          從畫布
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {referenceImages.length > 0 && (
+                  <span className="text-[10px] text-[#86868B]">{referenceImages.length}/{MAX_REFERENCE_IMAGES} 張・AI 將把遮罩區替換成參考圖的物件或風格</span>
+                )}
+                {referenceImages.length === 0 && (
+                  <span className="text-[10px] text-[#86868B]">選填・可上傳參考圖，讓 AI 將遮罩區替換成指定物件或套用參考風格</span>
+                )}
+
+                {/* Hidden file input for local upload */}
+                <input
+                  ref={refFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={e => {
+                    const files = Array.from(e.target.files ?? []).slice(0, MAX_REFERENCE_IMAGES - referenceImages.length);
+                    files.forEach((file: File) => {
+                      const reader = new FileReader();
+                      reader.onload = ev => {
+                        const src = ev.target?.result as string;
+                        if (src) setReferenceImages(prev => [...prev, src].slice(0, MAX_REFERENCE_IMAGES));
+                      };
+                      reader.readAsDataURL(file);
+                    });
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+
+              {/* Canvas image picker popup */}
+              {showCanvasPicker && (
+                <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowCanvasPicker(false)}>
+                  <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 w-[480px] max-h-[60vh] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between flex-shrink-0">
+                      <div>
+                        <p className="text-sm font-bold text-[#1D1D1F]">從畫布選取參考圖</p>
+                        <p className="text-xs text-[#86868B] mt-0.5">最多可再選 {MAX_REFERENCE_IMAGES - referenceImages.length} 張</p>
+                      </div>
+                      <button onClick={() => setShowCanvasPicker(false)} className="text-[#86868B] hover:text-[#1D1D1F] text-xl leading-none transition-colors">&times;</button>
+                    </div>
+                    <div className="overflow-y-auto grid grid-cols-4 gap-3">
+                      {canvasImages.filter(img => img.id !== element.id).map(img => {
+                        const alreadySelected = referenceImages.includes(img.src);
+                        const canSelect = !alreadySelected && referenceImages.length < MAX_REFERENCE_IMAGES;
+                        return (
+                          <button
+                            key={img.id}
+                            disabled={!canSelect && !alreadySelected}
+                            onClick={() => {
+                              if (alreadySelected) {
+                                setReferenceImages(prev => prev.filter(s => s !== img.src));
+                              } else if (canSelect) {
+                                setReferenceImages(prev => [...prev, img.src]);
+                              }
+                            }}
+                            className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
+                              alreadySelected
+                                ? 'border-[#AF52DE] ring-2 ring-[#AF52DE]/30'
+                                : canSelect
+                                ? 'border-transparent hover:border-gray-300'
+                                : 'border-transparent opacity-40 cursor-not-allowed'
+                            }`}
+                          >
+                            <img src={img.src} alt={img.name || '圖片'} className="w-full h-full object-cover" />
+                            {alreadySelected && (
+                              <div className="absolute inset-0 bg-[#AF52DE]/20 flex items-center justify-center">
+                                <div className="w-6 h-6 rounded-full bg-[#AF52DE] text-white flex items-center justify-center text-xs font-bold">✓</div>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setShowCanvasPicker(false)}
+                      className="flex-shrink-0 w-full py-2.5 text-sm font-semibold text-white bg-black hover:bg-gray-800 rounded-full transition-all"
+                    >
+                      確認 ({referenceImages.length} 張已選)
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
          )}
         </div>

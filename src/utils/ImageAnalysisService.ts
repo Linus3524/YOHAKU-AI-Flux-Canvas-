@@ -22,8 +22,8 @@ export const analyzeImagePrompt = async (base64Image: string, apiKey: string): P
     }
   };
 
-  const systemPrompt = `You are an expert AI Art Prompt Engineer. Analyze the image style, lighting, medium, subject, and OCR text. 
-  Output strictly valid JSON with two fields: 
+  const systemPrompt = `You are an expert AI Art Prompt Engineer. Analyze the image style, lighting, medium, subject, and OCR text.
+  Output strictly valid JSON with two fields:
   1. 'en': A detailed, descriptive prompt in English suitable for image generation.
   2. 'zh': A high-quality Traditional Chinese (繁體中文) translation of the prompt.
   NO conversational filler. Output ONLY the JSON.`;

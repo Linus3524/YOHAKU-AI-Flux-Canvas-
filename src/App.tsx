@@ -1402,6 +1402,9 @@ const App: React.FC = () => {
           apiKey={effectiveApiKey}
           imageModel={imageModel}
           atlasKey={atlasApiKey}
+          canvasImages={elements
+            .filter(el => el.type === 'image' && el.id !== editingImage.id && (el as any).src?.startsWith('data:'))
+            .map(el => ({ id: el.id, src: (el as any).src, name: el.name }))}
         />
       )}
 
