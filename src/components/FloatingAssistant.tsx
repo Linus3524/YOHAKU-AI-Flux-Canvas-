@@ -573,6 +573,11 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                                 <td className="py-2 pr-2 text-gray-500 align-top">Black Forest Labs</td>
                                 <td className="py-2 text-gray-600 align-top">藝術風格強烈、色彩層次豐富，適合創意插圖、概念設計與風格化視覺作品。支援<span className="font-bold text-orange-600">圖生圖</span>（Flux Kontext Dev）。</td>
                               </tr>
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">通義千問 Qwen Image 2.0</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">Alibaba</td>
+                                <td className="py-2 text-gray-600 align-top">阿里巴巴頂級多模態生圖模型，中文理解能力出色，支援中英文提示詞（最多 800 字），適合電商、設計素材與創意圖片生成。支援<span className="font-bold text-orange-600">圖生圖</span>。</td>
+                              </tr>
                             </tbody>
                           </table>
                         </div>
@@ -617,7 +622,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-2">3. 數據與隱私保護</h3>
                     <ul className="space-y-1.5 text-gray-600 text-xs">
                       <li>・ <span className="font-bold text-gray-600">Gemini API（Google）：</span>提示詞、上傳影像將傳送至 Google 伺服器處理，遵循 <a href="https://ai.google.dev/terms" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">Google AI Studio 服務條款</a>。</li>
-                      <li>・ <span className="font-bold text-gray-600">Atlas Cloud API：</span>提示詞與影像將傳送至 Atlas Cloud 伺服器，並轉發至對應模型供應商（OpenAI / ByteDance / Black Forest Labs）處理，遵循各供應商之使用政策。生成結果以 base64 格式直接回傳至您的裝置，不永久儲存於 Atlas 伺服器（CDN 連結僅保留 1–7 天）。</li>
+                      <li>・ <span className="font-bold text-gray-600">Atlas Cloud API：</span>提示詞與影像將傳送至 Atlas Cloud 伺服器，並轉發至對應模型供應商（OpenAI / ByteDance / Black Forest Labs / Alibaba）處理，遵循各供應商之使用政策。生成結果以 base64 格式直接回傳至您的裝置，不永久儲存於 Atlas 伺服器（CDN 連結僅保留 1–7 天）。</li>
                       <li>・ <span className="font-bold text-gray-600">本機儲存：</span>所有畫布資料、API Key、生成圖片均僅儲存於您的裝置本機（localStorage / IndexedDB），本軟體伺服器不收集任何個人資料。</li>
                       <li>・ <span className="font-bold text-gray-600">版權責任：</span>用戶應確保上傳圖片擁有合法使用權，侵權糾紛由用戶自負法律責任。</li>
                       <li>・ <span className="font-bold text-gray-600">機密資訊：</span>請勿上傳含有個人識別資訊、商業機密或敏感資料之影像。</li>
@@ -628,7 +633,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     <ul className="space-y-1.5 text-gray-600 text-xs">
                       <li>・ <span className="font-bold text-gray-600">本軟體主權：</span>YOHAKU 之程式碼邏輯、UI 設計及品牌版權歸開發者 LINUS Nice Day Japan (CHANG CHIN WEI) @linus3524 所有。</li>
                       <li>・ <span className="font-bold text-gray-600">開源致敬：</span>本軟體衍生自 @prompt_case 之 Nano Banana Infinite Canvas，並獲授權重製發佈。</li>
-                      <li>・ <span className="font-bold text-gray-600">生成內容：</span>AI 生成內容之權利歸屬依各國法律及各供應商條款（Google、OpenAI、ByteDance、Black Forest Labs）判定，商用前請諮詢法律意見。</li>
+                      <li>・ <span className="font-bold text-gray-600">生成內容：</span>AI 生成內容之權利歸屬依各國法律及各供應商條款（Google、OpenAI、ByteDance、Black Forest Labs、Alibaba）判定，商用前請諮詢法律意見。</li>
                     </ul>
                   </div>
                   <div>

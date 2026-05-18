@@ -8,7 +8,7 @@ const ATLAS_BASE_URL = 'https://api.atlascloud.ai/api/v1';
 const POLL_INTERVAL_MS = 2500;
 const MAX_WAIT_MS = 120000; // 2 minutes
 
-export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'flux-dev';
+export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'flux-dev' | 'qwen-image-2';
 
 /** Seedream v4.5 / v5 / Flux Dev — 8 種比例 × 2K/4K（使用 * 分隔符） */
 export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
@@ -20,6 +20,18 @@ export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: stri
     { ratio: '3:2',  label: '3:2',  w2k: '2496*1664', w4k: '4992*3328' },
     { ratio: '2:3',  label: '2:3',  w2k: '1664*2496', w4k: '3328*4992' },
     { ratio: '21:9', label: '21:9', w2k: '3136*1344', w4k: '6240*2656' },
+];
+
+/** 通義千問 Qwen Image 2.0 — 單層尺寸（每邊最大 2048px，* 分隔） */
+export const QWEN_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
+    { ratio: '1:1',  label: '1:1',  w2k: '1536*1536', w4k: '2048*2048' },
+    { ratio: '4:3',  label: '4:3',  w2k: '1536*1152', w4k: '2048*1536' },
+    { ratio: '3:4',  label: '3:4',  w2k: '1152*1536', w4k: '1536*2048' },
+    { ratio: '16:9', label: '16:9', w2k: '1536*864',  w4k: '2048*1152' },
+    { ratio: '9:16', label: '9:16', w2k: '864*1536',  w4k: '1152*2048' },
+    { ratio: '3:2',  label: '3:2',  w2k: '1536*1024', w4k: '2048*1366' },
+    { ratio: '2:3',  label: '2:3',  w2k: '1024*1536', w4k: '1366*2048' },
+    { ratio: '21:9', label: '21:9', w2k: '1512*648',  w4k: '2048*878'  },
 ];
 
 /** GPT Image 2 — 使用 x 分隔符，quality 控制解析度 */
@@ -35,7 +47,9 @@ export const GPT_SIZES: { ratio: string; label: string; w2k: string; w4k: string
 
 /** 依模型取對應的尺寸表（供 UI 使用） */
 export function getModelSizes(model: AtlasGenerationModel) {
-    return model === 'gpt-image-2' ? GPT_SIZES : ATLAS_SIZES;
+    if (model === 'gpt-image-2') return GPT_SIZES;
+    if (model === 'qwen-image-2') return QWEN_SIZES;
+    return ATLAS_SIZES;
 }
 
 interface ModelConfig {
@@ -44,6 +58,7 @@ interface ModelConfig {
     useInputWrapper: boolean;
     sizeParam?: string;           // API 尺寸欄位名稱（e.g. 'size', 'image_size'）
     useGptSizes?: boolean;        // true = 使用 GPT_SIZES（x 分隔）；false/undefined = ATLAS_SIZES（* 分隔）
+    useQwenSizes?: boolean;       // true = 使用 QWEN_SIZES（* 分隔，max 2048px）
     supportsBase64Output?: boolean; // 支援 enable_base64_output
     supportsQualityParam?: boolean; // 支援 quality: low/medium/high（GPT Image 2）
     extraParams?: Record<string, unknown>; // 固定附加參數
@@ -98,6 +113,17 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         img2imgImageParam: 'image',
         img2imgImageIsArray: false,
     },
+    'qwen-image-2': {
+        id: 'qwen/qwen-image-2.0/text-to-image',
+        useInputWrapper: false,
+        sizeParam: 'size',
+        useQwenSizes: true,
+        supportsBase64Output: true,
+        img2imgId: 'qwen/qwen-image-2.0/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
+    },
 };
 
 /** ratio ('1:1' etc.) + quality ('2K'|'4K') + sizes table → size string */
@@ -105,8 +131,9 @@ function resolveSize(
     ratio: string,
     quality: '2K' | '4K',
     useGptSizes?: boolean,
+    useQwenSizes?: boolean,
 ): string | undefined {
-    const table = useGptSizes ? GPT_SIZES : ATLAS_SIZES;
+    const table = useGptSizes ? GPT_SIZES : useQwenSizes ? QWEN_SIZES : ATLAS_SIZES;
     const entry = table.find(s => s.ratio === ratio);
     if (!entry) return undefined;
     return quality === '4K' ? entry.w4k : entry.w2k;
@@ -271,7 +298,7 @@ function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
 function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOptions) {
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
     if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
-        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes);
+        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes);
         if (size) extra[config.sizeParam] = size;
     }
     if (config.supportsQualityParam) {
@@ -311,7 +338,7 @@ function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, 
     const imgValue = isArray ? [imageBase64] : imageBase64;
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
     if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
-        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes);
+        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes);
         if (size) extra[config.sizeParam] = size;
     }
     if (config.supportsQualityParam) {
