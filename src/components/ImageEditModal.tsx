@@ -682,14 +682,43 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
   }, [adjustments, debouncedUpdatePreview, previewImageSrc, adjustedPreviewSrc]);
 
 
+  // Gemini Flash Lite 分析遮罩周圍環境，提供 context 給 GPT Image 2 融合
+  const analyzeSurroundingContext = useCallback(async (baseImageSrc: string, bwMaskUrl: string): Promise<string> => {
+    if (!apiKey) return '';
+    try {
+      const { GoogleGenAI } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey });
+      const [baseHeader, baseData] = baseImageSrc.split(',');
+      const baseMime = baseHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
+      const [maskHeader, maskData] = bwMaskUrl.split(',');
+      const maskMime = maskHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-lite-preview',
+        contents: {
+          parts: [
+            { inlineData: { data: baseData, mimeType: baseMime } },
+            { inlineData: { data: maskData, mimeType: maskMime } },
+            { text: 'The second image is a B&W mask — white = region to replace, black = surrounding area to preserve. Analyze ONLY the black (surrounding) area visible in the first image. Describe in 1-2 concise sentences: lighting direction and quality, color temperature, dominant colors and palette, surface materials and textures, visual style and atmosphere. This guides seamless inpainting blending.' },
+          ],
+        },
+      });
+      return response.text?.trim() || '';
+    } catch {
+      return ''; // Silent fail — proceed without context
+    }
+  }, [apiKey]);
+
   const runGeneration = async (context: GenerationContext) => {
     // ── 準備黑白遮罩（兩條路都需要） ──────────────────────────
     setIsLoading(true);
     try {
       const bwMaskBase64Url = await createBlackAndWhiteMask(context.baseImageSrc, context.maskDataUrl);
 
-      // ══ 路線 A：Atlas Flux Fill（優先，有 atlasKey 時） ══════
+      // ══ 路線 A：Atlas GPT Image 2（優先，有 atlasKey 時） ══════
       if (atlasKey) {
+        // 先用 Gemini Flash Lite 分析周圍環境，幫助 GPT Image 2 更好融合
+        const surroundingContext = await analyzeSurroundingContext(context.baseImageSrc, bwMaskBase64Url);
+
         const fluxPrompt = context.type === 'remove'
           ? (context.prompt?.trim()
               ? `Remove the selected object. Background hint: ${context.prompt}. Seamlessly fill with natural background.`
@@ -702,6 +731,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
           bwMaskBase64Url,
           atlasKey,
           referenceImages.length > 0 ? referenceImages : undefined,
+          surroundingContext || undefined,
         );
 
         // 用 compositeImagesPixelPerfect 確保遮罩外像素完全一致

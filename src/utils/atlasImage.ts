@@ -462,21 +462,25 @@ export async function callAtlasInpaint(
     maskBase64: string,
     atlasKey: string,
     referenceImages?: string[], // Optional: up to 3 reference images (base64 data URLs)
+    surroundingContext?: string, // Optional: Gemini pre-analysis of surrounding environment
 ): Promise<string> {
     // 透明遮罩圖：讓 GPT Image 2 Edit 知道哪裡需要重新生成
     const transparentImage = await createTransparentMaskedImage(imageBase64, maskBase64);
 
     const hasRefs = referenceImages && referenceImages.length > 0;
     const isRemove = !prompt.trim() && !hasRefs;
+    const ctxHint = surroundingContext
+        ? ` Surrounding environment: ${surroundingContext} — match this lighting, color temperature, materials and atmosphere exactly.`
+        : '';
 
     let editPrompt: string;
     if (isRemove) {
-        editPrompt = 'Seamlessly reconstruct the transparent area to match the surrounding background. Extend the nearby textures, colors, and patterns naturally inward so the result looks like the object was never there.';
+        editPrompt = `Seamlessly reconstruct the transparent area to match the surrounding background. Extend the nearby textures, colors, and patterns naturally inward so the result looks like the object was never there.${ctxHint}`;
     } else if (hasRefs) {
         const extraDesc = prompt.trim() ? ` Additional instruction: ${prompt.trim()}.` : '';
-        editPrompt = `Use the reference image(s) to fill the transparent area. If the reference shows a specific object or subject, place it naturally into the scene. If it shows a style, texture, or aesthetic, apply that to the fill instead. In either case, adapt the lighting, shadows, color temperature, and perspective to seamlessly match the surrounding image.${extraDesc}`;
+        editPrompt = `Use the reference image(s) to fill the transparent area. If the reference shows a specific object or subject, place it naturally into the scene. If it shows a style, texture, or aesthetic, apply that to the fill instead. In either case, adapt the lighting, shadows, color temperature, and perspective to seamlessly match the surrounding image.${ctxHint}${extraDesc}`;
     } else {
-        editPrompt = `In the transparent area only: ${prompt.trim()}. Make it look natural, matching the surrounding lighting, color temperature, and texture.`;
+        editPrompt = `In the transparent area only: ${prompt.trim()}. Make it look completely natural and seamlessly blended.${ctxHint}`;
     }
 
     // images[0] = masked base image; images[1..] = optional reference images
