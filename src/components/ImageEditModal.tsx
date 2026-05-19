@@ -192,6 +192,10 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
   const [showCanvasPicker, setShowCanvasPicker] = useState(false);
   const refFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Inpaint engine selector — show when atlasKey is available (GPT Image 2 option)
+  const canSwitchEngine = !!atlasKey;
+  const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'gemini'>(atlasKey ? 'gpt' : 'gemini');
+
   const saveMaskState = useCallback(() => {
     const maskCtx = maskCanvasRef.current?.getContext('2d');
     if (!maskCtx) return;
@@ -714,8 +718,8 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
     try {
       const bwMaskBase64Url = await createBlackAndWhiteMask(context.baseImageSrc, context.maskDataUrl);
 
-      // ══ 路線 A：Atlas GPT Image 2（優先，有 atlasKey 時） ══════
-      if (atlasKey) {
+      // ══ 路線 A：Atlas GPT Image 2 ══════
+      if (atlasKey && inpaintEngine === 'gpt') {
         // 先用 Gemini Flash Lite 分析周圍環境，幫助 GPT Image 2 更好融合
         const surroundingContext = await analyzeSurroundingContext(context.baseImageSrc, bwMaskBase64Url);
 
@@ -934,7 +938,24 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-7xl h-[95vh] flex flex-col overflow-hidden border border-black/5" onClick={e => e.stopPropagation()}>
         <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white flex-shrink-0">
           <h2 className="text-xl font-bold text-[#1D1D1F]">局部重繪與圖片編輯</h2>
-          <button onClick={onClose} className="text-[#86868B] hover:text-[#1D1D1F] text-2xl leading-none transition-colors">&times;</button>
+          <div className="flex items-center gap-3">
+            {/* Engine toggle in header — always visible */}
+            {canSwitchEngine && (
+              <div className="flex items-center bg-[#F5F5F7] rounded-lg p-0.5 border border-gray-100">
+                <button
+                  onClick={() => setInpaintEngine('gpt')}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${inpaintEngine === 'gpt' ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
+                >GPT Image 2</button>
+                <button
+                  onClick={() => { if (apiKey) setInpaintEngine('gemini'); }}
+                  disabled={!apiKey}
+                  title={!apiKey ? '需要 Gemini API Key' : ''}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${inpaintEngine === 'gemini' ? 'bg-white text-[#1D1D1F] shadow-sm' : !apiKey ? 'text-gray-300 cursor-not-allowed' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
+                >Gemini</button>
+              </div>
+            )}
+            <button onClick={onClose} className="text-[#86868B] hover:text-[#1D1D1F] text-2xl leading-none transition-colors">&times;</button>
+          </div>
         </div>
         
         <div className="flex flex-row flex-grow min-h-0">
