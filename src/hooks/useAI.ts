@@ -929,6 +929,27 @@ CONSTRAINTS:
                 atlasPrompt = atlasPrompt ? `${atlasPrompt}, ${styleLabel} style` : `${styleLabel} style`;
             }
 
+            // Flux Dev 不支援中文，自動翻譯為英文
+            const isFluxModel = atlasModel === 'flux-dev';
+            const hasChinese = /[一-鿿㐀-䶿]/.test(atlasPrompt);
+            if (isFluxModel && hasChinese && atlasPrompt && apiKey) {
+                try {
+                    showToast("Flux Dev 使用英文提示詞以確保生成品質，正在翻譯...");
+                    const liteAI = new GoogleGenAI({ apiKey });
+                    const transRes = await liteAI.models.generateContent({
+                        model: 'gemini-3.1-flash-lite-preview',
+                        contents: { parts: [{ text: `Translate the following image generation prompt to English. Output ONLY the translated prompt, no explanation:\n\n${atlasPrompt}` }] },
+                    });
+                    const translated = transRes.text?.trim();
+                    if (translated) {
+                        atlasPrompt = translated;
+                        showToast(`✅ 已自動翻譯為英文提示詞（Flux Dev 不支援中文）`);
+                    }
+                } catch {
+                    showToast("⚠️ 翻譯失敗，建議改用英文提示詞以獲得最佳 Flux Dev 效果");
+                }
+            }
+
             // 圖生圖：有選取圖片
             if (hasImages) {
                 if (!atlasModelSupportsImg2Img(atlasModel)) {
