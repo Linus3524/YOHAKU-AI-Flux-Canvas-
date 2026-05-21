@@ -950,6 +950,47 @@ CONSTRAINTS:
                 }
             }
 
+            // 畫框模式：每個畫框獨立生成並填入
+            if (frameElements.length > 0) {
+                if (!atlasPrompt) {
+                    showToast("畫框需要便利貼提示詞才可生成 ⚠️");
+                    return;
+                }
+                setGeneratingElementIds(frameElements.map(f => f.id));
+                setIsGenerating(true);
+                setGeneratedImages(null);
+                const atlasQualityFrame = imageSize === '4K' ? '4K' : '2K';
+                try {
+                    const generatePromises = frameElements.map(async (frame) => {
+                        let frameRatio = frame.aspectRatioLabel;
+                        if (!['1:1', '3:4', '4:3', '9:16', '16:9'].includes(frameRatio)) frameRatio = '1:1';
+                        const images = await callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame });
+                        if (images.length === 0) throw new Error('未收到圖片');
+                        const newImageElement: ImageElement = { ...frame, type: 'image', src: images[0] };
+                        return newImageElement;
+                    });
+                    const results = await Promise.allSettled(generatePromises);
+                    const validNewImages = results
+                        .filter((r): r is PromiseFulfilledResult<ImageElement> => r.status === 'fulfilled')
+                        .map(r => r.value);
+                    if (validNewImages.length > 0) {
+                        setElements(prev => prev.map(el => {
+                            const replacement = validNewImages.find(newImg => newImg.id === el.id);
+                            return replacement || el;
+                        }));
+                        showToast(`成功生成 ${validNewImages.length} 張圖片並填入畫框！✨`);
+                    } else {
+                        showToast('畫框生成失敗，請稍後再試 ⚠️');
+                    }
+                } catch (e: any) {
+                    showToast(`畫框生成失敗：${e.message}`);
+                } finally {
+                    setGeneratingElementIds([]);
+                    setIsGenerating(false);
+                }
+                return;
+            }
+
             // 圖生圖：有選取圖片
             if (hasImages) {
                 if (!atlasModelSupportsImg2Img(atlasModel)) {
