@@ -8,9 +8,9 @@ const ATLAS_BASE_URL = 'https://api.atlascloud.ai/api/v1';
 const POLL_INTERVAL_MS = 2500;
 const MAX_WAIT_MS = 120000; // 2 minutes
 
-export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'flux-dev' | 'qwen-image-2';
+export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'qwen-image-2';
 
-/** Seedream v4.5 / v5 / Flux Dev — 8 種比例 × 2K/4K（使用 * 分隔符） */
+/** Seedream v4.5 / v5 — 8 種比例 × 2K/4K（使用 * 分隔符） */
 export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
     { ratio: '1:1',  label: '1:1',  w2k: '2048*2048', w4k: '4096*4096' },
     { ratio: '4:3',  label: '4:3',  w2k: '2304*1728', w4k: '4704*3520' },
@@ -102,16 +102,6 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         img2imgUseInputWrapper: false,
         img2imgImageParam: 'images',
         img2imgImageIsArray: true,
-    },
-    'flux-dev': {
-        id: 'black-forest-labs/flux-dev',
-        useInputWrapper: true,
-        sizeParam: 'size',
-        supportsBase64Output: true,
-        img2imgId: 'black-forest-labs/flux-kontext-dev',
-        img2imgUseInputWrapper: false,
-        img2imgImageParam: 'image',
-        img2imgImageIsArray: false,
     },
     'qwen-image-2': {
         id: 'qwen/qwen-image-2.0/text-to-image',
