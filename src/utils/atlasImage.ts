@@ -494,60 +494,17 @@ export function isValidAtlasKey(key: string): boolean {
 }
 
 // ── [TEST] Atlas 去背工具 ───────────────────────────────────
-
-/**
- * 把 base64 data URI 上傳至暫存主機，回傳公開可存取的 HTTP URL。
- * 使用自建 Vercel serverless function /api/upload-temp → tmpfiles.org（1小時有效）。
- * 本機開發時呼叫 production Vercel URL（已加 CORS 允許）。
- */
-async function uploadBase64ToTempUrl(dataUri: string): Promise<string> {
-    const match = dataUri.match(/^data:([^;]+);base64,(.+)$/s);
-    if (!match) throw new Error('無法解析 base64 data URI');
-    const mimeType = match[1];
-    const base64 = match[2];
-
-    // 本機開發 → 呼叫 production Vercel API（已允許跨域）
-    // 生產環境 → 直接呼叫相對路徑
-    const isLocalDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-    const uploadEndpoint = isLocalDev
-        ? 'https://yohaku-ai-flux-canvas.vercel.app/api/upload-temp'
-        : '/api/upload-temp';
-
-    const res = await fetch(uploadEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64, mimeType }),
-    });
-
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(`圖片暫存上傳失敗：${err.error ?? res.status}`);
-    }
-
-    const { url } = await res.json();
-    if (!url) throw new Error('暫存伺服器未回傳 URL');
-    return url;
-}
-
 /** atlascloud/image-background-remover 測試用
- *  imageInput: base64 data URI 或 http URL 均可
- *  - base64 → 自動上傳至 tmpfiles.org 取得暫存 URL
- *  - http URL → 直接傳給 Atlas
+ *  imageInput: base64 data URI 或 http URL 均可嘗試
  *  回傳: 去背後的 base64 字串（透明 PNG）
  */
 export async function callAtlasBackgroundRemover(
     imageInput: string,
     atlasKey: string
 ): Promise<string> {
-    // Atlas 只接受 HTTP URL，若是 base64 先上傳取得暫存 URL
-    let imageUrl = imageInput;
-    if (imageInput.startsWith('data:')) {
-        imageUrl = await uploadBase64ToTempUrl(imageInput);
-    }
-
     const predId = await postGeneration({
         model: 'atlascloud/image-background-remover',
-        image: imageUrl,
+        image: imageInput,
         enable_base64_output: true,
     }, atlasKey);
     const results = await pollPrediction(predId, atlasKey);
