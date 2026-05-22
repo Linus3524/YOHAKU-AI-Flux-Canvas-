@@ -1114,14 +1114,21 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                     </div>
 
                                     {hasImageOrDrawingOrShape && (
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-xs font-semibold text-[#1D1D1F]">保留透明背景</label>
-                                            <div 
-                                                className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
-                                                onClick={() => onSetPreserveTransparency(!preserveTransparency)}
-                                            >
-                                                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${preserveTransparency ? 'translate-x-5' : 'translate-x-0'}`} />
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs font-semibold text-[#1D1D1F]">保留透明背景</label>
+                                                <div
+                                                    className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
+                                                    onClick={() => onSetPreserveTransparency(!preserveTransparency)}
+                                                >
+                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${preserveTransparency ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </div>
                                             </div>
+                                            {generationModel && generationModel !== 'gemini' && (
+                                                <p className="text-[10px] text-[#FF9500] leading-snug">
+                                                    ⚠️ 目前模型不支援生圖透明輸出，風格轉移、視角轉換等功能仍適用
+                                                </p>
+                                            )}
                                         </div>
                                     )}
 
