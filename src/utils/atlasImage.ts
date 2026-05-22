@@ -493,6 +493,25 @@ export function isValidAtlasKey(key: string): boolean {
     return key.startsWith('apikey-') && key.length > 10;
 }
 
+// ── [TEST] Atlas 去背工具 ───────────────────────────────────
+/** atlascloud/image-background-remover 測試用
+ *  imageInput: base64 data URI 或 http URL 均可嘗試
+ *  回傳: 去背後的 base64 字串（透明 PNG）
+ */
+export async function callAtlasBackgroundRemover(
+    imageInput: string,
+    atlasKey: string
+): Promise<string> {
+    const predId = await postGeneration({
+        model: 'atlascloud/image-background-remover',
+        image: imageInput,
+        enable_base64_output: true,
+    }, atlasKey);
+    const results = await pollPrediction(predId, atlasKey);
+    if (!results[0]) throw new Error('Atlas 去背未回傳結果');
+    return results[0];
+}
+
 /** 除錯用：查詢已知 prediction ID */
 export async function debugFetchPrediction(predictionId: string, atlasKey: string): Promise<string> {
     const res = await fetch(`${ATLAS_BASE_URL}/model/result/${predictionId}`, {

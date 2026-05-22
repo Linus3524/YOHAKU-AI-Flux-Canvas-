@@ -28,7 +28,7 @@ import { STYLE_PRESETS, COLORS, isCJK, wrapTextCanvas, loadImage, createShapeDat
 import { drawTextOnCanvas } from './utils/textCanvas'; // ✅ 新增
 import { captureTextElementAsImage } from './utils/svgCapture'; // ✅ 彎曲文字轉圖片用
 import { analyzeImagePrompt } from './utils/ImageAnalysisService';
-import { downloadImageAsBase64 } from './utils/atlasImage';
+import { downloadImageAsBase64, callAtlasBackgroundRemover } from './utils/atlasImage';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
@@ -324,6 +324,21 @@ const App: React.FC = () => {
       atlasApiKey,
       generationModel,
   });
+
+  // --- [TEST] Atlas 去背測試 ---
+  const handleAtlasRemoveBackground = useCallback(async () => {
+      if (!atlasApiKey) { showToast('請先設定 Atlas Cloud Key'); return; }
+      const el = elements.find(e => selectedElementIds.includes(e.id) && e.type === 'image') as ImageElement | undefined;
+      if (!el) { showToast('請先選取一張圖片'); return; }
+      showToast('🧪 Atlas 去背測試中...');
+      try {
+          const result = await callAtlasBackgroundRemover(el.src, atlasApiKey);
+          setElements(prev => prev.map(e => e.id === el.id ? { ...e, src: result } as ImageElement : e));
+          showToast('✅ Atlas 去背完成！');
+      } catch (e: any) {
+          showToast(`❌ Atlas 去背失敗：${e.message}`);
+      }
+  }, [atlasApiKey, elements, selectedElementIds, setElements, showToast]);
 
   // --- WRAPPED updateElements to Sync Outpainting Frame ---
   const updateElements = useCallback((updatedElement: CanvasElement, dragDelta?: Point) => {
@@ -1231,6 +1246,7 @@ const App: React.FC = () => {
         stylePresets={STYLE_PRESETS}
         onCameraAngle={handleCameraAngle}
         onRemoveBackground={handleRemoveBackground}
+        onAtlasRemoveBackground={handleAtlasRemoveBackground}
         onHarmonize={handleHarmonize}
         isGenerating={isGenerating}
         generatingElementIds={generatingElementIds}
