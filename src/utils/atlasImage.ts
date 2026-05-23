@@ -8,7 +8,7 @@ const ATLAS_BASE_URL = 'https://api.atlascloud.ai/api/v1';
 const POLL_INTERVAL_MS = 2500;
 const MAX_WAIT_MS = 120000; // 2 minutes
 
-export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'qwen-image-2';
+export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'qwen-image-2' | 'nano-banana-2';
 
 /** Seedream v4.5 / v5 — 8 種比例 × 2K/4K（使用 * 分隔符） */
 export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
@@ -110,6 +110,17 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         useQwenSizes: true,
         supportsBase64Output: true,
         img2imgId: 'qwen/qwen-image-2.0/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
+    },
+    // Google Nano Banana 2（Gemini 3.1 Flash Image）透過 Atlas 呼叫
+    'nano-banana-2': {
+        id: 'google/nano-banana-2/text-to-image',
+        useInputWrapper: false,
+        sizeParam: 'size',
+        supportsBase64Output: true,
+        img2imgId: 'google/nano-banana-2/edit',
         img2imgUseInputWrapper: false,
         img2imgImageParam: 'images',
         img2imgImageIsArray: true,
