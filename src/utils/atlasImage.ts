@@ -131,13 +131,14 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         img2imgImageIsArray: true,
     },
     // Google Nano Banana 2（Gemini 3.1 Flash Image）透過 Atlas 呼叫
-    // ⚠️ 使用獨立 aspect_ratio + resolution 欄位；enable_base64_output 為 disabled
+    // 使用獨立 aspect_ratio + resolution 欄位
+    // enable_base64_output 在 web UI 為 disabled，但 API 可用（"only available through the API"）
     // ⚠️ /edit 端點的 images 欄位只接受 HTTP URL（不接受 base64），img2img 暫停支援
     'nano-banana-2': {
         id: 'google/nano-banana-2/text-to-image',
         useInputWrapper: false,
-        useAspectResolution: true,  // 使用 aspect_ratio + resolution 代替 size 字串
-        supportsBase64Output: false, // API schema 標記為 disabled
+        useAspectResolution: true,   // 使用 aspect_ratio + resolution 代替 size 字串
+        supportsBase64Output: true,  // API 可用（透過 enable_base64_output: true）
     },
 };
 
@@ -325,6 +326,9 @@ function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOp
         }
         extra['resolution'] = qualityToResolution(options?.quality);
         extra['output_format'] = 'png';
+        if (config.supportsBase64Output) {
+            extra['enable_base64_output'] = true;
+        }
     } else {
         if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
             const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes);
@@ -373,6 +377,9 @@ function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, 
         }
         extra['resolution'] = qualityToResolution(options?.quality);
         extra['output_format'] = 'png';
+        if (config.supportsBase64Output) {
+            extra['enable_base64_output'] = true;
+        }
     } else {
         if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
             const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes);
