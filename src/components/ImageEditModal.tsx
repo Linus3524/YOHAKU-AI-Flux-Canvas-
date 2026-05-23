@@ -738,13 +738,10 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
           surroundingContext || undefined,
         );
 
-        // 用 compositeImagesPixelPerfect 確保遮罩外像素完全一致
-        const finalImageSrc = await compositeImagesPixelPerfect(
-          context.baseImageSrc,
-          generatedBase64,
-          bwMaskBase64Url,
-        );
-        setPreviewImageSrc(finalImageSrc);
+        // GPT Image 2 Edit 原生支援透明遮罩 inpainting，
+        // 回傳的整張圖遮罩外區域已由模型自行保留，不需要再做 pixel composite。
+        // 強制 composite 反而會因兩張圖透視/色調細微差異造成拼縫變形。
+        setPreviewImageSrc(generatedBase64);
         return;
       }
 
