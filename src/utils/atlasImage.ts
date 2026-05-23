@@ -10,20 +10,6 @@ const MAX_WAIT_MS = 120000; // 2 minutes
 
 export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'qwen-image-2' | 'nano-banana-2';
 
-/** Nano Banana 2 — 10 種比例，resolution 用 1k/2k/4k 字串（不需要 w2k/w4k） */
-export const NANO_BANANA_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
-    { ratio: '1:1',  label: '1:1',  w2k: '1:1',  w4k: '1:1'  },
-    { ratio: '4:3',  label: '4:3',  w2k: '4:3',  w4k: '4:3'  },
-    { ratio: '3:4',  label: '3:4',  w2k: '3:4',  w4k: '3:4'  },
-    { ratio: '16:9', label: '16:9', w2k: '16:9', w4k: '16:9' },
-    { ratio: '9:16', label: '9:16', w2k: '9:16', w4k: '9:16' },
-    { ratio: '3:2',  label: '3:2',  w2k: '3:2',  w4k: '3:2'  },
-    { ratio: '2:3',  label: '2:3',  w2k: '2:3',  w4k: '2:3'  },
-    { ratio: '4:5',  label: '4:5',  w2k: '4:5',  w4k: '4:5'  },
-    { ratio: '5:4',  label: '5:4',  w2k: '5:4',  w4k: '5:4'  },
-    { ratio: '21:9', label: '21:9', w2k: '21:9', w4k: '21:9' },
-];
-
 /** Seedream v4.5 / v5 — 8 種比例 × 2K/4K（使用 * 分隔符） */
 export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
     { ratio: '1:1',  label: '1:1',  w2k: '2048*2048', w4k: '4096*4096' },
@@ -63,7 +49,6 @@ export const GPT_SIZES: { ratio: string; label: string; w2k: string; w4k: string
 export function getModelSizes(model: AtlasGenerationModel) {
     if (model === 'gpt-image-2') return GPT_SIZES;
     if (model === 'qwen-image-2') return QWEN_SIZES;
-    if (model === 'nano-banana-2') return NANO_BANANA_SIZES;
     return ATLAS_SIZES;
 }
 
@@ -74,7 +59,6 @@ interface ModelConfig {
     sizeParam?: string;           // API 尺寸欄位名稱（e.g. 'size', 'image_size'）
     useGptSizes?: boolean;        // true = 使用 GPT_SIZES（x 分隔）；false/undefined = ATLAS_SIZES（* 分隔）
     useQwenSizes?: boolean;       // true = 使用 QWEN_SIZES（* 分隔，max 2048px）
-    useAspectResolution?: boolean; // true = 使用獨立 aspect_ratio + resolution 欄位（Nano Banana 2）
     supportsBase64Output?: boolean; // 支援 enable_base64_output
     supportsQualityParam?: boolean; // 支援 quality: low/medium/high（GPT Image 2）
     extraParams?: Record<string, unknown>; // 固定附加參數
@@ -131,14 +115,15 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         img2imgImageIsArray: true,
     },
     // Google Nano Banana 2（Gemini 3.1 Flash Image）透過 Atlas 呼叫
-    // 使用獨立 aspect_ratio + resolution 欄位
-    // enable_base64_output 在 web UI 為 disabled，但 API 可用（"only available through the API"）
-    // ⚠️ /edit 端點的 images 欄位只接受 HTTP URL（不接受 base64），img2img 暫停支援
     'nano-banana-2': {
         id: 'google/nano-banana-2/text-to-image',
         useInputWrapper: false,
-        useAspectResolution: true,   // 使用 aspect_ratio + resolution 代替 size 字串
-        supportsBase64Output: true,  // API 可用（透過 enable_base64_output: true）
+        sizeParam: 'size',
+        supportsBase64Output: true,
+        img2imgId: 'google/nano-banana-2/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
     },
 };
 
@@ -311,35 +296,17 @@ function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
     return q === '4K' ? 'high' : 'medium';
 }
 
-function qualityToResolution(q?: '2K' | '4K'): string {
-    if (q === '4K') return '4k';
-    if (q === '2K') return '2k';
-    return '1k';
-}
-
 function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOptions) {
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
-    if (config.useAspectResolution) {
-        // Nano Banana 2：獨立的 aspect_ratio + resolution 欄位
-        if (options?.ratio && options.ratio !== 'Original') {
-            extra['aspect_ratio'] = options.ratio;
-        }
-        extra['resolution'] = qualityToResolution(options?.quality);
-        extra['output_format'] = 'png';
-        if (config.supportsBase64Output) {
-            extra['enable_base64_output'] = true;
-        }
-    } else {
-        if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
-            const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes);
-            if (size) extra[config.sizeParam] = size;
-        }
-        if (config.supportsQualityParam) {
-            extra['quality'] = qualityToGpt(options?.quality);
-        }
-        if (config.supportsBase64Output) {
-            extra['enable_base64_output'] = true;
-        }
+    if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
+        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes);
+        if (size) extra[config.sizeParam] = size;
+    }
+    if (config.supportsQualityParam) {
+        extra['quality'] = qualityToGpt(options?.quality);
+    }
+    if (config.supportsBase64Output) {
+        extra['enable_base64_output'] = true;
     }
     return config.useInputWrapper
         ? { model: config.id, input: { prompt, ...extra } }
@@ -371,26 +338,15 @@ function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, 
     const isArray  = config.img2imgImageIsArray ?? true;
     const imgValue = isArray ? [imageBase64] : imageBase64;
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
-    if (config.useAspectResolution) {
-        if (options?.ratio && options.ratio !== 'Original') {
-            extra['aspect_ratio'] = options.ratio;
-        }
-        extra['resolution'] = qualityToResolution(options?.quality);
-        extra['output_format'] = 'png';
-        if (config.supportsBase64Output) {
-            extra['enable_base64_output'] = true;
-        }
-    } else {
-        if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
-            const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes);
-            if (size) extra[config.sizeParam] = size;
-        }
-        if (config.supportsQualityParam) {
-            extra['quality'] = qualityToGpt(options?.quality);
-        }
-        if (config.supportsBase64Output) {
-            extra['enable_base64_output'] = true;
-        }
+    if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
+        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes);
+        if (size) extra[config.sizeParam] = size;
+    }
+    if (config.supportsQualityParam) {
+        extra['quality'] = qualityToGpt(options?.quality);
+    }
+    if (config.supportsBase64Output) {
+        extra['enable_base64_output'] = true;
     }
     return config.img2imgUseInputWrapper
         ? { model: config.img2imgId, input: { prompt, [imgParam]: imgValue, ...extra } }
