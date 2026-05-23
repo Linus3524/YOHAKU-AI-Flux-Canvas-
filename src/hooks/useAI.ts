@@ -297,6 +297,7 @@ ALWAYS PRESERVE:
     }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey]);
 
     // handlePasteStyle: 僅供 Style Library 預設風格使用（styleOverride 一定存在）
+    // 優先順序：非 Gemini 模型且有 Atlas key → Atlas img2img；否則 → Gemini
     const handlePasteStyle = useCallback(async (targetElementIds: string[], styleOverride?: string) => {
         const styleToApply = styleOverride;
 
@@ -304,7 +305,7 @@ ALWAYS PRESERVE:
             showToast("沒有指定風格！");
             return;
         }
-        
+
         const targetElements = elements.filter(el => targetElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
         if (targetElements.length === 0) return;
 
@@ -313,55 +314,82 @@ ALWAYS PRESERVE:
         showToast(`正在應用預設風格...`);
         setShowStyleLibrary(false);
 
+        // 判斷走 Atlas 還是 Gemini
+        const useAtlas = generationModel !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModel as AtlasGenerationModel);
+
         try {
-            const genAI = createAiClient();
-            
-            for (const element of targetElements) {
-                try {
-                    const [header, data] = element.src.split(',');
-                    const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                    const imagePart = { inlineData: { data, mimeType } };
+            if (useAtlas) {
+                // ── Atlas img2img 風格套用 ──────────────────────────────
+                const atlasModel = generationModel as AtlasGenerationModel;
+                const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
+                const stylePrompt = presetMatch?.prompt
+                    ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
+                    : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
 
-                    // Style library presets: styleOverride is always provided
-                    const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
-                    let prompt = presetMatch?.prompt
-                        ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
-                        : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
-
-                    const transparencyOverride = preserveTransparency
-                        ? `\n\n---FINAL OVERRIDE (supersedes all instructions above)---\nThe input image has a transparent background.\nOUTPUT REQUIREMENT: Place the subject on a PURE WHITE (#FFFFFF) background.\nPROHIBITED: gradients, shadows behind subject, environmental backgrounds, textures, any non-white background.\nThis background requirement overrides all style instructions above.`
-                        : '';
-
-                    prompt = prompt + transparencyOverride;
-
-                    const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                        model: imageModel,
-                        contents: { parts: [imagePart, { text: prompt }] },
-                    }));
-
-                    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                    if (part?.inlineData) {
-                        const generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
-                        let finalSrc = generatedSrc;
-                        
-                        if (preserveTransparency) {
-                             try {
-                                 const similarity = await checkCompositionSimilarity(element.src, generatedSrc);
-                                 if (similarity > 0.75) {
-                                     finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
-                                 } else {
-                                     showToast("構圖已變化，正在重新去背...");
-                                     finalSrc = await executeDynamicRemoval(generatedSrc, genAI, undefined, imageModel);
-                                 }
-                             } catch (e) {
-                                 console.warn("Failed to restore transparency for style transfer:", e);
-                             }
+                for (const element of targetElements) {
+                    try {
+                        let refImage = element.src;
+                        if (!refImage.startsWith('data:')) {
+                            refImage = await downloadImageAsBase64(refImage);
                         }
-
-                        setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
+                        const images = await callAtlasImg2Img(stylePrompt, atlasModel, atlasApiKey, refImage, 1, { ratio: '1:1', quality: imageSize === '4K' ? '4K' : '2K' });
+                        if (images.length > 0) {
+                            setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: images[0] } : el));
+                        }
+                    } catch (err: any) {
+                        throw err;
                     }
-                } catch (err: any) {
-                    throw err; 
+                }
+            } else {
+                // ── Gemini img2img 風格套用（原有邏輯）─────────────────
+                const genAI = createAiClient();
+
+                for (const element of targetElements) {
+                    try {
+                        const [header, data] = element.src.split(',');
+                        const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                        const imagePart = { inlineData: { data, mimeType } };
+
+                        const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
+                        let prompt = presetMatch?.prompt
+                            ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
+                            : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
+
+                        const transparencyOverride = preserveTransparency
+                            ? `\n\n---FINAL OVERRIDE (supersedes all instructions above)---\nThe input image has a transparent background.\nOUTPUT REQUIREMENT: Place the subject on a PURE WHITE (#FFFFFF) background.\nPROHIBITED: gradients, shadows behind subject, environmental backgrounds, textures, any non-white background.\nThis background requirement overrides all style instructions above.`
+                            : '';
+
+                        prompt = prompt + transparencyOverride;
+
+                        const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                            model: imageModel,
+                            contents: { parts: [imagePart, { text: prompt }] },
+                        }));
+
+                        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                        if (part?.inlineData) {
+                            const generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
+                            let finalSrc = generatedSrc;
+
+                            if (preserveTransparency) {
+                                try {
+                                    const similarity = await checkCompositionSimilarity(element.src, generatedSrc);
+                                    if (similarity > 0.75) {
+                                        finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
+                                    } else {
+                                        showToast("構圖已變化，正在重新去背...");
+                                        finalSrc = await executeDynamicRemoval(generatedSrc, genAI, undefined, imageModel);
+                                    }
+                                } catch (e) {
+                                    console.warn("Failed to restore transparency for style transfer:", e);
+                                }
+                            }
+
+                            setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
+                        }
+                    } catch (err: any) {
+                        throw err;
+                    }
                 }
             }
             showToast("風格應用完成！✨");
@@ -372,7 +400,7 @@ ALWAYS PRESERVE:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey]);
+    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModel, atlasApiKey, imageSize]);
 
     const handleCameraAngle = useCallback(async (anglePrompt: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
