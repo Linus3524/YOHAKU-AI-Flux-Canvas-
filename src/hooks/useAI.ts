@@ -48,7 +48,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
      */
     const withAtlasWaitToast = useCallback(async <T>(fn: () => Promise<T>): Promise<T> => {
         let elapsed = 0;
-        const INTERVAL = 30000; // 每 30 秒提示一次
+        const INTERVAL = 90000; // 每 1.5 分鐘提示一次
         const msgs = [
             '⏳ Atlas 生成中，請稍候...',
             '🖼️ 參考圖較多，Atlas 仍在處理中，請耐心等候...',
