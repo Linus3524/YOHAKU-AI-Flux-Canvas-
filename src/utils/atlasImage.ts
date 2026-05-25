@@ -6,7 +6,7 @@
 
 const ATLAS_BASE_URL = 'https://api.atlascloud.ai/api/v1';
 const POLL_INTERVAL_MS = 2500;
-const MAX_WAIT_MS = 120000; // 2 minutes
+const MAX_WAIT_MS = 300000; // 5 minutes（參考圖模式需要更長時間）
 
 export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'qwen-image-2';
 
@@ -311,11 +311,15 @@ export async function callAtlasGenerate(
     options?: AtlasCallOptions
 ): Promise<string[]> {
     const config = MODEL_CONFIGS[model];
-    const predIds = await Promise.all(
+    const submitResults = await Promise.allSettled(
         Array.from({ length: count }, () =>
             postGeneration(buildT2IBody(config, prompt, options), atlasKey)
         )
     );
+    const predIds = submitResults
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+        .map(r => r.value);
+    if (predIds.length === 0) throw new Error('Atlas: 所有生成請求均失敗');
     const results = await Promise.allSettled(predIds.map(id => pollPrediction(id, atlasKey)));
     return results
         .filter((r): r is PromiseFulfilledResult<string[]> => r.status === 'fulfilled')
@@ -394,11 +398,15 @@ export async function callAtlasImg2Img(
     // 主圖 + 便利貼附加參考圖（去除空值，最多 8 張避免 API 超限）
     const allImages = [referenceImageBase64, ...(noteRefImages ?? [])].filter(Boolean).slice(0, 8);
 
-    const predIds = await Promise.all(
+    const submitResults = await Promise.allSettled(
         Array.from({ length: count }, () =>
             postGeneration(buildI2IBody(config, prompt, allImages, resolvedOptions), atlasKey)
         )
     );
+    const predIds = submitResults
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+        .map(r => r.value);
+    if (predIds.length === 0) throw new Error('Atlas img2img: 所有生成請求均失敗');
     const results = await Promise.allSettled(predIds.map(id => pollPrediction(id, atlasKey)));
     return results
         .filter((r): r is PromiseFulfilledResult<string[]> => r.status === 'fulfilled')
