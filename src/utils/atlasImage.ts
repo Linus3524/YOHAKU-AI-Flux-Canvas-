@@ -370,6 +370,30 @@ async function detectClosestRatio(base64: string): Promise<string> {
     });
 }
 
+/**
+ * 送給 Atlas 前壓縮圖片：最長邊縮到 1024px，轉 JPEG 85%
+ * 大幅減少傳輸量（原圖可能 3-5MB → 壓縮後約 200-400KB），加快 API 處理速度
+ */
+async function compressForAtlas(base64: string, maxPx = 1024, quality = 0.85): Promise<string> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const { naturalWidth: w, naturalHeight: h } = img;
+            const scale = w > h ? maxPx / w : maxPx / h;
+            // 已經夠小就不放大，直接用原圖
+            if (scale >= 1) { resolve(base64); return; }
+            const canvas = document.createElement('canvas');
+            canvas.width  = Math.round(w * scale);
+            canvas.height = Math.round(h * scale);
+            const ctx = canvas.getContext('2d')!;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(base64); // 壓縮失敗就用原圖
+        img.src = base64;
+    });
+}
+
 /** 某模型是否支援圖生圖 */
 export function atlasModelSupportsImg2Img(model: AtlasGenerationModel): boolean {
     return !!MODEL_CONFIGS[model].img2imgId;
@@ -395,8 +419,9 @@ export async function callAtlasImg2Img(
         resolvedOptions = { ...options, ratio: detectedRatio };
     }
 
-    // 主圖 + 便利貼附加參考圖（去除空值，最多 8 張避免 API 超限）
-    const allImages = [referenceImageBase64, ...(noteRefImages ?? [])].filter(Boolean).slice(0, 8);
+    // 送出前壓縮所有參考圖（最長邊 1024px + JPEG 85%），大幅減少傳輸量
+    const rawImages = [referenceImageBase64, ...(noteRefImages ?? [])].filter(Boolean).slice(0, 8);
+    const allImages = await Promise.all(rawImages.map(img => compressForAtlas(img)));
 
     const submitResults = await Promise.allSettled(
         Array.from({ length: count }, () =>
