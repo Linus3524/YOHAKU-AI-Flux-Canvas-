@@ -957,6 +957,16 @@ CONSTRAINTS:
                 atlasPrompt = atlasPrompt ? `${atlasPrompt}, ${styleLabel} style` : `${styleLabel} style`;
             }
 
+            // 收集便利貼中的參考圖（base64）
+            const noteRefImgs: string[] = [];
+            for (const note of noteElements) {
+                if (note.type === 'note' && (note as NoteElement).referenceImages) {
+                    (note as NoteElement).referenceImages!.forEach(src => { if (src) noteRefImgs.push(src); });
+                }
+            }
+            const hasNoteRefs = noteRefImgs.length > 0;
+            const canDoImg2Img = atlasModelSupportsImg2Img(atlasModel);
+
             // 畫框模式：每個畫框獨立生成並填入
             if (frameElements.length > 0) {
                 if (!atlasPrompt) {
@@ -971,9 +981,15 @@ CONSTRAINTS:
                     const generatePromises = frameElements.map(async (frame) => {
                         let frameRatio = frame.aspectRatioLabel;
                         if (!['1:1', '3:4', '4:3', '9:16', '16:9'].includes(frameRatio)) frameRatio = '1:1';
-                        const images = await callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame });
-                        if (images.length === 0) throw new Error('未收到圖片');
-                        const newImageElement: ImageElement = { ...frame, type: 'image', src: images[0] };
+                        let imgs: string[];
+                        if (hasNoteRefs && canDoImg2Img) {
+                            // 有便利貼參考圖 → 用 img2img，以第一張參考圖為主
+                            imgs = await callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame }, noteRefImgs.slice(1));
+                        } else {
+                            imgs = await callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame });
+                        }
+                        if (imgs.length === 0) throw new Error('未收到圖片');
+                        const newImageElement: ImageElement = { ...frame, type: 'image', src: imgs[0] };
                         return newImageElement;
                     });
                     const results = await Promise.allSettled(generatePromises);
@@ -998,21 +1014,19 @@ CONSTRAINTS:
                 return;
             }
 
-            // 圖生圖：有選取圖片
+            // 圖生圖：有選取畫布圖片
             if (hasImages) {
-                if (!atlasModelSupportsImg2Img(atlasModel)) {
+                if (!canDoImg2Img) {
                     showToast(`${atlasModel} 不支援圖生圖，請改用 Gemini 模式 ⚠️`);
                     return;
                 }
                 const firstImg = imageElements.find(el => el.type === 'image' || el.type === 'drawing') as (ImageElement | DrawingElement) | undefined;
                 let refImage = firstImg?.src ?? '';
                 if (!refImage) { showToast("請選取一張圖片作為參考 ⚠️"); return; }
-                // 若參考圖是 URL（非 base64），先透過 proxy 轉換
                 if (!refImage.startsWith('data:')) {
                     refImage = await downloadImageAsBase64(refImage);
                     if (!refImage.startsWith('data:')) { showToast("無法讀取參考圖片，請確認圖片已正確載入 ⚠️"); return; }
                 }
-                // 如果沒有任何提示詞，給一個保留原構圖的預設
                 const img2imgPrompt = atlasPrompt || 'Keep the overall composition, enhance details and quality';
                 setGeneratingElementIds(firstImg ? [firstImg.id] : []);
                 setIsGenerating(true);
@@ -1020,7 +1034,8 @@ CONSTRAINTS:
                 const atlasQuality = imageSize === '4K' ? '4K' : '2K';
                 const atlasRatio = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
                 try {
-                    const images = await callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2, { ratio: atlasRatio, quality: atlasQuality });
+                    // 便利貼參考圖追加在畫布圖片之後
+                    const images = await callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2, { ratio: atlasRatio, quality: atlasQuality }, hasNoteRefs ? noteRefImgs : undefined);
                     if (images.length === 0) throw new Error('未收到任何圖片');
                     setGeneratedImages(images);
                 } catch (e: any) {
@@ -1032,7 +1047,31 @@ CONSTRAINTS:
                 return;
             }
 
-            // 文生圖：便利貼必填（無圖片參考時）
+            // 便利貼有參考圖且模型支援 img2img → 以參考圖驅動生成
+            if (hasNoteRefs && canDoImg2Img) {
+                if (!atlasPrompt) {
+                    showToast("請在便利貼加入提示詞描述想要的內容 ⚠️");
+                    return;
+                }
+                setGeneratingElementIds([]);
+                setIsGenerating(true);
+                setGeneratedImages(null);
+                const atlasQualityR = imageSize === '4K' ? '4K' : '2K';
+                const atlasRatioR = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
+                try {
+                    const images = await callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 2, { ratio: atlasRatioR, quality: atlasQualityR }, noteRefImgs.slice(1));
+                    if (images.length === 0) throw new Error('未收到任何圖片');
+                    setGeneratedImages(images);
+                } catch (e: any) {
+                    showToast(`生成失敗：${e.message}`);
+                } finally {
+                    setGeneratingElementIds([]);
+                    setIsGenerating(false);
+                }
+                return;
+            }
+
+            // 純文生圖
             if (!atlasPrompt) {
                 showToast("文生圖需要便利貼提示詞，或選取圖片使用圖生圖模式 ⚠️");
                 return;

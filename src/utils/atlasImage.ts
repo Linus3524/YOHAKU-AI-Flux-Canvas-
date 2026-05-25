@@ -322,10 +322,11 @@ export async function callAtlasGenerate(
 
 // ── 圖生圖 ─────────────────────────────────────────────
 
-function buildI2IBody(config: ModelConfig, prompt: string, imageBase64: string, options?: AtlasCallOptions) {
+// images: 第一張為主參考圖，其餘為便利貼附加參考圖
+function buildI2IBody(config: ModelConfig, prompt: string, images: string[], options?: AtlasCallOptions) {
     const imgParam = config.img2imgImageParam  ?? 'images';
     const isArray  = config.img2imgImageIsArray ?? true;
-    const imgValue = isArray ? [imageBase64] : imageBase64;
+    const imgValue = isArray ? images : images[0];
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
     if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
         const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes);
@@ -367,14 +368,15 @@ export function atlasModelSupportsImg2Img(model: AtlasGenerationModel): boolean 
     return !!MODEL_CONFIGS[model].img2imgId;
 }
 
-/** 圖生圖：傳入參考圖 base64，回傳生成結果 base64 陣列 */
+/** 圖生圖：主參考圖 + 可選的便利貼附加參考圖，回傳生成結果 base64 陣列 */
 export async function callAtlasImg2Img(
     prompt: string,
     model: AtlasGenerationModel,
     atlasKey: string,
     referenceImageBase64: string,
     count: number = 2,
-    options?: AtlasCallOptions
+    options?: AtlasCallOptions,
+    noteRefImages?: string[]   // 便利貼附加參考圖（base64），追加在主參考圖之後
 ): Promise<string[]> {
     const config = MODEL_CONFIGS[model];
     if (!config.img2imgId) throw new Error(`${model} 不支援圖生圖`);
@@ -386,9 +388,12 @@ export async function callAtlasImg2Img(
         resolvedOptions = { ...options, ratio: detectedRatio };
     }
 
+    // 主圖 + 便利貼附加參考圖（去除空值，最多 8 張避免 API 超限）
+    const allImages = [referenceImageBase64, ...(noteRefImages ?? [])].filter(Boolean).slice(0, 8);
+
     const predIds = await Promise.all(
         Array.from({ length: count }, () =>
-            postGeneration(buildI2IBody(config, prompt, referenceImageBase64, resolvedOptions), atlasKey)
+            postGeneration(buildI2IBody(config, prompt, allImages, resolvedOptions), atlasKey)
         )
     );
     const results = await Promise.all(predIds.map(id => pollPrediction(id, atlasKey)));
