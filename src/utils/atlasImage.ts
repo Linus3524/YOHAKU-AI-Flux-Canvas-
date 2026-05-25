@@ -302,7 +302,7 @@ function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOp
         : { model: config.id, prompt, ...extra };
 }
 
-/** 文生圖：回傳 base64 陣列（count 張） */
+/** 文生圖：回傳 base64 陣列（count 張），單張失敗不影響其他 */
 export async function callAtlasGenerate(
     prompt: string,
     model: AtlasGenerationModel,
@@ -316,8 +316,11 @@ export async function callAtlasGenerate(
             postGeneration(buildT2IBody(config, prompt, options), atlasKey)
         )
     );
-    const results = await Promise.all(predIds.map(id => pollPrediction(id, atlasKey)));
-    return results.map(r => r[0]).filter(Boolean) as string[];
+    const results = await Promise.allSettled(predIds.map(id => pollPrediction(id, atlasKey)));
+    return results
+        .filter((r): r is PromiseFulfilledResult<string[]> => r.status === 'fulfilled')
+        .flatMap(r => r.value)
+        .filter(Boolean);
 }
 
 // ── 圖生圖 ─────────────────────────────────────────────
@@ -396,8 +399,11 @@ export async function callAtlasImg2Img(
             postGeneration(buildI2IBody(config, prompt, allImages, resolvedOptions), atlasKey)
         )
     );
-    const results = await Promise.all(predIds.map(id => pollPrediction(id, atlasKey)));
-    return results.map(r => r[0]).filter(Boolean) as string[];
+    const results = await Promise.allSettled(predIds.map(id => pollPrediction(id, atlasKey)));
+    return results
+        .filter((r): r is PromiseFulfilledResult<string[]> => r.status === 'fulfilled')
+        .flatMap(r => r.value)
+        .filter(Boolean);
 }
 
 /**
