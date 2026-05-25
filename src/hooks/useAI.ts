@@ -42,6 +42,33 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [showStyleLibrary, setShowStyleLibrary] = useState(false);
     const zIndexCounter = useRef(Math.max(0, ...elements.map(e => e.zIndex)) + 1);
 
+    /**
+     * 包住 Atlas 長時間請求：每 30 秒跳一次提示 toast，避免用戶誤以為卡死
+     * 有參考圖的算圖可能需要 3-8 分鐘，前端最多等 10 分鐘
+     */
+    const withAtlasWaitToast = useCallback(async <T>(fn: () => Promise<T>): Promise<T> => {
+        let elapsed = 0;
+        const INTERVAL = 30000; // 每 30 秒提示一次
+        const msgs = [
+            '⏳ Atlas 生成中，請稍候...',
+            '🖼️ 參考圖較多，Atlas 仍在處理中，請耐心等候...',
+            '⏳ 還在算圖中，沒有斷線，請繼續等待...',
+            '🎨 Atlas 快完成了，請再等一下...',
+            '⏳ 仍在生成中，Atlas 後台已收到任務...',
+            '🌐 遠端生成中，網路正常，請繼續等候...',
+        ];
+        const timer = setInterval(() => {
+            elapsed += INTERVAL;
+            const idx = Math.floor(elapsed / INTERVAL) - 1;
+            showToast(msgs[Math.min(idx, msgs.length - 1)]);
+        }, INTERVAL);
+        try {
+            return await fn();
+        } finally {
+            clearInterval(timer);
+        }
+    }, [showToast]);
+
     // Helper to create client or throw error immediately
     const createAiClient = () => {
         if (!apiKey) {
@@ -332,7 +359,7 @@ ALWAYS PRESERVE:
                         if (!refImage.startsWith('data:')) {
                             refImage = await downloadImageAsBase64(refImage);
                         }
-                        const images = await callAtlasImg2Img(stylePrompt, atlasModel, atlasApiKey, refImage, 1, { ratio: '1:1', quality: imageSize === '4K' ? '4K' : '2K' });
+                        const images = await withAtlasWaitToast(() => callAtlasImg2Img(stylePrompt, atlasModel, atlasApiKey, refImage, 1, { ratio: '1:1', quality: imageSize === '4K' ? '4K' : '2K' }));
                         if (images.length > 0) {
                             setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: images[0] } : el));
                         }
@@ -984,9 +1011,9 @@ CONSTRAINTS:
                         let imgs: string[];
                         if (hasNoteRefs && canDoImg2Img) {
                             // 有便利貼參考圖 → 用 img2img，以第一張參考圖為主
-                            imgs = await callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame }, noteRefImgs.slice(1));
+                            imgs = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame }, noteRefImgs.slice(1)));
                         } else {
-                            imgs = await callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame });
+                            imgs = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame }));
                         }
                         if (imgs.length === 0) throw new Error('未收到圖片');
                         const newImageElement: ImageElement = { ...frame, type: 'image', src: imgs[0] };
@@ -1035,7 +1062,7 @@ CONSTRAINTS:
                 const atlasRatio = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
                 try {
                     // 便利貼參考圖追加在畫布圖片之後
-                    const images = await callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2, { ratio: atlasRatio, quality: atlasQuality }, hasNoteRefs ? noteRefImgs : undefined);
+                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2, { ratio: atlasRatio, quality: atlasQuality }, hasNoteRefs ? noteRefImgs : undefined));
                     if (images.length === 0) throw new Error('未收到任何圖片');
                     setGeneratedImages(images);
                 } catch (e: any) {
@@ -1059,7 +1086,7 @@ CONSTRAINTS:
                 const atlasQualityR = imageSize === '4K' ? '4K' : '2K';
                 const atlasRatioR = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
                 try {
-                    const images = await callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 2, { ratio: atlasRatioR, quality: atlasQualityR }, noteRefImgs.slice(1));
+                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 2, { ratio: atlasRatioR, quality: atlasQualityR }, noteRefImgs.slice(1)));
                     if (images.length === 0) throw new Error('未收到任何圖片');
                     setGeneratedImages(images);
                 } catch (e: any) {
@@ -1082,7 +1109,7 @@ CONSTRAINTS:
             const atlasQuality2 = imageSize === '4K' ? '4K' : '2K';
             const atlasRatio2 = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
             try {
-                const images = await callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 2, { ratio: atlasRatio2, quality: atlasQuality2 });
+                const images = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 2, { ratio: atlasRatio2, quality: atlasQuality2 }));
                 if (images.length === 0) throw new Error('未收到任何圖片');
                 setGeneratedImages(images);
             } catch (e: any) {

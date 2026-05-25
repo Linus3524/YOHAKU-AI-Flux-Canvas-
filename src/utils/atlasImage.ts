@@ -6,7 +6,7 @@
 
 const ATLAS_BASE_URL = 'https://api.atlascloud.ai/api/v1';
 const POLL_INTERVAL_MS = 2500;
-const MAX_WAIT_MS = 300000; // 5 minutes（參考圖模式需要更長時間）
+const MAX_WAIT_MS = 600000; // 10 minutes（參考圖模式需要更長時間）
 
 export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'qwen-image-2';
 
