@@ -29,7 +29,7 @@ import { drawTextOnCanvas } from './utils/textCanvas'; // ✅ 新增
 import { captureTextElementAsImage } from './utils/svgCapture'; // ✅ 彎曲文字轉圖片用
 import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import { downloadImageAsBase64 } from './utils/atlasImage';
-import { callFalQwenImageLayered, analyzeLayerCount } from './utils/falImage';
+import { geminiLayerSegment } from './utils/geminiLayer';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
@@ -513,13 +513,15 @@ const App: React.FC = () => {
 
       setIsGenerating(true);
       setGeneratingElementIds([elementId]);
-      showToast('🔍 Gemini 分析圖層結構中...');
+      showToast('🔍 魔法分層啟動中...');
 
       try {
-          // 先用 Gemini 判斷最適合幾層，再交給 fal.ai 分解
-          const numLayers = await analyzeLayerCount(el.src, effectiveApiKey || '');
-          showToast(`✨ 分析完成，準備分解成 ${numLayers} 個圖層...`);
-          const layers = await callFalQwenImageLayered(el.src, falApiKey, numLayers);
+          const layers = await geminiLayerSegment(
+              el.src,
+              effectiveApiKey || '',
+              falApiKey,
+              (msg) => showToast(msg),
+          );
           if (layers.length === 0) throw new Error('未收到任何圖層');
 
           // 將各圖層依序排列在原圖右側，每層的位置與尺寸根據裁切比例計算
