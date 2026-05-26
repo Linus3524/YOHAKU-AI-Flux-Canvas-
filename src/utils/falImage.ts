@@ -61,15 +61,71 @@ async function compressBase64(base64: string, maxPx = 1024, quality = 0.85): Pro
     });
 }
 
+export interface LayerResult {
+    base64: string;
+    /** 裁切後內容在原圖像素座標中的相對位置（0~1 比例） */
+    cropRatioX: number;
+    cropRatioY: number;
+    cropRatioW: number;
+    cropRatioH: number;
+}
+
+/**
+ * 掃描透明 PNG，裁掉透明邊緣，回傳裁切後 base64 + 在原圖中的比例位置
+ */
+export async function trimTransparentPixels(base64: string): Promise<LayerResult> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const W = img.naturalWidth, H = img.naturalHeight;
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d')!;
+            ctx.drawImage(img, 0, 0);
+            const data = ctx.getImageData(0, 0, W, H).data;
+
+            let minX = W, maxX = 0, minY = H, maxY = 0;
+            for (let y = 0; y < H; y++) {
+                for (let x = 0; x < W; x++) {
+                    if (data[(y * W + x) * 4 + 3] > 8) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+            // 完全透明（空白層）→ 回傳全尺寸
+            if (minX > maxX || minY > maxY) {
+                resolve({ base64, cropRatioX: 0, cropRatioY: 0, cropRatioW: 1, cropRatioH: 1 });
+                return;
+            }
+            const cW = maxX - minX + 1, cH = maxY - minY + 1;
+            const out = document.createElement('canvas');
+            out.width = cW; out.height = cH;
+            out.getContext('2d')!.drawImage(canvas, minX, minY, cW, cH, 0, 0, cW, cH);
+            resolve({
+                base64: out.toDataURL('image/png'),
+                cropRatioX: minX / W,
+                cropRatioY: minY / H,
+                cropRatioW: cW / W,
+                cropRatioH: cH / H,
+            });
+        };
+        img.onerror = () => resolve({ base64, cropRatioX: 0, cropRatioY: 0, cropRatioW: 1, cropRatioH: 1 });
+        img.src = base64;
+    });
+}
+
 /**
  * 呼叫 fal.ai Qwen-Image-Layered：
- * 上傳原圖 → 模型自動分解成 N 個透明 PNG 圖層 → 回傳 base64 陣列
+ * 上傳原圖 → 模型自動分解成 N 個透明 PNG 圖層 → 回傳裁切後圖層陣列
  */
 export async function callFalQwenImageLayered(
     imageBase64: string,
     falKey: string,
     numLayers: number = 4
-): Promise<string[]> {
+): Promise<LayerResult[]> {
     // 設定 fal.ai API key
     fal.config({ credentials: falKey });
 
@@ -91,5 +147,7 @@ export async function callFalQwenImageLayered(
     // 回傳的是 fal.media 暫時 URL，需轉成 base64 才能持久存在畫布
     const layerUrls: string[] = (result.data.images ?? []).map((img: { url: string }) => img.url);
     const base64Layers = await Promise.all(layerUrls.map(url => downloadImageAsBase64(url)));
-    return base64Layers.filter(Boolean) as string[];
+    const validLayers = base64Layers.filter(Boolean) as string[];
+    // 掃描每層透明邊緣，裁切到內容邊界框
+    return await Promise.all(validLayers.map(b64 => trimTransparentPixels(b64)));
 }

@@ -522,21 +522,33 @@ const App: React.FC = () => {
           const layers = await callFalQwenImageLayered(el.src, falApiKey, numLayers);
           if (layers.length === 0) throw new Error('未收到任何圖層');
 
-          // 在原圖同位置疊上各圖層，zIndex 依序遞增
+          // 將各圖層依序排列在原圖右側，每層的位置與尺寸根據裁切比例計算
+          const GAP = 20; // canvas units 間距
           const baseZ = el.zIndex;
-          const newLayerElements: ImageElement[] = layers.map((src, i) => ({
-              ...el,
-              id: `${el.id}_layer_${i}_${Date.now() + i}`,
-              src,
-              zIndex: baseZ + i + 1,
-              name: `${el.name || '圖片'} 圖層 ${i + 1}`,
-              isLocked: false,
-          }));
+          let offsetX = el.position.x + el.width + GAP;
+          const newLayerElements: ImageElement[] = layers.map((layer, i) => {
+              const w = Math.round(layer.cropRatioW * el.width);
+              const h = Math.round(layer.cropRatioH * el.height);
+              const y = el.position.y + layer.cropRatioY * el.height;
+              const element: ImageElement = {
+                  ...el,
+                  id: `${el.id}_layer_${i}_${Date.now() + i}`,
+                  src: layer.base64,
+                  position: { x: offsetX, y },
+                  width: w,
+                  height: h,
+                  zIndex: baseZ + i + 1,
+                  name: `${el.name || '圖片'} 圖層 ${i + 1}`,
+                  isLocked: false,
+              };
+              offsetX += w + GAP;
+              return element;
+          });
 
           setElements(prev => [...prev, ...newLayerElements]);
           // 快取到 IndexedDB
           newLayerElements.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
-          showToast(`✅ 魔法分層完成！${layers.length} 個圖層已疊在原位，請至圖層面板個別拖移分開`);
+          showToast(`✅ 魔法分層完成！${layers.length} 個圖層已排列在原圖右側`);
       } catch (e: any) {
           showToast(`❌ 魔法分層失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
       } finally {
