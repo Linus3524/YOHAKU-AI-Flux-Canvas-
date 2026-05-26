@@ -29,7 +29,6 @@ import { drawTextOnCanvas } from './utils/textCanvas'; // ✅ 新增
 import { captureTextElementAsImage } from './utils/svgCapture'; // ✅ 彎曲文字轉圖片用
 import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import { downloadImageAsBase64 } from './utils/atlasImage';
-import { geminiLayerSegment } from './utils/geminiLayer';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
@@ -42,19 +41,14 @@ const ApiKeyModal = ({
     onClose,
     atlasKey: initialAtlasKey,
     onSubmitAtlas,
-    falKey: initialFalKey,
-    onSubmitFal,
 }: {
     onSubmit: (key: string) => void;
     onClose: () => void;
     atlasKey?: string;
     onSubmitAtlas?: (key: string) => void;
-    falKey?: string;
-    onSubmitFal?: (key: string) => void;
 }) => {
     const [key, setKey] = useState('');
     const [atlasKey, setAtlasKey] = useState(initialAtlasKey || '');
-    const [falKey, setFalKey] = useState(initialFalKey || '');
 
     return (
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fade-in">
@@ -121,30 +115,13 @@ const ApiKeyModal = ({
                             </a>
                         </div>
 
-                        {/* fal.ai Key */}
-                        <div>
-                            <p className="text-[11px] font-medium text-gray-500 mb-1 text-left">fal.ai Key（選填・魔法分層用）</p>
-                            <input
-                                type="password"
-                                value={falKey}
-                                onChange={(e) => setFalKey(e.target.value)}
-                                placeholder="fal_..."
-                                className="w-full px-4 py-3 bg-[#F5F5F7] border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm"
-                            />
-                            <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener noreferrer"
-                                className="text-[10px] text-[#007AFF] hover:underline mt-1 inline-block">
-                                沒有 fal.ai Key？點此取得 →
-                            </a>
-                        </div>
-
                         <button
                             onClick={() => {
                                 if (key) onSubmit(key);
                                 if (atlasKey && onSubmitAtlas) onSubmitAtlas(atlasKey);
-                                if (falKey && onSubmitFal) onSubmitFal(falKey);
-                                if (key || atlasKey || falKey) onClose();
+                                if (key || atlasKey) onClose();
                             }}
-                            disabled={!key && !atlasKey && !falKey}
+                            disabled={!key && !atlasKey}
                             className="w-full py-3 bg-black text-white font-bold rounded-xl shadow-lg shadow-black/10 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             儲存設定
@@ -191,13 +168,7 @@ const App: React.FC = () => {
     setAtlasApiKey(key);
   };
 
-  const [falApiKey, setFalApiKey] = useState<string | null>(
-    () => localStorage.getItem('yohaku_fal_key')
-  );
-  const handleSaveFalKey = (key: string) => {
-    localStorage.setItem('yohaku_fal_key', key);
-    setFalApiKey(key);
-  };
+
 
   // --- Generation Model (Gemini / GPT Image 2 / Seedream) ---
   const [generationModel, setGenerationModel] = useState<string>(
@@ -501,73 +472,6 @@ const App: React.FC = () => {
       }
   }, [elements, effectiveApiKey, setElements, showToast, zIndexCounter, setGeneratingElementIds]);
 
-  // --- 魔法分層：呼叫 fal.ai Qwen-Image-Layered，將圖片分解成多個透明圖層 ---
-  const handleMagicLayer = useCallback(async (elementId: string) => {
-      if (!falApiKey) {
-          showToast('✨ 魔法分層需要 fal.ai API Key，請在設定中輸入');
-          setShowKeyModal(true);
-          return;
-      }
-      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
-      if (!el) return;
-
-      setIsGenerating(true);
-      setGeneratingElementIds([elementId]);
-      showToast('🔍 魔法分層啟動中...');
-
-      try {
-          const layers = await geminiLayerSegment(
-              el.src,
-              effectiveApiKey || '',
-              falApiKey,
-              (msg) => showToast(msg),
-          );
-          if (layers.length === 0) throw new Error('未收到任何圖層');
-
-          // 各圖層貼合內容邊界，座標對齊在原圖位置上疊合
-          const baseZ = el.zIndex;
-
-          // 背景層：原圖複製一份放在最底下，隱藏原圖
-          const bgElement: ImageElement = {
-              ...el,
-              id: `${el.id}_bg_${Date.now()}`,
-              zIndex: baseZ,
-              name: `${el.name || '圖片'} 背景`,
-              isLocked: false,
-          };
-
-          // 物件圖層：各自貼合去背後的內容邊界
-          const newLayerElements: ImageElement[] = layers.map((layer, i) => ({
-              ...el,
-              id: `${el.id}_layer_${i}_${Date.now() + i}`,
-              src: layer.base64,
-              position: {
-                  x: el.position.x + layer.cropRatioX * el.width,
-                  y: el.position.y + layer.cropRatioY * el.height,
-              },
-              width: Math.round(layer.cropRatioW * el.width),
-              height: Math.round(layer.cropRatioH * el.height),
-              zIndex: baseZ + i + 1,
-              name: `${el.name || '圖片'} 圖層 ${i + 1}`,
-              isLocked: false,
-          }));
-
-          const allNew = [bgElement, ...newLayerElements];
-          // 隱藏原圖（已被背景層取代）
-          setElements(prev => [
-              ...prev.map(e => e.id === el.id ? { ...e, isVisible: false } : e),
-              ...allNew,
-          ]);
-          // 快取到 IndexedDB
-          allNew.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
-          showToast(`✅ 魔法分層完成！${layers.length} 個物件圖層 + 背景層`);
-      } catch (e: any) {
-          showToast(`❌ 魔法分層失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
-      } finally {
-          setIsGenerating(false);
-          setGeneratingElementIds([]);
-      }
-  }, [falApiKey, elements, setElements, showToast, setGeneratingElementIds]);
 
   // --- Callback for Floating Assistant Sticky Note Creation ---
   const handleAiCreateSticky = useCallback((text: string) => {
@@ -1146,8 +1050,6 @@ const App: React.FC = () => {
               onClose={() => setShowKeyModal(false)}
               atlasKey={atlasApiKey || ''}
               onSubmitAtlas={handleSaveAtlasKey}
-              falKey={falApiKey || ''}
-              onSubmitFal={handleSaveFalKey}
           />
       )}
 
@@ -1554,7 +1456,6 @@ const App: React.FC = () => {
             rasterizeArrow: handleRasterizeArrow,
             mergeLayers: handleMergeLayersOverride,
             extractPrompt: handleExtractPrompt,
-            magicLayer: handleMagicLayer,
           }}
           canChangeColor={canChangeColor}
           elementType={contextMenuElement?.type || null}
