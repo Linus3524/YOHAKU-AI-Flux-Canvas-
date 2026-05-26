@@ -17,7 +17,7 @@ export async function analyzeLayerCount(imageBase64: string, geminiApiKey: strin
     const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
 
     const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite-preview',
+        model: 'gemini-2.0-flash-lite',
         contents: {
             parts: [
                 { inlineData: { mimeType, data: cleanBase64 } },
