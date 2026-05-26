@@ -495,6 +495,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         <ul className="text-xs text-gray-600 space-y-1">
                           <li>・ <span className="font-bold">Gemini API：</span>費用由您的 Google 帳號直接扣款，依 Google 官方政策計費。</li>
                           <li>・ <span className="font-bold">Atlas Cloud API：</span>費用由您的 Atlas Cloud 帳號扣款，依使用模型與次數計費。</li>
+                          <li>・ <span className="font-bold">fal.ai API：</span>費用由您的 fal.ai 帳號扣款，依模型推理時間（compute seconds）計費。</li>
                         </ul>
                       </div>
 
@@ -583,8 +584,37 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         </div>
                       </div>
 
+                      {/* fal.ai 模型 */}
+                      <div className="pb-3 border-b border-yohaku-border-light">
+                        <span className="text-sm font-bold text-yohaku-text-main block mb-2">🟢 fal.ai 去背模型（需 fal.ai Key）</span>
+                        <p className="text-xs text-gray-500 mb-3">由 fal.ai 代理的專業影像分割模型，用於「快速去背（BiRefNet）」功能，可精準去除圖片背景並保留透明通道。</p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[10px] text-gray-600 border-collapse">
+                            <thead>
+                              <tr className="border-b border-gray-200">
+                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-muted" style={{width:'28%'}}>模型</th>
+                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-main" style={{width:'20%'}}>開發商</th>
+                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">特色與適用場景</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">BiRefNet v2</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">ZhengPeng7</td>
+                                <td className="py-2 text-gray-600 align-top">高精度雙向參考網路（Bilateral Reference Network），專為複雜邊緣去背設計。支援 2048px 高解析度推理與前景細化（refine foreground），毛髮、半透明物件邊緣清晰，適合產品圖、人像、設計素材去背。</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-100">
+                          <p className="text-[10px] text-green-700 leading-relaxed">
+                            <span className="font-bold">💡 計費方式：</span>依模型推理時間（compute seconds）計費，一般圖片約 1–3 秒即完成，費用極低。詳細定價請至 <span className="font-bold">fal.ai/models/fal-ai/birefnet/v2</span> 查閱。
+                          </p>
+                        </div>
+                      </div>
+
                       <div className="p-3 bg-rose-50 rounded-lg text-xs text-rose-600 border border-rose-100">
-                        <b>溫馨提示：</b>建議至 Google Cloud Console 設定預算警示（Gemini），並定期於 Atlas Cloud 後台確認餘額，以精確掌控使用成本。
+                        <b>溫馨提示：</b>建議至 Google Cloud Console 設定預算警示（Gemini），並定期於 Atlas Cloud 與 fal.ai 後台確認餘額，以精確掌控使用成本。
                       </div>
                     </div>
                   </div>
