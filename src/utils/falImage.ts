@@ -31,14 +31,34 @@ export async function analyzeLayerCount(imageBase64: string, geminiApiKey: strin
     return Number.isFinite(num) && num >= 2 && num <= 8 ? num : 4;
 }
 
-/** base64 data URI → Blob */
-function base64ToBlob(base64: string): Blob {
+/** base64 data URI → File（fal.ai storage.upload 需要 File 物件而非裸 Blob） */
+function base64ToFile(base64: string, filename = 'image.png'): File {
     const [header, data] = base64.includes(',') ? base64.split(',') : ['data:image/png;base64', base64];
     const mime = header.match(/:(.*?);/)?.[1] ?? 'image/png';
+    const ext = mime.split('/')[1] ?? 'png';
     const binary = atob(data);
     const arr = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
-    return new Blob([arr], { type: mime });
+    return new File([arr], `${filename}.${ext}`, { type: mime });
+}
+
+/** 上傳前壓縮到 1024px JPEG，減少傳輸量 */
+async function compressBase64(base64: string, maxPx = 1024, quality = 0.85): Promise<string> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const { naturalWidth: w, naturalHeight: h } = img;
+            const scale = Math.min(1, maxPx / Math.max(w, h));
+            if (scale >= 1) { resolve(base64); return; }
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(w * scale);
+            canvas.height = Math.round(h * scale);
+            canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(base64);
+        img.src = base64;
+    });
 }
 
 /**
@@ -53,9 +73,10 @@ export async function callFalQwenImageLayered(
     // 設定 fal.ai API key
     fal.config({ credentials: falKey });
 
-    // base64 → Blob → 上傳到 fal.ai storage 取得 HTTP URL（API 需要 URL，不接受 base64）
-    const blob = base64ToBlob(imageBase64);
-    const imageUrl = await fal.storage.upload(blob);
+    // 壓縮後上傳到 fal.ai storage 取得 HTTP URL（API 需要 URL，不接受 base64）
+    const compressed = await compressBase64(imageBase64);
+    const file = base64ToFile(compressed, 'magic-layer-input');
+    const imageUrl = await fal.storage.upload(file);
 
     // 呼叫 qwen-image-layered 並等待結果
     const result = await fal.subscribe('fal-ai/qwen-image-layered', {
