@@ -524,8 +524,19 @@ const App: React.FC = () => {
           );
           if (layers.length === 0) throw new Error('未收到任何圖層');
 
-          // 各圖層貼合內容邊界，但座標對齊在原圖位置上疊合
+          // 各圖層貼合內容邊界，座標對齊在原圖位置上疊合
           const baseZ = el.zIndex;
+
+          // 背景層：原圖複製一份放在最底下，隱藏原圖
+          const bgElement: ImageElement = {
+              ...el,
+              id: `${el.id}_bg_${Date.now()}`,
+              zIndex: baseZ,
+              name: `${el.name || '圖片'} 背景`,
+              isLocked: false,
+          };
+
+          // 物件圖層：各自貼合去背後的內容邊界
           const newLayerElements: ImageElement[] = layers.map((layer, i) => ({
               ...el,
               id: `${el.id}_layer_${i}_${Date.now() + i}`,
@@ -541,10 +552,15 @@ const App: React.FC = () => {
               isLocked: false,
           }));
 
-          setElements(prev => [...prev, ...newLayerElements]);
+          const allNew = [bgElement, ...newLayerElements];
+          // 隱藏原圖（已被背景層取代）
+          setElements(prev => [
+              ...prev.map(e => e.id === el.id ? { ...e, isVisible: false } : e),
+              ...allNew,
+          ]);
           // 快取到 IndexedDB
-          newLayerElements.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
-          showToast(`✅ 魔法分層完成！${layers.length} 個圖層已疊合在原位`);
+          allNew.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
+          showToast(`✅ 魔法分層完成！${layers.length} 個物件圖層 + 背景層`);
       } catch (e: any) {
           showToast(`❌ 魔法分層失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
       } finally {
