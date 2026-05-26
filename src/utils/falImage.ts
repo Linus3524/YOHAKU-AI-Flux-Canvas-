@@ -21,7 +21,7 @@ export async function analyzeLayerCount(imageBase64: string, geminiApiKey: strin
         contents: {
             parts: [
                 { inlineData: { mimeType, data: cleanBase64 } },
-                { text: '分析這張圖片的構成，判斷最適合拆解成幾個獨立語意圖層（例如：背景、天空、人物、物件、文字等）。只需回傳一個 2 到 8 之間的整數，不要其他文字。' }
+                { text: '分析這張圖片的構成，判斷最適合拆解成幾個有意義的獨立語意圖層（例如：背景、人物、植物、物件、文字等）。請勿把陰影、純黑暗部、純色填充等無內容的部分計入圖層。只需回傳一個 2 到 5 之間的整數，不要其他文字。' }
             ]
         },
     });

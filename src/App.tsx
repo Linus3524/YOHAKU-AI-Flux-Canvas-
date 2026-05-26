@@ -536,7 +536,7 @@ const App: React.FC = () => {
           setElements(prev => [...prev, ...newLayerElements]);
           // 快取到 IndexedDB
           newLayerElements.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
-          showToast(`✅ 魔法分層完成！已分解出 ${layers.length} 個圖層`);
+          showToast(`✅ 魔法分層完成！${layers.length} 個圖層已疊在原位，請至圖層面板個別拖移分開`);
       } catch (e: any) {
           showToast(`❌ 魔法分層失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
       } finally {
