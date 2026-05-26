@@ -109,6 +109,16 @@ async function removeBgBiRefNet(cropBase64: string, falKey: string): Promise<str
 }
 
 /**
+ * 單張圖片 BiRefNet v2 去背（整張圖直接去背，不裁切）
+ * @param imageBase64  原圖 base64
+ * @param falKey       fal.ai API Key
+ * @returns 去背後透明 PNG base64
+ */
+export async function birefnetRemoveBg(imageBase64: string, falKey: string): Promise<string> {
+    return removeBgBiRefNet(imageBase64, falKey);
+}
+
+/**
  * 主要入口：Gemini 語意偵測 + BiRefNet 去背 → LayerResult[]
  * @param imageBase64  原圖 base64
  * @param geminiApiKey Gemini API Key

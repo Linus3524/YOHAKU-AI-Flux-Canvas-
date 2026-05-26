@@ -30,6 +30,7 @@ import { captureTextElementAsImage } from './utils/svgCapture'; // ✅ 彎曲文
 import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import { downloadImageAsBase64 } from './utils/atlasImage';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
+import { birefnetRemoveBg } from './utils/geminiLayer';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -41,14 +42,19 @@ const ApiKeyModal = ({
     onClose,
     atlasKey: initialAtlasKey,
     onSubmitAtlas,
+    falKey: initialFalKey,
+    onSubmitFal,
 }: {
     onSubmit: (key: string) => void;
     onClose: () => void;
     atlasKey?: string;
     onSubmitAtlas?: (key: string) => void;
+    falKey?: string;
+    onSubmitFal?: (key: string) => void;
 }) => {
     const [key, setKey] = useState('');
     const [atlasKey, setAtlasKey] = useState(initialAtlasKey || '');
+    const [falKey, setFalKey] = useState(initialFalKey || '');
 
     return (
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fade-in">
@@ -115,13 +121,30 @@ const ApiKeyModal = ({
                             </a>
                         </div>
 
+                        {/* fal.ai Key */}
+                        <div>
+                            <p className="text-[11px] font-medium text-gray-500 mb-1 text-left">fal.ai Key（選填・BiRefNet 去背用）</p>
+                            <input
+                                type="password"
+                                value={falKey}
+                                onChange={(e) => setFalKey(e.target.value)}
+                                placeholder="fal_..."
+                                className="w-full px-4 py-3 bg-[#F5F5F7] border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm"
+                            />
+                            <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener noreferrer"
+                                className="text-[10px] text-[#007AFF] hover:underline mt-1 inline-block">
+                                沒有 fal.ai Key？點此取得 →
+                            </a>
+                        </div>
+
                         <button
                             onClick={() => {
                                 if (key) onSubmit(key);
                                 if (atlasKey && onSubmitAtlas) onSubmitAtlas(atlasKey);
-                                if (key || atlasKey) onClose();
+                                if (falKey && onSubmitFal) onSubmitFal(falKey);
+                                if (key || atlasKey || falKey) onClose();
                             }}
-                            disabled={!key && !atlasKey}
+                            disabled={!key && !atlasKey && !falKey}
                             className="w-full py-3 bg-black text-white font-bold rounded-xl shadow-lg shadow-black/10 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             儲存設定
@@ -166,6 +189,15 @@ const App: React.FC = () => {
   const handleSaveAtlasKey = (key: string) => {
     localStorage.setItem('yohaku_atlas_key', key);
     setAtlasApiKey(key);
+  };
+
+  // --- fal.ai Key ---
+  const [falApiKey, setFalApiKey] = useState<string | null>(
+    () => localStorage.getItem('yohaku_fal_key')
+  );
+  const handleSaveFalKey = (key: string) => {
+    localStorage.setItem('yohaku_fal_key', key);
+    setFalApiKey(key);
   };
 
 
@@ -326,6 +358,29 @@ const App: React.FC = () => {
       atlasApiKey,
       generationModel,
   });
+
+  // --- BiRefNet v2 去背 ---
+  const handleBiRefNetRemoveBackground = useCallback(async () => {
+      if (!falApiKey) { showToast('需要 fal.ai API Key，請在設定中輸入'); setShowKeyModal(true); return; }
+      const targets = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
+      if (targets.length === 0) return;
+      setIsGenerating(true);
+      setGeneratingElementIds(targets.map(el => el.id));
+      showToast('🔍 BiRefNet v2 去背中...');
+      try {
+          for (const el of targets) {
+              const result = await birefnetRemoveBg(el.src, falApiKey);
+              setElements(prev => prev.map(e => e.id === el.id ? { ...e, src: result } : e));
+              if (result.startsWith('data:')) cacheImage(el.id, result);
+          }
+          showToast('✅ BiRefNet 去背完成！');
+      } catch (e: any) {
+          showToast(`❌ BiRefNet 去背失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
+      } finally {
+          setIsGenerating(false);
+          setGeneratingElementIds([]);
+      }
+  }, [falApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
   // --- WRAPPED updateElements to Sync Outpainting Frame ---
   const updateElements = useCallback((updatedElement: CanvasElement, dragDelta?: Point) => {
@@ -1050,6 +1105,8 @@ const App: React.FC = () => {
               onClose={() => setShowKeyModal(false)}
               atlasKey={atlasApiKey || ''}
               onSubmitAtlas={handleSaveAtlasKey}
+              falKey={falApiKey || ''}
+              onSubmitFal={handleSaveFalKey}
           />
       )}
 
@@ -1226,6 +1283,8 @@ const App: React.FC = () => {
         generationModel={generationModel}
         onSetGenerationModel={handleSetGenerationModel}
         hasAtlasKey={!!atlasApiKey}
+        hasFalKey={!!falApiKey}
+        onBiRefNetRemoveBackground={handleBiRefNetRemoveBackground}
         outpaintingState={outpaintingState}
         onUpdateOutpaintingFrame={handleUpdateOutpaintingFrame}
         onCancelOutpainting={handleCancelOutpainting}
