@@ -697,7 +697,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       const [maskHeader, maskData] = bwMaskUrl.split(',');
       const maskMime = maskHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
       const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite-preview',
+        model: 'gemini-3.1-flash-lite',
         contents: {
           parts: [
             { inlineData: { data: baseData, mimeType: baseMime } },

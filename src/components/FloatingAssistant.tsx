@@ -502,7 +502,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <div className="pb-3 border-b border-yohaku-border-light">
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">🔵 Gemini 生圖模型（需 Gemini API Key）</span>
                         <ul className="text-xs text-gray-600 space-y-2 leading-relaxed mb-3">
-                          <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-lite-preview</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
+                          <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-lite</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
                           <li>・ <span className="font-bold text-gray-600">生圖模型</span>：可在頂部狀態欄切換 Flash / Pro，依需求選擇。需付費使用。</li>
                         </ul>
                         <span className="text-xs font-bold text-yohaku-text-main block mb-2">Gemini 生圖模型比較：</span>
