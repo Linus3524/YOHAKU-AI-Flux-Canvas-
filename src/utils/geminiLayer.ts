@@ -145,14 +145,22 @@ Coordinates are integers 0-1000 (normalized from image dimensions). Each box mus
     });
 
     const text = response.text ?? '';
-    const match = text.match(/\[[\s\S]*?\]/);
-    if (!match) throw new Error('Gemini 未回傳物件偵測結果，請重試');
+
+    // 移除 markdown code block（```json ... ``` 或 ``` ... ```）
+    const stripped = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+    // 貪婪抓取最外層的 JSON 陣列
+    const match = stripped.match(/\[[\s\S]*\]/);
+    if (!match) {
+        console.error('[geminiLayer] raw response:', text);
+        throw new Error('Gemini 未回傳物件偵測結果，請重試');
+    }
 
     let objects: DetectedObject[];
     try {
         objects = JSON.parse(match[0]);
-    } catch {
-        throw new Error('Gemini 回傳 JSON 格式錯誤');
+    } catch (e) {
+        console.error('[geminiLayer] JSON parse failed:', match[0]);
+        throw new Error('Gemini 回傳 JSON 解析失敗，請重試');
     }
     if (!objects || objects.length === 0) throw new Error('Gemini 未偵測到任何物件');
 
