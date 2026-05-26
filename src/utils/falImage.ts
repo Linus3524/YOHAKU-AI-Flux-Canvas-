@@ -4,7 +4,32 @@
  */
 
 import { fal } from '@fal-ai/client';
+import { GoogleGenAI } from '@google/genai';
 import { downloadImageAsBase64 } from './atlasImage';
+
+/**
+ * 請 Gemini 分析圖片，判斷最適合分解成幾個語意圖層
+ * 回傳 1-10 之間的整數
+ */
+export async function analyzeLayerCount(imageBase64: string, geminiApiKey: string): Promise<number> {
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+    const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-lite-preview',
+        contents: {
+            parts: [
+                { inlineData: { mimeType, data: cleanBase64 } },
+                { text: '分析這張圖片的構成，判斷最適合拆解成幾個獨立語意圖層（例如：背景、天空、人物、物件、文字等）。只需回傳一個 2 到 8 之間的整數，不要其他文字。' }
+            ]
+        },
+    });
+
+    const num = parseInt((response.text ?? '').trim(), 10);
+    // 若解析失敗或超出範圍，fallback 到 4
+    return Number.isFinite(num) && num >= 2 && num <= 8 ? num : 4;
+}
 
 /** base64 data URI → Blob */
 function base64ToBlob(base64: string): Blob {

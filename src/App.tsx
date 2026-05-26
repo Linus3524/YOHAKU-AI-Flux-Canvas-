@@ -29,7 +29,7 @@ import { drawTextOnCanvas } from './utils/textCanvas'; // ✅ 新增
 import { captureTextElementAsImage } from './utils/svgCapture'; // ✅ 彎曲文字轉圖片用
 import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import { downloadImageAsBase64 } from './utils/atlasImage';
-import { callFalQwenImageLayered } from './utils/falImage';
+import { callFalQwenImageLayered, analyzeLayerCount } from './utils/falImage';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
@@ -513,10 +513,13 @@ const App: React.FC = () => {
 
       setIsGenerating(true);
       setGeneratingElementIds([elementId]);
-      showToast('✨ 魔法分層分析中，請稍候...');
+      showToast('🔍 Gemini 分析圖層結構中...');
 
       try {
-          const layers = await callFalQwenImageLayered(el.src, falApiKey, 4);
+          // 先用 Gemini 判斷最適合幾層，再交給 fal.ai 分解
+          const numLayers = await analyzeLayerCount(el.src, effectiveApiKey || '');
+          showToast(`✨ 分析完成，準備分解成 ${numLayers} 個圖層...`);
+          const layers = await callFalQwenImageLayered(el.src, falApiKey, numLayers);
           if (layers.length === 0) throw new Error('未收到任何圖層');
 
           // 在原圖同位置疊上各圖層，zIndex 依序遞增
