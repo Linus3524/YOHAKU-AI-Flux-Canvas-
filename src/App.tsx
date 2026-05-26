@@ -524,33 +524,27 @@ const App: React.FC = () => {
           );
           if (layers.length === 0) throw new Error('未收到任何圖層');
 
-          // 將各圖層依序排列在原圖右側，每層的位置與尺寸根據裁切比例計算
-          const GAP = 20; // canvas units 間距
+          // 各圖層貼合內容邊界，但座標對齊在原圖位置上疊合
           const baseZ = el.zIndex;
-          let offsetX = el.position.x + el.width + GAP;
-          const newLayerElements: ImageElement[] = layers.map((layer, i) => {
-              const w = Math.round(layer.cropRatioW * el.width);
-              const h = Math.round(layer.cropRatioH * el.height);
-              const y = el.position.y + layer.cropRatioY * el.height;
-              const element: ImageElement = {
-                  ...el,
-                  id: `${el.id}_layer_${i}_${Date.now() + i}`,
-                  src: layer.base64,
-                  position: { x: offsetX, y },
-                  width: w,
-                  height: h,
-                  zIndex: baseZ + i + 1,
-                  name: `${el.name || '圖片'} 圖層 ${i + 1}`,
-                  isLocked: false,
-              };
-              offsetX += w + GAP;
-              return element;
-          });
+          const newLayerElements: ImageElement[] = layers.map((layer, i) => ({
+              ...el,
+              id: `${el.id}_layer_${i}_${Date.now() + i}`,
+              src: layer.base64,
+              position: {
+                  x: el.position.x + layer.cropRatioX * el.width,
+                  y: el.position.y + layer.cropRatioY * el.height,
+              },
+              width: Math.round(layer.cropRatioW * el.width),
+              height: Math.round(layer.cropRatioH * el.height),
+              zIndex: baseZ + i + 1,
+              name: `${el.name || '圖片'} 圖層 ${i + 1}`,
+              isLocked: false,
+          }));
 
           setElements(prev => [...prev, ...newLayerElements]);
           // 快取到 IndexedDB
           newLayerElements.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
-          showToast(`✅ 魔法分層完成！${layers.length} 個圖層已排列在原圖右側`);
+          showToast(`✅ 魔法分層完成！${layers.length} 個圖層已疊合在原位`);
       } catch (e: any) {
           showToast(`❌ 魔法分層失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
       } finally {
