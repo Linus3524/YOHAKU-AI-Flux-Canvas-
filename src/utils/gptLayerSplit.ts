@@ -1,8 +1,8 @@
 /**
  * GPT Image 2 魔法分層
  * 流程：Gemini 識別語意元素
- *       → GPT Image 2 Edit 逐層隔離（白背景）
- *       → BiRefNet 去背（有 fal key 時）/ 品紅 Chroma Key（無 fal key 時）
+ *       → GPT Image 2 Edit 逐層隔離（灰色背景）
+ *       → BiRefNet v2 去背（有 fal key）/ 品紅 Chroma Key 備援（無 fal key）
  *       → GPT Image 2 Edit 補全背景
  *       → LayerResult[]
  */
@@ -11,6 +11,9 @@ import { GoogleGenAI } from '@google/genai';
 import { callAtlasImg2Img } from './atlasImage';
 import { birefnetRemoveBg } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
+
+/** GPT 隔離用的中性灰背景色（BiRefNet 對背景色不敏感，灰色對主體顏色干擾最小） */
+const ISOLATION_BACKGROUNDS = ['#DADADA', '#CFCFCF', '#E5E5E5'] as const;
 
 interface DetectedObject {
     label: string;
@@ -54,8 +57,8 @@ Return ONLY valid JSON array, no markdown:
 }
 
 /**
- * Chroma Key 備援：移除品紅色（#FF00FF）背景，邊緣做平滑漸變
- * 僅在沒有 fal.ai key 時使用
+ * Chroma Key 備援（僅在無 fal key 時使用）
+ * 移除品紅色（#FF00FF）背景，邊緣做平滑漸變
  */
 async function removeMagentaBackground(base64: string): Promise<string> {
     return new Promise((resolve) => {
@@ -72,11 +75,8 @@ async function removeMagentaBackground(base64: string): Promise<string> {
                 const r = d[i], g = d[i + 1], b = d[i + 2];
                 const dr = r - 255, dg = g - 0, db = b - 255;
                 const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-                if (dist < 60) {
-                    d[i + 3] = 0;
-                } else if (dist < 110) {
-                    d[i + 3] = Math.round(((dist - 60) / 50) * 255);
-                }
+                if (dist < 60)       d[i + 3] = 0;
+                else if (dist < 110) d[i + 3] = Math.round(((dist - 60) / 50) * 255);
             }
             ctx.putImageData(imageData, 0, 0);
             resolve(canvas.toDataURL('image/png'));
@@ -86,12 +86,20 @@ async function removeMagentaBackground(base64: string): Promise<string> {
     });
 }
 
+/** hex #RRGGBB → 'R,G,B' */
+function hexToRgb(hex: string): string {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `${r},${g},${b}`;
+}
+
 /**
  * 主要入口：GPT Image 2 分層提取
  * @param imageBase64  原圖 base64
  * @param geminiApiKey Gemini API Key（語意識別用）
  * @param atlasKey     Atlas Cloud API Key（GPT Image 2 用）
- * @param falKey       fal.ai API Key（BiRefNet 去背用，選填）
+ * @param falKey       fal.ai API Key（BiRefNet 去背用，選填；無則 Chroma Key 備援）
  * @param onProgress   進度回呼
  */
 export async function gptLayerSegment(
@@ -116,15 +124,19 @@ export async function gptLayerSegment(
     for (let i = 0; i < objects.length; i++) {
         const obj = objects[i];
         onProgress?.(`🎨 提取第 ${i + 1}/${objects.length} 層：${obj.label}`);
-        try {
-            // 2a：GPT Image 2 Edit → 元素留在原位，其餘填純白/品紅背景
-            const bgDesc = useBiRefNet
-                ? 'a plain solid white background (#FFFFFF)'
-                : 'a perfectly solid bright magenta background (RGB 255,0,255 / hex #FF00FF)';
 
+        try {
+            // 每層輪流使用不同灰色背景，避免背景色與主體色衝突
+            const bgHex = useBiRefNet
+                ? ISOLATION_BACKGROUNDS[i % ISOLATION_BACKGROUNDS.length]
+                : '#FF00FF'; // Chroma Key 備援需要品紅色
+
+            const bgRgb = hexToRgb(bgHex);
+
+            // 2a：GPT Image 2 Edit → 元素留在原位，其餘填指定背景色
             const isolated = await callAtlasImg2Img(
                 `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
-                `Replace ALL other areas with ${bgDesc}. ` +
+                `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgRgb} / hex ${bgHex}). ` +
                 `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
                 `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations.`,
                 'gpt-image-2',
@@ -135,14 +147,14 @@ export async function gptLayerSegment(
             );
             if (!isolated[0]) continue;
 
-            // 2b：去背（BiRefNet 或 Chroma Key 備援）
+            // 2b：去背
             onProgress?.(`✂️ 去背第 ${i + 1}/${objects.length} 層：${obj.label}`);
             let transparent: string;
             if (useBiRefNet) {
                 try {
                     transparent = await birefnetRemoveBg(isolated[0], falKey!);
                 } catch (e) {
-                    console.warn(`[gptLayerSplit] BiRefNet failed for "${obj.label}", fallback to chroma key:`, e);
+                    console.warn(`[gptLayerSplit] BiRefNet failed for "${obj.label}", fallback chroma key:`, e);
                     transparent = await removeMagentaBackground(isolated[0]);
                 }
             } else {
