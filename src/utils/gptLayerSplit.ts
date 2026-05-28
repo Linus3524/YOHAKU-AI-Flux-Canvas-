@@ -233,7 +233,10 @@ async function extractOneLayer(
     falKey: string | undefined,
     onProgress?: (msg: string) => void,
 ): Promise<LayerResult | null> {
-    const useBiRefNet = !!falKey;
+    // TEXT / DECOR 類別：硬邊幾何形狀，BiRefNet 反而會誤判字母負空間
+    // → 強制走 Chroma Key（純色背景下效果更準確）
+    const isTextLayer = obj.category === 'TEXT' || obj.category === 'DECOR';
+    const useBiRefNet = !!falKey && !isTextLayer;
     const bgColor = BG_COLOR_MAP[obj.bgColor] ?? BG_COLOR_MAP.GRAY;
 
     try {
@@ -256,7 +259,8 @@ async function extractOneLayer(
 
         // 2b：去背（BiRefNet 優先，timeout 後降級 Chroma Key）
         // complex edge → timeout 3min；simple edge → timeout 2min
-        onProgress?.(`✂️ 去背：${obj.label}${obj.edgeComplexity === 'complex' ? '（複雜邊緣）' : ''}`);
+        const method = useBiRefNet ? `BiRefNet${obj.edgeComplexity === 'complex' ? '/複雜邊緣' : ''}` : 'Chroma Key';
+        onProgress?.(`✂️ 去背：${obj.label}（${method}）`);
         const birefnetTimeout = obj.edgeComplexity === 'complex' ? 180_000 : 120_000;
         let transparent: string;
         if (useBiRefNet) {
