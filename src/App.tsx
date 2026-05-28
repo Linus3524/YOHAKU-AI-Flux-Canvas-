@@ -31,7 +31,7 @@ import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import { downloadImageAsBase64 } from './utils/atlasImage';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import { birefnetRemoveBg } from './utils/geminiLayer';
-import { gptLayerSegment } from './utils/gptLayerSplit';
+import { gptLayerSegment, gptLayerSegmentTransparent } from './utils/gptLayerSplit';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -447,6 +447,63 @@ const App: React.FC = () => {
           setGeneratingElementIds([]);
       }
   }, [atlasApiKey, effectiveApiKey, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+
+  // --- 魔法分層（透明測試）：GPT Image 2 直接輸出透明背景 ---
+  const handleMagicLayerTransparent = useCallback(async (elementId: string) => {
+      if (!atlasApiKey) { showToast('魔法分層需要 Atlas Key（GPT Image 2 用）'); setShowKeyModal(true); return; }
+      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
+      if (!el) return;
+
+      setIsGenerating(true);
+      setGeneratingElementIds([elementId]);
+      showToast('✨ 魔法分層（透明）啟動中...');
+
+      try {
+          const layers = await gptLayerSegmentTransparent(
+              el.src,
+              effectiveApiKey || '',
+              atlasApiKey,
+              (msg) => showToast(msg),
+          );
+          if (layers.length === 0) throw new Error('未收到任何圖層');
+
+          const baseZ = el.zIndex;
+          const GAP = 30;
+          const layerAreaLeft = el.position.x - el.width / 2 + el.width + GAP;
+          const layerAreaTop  = el.position.y - el.height / 2;
+
+          const newLayerElements: ImageElement[] = layers.map((layer, i) => {
+              const layerW = Math.round(layer.cropRatioW * el.width);
+              const layerH = Math.round(layer.cropRatioH * el.height);
+              const cx = layerAreaLeft + layer.cropRatioX * el.width + layerW / 2;
+              const cy = layerAreaTop  + layer.cropRatioY * el.height + layerH / 2;
+              const layerName = layer.name
+                  ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name)
+                  : `${el.name || '圖片'} 透明圖層 ${i + 1}`;
+              return {
+                  ...el,
+                  id: `${el.id}_tlayer_${i}_${Date.now() + i}`,
+                  src: layer.base64,
+                  position: { x: cx, y: cy },
+                  width: layerW,
+                  height: layerH,
+                  zIndex: baseZ + i + 1,
+                  name: layerName,
+                  isLocked: false,
+              };
+          });
+
+          setElements(prev => [...prev, ...newLayerElements]);
+          newLayerElements.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
+          showToast(`✅ 魔法分層（透明）完成！${layers.length} 個物件圖層`);
+      } catch (e: any) {
+          showToast(`❌ 魔法分層（透明）失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
+      } finally {
+          setIsGenerating(false);
+          setGeneratingElementIds([]);
+      }
+  }, [atlasApiKey, effectiveApiKey, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+
 
   // --- WRAPPED updateElements to Sync Outpainting Frame ---
   const updateElements = useCallback((updatedElement: CanvasElement, dragDelta?: Point) => {
@@ -1582,6 +1639,7 @@ const App: React.FC = () => {
             mergeLayers: handleMergeLayersOverride,
             extractPrompt: handleExtractPrompt,
             magicLayer: handleMagicLayer,
+            magicLayerTransparent: handleMagicLayerTransparent,
           }}
           canChangeColor={canChangeColor}
           elementType={contextMenuElement?.type || null}
