@@ -19,11 +19,13 @@ import { birefnetRemoveBg } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
 // ── 背景色方案 ──────────────────────────────────────────────────────────────
+// 中飽和度版本（非純色）：降低 GPT Image 2 重繪時的 color spill，
+// 同時保持足夠對比讓 BiRefNet 邊緣偵測更乾淨
 const BG_COLOR_MAP = {
-    GREEN: { hex: '#00FF00', rgb: '0,255,0' },
-    BLUE:  { hex: '#0000FF', rgb: '0,0,255' },
-    RED:   { hex: '#FF0000', rgb: '255,0,0' },
-    GRAY:  { hex: '#DADADA', rgb: '218,218,218' },
+    GREEN: { hex: '#00BB44', rgb: '0,187,68' },      // 中綠（取代純綠 #00FF00）
+    BLUE:  { hex: '#2255CC', rgb: '34,85,204' },     // 中藍（取代純藍 #0000FF）
+    RED:   { hex: '#CC2200', rgb: '204,34,0' },      // 中紅（取代純紅 #FF0000）
+    GRAY:  { hex: '#787878', rgb: '120,120,120' },   // 中灰（取代淺灰 #DADADA，對比更強）
 } as const;
 
 type BgColorKey = keyof typeof BG_COLOR_MAP;
@@ -240,7 +242,10 @@ async function extractOneLayer(
             `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
             `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
             `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
-            `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations.`,
+            `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations. ` +
+            `CRITICAL: Do NOT blend or feather the object edges into the background. ` +
+            `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
+            `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.`,
             'gpt-image-2',
             atlasKey,
             compressedImage,   // 直接傳預壓縮圖，跳過內部壓縮
