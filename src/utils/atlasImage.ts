@@ -279,6 +279,7 @@ async function postGeneration(body: Record<string, unknown>, atlasKey: string): 
 interface AtlasCallOptions {
     ratio?: string;       // '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '3:2' | '2:3' | '21:9'
     quality?: '2K' | '4K';
+    transparentBg?: boolean; // 要求輸出透明背景（background: 'transparent'）
 }
 
 function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
@@ -344,6 +345,9 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
     }
     if (config.supportsBase64Output) {
         extra['enable_base64_output'] = true;
+    }
+    if (options?.transparentBg) {
+        extra['background'] = 'transparent';
     }
     return config.img2imgUseInputWrapper
         ? { model: config.img2imgId, input: { prompt, [imgParam]: imgValue, ...extra } }
