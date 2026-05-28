@@ -31,9 +31,6 @@ interface UseAIProps {
 }
 
 export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel = 'gemini', atlasTransparentBg = false }: UseAIProps) => {
-    // 只有 gpt-image-2 支援 background: transparent
-    // preserveTransparency（保留透明背景）或 atlasTransparentBg（輸出透明背景）任一開啟皆觸發
-    const useTransparentBg = (atlasTransparentBg || preserveTransparency) && generationModel === 'gpt-image-2';
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
@@ -43,6 +40,9 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [imageAspectRatio, setImageAspectRatio] = useState<string>('Original');
     const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('1K');
     const [preserveTransparency, setPreserveTransparency] = useState(true);
+    // 只有 gpt-image-2 支援 background: transparent
+    // preserveTransparency 或 atlasTransparentBg 任一開啟皆觸發
+    const useTransparentBg = (atlasTransparentBg || preserveTransparency) && generationModel === 'gpt-image-2';
     const [showStyleLibrary, setShowStyleLibrary] = useState(false);
     const zIndexCounter = useRef(Math.max(0, ...elements.map(e => e.zIndex)) + 1);
 
