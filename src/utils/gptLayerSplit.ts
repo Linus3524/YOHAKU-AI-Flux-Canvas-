@@ -1,21 +1,20 @@
 /**
- * GPT Image 2 魔法分層（重構版）
+ * GPT Image 2 魔法分層（透明背景版）
  *
  * 定位策略：Gemini 回傳 bbox 座標 → 用於回貼位置（接近原圖）
- * 視覺策略：GPT Image 2 Edit 隔離 → BiRefNet/Chroma Key 去背（保持品質）
+ * 視覺策略：GPT Image 2 Edit 直接輸出透明背景 PNG（background: transparent）
+ *           → 省去 BiRefNet / Chroma Key 去背步驟，無 color spill 問題
  * 效能策略：所有物件 Promise.all 平行處理，背景補全同步開跑互不等待
  *
  * 流程：
- *   Gemini（bbox + category + bgColor + edgeComplexity）
- *   → [Promise.all] GPT Image 2 隔離 → BiRefNet/Chroma Key 去背（含 timeout）
- *     - complex edge：timeout 3min；simple edge：timeout 2min
+ *   Gemini（bbox + category + edgeComplexity）
+ *   → [Promise.all] GPT Image 2 透明背景隔離 → trimTransparentPixels
  *   → [同步] GPT Image 2 背景補全
- *   → LayerResult[]（cropRatio 來自 Gemini bbox，位置接近原圖）
+ *   → LayerResult[]（位置來自 Gemini bbox，尺寸來自實際像素）
  */
 
 import { GoogleGenAI } from '@google/genai';
 import { callAtlasImg2Img, compressForAtlas, detectClosestRatio } from './atlasImage';
-import { birefnetRemoveBg } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
 // ── 背景色方案 ──────────────────────────────────────────────────────────────
@@ -230,64 +229,37 @@ async function extractOneLayer(
     compressedImage: string,   // 預壓縮好的圖（只壓一次）
     detectedRatio: string,     // 預偵測好的比例（只偵測一次）
     atlasKey: string,
-    falKey: string | undefined,
     onProgress?: (msg: string) => void,
 ): Promise<LayerResult | null> {
-    // TEXT / DECOR 類別：硬邊幾何形狀，BiRefNet 反而會誤判字母負空間
-    // → 強制走 Chroma Key（純色背景下效果更準確）
-    const isTextLayer = obj.category === 'TEXT' || obj.category === 'DECOR';
-    const useBiRefNet = !!falKey && !isTextLayer;
-    const bgColor = BG_COLOR_MAP[obj.bgColor] ?? BG_COLOR_MAP.GRAY;
-
     try {
-        // 2a：GPT Image 2 Edit — 保留目標物件，填純色背景
+        onProgress?.(`🎨 提取：${obj.label}`);
+
+        // GPT Image 2：直接輸出透明背景 PNG
+        // background: transparent + output_format: png → 無需 BiRefNet/Chroma Key
         const isolated = await callAtlasImg2Img(
-            `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
-            `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
-            `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
-            `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations. ` +
-            `CRITICAL: Do NOT blend or feather the object edges into the background. ` +
-            `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
-            `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.`,
+            `Extract only the "${obj.labelEn}" (${obj.label}) from this image as an isolated element. ` +
+            `Output with a completely transparent background. ` +
+            `Preserve the exact original position, size, proportions, colors, lighting and details of the "${obj.labelEn}". ` +
+            `Do not move, resize, or modify the element in any way. ` +
+            `Everything except the "${obj.labelEn}" must be fully transparent.`,
             'gpt-image-2',
             atlasKey,
-            compressedImage,   // 直接傳預壓縮圖，跳過內部壓縮
+            compressedImage,
             1,
-            { ratio: detectedRatio },  // 直接傳比例字串，跳過內部偵測
+            { ratio: detectedRatio, transparentBg: true },
         );
         if (!isolated[0]) return null;
 
-        // 2b：去背（BiRefNet 優先，timeout 後降級 Chroma Key）
-        // complex edge → timeout 3min；simple edge → timeout 2min
-        const method = useBiRefNet ? `BiRefNet${obj.edgeComplexity === 'complex' ? '/複雜邊緣' : ''}` : 'Chroma Key';
-        onProgress?.(`✂️ 去背：${obj.label}（${method}）`);
-        const birefnetTimeout = obj.edgeComplexity === 'complex' ? 180_000 : 120_000;
-        let transparent: string;
-        if (useBiRefNet) {
-            transparent = await withTimeout(
-                birefnetRemoveBg(isolated[0], falKey!),
-                birefnetTimeout,
-                () => {
-                    console.warn(`[magicLayer] BiRefNet timeout for "${obj.label}", fallback chroma key`);
-                    return removeColorBackground(isolated[0], bgColor.hex, obj.edgeComplexity);
-                },
-            );
-        } else {
-            transparent = await removeColorBackground(isolated[0], bgColor.hex, obj.edgeComplexity);
-        }
+        // 裁切透明邊緣（位置用 Gemini bbox，尺寸用實際像素）
+        onProgress?.(`✂️ 裁切：${obj.label}`);
+        const trimmed = await trimTransparentPixels(isolated[0]);
 
-        // 2c：裁切透明邊緣
-        const trimmed = await trimTransparentPixels(transparent);
-
-        // ⭐ 定位（x,y）用 Gemini bbox（位置接近原圖）
-        //    尺寸（w,h）用 trimTransparentPixels 實際像素比例（防止回貼時比例拉伸）
-        //    兩者各取所長：Gemini 定位準但尺寸是估算，trimmed 尺寸是真實像素
         return {
             base64:      trimmed.base64,
             cropRatioX:  obj.bbox.x,
             cropRatioY:  obj.bbox.y,
-            cropRatioW:  trimmed.cropRatioW,   // 實際像素寬度比例，不拉伸
-            cropRatioH:  trimmed.cropRatioH,   // 實際像素高度比例，不拉伸
+            cropRatioW:  trimmed.cropRatioW,
+            cropRatioH:  trimmed.cropRatioH,
             name:        obj.label,
             category:    obj.category,
         };
@@ -309,8 +281,7 @@ export async function gptLayerSegment(
     // Step 1：Gemini 識別元素 + bbox + category + bgColor
     onProgress?.('🔍 Gemini 分析圖片語意與位置中...');
     const objects = await detectObjects(imageBase64, geminiApiKey);
-    const bgMethod = falKey ? 'BiRefNet' : 'Chroma Key';
-    onProgress?.(`✨ 偵測到 ${objects.length} 個元素，使用 ${bgMethod} 去背，平行處理中...`);
+    onProgress?.(`✨ 偵測到 ${objects.length} 個元素，GPT Image 2 透明背景提取，平行處理中...`);
 
     // Step 2 & 3：物件提取（Promise.all 平行）+ 背景補全（同步開跑，互不等待）
     const labelsList = objects.map(o => `"${o.labelEn}" (${o.label})`).join(', ');
@@ -339,7 +310,7 @@ export async function gptLayerSegment(
     const objectResults = await Promise.all(
         objects.map((obj, i) => {
             onProgress?.(`🎨 提取第 ${i + 1}/${objects.length} 層：${obj.label}`);
-            return extractOneLayer(obj, compressedImage, detectedRatio, atlasKey, falKey, onProgress);
+            return extractOneLayer(obj, compressedImage, detectedRatio, atlasKey, onProgress);
         })
     );
 
