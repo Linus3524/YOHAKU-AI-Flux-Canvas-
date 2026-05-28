@@ -50,7 +50,6 @@ interface ContextMenuProps {
     mergeLayers: () => void; 
     extractPrompt: (elementId: string) => void;
     magicLayer: (elementId: string) => void;
-    magicLayerTransparent: (elementId: string) => void;
   };
   canChangeColor: boolean;
   elementType: ElementType | null;
@@ -397,9 +396,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                 <div className="border-t my-1 border-gray-100/50" />
                                 <MenuItem icon={<MenuIcons.Magic />} onClick={() => handleAction(() => actions.magicLayer(menuData.elementId!))}>
                                     魔法分層
-                                </MenuItem>
-                                <MenuItem icon={<MenuIcons.Magic />} onClick={() => handleAction(() => actions.magicLayerTransparent(menuData.elementId!))}>
-                                    魔法分層（透明測試）
                                 </MenuItem>
                                 <MenuItem icon={<MenuIcons.Edit />} onClick={() => handleAction(() => actions.startImageEdit(menuData.elementId!))}>
                                     局部重繪與圖片編輯
