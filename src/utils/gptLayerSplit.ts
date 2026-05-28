@@ -93,12 +93,20 @@ Do NOT include any of these as separate layers:
 - Atmospheric haze, fog, depth-of-field blur areas
 - Texture overlays spanning the entire image
 
+━━━ GROUPING RULES (important) ━━━
+Physically touching or functionally related objects MUST be grouped into ONE layer:
+- Person + any furniture/prop they are directly sitting on, holding, or wearing → ONE layer
+- Character + vehicle/mount they are on → ONE layer
+- Product + its stand/base/packaging it rests on → ONE layer
+- Group of identical/similar small objects (e.g. multiple tickets, icons of the same type) → ONE layer
+Do NOT split a person from their chair, a rider from their bike, etc.
+
 ━━━ LAYER COUNT RULES ━━━
 Determine count based on actual image complexity — never force layers:
 - Very simple (1-2 objects): return 2-3 layers
 - Moderate (3-5 objects): return 3-5 layers
-- Complex (6+ distinct objects): return 5-9 layers
-Maximum 9 layers. Fewer precise layers beats more noisy layers.
+- Complex (6+ distinct objects): return 5-8 layers
+Maximum 8 layers. Fewer precise layers beats more noisy layers.
 
 ━━━ CATEGORIES ━━━
 - SUBJECT: main person, character, model, portrait
@@ -146,6 +154,14 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         throw new Error('Gemini 回傳 JSON 解析失敗');
     }
     if (!objects || objects.length === 0) throw new Error('Gemini 未偵測到任何物件');
+
+    // 按重要性排序，確保截取時重要層（主體、產品、文字）優先保留
+    const CATEGORY_PRIORITY: Record<string, number> = {
+        SUBJECT: 0, PRODUCT: 1, TEXT: 2, OBJECTS: 3, DECOR: 4,
+    };
+    objects.sort((a, b) =>
+        (CATEGORY_PRIORITY[a.category] ?? 5) - (CATEGORY_PRIORITY[b.category] ?? 5)
+    );
 
     // 硬限：最多 8 個物件（避免 API 費用爆炸）
     if (objects.length > 8) objects = objects.slice(0, 8);
