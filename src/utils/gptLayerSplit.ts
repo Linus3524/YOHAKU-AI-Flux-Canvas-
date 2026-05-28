@@ -147,6 +147,9 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     }
     if (!objects || objects.length === 0) throw new Error('Gemini 未偵測到任何物件');
 
+    // 硬限：最多 8 個物件（避免 API 費用爆炸）
+    if (objects.length > 8) objects = objects.slice(0, 8);
+
     // 安全夾值：bbox + edgeComplexity 預設值
     return objects.map(o => ({
         ...o,
@@ -248,16 +251,18 @@ async function extractOneLayer(
             transparent = await removeColorBackground(isolated[0], bgColor.hex, obj.edgeComplexity);
         }
 
-        // 2c：裁切透明邊緣（取得實際像素內容，但定位用 Gemini bbox）
+        // 2c：裁切透明邊緣
         const trimmed = await trimTransparentPixels(transparent);
 
-        // ⭐ 定位座標用 Gemini bbox（比 trimTransparentPixels 更接近原圖位置）
+        // ⭐ 定位（x,y）用 Gemini bbox（位置接近原圖）
+        //    尺寸（w,h）用 trimTransparentPixels 實際像素比例（防止回貼時比例拉伸）
+        //    兩者各取所長：Gemini 定位準但尺寸是估算，trimmed 尺寸是真實像素
         return {
             base64:      trimmed.base64,
             cropRatioX:  obj.bbox.x,
             cropRatioY:  obj.bbox.y,
-            cropRatioW:  obj.bbox.w,
-            cropRatioH:  obj.bbox.h,
+            cropRatioW:  trimmed.cropRatioW,   // 實際像素寬度比例，不拉伸
+            cropRatioH:  trimmed.cropRatioH,   // 實際像素高度比例，不拉伸
             name:        obj.label,
             category:    obj.category,
         };
