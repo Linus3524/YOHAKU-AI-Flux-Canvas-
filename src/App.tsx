@@ -396,6 +396,8 @@ const App: React.FC = () => {
       try {
           const layers = await gptLayerSegment(
               el.src,
+              Math.round(el.width),
+              Math.round(el.height),
               effectiveApiKey || '',
               atlasApiKey,
               falApiKey || undefined,
