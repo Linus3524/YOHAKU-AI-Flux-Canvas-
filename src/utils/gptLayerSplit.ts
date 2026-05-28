@@ -1,19 +1,19 @@
 /**
  * GPT Image 2 魔法分層
  * 流程：Gemini 識別語意元素
- *       → GPT Image 2 Edit 逐層隔離（白背景）
- *       → Atlas Background Remover 去背（透明 PNG）
+ *       → GPT Image 2 Edit 逐層隔離（品紅 #FF00FF 背景）
+ *       → 瀏覽器 Chroma Key 去掉品紅 → 透明 PNG
  *       → GPT Image 2 Edit 補全背景
  *       → LayerResult[]
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { callAtlasImg2Img, callAtlasBackgroundRemover } from './atlasImage';
+import { callAtlasImg2Img } from './atlasImage';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
 interface DetectedObject {
     label: string;
-    labelEn: string; // 英文，給 GPT prompt 用
+    labelEn: string;
 }
 
 /** Gemini 識別圖片中的語意元素 */
@@ -53,6 +53,42 @@ Return ONLY valid JSON array, no markdown:
 }
 
 /**
+ * Chroma Key：移除品紅色（#FF00FF）背景，邊緣做平滑漸變
+ * GPT output 是 PNG，品紅區域很乾淨，tolerance 60 就夠；
+ * 邊緣抗鋸齒區域用 60-110 漸層過渡。
+ */
+async function removeMagentaBackground(base64: string): Promise<string> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width  = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d')!;
+            ctx.drawImage(img, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const d = imageData.data;
+            for (let i = 0; i < d.length; i += 4) {
+                const r = d[i], g = d[i + 1], b = d[i + 2];
+                // 與純品紅 (255, 0, 255) 的歐氏距離
+                const dr = r - 255, dg = g - 0, db = b - 255;
+                const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+                if (dist < 60) {
+                    d[i + 3] = 0;                                          // 完全透明
+                } else if (dist < 110) {
+                    d[i + 3] = Math.round(((dist - 60) / 50) * 255);      // 漸層邊緣
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(base64);
+        img.src = base64;
+    });
+}
+
+/**
  * 主要入口：GPT Image 2 分層提取
  * @param imageBase64  原圖 base64
  * @param geminiApiKey Gemini API Key（語意識別用）
@@ -73,17 +109,17 @@ export async function gptLayerSegment(
 
     const layers: LayerResult[] = [];
 
-    // ── Step 2：逐層提取（白背景隔離 → Atlas 去背）─────────
+    // ── Step 2：逐層提取（品紅背景隔離 → Chroma Key 去背）──
     for (let i = 0; i < objects.length; i++) {
         const obj = objects[i];
         onProgress?.(`🎨 提取第 ${i + 1}/${objects.length} 層：${obj.label}`);
         try {
-            // 2a：GPT Image 2 Edit 把元素隔離在純白背景上
+            // 2a：GPT Image 2 Edit → 元素留在原位，其餘填純品紅背景
             const isolated = await callAtlasImg2Img(
                 `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
-                `Replace ALL other areas with a plain solid white background (#FFFFFF). ` +
-                `Preserve every detail of the "${obj.labelEn}": colors, lighting, proportions, edges, and position. ` +
-                `The background must be a perfectly uniform solid white with no gradients, shadows, or other elements.`,
+                `Replace ALL other areas with a perfectly solid bright magenta background (RGB 255,0,255 / hex #FF00FF). ` +
+                `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
+                `The background must be a perfectly uniform solid #FF00FF magenta with NO gradients, shadows, or variations.`,
                 'gpt-image-2',
                 atlasKey,
                 imageBase64,
@@ -92,17 +128,11 @@ export async function gptLayerSegment(
             );
             if (!isolated[0]) continue;
 
-            // 2b：Atlas Background Remover 去掉白背景 → 透明 PNG
+            // 2b：Chroma Key → 移除品紅 → 透明 PNG
             onProgress?.(`✂️ 去背第 ${i + 1}/${objects.length} 層：${obj.label}`);
-            let transparentBase64: string;
-            try {
-                transparentBase64 = await callAtlasBackgroundRemover(isolated[0], atlasKey);
-            } catch (bgErr) {
-                console.warn(`[gptLayerSplit] BG remover failed for "${obj.label}", using isolated:`, bgErr);
-                transparentBase64 = isolated[0];
-            }
+            const transparent = await removeMagentaBackground(isolated[0]);
 
-            const trimmed = await trimTransparentPixels(transparentBase64);
+            const trimmed = await trimTransparentPixels(transparent);
             layers.push(trimmed);
         } catch (e) {
             console.warn(`[gptLayerSplit] Skip "${obj.label}":`, e);
@@ -125,7 +155,6 @@ export async function gptLayerSegment(
             { ratio: 'Original' },
         );
         if (bgResults[0]) {
-            // 背景層放最前面（最底層）
             layers.unshift({
                 base64: bgResults[0],
                 cropRatioX: 0,
