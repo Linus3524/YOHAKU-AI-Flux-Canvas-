@@ -260,55 +260,84 @@ export async function gptLayerSegment(
     const bgMethod = useBiRefNet ? 'BiRefNet' : 'Chroma Key';
     onProgress?.(`✨ 偵測到 ${objects.length} 個物件，使用 ${bgMethod} 去背...`);
 
-    const layers: LayerResult[] = [];
+    // ── Step 3 & 4：全部物件去背 + 背景補圖 同時平行執行 ───
+    onProgress?.(`⚡ ${objects.length} 個物件去背 + 背景補圖同時進行中...`);
 
-    // ── Step 3：逐一裁切 + 去背 ───────────────────────────
-    for (let i = 0; i < objects.length; i++) {
-        const obj = objects[i];
-        const colorName = obj.bg_color;
-        onProgress?.(`✂️ 第 ${i + 1}/${objects.length} [${obj.category}]：${obj.label}（底色 ${colorName}）`);
+    const labelsList = objects.map(o => `"${o.label}"`).join(', ');
+
+    // 每個物件獨立 async task（平行）
+    const objectTasks = objects.map(async (obj, i): Promise<LayerResult | null> => {
         try {
             const crop = await cropToBBox(workingImage, obj.box_2d, W, H);
 
             let transparent: string;
             if (useBiRefNet) {
                 try {
-                    transparent = await removeBgBiRefNet(crop, falKey!);
+                    // BiRefNet 單次最長等 2 分鐘
+                    transparent = await withTimeout(
+                        removeBgBiRefNet(crop, falKey!),
+                        120_000,
+                        `BiRefNet "${obj.label}"`,
+                    );
                 } catch (e) {
-                    console.warn(`[gptLayerSplit] BiRefNet failed for "${obj.label}", fallback chroma key (${colorName}):`, e);
-                    transparent = await removeColorBackground(crop, colorName);
+                    console.warn(`[gptLayerSplit] BiRefNet failed for "${obj.label}", fallback chroma key:`, e);
+                    transparent = await removeColorBackground(crop, obj.bg_color);
                 }
             } else {
-                transparent = await removeColorBackground(crop, colorName);
+                transparent = await removeColorBackground(crop, obj.bg_color);
             }
 
             const fullLayer = await placeInFullCanvas(transparent, W, H, obj.box_2d);
             const trimmed   = await trimTransparentPixels(fullLayer);
-            layers.push({ ...trimmed, name: `[${obj.category}] ${obj.label}` });
+            onProgress?.(`✅ ${i + 1}/${objects.length} 完成：${obj.label}`);
+            return { ...trimmed, name: `[${obj.category}] ${obj.label}` };
         } catch (e) {
             console.warn(`[gptLayerSplit] Skip "${obj.label}":`, e);
+            return null;
         }
-    }
+    });
 
-    // ── Step 4：GPT Image 2 Edit 背景補圖 ─────────────────
-    onProgress?.('🌄 生成補全背景中...');
-    try {
-        const labelsList = objects.map(o => `"${o.label}"`).join(', ');
-        const bgResults = await callAtlasImg2Img(
-            `Remove the following foreground elements from this image: ${labelsList}. ` +
-            `Reconstruct the complete background naturally and realistically. ` +
-            `Fill all areas where elements were removed with appropriate background content. ` +
-            `Preserve the original background colors, lighting, perspective and atmosphere.`,
-            'gpt-image-2', atlasKey, imageBase64, 1, { ratio: 'Original' },
-        );
-        if (bgResults[0]) {
-            const bgScaled = await scaleToDisplay(bgResults[0], W, H);
-            layers.unshift({ base64: bgScaled, cropRatioX: 0, cropRatioY: 0, cropRatioW: 1, cropRatioH: 1 });
+    // 背景補圖也同時跑（平行）
+    const bgTask = (async (): Promise<string | null> => {
+        try {
+            const bgResults = await callAtlasImg2Img(
+                `Remove the following foreground elements from this image: ${labelsList}. ` +
+                `Reconstruct the complete background naturally and realistically. ` +
+                `Fill all areas where elements were removed with appropriate background content. ` +
+                `Preserve the original background colors, lighting, perspective and atmosphere.`,
+                'gpt-image-2', atlasKey, imageBase64, 1, { ratio: 'Original' },
+            );
+            return bgResults[0] ?? null;
+        } catch (e) {
+            console.warn('[gptLayerSplit] Background inpainting failed:', e);
+            return null;
         }
-    } catch (e) {
-        console.warn('[gptLayerSplit] Background inpainting failed:', e);
+    })();
+
+    // 等全部完成
+    const [objectResults, bgBase64] = await Promise.all([
+        Promise.all(objectTasks),
+        bgTask,
+    ]);
+
+    // 整理結果（保留原始順序，過濾失敗項）
+    const layers: LayerResult[] = objectResults.filter((r): r is LayerResult => r !== null);
+
+    if (bgBase64) {
+        const bgScaled = await scaleToDisplay(bgBase64, W, H);
+        layers.unshift({ base64: bgScaled, cropRatioX: 0, cropRatioY: 0, cropRatioW: 1, cropRatioH: 1 });
     }
 
     if (layers.length === 0) throw new Error('所有圖層提取均失敗');
     return layers;
+}
+
+/** 為 Promise 加上 timeout，超時則 reject */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return Promise.race([
+        promise,
+        new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`${label} 超時（${Math.round(ms / 1000)}s）`)), ms),
+        ),
+    ]);
 }
