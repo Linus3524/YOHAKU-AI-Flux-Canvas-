@@ -6,14 +6,15 @@
  * 效能策略：所有物件 Promise.all 平行處理，背景補全同步開跑互不等待
  *
  * 流程：
- *   Gemini（bbox + category + bgColor）
- *   → [Promise.all] GPT Image 2 隔離 → BiRefNet/Chroma Key 去背（含 2min timeout）
+ *   Gemini（bbox + category + bgColor + edgeComplexity）
+ *   → [Promise.all] GPT Image 2 隔離 → BiRefNet/Chroma Key 去背（含 timeout）
+ *     - complex edge：timeout 3min；simple edge：timeout 2min
  *   → [同步] GPT Image 2 背景補全
  *   → LayerResult[]（cropRatio 來自 Gemini bbox，位置接近原圖）
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { callAtlasImg2Img } from './atlasImage';
+import { callAtlasImg2Img, compressForAtlas, detectClosestRatio } from './atlasImage';
 import { birefnetRemoveBg } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
@@ -33,6 +34,11 @@ interface DetectedObject {
     labelEn: string;
     category: 'SUBJECT' | 'PRODUCT' | 'OBJECTS' | 'DECOR' | 'TEXT';
     bgColor: BgColorKey;
+    /**
+     * simple = 邊緣乾淨（幾何形、硬邊）→ Chroma Key 可處理
+     * complex = 邊緣複雜（頭髮、毛邊、羽毛、透明玻璃）→ 需要 BiRefNet，timeout 延長至 3min
+     */
+    edgeComplexity: 'simple' | 'complex';
     /** 在原圖中的相對位置（0~1 比例），用於回貼定位 */
     bbox: { x: number; y: number; w: number; h: number };
 }
@@ -63,32 +69,66 @@ async function detectObjects(imageBase64: string, apiKey: string): Promise<Detec
     const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: {
             parts: [
                 { inlineData: { mimeType, data: cleanBase64 } },
                 {
-                    text: `Analyze this image and detect 3-8 major design elements to separate into independent layers.
+                    text: `You are a professional design layer segmentation AI. Analyze this image and identify distinct visual elements that should become independent design layers.
 
-Categories (pick the most accurate):
-- SUBJECT: main person, character, portrait
-- PRODUCT: featured product or hero object
-- OBJECTS: props, items, tools, secondary objects
-- DECOR: decorative elements, patterns, icons
-- TEXT: text overlays, logos, typography
+━━━ INCLUSION CRITERIA ━━━
+Only include an element if ALL conditions are true:
+1. It is a self-contained recognizable object, person, product, text, or illustration
+2. It could stand alone on a transparent background and still be meaningful
+3. It occupies a coherent bounded region in the image
+4. It has clear, identifiable edges (even if complex)
 
-bgColor (pick the color that contrasts MOST with this specific object for easy chroma-key removal):
-- GREEN: use for skin tones, red/orange/warm objects
-- BLUE: use for green/nature/plant objects
-- RED: use for blue/cool-tone objects
-- GRAY: use for multi-colored or complex objects (BiRefNet default)
+━━━ STRICT EXCLUSION LIST ━━━
+Do NOT include any of these as separate layers:
+- Cast shadows, drop shadows, inner shadows (shadows belong to their parent object)
+- Color gradients, vignettes, background wash effects
+- Glow, bloom, light rays, lens flare, bokeh
+- Large plain background fills covering >35% of the image
+- Reflections on surfaces (water, glass, floor)
+- Atmospheric haze, fog, depth-of-field blur areas
+- Texture overlays spanning the entire image
 
-Exclude: pure shadows, gradients, large plain backgrounds, light/glow effects.
+━━━ LAYER COUNT RULES ━━━
+Determine count based on actual image complexity — never force layers:
+- Very simple (1-2 objects): return 2-3 layers
+- Moderate (3-5 objects): return 3-5 layers
+- Complex (6+ distinct objects): return 5-9 layers
+Maximum 9 layers. Fewer precise layers beats more noisy layers.
 
-bbox values must be precise tight bounding boxes (0.0 to 1.0 ratios of image width/height).
+━━━ CATEGORIES ━━━
+- SUBJECT: main person, character, model, portrait
+- PRODUCT: featured product, hero item, merchandise, food dish
+- OBJECTS: props, tools, secondary items, accessories
+- DECOR: decorative shapes, patterns, icons, illustrations, badges
+- TEXT: text overlays, logos, typography, labels, titles
 
-Return ONLY valid JSON array, no markdown, no explanation:
-[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85}}]`
+━━━ BBOX RULES (critical) ━━━
+bbox = tightest possible rectangle enclosing ALL visible pixels of this element only.
+- x, y = top-left corner (fraction of image width/height)
+- w, h = width and height (fraction of image width/height)
+- The box must TOUCH the outermost visible pixel — no padding, no rounding outward
+- Bad: whole-image box for a small object. Good: tight box that just wraps the object
+- If an element is near an edge, x or y can be 0.0; w or h can reach 1.0 only if truly full-width/height
+
+━━━ BGCOLOR (chroma-key color) ━━━
+Pick the color that contrasts MOST with the element's dominant visible color:
+- GREEN (#00FF00): skin tones, red/orange/yellow/pink/warm objects
+- BLUE (#0000FF): green/teal/cyan/nature/plant objects
+- RED (#FF0000): blue/purple/indigo/cool-toned objects
+- GRAY (#DADADA): ONLY when the object is multi-colored with no clear dominant color AND edges are simple
+
+━━━ EDGE COMPLEXITY ━━━
+- "simple": clean geometric or hard edges (products, text, simple shapes, solid objects)
+- "complex": fine/irregular edges needing AI matting (hair, fur, feathers, transparent glass, smoke, intricate cutouts)
+Note: objects with complex edges should prefer GRAY bgColor to signal AI-based removal.
+
+Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
+[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85}}]`
                 }
             ]
         },
@@ -107,9 +147,12 @@ Return ONLY valid JSON array, no markdown, no explanation:
     }
     if (!objects || objects.length === 0) throw new Error('Gemini 未偵測到任何物件');
 
-    // bbox 安全夾值
+    // 安全夾值：bbox + edgeComplexity 預設值
     return objects.map(o => ({
         ...o,
+        edgeComplexity: (o.edgeComplexity === 'complex' || o.edgeComplexity === 'simple')
+            ? o.edgeComplexity
+            : 'simple' as const,
         bbox: {
             x: Math.max(0, Math.min(1, o.bbox?.x ?? 0)),
             y: Math.max(0, Math.min(1, o.bbox?.y ?? 0)),
@@ -120,10 +163,19 @@ Return ONLY valid JSON array, no markdown, no explanation:
 }
 
 // ── 通用 Chroma Key 去背（任意目標色）───────────────────────────────────────
-async function removeColorBackground(base64: string, targetHex: string): Promise<string> {
+// edgeComplexity = 'complex' → 收緊容差，減少誤刪邊緣細節
+async function removeColorBackground(
+    base64: string,
+    targetHex: string,
+    edgeComplexity: 'simple' | 'complex' = 'simple',
+): Promise<string> {
     const tR = parseInt(targetHex.slice(1, 3), 16);
     const tG = parseInt(targetHex.slice(3, 5), 16);
     const tB = parseInt(targetHex.slice(5, 7), 16);
+
+    // simple：容差寬鬆（去色乾淨）；complex：容差收緊（保留細節邊緣）
+    const hardThreshold = edgeComplexity === 'complex' ? 45  : 60;
+    const softThreshold = edgeComplexity === 'complex' ? 85  : 110;
 
     return new Promise(resolve => {
         const img = new Image();
@@ -138,8 +190,10 @@ async function removeColorBackground(base64: string, targetHex: string): Promise
             for (let i = 0; i < d.length; i += 4) {
                 const dr = d[i] - tR, dg = d[i + 1] - tG, db = d[i + 2] - tB;
                 const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-                if (dist < 60)        d[i + 3] = 0;
-                else if (dist < 110)  d[i + 3] = Math.round(((dist - 60) / 50) * 255);
+                if (dist < hardThreshold)
+                    d[i + 3] = 0;
+                else if (dist < softThreshold)
+                    d[i + 3] = Math.round(((dist - hardThreshold) / (softThreshold - hardThreshold)) * 255);
             }
             ctx.putImageData(imageData, 0, 0);
             resolve(canvas.toDataURL('image/png'));
@@ -152,7 +206,8 @@ async function removeColorBackground(base64: string, targetHex: string): Promise
 // ── 單一物件提取（供 Promise.all 並發）──────────────────────────────────────
 async function extractOneLayer(
     obj: DetectedObject,
-    imageBase64: string,
+    compressedImage: string,   // 預壓縮好的圖（只壓一次）
+    detectedRatio: string,     // 預偵測好的比例（只偵測一次）
     atlasKey: string,
     falKey: string | undefined,
     onProgress?: (msg: string) => void,
@@ -169,26 +224,28 @@ async function extractOneLayer(
             `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations.`,
             'gpt-image-2',
             atlasKey,
-            imageBase64,
+            compressedImage,   // 直接傳預壓縮圖，跳過內部壓縮
             1,
-            { ratio: 'Original' },
+            { ratio: detectedRatio },  // 直接傳比例字串，跳過內部偵測
         );
         if (!isolated[0]) return null;
 
-        // 2b：去背（BiRefNet 優先，timeout 2min 後降級 Chroma Key）
-        onProgress?.(`✂️ 去背：${obj.label}`);
+        // 2b：去背（BiRefNet 優先，timeout 後降級 Chroma Key）
+        // complex edge → timeout 3min；simple edge → timeout 2min
+        onProgress?.(`✂️ 去背：${obj.label}${obj.edgeComplexity === 'complex' ? '（複雜邊緣）' : ''}`);
+        const birefnetTimeout = obj.edgeComplexity === 'complex' ? 180_000 : 120_000;
         let transparent: string;
         if (useBiRefNet) {
             transparent = await withTimeout(
                 birefnetRemoveBg(isolated[0], falKey!),
-                120_000,
+                birefnetTimeout,
                 () => {
                     console.warn(`[magicLayer] BiRefNet timeout for "${obj.label}", fallback chroma key`);
-                    return removeColorBackground(isolated[0], bgColor.hex);
+                    return removeColorBackground(isolated[0], bgColor.hex, obj.edgeComplexity);
                 },
             );
         } else {
-            transparent = await removeColorBackground(isolated[0], bgColor.hex);
+            transparent = await removeColorBackground(isolated[0], bgColor.hex, obj.edgeComplexity);
         }
 
         // 2c：裁切透明邊緣（取得實際像素內容，但定位用 Gemini bbox）
@@ -228,6 +285,13 @@ export async function gptLayerSegment(
     // Step 2 & 3：物件提取（Promise.all 平行）+ 背景補全（同步開跑，互不等待）
     const labelsList = objects.map(o => `"${o.labelEn}" (${o.label})`).join(', ');
 
+    // ⚡ 預處理：壓縮圖片 + 偵測比例只做一次（省去 N+1 次重複運算）
+    onProgress?.('⚡ 預壓縮圖片 & 偵測比例...');
+    const [compressedImage, detectedRatio] = await Promise.all([
+        compressForAtlas(imageBase64),
+        detectClosestRatio(imageBase64),
+    ]);
+
     // 背景補全立即開始（不等物件提取完成）
     const bgPromise = callAtlasImg2Img(
         `Remove the following foreground elements from this image: ${labelsList}. ` +
@@ -236,16 +300,16 @@ export async function gptLayerSegment(
         `Preserve the original background colors, lighting, perspective and atmosphere.`,
         'gpt-image-2',
         atlasKey,
-        imageBase64,
+        compressedImage,   // 預壓縮圖
         1,
-        { ratio: 'Original' },
+        { ratio: detectedRatio },  // 預偵測比例
     ).catch(e => { console.warn('[magicLayer] Background inpainting failed:', e); return null; });
 
     // 所有物件平行去背
     const objectResults = await Promise.all(
         objects.map((obj, i) => {
             onProgress?.(`🎨 提取第 ${i + 1}/${objects.length} 層：${obj.label}`);
-            return extractOneLayer(obj, imageBase64, atlasKey, falKey, onProgress);
+            return extractOneLayer(obj, compressedImage, detectedRatio, atlasKey, falKey, onProgress);
         })
     );
 

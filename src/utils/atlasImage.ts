@@ -355,7 +355,7 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
 }
 
 /** 從 base64 圖片偵測實際尺寸，回傳最接近的 ATLAS_SIZES 比例字串 */
-async function detectClosestRatio(base64: string): Promise<string> {
+export async function detectClosestRatio(base64: string): Promise<string> {
     return new Promise(resolve => {
         const img = new Image();
         img.onload = () => {
@@ -378,7 +378,7 @@ async function detectClosestRatio(base64: string): Promise<string> {
  * 送給 Atlas 前壓縮圖片：最長邊縮到 1024px，轉 JPEG 85%
  * 大幅減少傳輸量（原圖可能 3-5MB → 壓縮後約 200-400KB），加快 API 處理速度
  */
-async function compressForAtlas(base64: string, maxPx = 1024, quality = 0.85): Promise<string> {
+export async function compressForAtlas(base64: string, maxPx = 1024, quality = 0.85): Promise<string> {
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
