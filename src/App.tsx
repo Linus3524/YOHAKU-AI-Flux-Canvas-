@@ -398,6 +398,7 @@ const App: React.FC = () => {
               el.src,
               effectiveApiKey || '',
               atlasApiKey,
+              falApiKey || undefined,
               (msg) => showToast(msg),
           );
           if (layers.length === 0) throw new Error('未收到任何圖層');
