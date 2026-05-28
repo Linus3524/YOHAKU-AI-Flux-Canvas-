@@ -68,6 +68,10 @@ export interface LayerResult {
     cropRatioY: number;
     cropRatioW: number;
     cropRatioH: number;
+    /** 圖層名稱（Gemini 偵測的物件名稱） */
+    name?: string;
+    /** 設計分類標籤 */
+    category?: string;
 }
 
 /**

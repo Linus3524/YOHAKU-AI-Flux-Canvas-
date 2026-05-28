@@ -404,26 +404,40 @@ const App: React.FC = () => {
           if (layers.length === 0) throw new Error('未收到任何圖層');
 
           const baseZ = el.zIndex;
-          // 第一層是背景（全尺寸），其餘是物件（貼合邊界）
-          const newLayerElements: ImageElement[] = layers.map((layer, i) => ({
-              ...el,
-              id: `${el.id}_layer_${i}_${Date.now() + i}`,
-              src: layer.base64,
-              position: {
-                  x: el.position.x + layer.cropRatioX * el.width,
-                  y: el.position.y + layer.cropRatioY * el.height,
-              },
-              width: Math.round(layer.cropRatioW * el.width),
-              height: Math.round(layer.cropRatioH * el.height),
-              zIndex: baseZ + i,
-              name: i === 0 ? `${el.name || '圖片'} 背景` : `${el.name || '圖片'} 圖層 ${i}`,
-              isLocked: false,
-          }));
+          const GAP = 30; // 原圖與圖層群組之間的間距（world units）
+          // 圖層區塊的左上角 X（原圖右邊緣 + gap）
+          const layerAreaLeft = el.position.x - el.width / 2 + el.width + GAP;
+          const layerAreaTop  = el.position.y - el.height / 2;
 
-          setElements(prev => [
-              ...prev.map(e => e.id === el.id ? { ...e, isVisible: false } : e),
-              ...newLayerElements,
-          ]);
+          const newLayerElements: ImageElement[] = layers.map((layer, i) => {
+              const isBackground = i === 0;
+              const layerW = isBackground ? el.width  : Math.round(layer.cropRatioW * el.width);
+              const layerH = isBackground ? el.height : Math.round(layer.cropRatioH * el.height);
+              // 中心點 = 圖層區塊左上角 + bbox 偏移 + 半寬/高
+              const cx = isBackground
+                  ? layerAreaLeft + el.width / 2
+                  : layerAreaLeft + layer.cropRatioX * el.width + layerW / 2;
+              const cy = isBackground
+                  ? el.position.y
+                  : layerAreaTop + layer.cropRatioY * el.height + layerH / 2;
+              const layerName = layer.name
+                  ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name)
+                  : (isBackground ? `${el.name || '圖片'} 背景` : `${el.name || '圖片'} 圖層 ${i}`);
+              return {
+                  ...el,
+                  id: `${el.id}_layer_${i}_${Date.now() + i}`,
+                  src: layer.base64,
+                  position: { x: cx, y: cy },
+                  width: layerW,
+                  height: layerH,
+                  zIndex: baseZ + i,
+                  name: layerName,
+                  isLocked: false,
+              };
+          });
+
+          // 原圖保持可見，圖層貼在右側
+          setElements(prev => [...prev, ...newLayerElements]);
           newLayerElements.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
           showToast(`✅ 魔法分層完成！${layers.length - 1} 個物件圖層 + 補全背景`);
       } catch (e: any) {
