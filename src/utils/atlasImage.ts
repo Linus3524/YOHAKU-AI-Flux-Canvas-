@@ -298,6 +298,9 @@ function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOp
     if (config.supportsBase64Output) {
         extra['enable_base64_output'] = true;
     }
+    if (options?.transparentBg) {
+        extra['background'] = 'transparent';
+    }
     return config.useInputWrapper
         ? { model: config.id, input: { prompt, ...extra } }
         : { model: config.id, prompt, ...extra };

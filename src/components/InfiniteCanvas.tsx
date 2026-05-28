@@ -422,6 +422,8 @@ interface InfiniteCanvasProps {
   generationModel?: string;
   onSetGenerationModel?: (model: string) => void;
   hasAtlasKey?: boolean;
+  atlasTransparentBg?: boolean;
+  onSetAtlasTransparentBg?: (v: boolean) => void;
 }
 
 // ... (MarqueeRect, CanvasApi, Constants, CameraIcons, SelectionMenuIcons, CAMERA_ANGLES, ASPECT_RATIOS) ...
@@ -532,6 +534,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   generationModel = 'gemini',
   onSetGenerationModel,
   hasAtlasKey = false,
+  atlasTransparentBg = false,
+  onSetAtlasTransparentBg,
 }, ref) => {
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -1118,6 +1122,24 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                             <p className="text-[10px] text-[#86868B]">輸入 Atlas Cloud Key 後可使用 GPT Image 2 / 即夢模型</p>
                                         )}
                                     </div>
+
+                                    {/* 透明背景輸出：僅 gpt-image-2 支援 */}
+                                    {generationModel === 'gpt-image-2' && (
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs font-semibold text-[#1D1D1F]">輸出透明背景</label>
+                                                <div
+                                                    className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${atlasTransparentBg ? 'bg-[#5856D6]' : 'bg-[#E5E5EA]'}`}
+                                                    onClick={() => onSetAtlasTransparentBg?.(!atlasTransparentBg)}
+                                                >
+                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${atlasTransparentBg ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </div>
+                                            </div>
+                                            <p className="text-[10px] text-[#86868B] leading-snug">
+                                                開啟後生成 PNG 透明背景圖（適合文字/物件去背）
+                                            </p>
+                                        </div>
+                                    )}
 
                                     {hasImageOrDrawingOrShape && (
                                         <div className="flex flex-col gap-1">
