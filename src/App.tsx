@@ -418,7 +418,7 @@ const App: React.FC = () => {
               width: Math.round(layer.cropRatioW * el.width),
               height: Math.round(layer.cropRatioH * el.height),
               zIndex: baseZ + i,
-              name: i === 0 ? `${el.name || '圖片'} 背景` : `${el.name || '圖片'} 圖層 ${i}`,
+              name: i === 0 ? `${el.name || '圖片'} 背景` : (layer.name ?? `${el.name || '圖片'} 圖層 ${i}`),
               isLocked: false,
           }));
 

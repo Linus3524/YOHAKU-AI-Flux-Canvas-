@@ -68,6 +68,8 @@ export interface LayerResult {
     cropRatioY: number;
     cropRatioW: number;
     cropRatioH: number;
+    /** 圖層顯示名稱（選填，魔法分層用） */
+    name?: string;
 }
 
 /**

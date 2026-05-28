@@ -25,8 +25,11 @@ const BG_COLOR_MAP: Record<BgColorKey, { hex: string; rgb: [number, number, numb
     GRAY:  { hex: '#CCCCCC', rgb: [204, 204, 204],    desc: 'flat light gray (hex #CCCCCC, RGB 204,204,204)'    },
 };
 
+type LayerCategory = 'SUBJECT' | 'PRODUCT' | 'OBJECTS' | 'DECOR' | 'TEXT';
+
 interface DetectedObject {
     label: string;
+    category: LayerCategory;                  // 圖層分類
     box_2d: [number, number, number, number]; // [y1, x1, y2, x2] normalized 0–1000
     bg_color: BgColorKey;                     // Gemini 判斷最適合的去背底色
 }
@@ -109,19 +112,27 @@ async function detectObjects(imageBase64: string, apiKey: string): Promise<Detec
             parts: [
                 { inlineData: { mimeType, data: cleanBase64 } },
                 {
-                    text: `Analyze this image and detect 3 to 6 distinct foreground elements worth separating into individual layers.
-Include: subjects (people, animals), products, objects, props, decorative elements.
-Exclude: featureless sky, plain ground, or uniform shadows (unless they are the primary subject).
+                    text: `Analyze this image and detect ALL distinct foreground elements worth separating into individual layers (3 to 8 elements).
 
-For each element, also choose the best solid background color for chroma-key removal.
-Pick the color that has the LEAST overlap with the element's own colors:
-- "GREEN"  — use for red, orange, yellow, brown, purple objects (no green present)
-- "BLUE"   — use for red, orange, yellow, green objects (no blue present)
-- "RED"    — use for cyan, green, blue objects (no red present)
-- "GRAY"   — use when the object contains ALL THREE primary colors, or is multi-colored rainbow
+Classify each element into one of these categories:
+- "SUBJECT"  — main people, characters, animals, human figures
+- "PRODUCT"  — featured products, items for sale, merchandise, packaged goods
+- "OBJECTS"  — props, tools, furniture, everyday items, supporting objects
+- "DECOR"    — decorative shapes, patterns, graphic elements, flowers, plants, ribbons
+- "TEXT"     — visible text, titles, labels, logos, signs in the image
+
+Do NOT include: plain sky, featureless ground, drop shadows, or lens flare unless they are the primary subject.
+Do NOT include: lighting effects or shadow overlays — these do not need separate layers.
+
+For each element, choose the best solid background color for chroma-key removal.
+Pick whichever color has the LEAST overlap with the element's own colors:
+- "GREEN"  — for red, orange, yellow, brown, purple, white objects (no green present)
+- "BLUE"   — for red, orange, yellow, green objects (no blue present)
+- "RED"    — for cyan, teal, green, blue objects (no red present)
+- "GRAY"   — for multi-colored / rainbow objects that contain all three primary colors
 
 Return ONLY a valid JSON array, no markdown:
-[{"label":"goldfish","box_2d":[y1,x1,y2,x2],"bg_color":"GREEN"},{"label":"bridge","box_2d":[y1,x1,y2,x2],"bg_color":"GRAY"}]
+[{"label":"woman in red dress","category":"SUBJECT","box_2d":[y1,x1,y2,x2],"bg_color":"GREEN"},{"label":"handbag","category":"PRODUCT","box_2d":[y1,x1,y2,x2],"bg_color":"BLUE"}]
 
 box_2d: integers 0-1000 (normalized). Each box must tightly surround its object.`
                 }
@@ -144,9 +155,11 @@ box_2d: integers 0-1000 (normalized). Each box must tightly surround its object.
         throw new Error('Gemini 回傳 JSON 解析失敗');
     }
 
-    // 補全 bg_color（以防 Gemini 漏填）
+    const validCategories: LayerCategory[] = ['SUBJECT', 'PRODUCT', 'OBJECTS', 'DECOR', 'TEXT'];
+    // 補全缺漏欄位（以防 Gemini 漏填）
     objects = objects.map(o => ({
         ...o,
+        category: (validCategories.includes(o.category) ? o.category : 'OBJECTS') as LayerCategory,
         bg_color: (['GREEN', 'BLUE', 'RED', 'GRAY'].includes(o.bg_color) ? o.bg_color : 'GREEN') as BgColorKey,
     }));
 
@@ -253,7 +266,7 @@ export async function gptLayerSegment(
     for (let i = 0; i < objects.length; i++) {
         const obj = objects[i];
         const colorName = obj.bg_color;
-        onProgress?.(`✂️ 第 ${i + 1}/${objects.length}：${obj.label}（底色 ${colorName}）`);
+        onProgress?.(`✂️ 第 ${i + 1}/${objects.length} [${obj.category}]：${obj.label}（底色 ${colorName}）`);
         try {
             const crop = await cropToBBox(workingImage, obj.box_2d, W, H);
 
@@ -271,7 +284,7 @@ export async function gptLayerSegment(
 
             const fullLayer = await placeInFullCanvas(transparent, W, H, obj.box_2d);
             const trimmed   = await trimTransparentPixels(fullLayer);
-            layers.push(trimmed);
+            layers.push({ ...trimmed, name: `[${obj.category}] ${obj.label}` });
         } catch (e) {
             console.warn(`[gptLayerSplit] Skip "${obj.label}":`, e);
         }
