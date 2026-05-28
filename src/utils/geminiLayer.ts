@@ -80,8 +80,36 @@ function placeInFullCanvas(
     });
 }
 
+/** 將圖片 resize 回指定尺寸（用於修正 BiRefNet 輸出尺寸與輸入不一致的問題） */
+function resizeToMatch(base64: string, targetW: number, targetH: number): Promise<string> {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            // 尺寸已正確則直接回傳，不做多餘處理
+            if (img.naturalWidth === targetW && img.naturalHeight === targetH) {
+                resolve(base64);
+                return;
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width  = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext('2d')!;
+            ctx.imageSmoothingEnabled  = true;
+            ctx.imageSmoothingQuality  = 'high';
+            ctx.drawImage(img, 0, 0, targetW, targetH);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(base64);
+        img.src = base64;
+    });
+}
+
 /** 使用 fal-ai/birefnet 去除裁切圖的背景，回傳透明 PNG base64 */
 async function removeBgBiRefNet(cropBase64: string, falKey: string): Promise<string> {
+    // ⚠️ operating_resolution: '2048x2048' 可能讓輸出尺寸與輸入不一致，
+    //    事先記錄輸入尺寸，回傳後強制 resize 回原始比例，防止回貼時變形。
+    const inputDims = await getImageDims(cropBase64).catch(() => null);
+
     fal.config({ credentials: falKey });
     const file = base64ToFile(cropBase64, 'birefnet-input');
     const imageUrl = await fal.storage.upload(file);
@@ -105,6 +133,11 @@ async function removeBgBiRefNet(cropBase64: string, falKey: string): Promise<str
 
     const b64 = await downloadImageAsBase64(resultUrl);
     if (!b64) throw new Error('BiRefNet 圖片下載失敗');
+
+    // 輸出尺寸不符輸入時，resize 回輸入尺寸（保持比例一致，防止 cropRatio 計算出錯）
+    if (inputDims) {
+        return resizeToMatch(b64, inputDims.w, inputDims.h);
+    }
     return b64;
 }
 
