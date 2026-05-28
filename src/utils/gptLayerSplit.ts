@@ -2,10 +2,10 @@
  * GPT Image 2 魔法分層
  *
  * 流程：
- *   工作圖縮放至顯示尺寸（el.width × el.height），所有座標在顯示座標系內計算 → 不變形
- *   Gemini 偵測物件 + bounding box
+ *   工作圖縮放至顯示尺寸（el.width × el.height）→ 確保座標系一致，不變形
+ *   Gemini 偵測物件 + bounding box + 每個物件最適合的去背底色（GREEN/BLUE/RED/GRAY）
  *   → 直接從工作圖裁切物件區域（不重新生成，保證位置正確）
- *   → BiRefNet v2 去背（有 fal key）/ 品紅 Chroma Key（無 fal key）
+ *   → BiRefNet v2 去背（有 fal key）/ 動態 Chroma Key（無 fal key）
  *   → 放回全圖座標 → 裁切透明邊緣 → LayerResult[]
  *   + GPT Image 2 Edit 補全背景（放最底層）
  */
@@ -15,24 +15,30 @@ import { fal } from '@fal-ai/client';
 import { callAtlasImg2Img, downloadImageAsBase64 } from './atlasImage';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
+// ── 底色方案表 ─────────────────────────────────────────────
+type BgColorKey = 'GREEN' | 'BLUE' | 'RED' | 'GRAY';
+
+const BG_COLOR_MAP: Record<BgColorKey, { hex: string; rgb: [number, number, number]; desc: string }> = {
+    GREEN: { hex: '#00FF00', rgb: [0, 255, 0],       desc: 'pure lime-green (hex #00FF00, RGB 0,255,0)'       },
+    BLUE:  { hex: '#0000FF', rgb: [0, 0, 255],        desc: 'pure blue (hex #0000FF, RGB 0,0,255)'              },
+    RED:   { hex: '#FF0000', rgb: [255, 0, 0],        desc: 'pure red (hex #FF0000, RGB 255,0,0)'               },
+    GRAY:  { hex: '#CCCCCC', rgb: [204, 204, 204],    desc: 'flat light gray (hex #CCCCCC, RGB 204,204,204)'    },
+};
+
 interface DetectedObject {
     label: string;
     box_2d: [number, number, number, number]; // [y1, x1, y2, x2] normalized 0–1000
+    bg_color: BgColorKey;                     // Gemini 判斷最適合的去背底色
 }
 
-/**
- * 把圖片縮放到指定顯示尺寸（targetW × targetH）
- * 所有後續座標計算均在此尺寸內進行，確保最終 cropRatio * el.width/height 無變形
- */
+// ── 圖片工具 ──────────────────────────────────────────────
+
+/** 縮放圖片至顯示尺寸（確保 cropRatio 與 el.width/height 一致） */
 async function scaleToDisplay(base64: string, targetW: number, targetH: number): Promise<string> {
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
-            // 已是目標尺寸則直接使用
-            if (img.naturalWidth === targetW && img.naturalHeight === targetH) {
-                resolve(base64);
-                return;
-            }
+            if (img.naturalWidth === targetW && img.naturalHeight === targetH) { resolve(base64); return; }
             const canvas = document.createElement('canvas');
             canvas.width  = targetW;
             canvas.height = targetH;
@@ -44,45 +50,14 @@ async function scaleToDisplay(base64: string, targetW: number, targetH: number):
     });
 }
 
-/** Gemini 識別圖片中的語意元素（帶 bounding box） */
-async function detectObjects(imageBase64: string, apiKey: string): Promise<DetectedObject[]> {
-    const ai = new GoogleGenAI({ apiKey });
-    const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
-    const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
-        contents: {
-            parts: [
-                { inlineData: { mimeType, data: cleanBase64 } },
-                {
-                    text: `Detect 2 to 4 major semantic foreground objects in this image. Each must be a visually distinct, meaningful element. Do NOT include pure sky, empty ground, or shadows unless they are the primary subject.
-
-Return ONLY a valid JSON array, no markdown, no explanation:
-[{"label":"goldfish","box_2d":[y1,x1,y2,x2]},{"label":"bridge","box_2d":[y1,x1,y2,x2]}]
-
-Coordinates are integers 0-1000 (normalized). Each box must tightly surround its object.`
-                }
-            ]
-        },
+/** 取得圖片自然尺寸 */
+function getImageDims(base64: string): Promise<[number, number]> {
+    return new Promise((res) => {
+        const i = new Image();
+        i.onload = () => res([i.naturalWidth, i.naturalHeight]);
+        i.onerror = () => res([256, 256]);
+        i.src = base64;
     });
-
-    const text = response.text ?? '';
-    const stripped = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
-    const match = stripped.match(/\[[\s\S]*\]/);
-    if (!match) {
-        console.error('[gptLayerSplit] Gemini raw response:', text);
-        throw new Error('Gemini 未回傳物件偵測結果');
-    }
-
-    let objects: DetectedObject[];
-    try {
-        objects = JSON.parse(match[0]);
-    } catch {
-        throw new Error('Gemini 回傳 JSON 解析失敗');
-    }
-    if (!objects || objects.length === 0) throw new Error('Gemini 未偵測到任何物件');
-    return objects;
 }
 
 /** 從工作圖按 bounding box 裁切（[y1,x1,y2,x2] 0-1000） */
@@ -91,10 +66,8 @@ function cropToBBox(imageBase64: string, box: [number, number, number, number], 
         const img = new Image();
         img.onload = () => {
             const [y1n, x1n, y2n, x2n] = box;
-            const x1 = Math.round(x1n / 1000 * W);
-            const y1 = Math.round(y1n / 1000 * H);
-            const x2 = Math.round(x2n / 1000 * W);
-            const y2 = Math.round(y2n / 1000 * H);
+            const x1 = Math.round(x1n / 1000 * W), y1 = Math.round(y1n / 1000 * H);
+            const x2 = Math.round(x2n / 1000 * W), y2 = Math.round(y2n / 1000 * H);
             const cw = Math.max(1, x2 - x1), ch = Math.max(1, y2 - y1);
             const canvas = document.createElement('canvas');
             canvas.width = cw; canvas.height = ch;
@@ -106,19 +79,13 @@ function cropToBBox(imageBase64: string, box: [number, number, number, number], 
     });
 }
 
-/** 將裁切後的透明 PNG 放回 W×H 的 canvas，定位在 bounding box 位置 */
-function placeInFullCanvas(
-    cropBase64: string,
-    W: number,
-    H: number,
-    box: [number, number, number, number],
-): Promise<string> {
+/** 將裁切後的透明 PNG 放回 W×H canvas，定位在 bounding box 位置 */
+function placeInFullCanvas(cropBase64: string, W: number, H: number, box: [number, number, number, number]): Promise<string> {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
-            const [y1n, x1n] = box;
-            const x1 = Math.round(x1n / 1000 * W);
-            const y1 = Math.round(y1n / 1000 * H);
+            const x1 = Math.round(box[1] / 1000 * W);
+            const y1 = Math.round(box[0] / 1000 * H);
             const canvas = document.createElement('canvas');
             canvas.width = W; canvas.height = H;
             canvas.getContext('2d')!.drawImage(img, x1, y1);
@@ -129,66 +96,111 @@ function placeInFullCanvas(
     });
 }
 
+// ── Gemini 物件偵測（含底色建議）────────────────────────────
+
+async function detectObjects(imageBase64: string, apiKey: string): Promise<DetectedObject[]> {
+    const ai = new GoogleGenAI({ apiKey });
+    const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+    const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-lite',
+        contents: {
+            parts: [
+                { inlineData: { mimeType, data: cleanBase64 } },
+                {
+                    text: `Analyze this image and detect 3 to 6 distinct foreground elements worth separating into individual layers.
+Include: subjects (people, animals), products, objects, props, decorative elements.
+Exclude: featureless sky, plain ground, or uniform shadows (unless they are the primary subject).
+
+For each element, also choose the best solid background color for chroma-key removal.
+Pick the color that has the LEAST overlap with the element's own colors:
+- "GREEN"  — use for red, orange, yellow, brown, purple objects (no green present)
+- "BLUE"   — use for red, orange, yellow, green objects (no blue present)
+- "RED"    — use for cyan, green, blue objects (no red present)
+- "GRAY"   — use when the object contains ALL THREE primary colors, or is multi-colored rainbow
+
+Return ONLY a valid JSON array, no markdown:
+[{"label":"goldfish","box_2d":[y1,x1,y2,x2],"bg_color":"GREEN"},{"label":"bridge","box_2d":[y1,x1,y2,x2],"bg_color":"GRAY"}]
+
+box_2d: integers 0-1000 (normalized). Each box must tightly surround its object.`
+                }
+            ]
+        },
+    });
+
+    const text = response.text ?? '';
+    const stripped = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+    const match = stripped.match(/\[[\s\S]*\]/);
+    if (!match) {
+        console.error('[gptLayerSplit] Gemini raw:', text);
+        throw new Error('Gemini 未回傳物件偵測結果');
+    }
+
+    let objects: DetectedObject[];
+    try {
+        objects = JSON.parse(match[0]);
+    } catch {
+        throw new Error('Gemini 回傳 JSON 解析失敗');
+    }
+
+    // 補全 bg_color（以防 Gemini 漏填）
+    objects = objects.map(o => ({
+        ...o,
+        bg_color: (['GREEN', 'BLUE', 'RED', 'GRAY'].includes(o.bg_color) ? o.bg_color : 'GREEN') as BgColorKey,
+    }));
+
+    if (!objects || objects.length === 0) throw new Error('Gemini 未偵測到任何物件');
+    return objects;
+}
+
+// ── 去背方法 ──────────────────────────────────────────────
+
 /** BiRefNet v2 去背 */
 async function removeBgBiRefNet(cropBase64: string, falKey: string): Promise<string> {
     fal.config({ credentials: falKey });
 
-    const [header, data] = cropBase64.includes(',')
-        ? cropBase64.split(',')
-        : ['data:image/png;base64', cropBase64];
-    const mime = header.match(/:(.*?);/)?.[1] ?? 'image/png';
-    const ext  = mime.split('/')[1] ?? 'png';
-    const binary = atob(data);
-    const arr    = new Uint8Array(binary.length);
+    const [header, data] = cropBase64.includes(',') ? cropBase64.split(',') : ['data:image/png;base64', cropBase64];
+    const mime    = header.match(/:(.*?);/)?.[1] ?? 'image/png';
+    const binary  = atob(data);
+    const arr     = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
-    const file = new File([arr], `birefnet-input.${ext}`, { type: mime });
+    const file = new File([arr], `birefnet-input.${mime.split('/')[1] ?? 'png'}`, { type: mime });
 
     const imageUrl = await fal.storage.upload(file);
     const result   = await fal.subscribe('fal-ai/birefnet/v2', {
-        input: {
-            image_url: imageUrl,
-            model: 'General Use (Heavy)',
-            operating_resolution: '2048x2048',
-            output_format: 'png',
-            refine_foreground: true,
-        },
+        input: { image_url: imageUrl, model: 'General Use (Heavy)', operating_resolution: '2048x2048', output_format: 'png', refine_foreground: true },
     });
 
     const resultUrl: string | undefined =
-        (result.data as any)?.image?.url ??
-        (result.data as any)?.images?.[0]?.url ??
-        (result.data as any)?.url;
+        (result.data as any)?.image?.url ?? (result.data as any)?.images?.[0]?.url ?? (result.data as any)?.url;
     if (!resultUrl) throw new Error('BiRefNet 未回傳結果 URL');
 
     const b64 = await downloadImageAsBase64(resultUrl);
     if (!b64) throw new Error('BiRefNet 圖片下載失敗');
 
-    // BiRefNet 可能輸出不同解析度，縮回裁切圖尺寸確保座標對齊
-    return scaleToDisplay(b64, ...(await (async () => {
-        const dims = await new Promise<[number, number]>((res) => {
-            const i = new Image();
-            i.onload = () => res([i.naturalWidth, i.naturalHeight]);
-            i.onerror = () => res([i.naturalWidth || 256, i.naturalHeight || 256]);
-            i.src = cropBase64;
-        });
-        return dims;
-    })()));
+    // 縮回裁切圖尺寸，確保座標對齊
+    const [cw, ch] = await getImageDims(cropBase64);
+    return scaleToDisplay(b64, cw, ch);
 }
 
-/** 品紅 Chroma Key 備援（無 fal key 時使用） */
-async function removeMagentaBackground(base64: string): Promise<string> {
+/**
+ * 動態 Chroma Key 去背（備援）
+ * 根據 Gemini 判斷的底色（GREEN/BLUE/RED/GRAY）去除對應顏色的背景
+ */
+async function removeColorBackground(base64: string, bgKey: BgColorKey): Promise<string> {
+    const { rgb: [tr, tg, tb] } = BG_COLOR_MAP[bgKey];
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            canvas.width  = img.naturalWidth;
-            canvas.height = img.naturalHeight;
+            canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
             const ctx = canvas.getContext('2d')!;
             ctx.drawImage(img, 0, 0);
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const d = imageData.data;
             for (let i = 0; i < d.length; i += 4) {
-                const dr = d[i] - 255, dg = d[i + 1] - 0, db = d[i + 2] - 255;
+                const dr = d[i] - tr, dg = d[i + 1] - tg, db = d[i + 2] - tb;
                 const dist = Math.sqrt(dr * dr + dg * dg + db * db);
                 if (dist < 60)       d[i + 3] = 0;
                 else if (dist < 110) d[i + 3] = Math.round(((dist - 60) / 50) * 255);
@@ -201,14 +213,16 @@ async function removeMagentaBackground(base64: string): Promise<string> {
     });
 }
 
+// ── 主要入口 ──────────────────────────────────────────────
+
 /**
- * 主要入口：魔法分層
+ * 魔法分層主函式
  * @param imageBase64   原圖 base64（el.src）
- * @param displayWidth  畫布上的顯示寬度（el.width）
- * @param displayHeight 畫布上的顯示高度（el.height）
+ * @param displayWidth  畫布顯示寬度（el.width）
+ * @param displayHeight 畫布顯示高度（el.height）
  * @param geminiApiKey  Gemini API Key
  * @param atlasKey      Atlas Cloud API Key（GPT Image 2 背景補圖用）
- * @param falKey        fal.ai API Key（BiRefNet 去背用，選填）
+ * @param falKey        fal.ai API Key（BiRefNet 去背，選填；無則 Chroma Key 備援）
  * @param onProgress    進度回呼
  */
 export async function gptLayerSegment(
@@ -222,14 +236,13 @@ export async function gptLayerSegment(
 ): Promise<LayerResult[]> {
 
     const useBiRefNet = !!falKey;
+    const W = displayWidth, H = displayHeight;
 
-    // ── Step 1：縮放至顯示尺寸（確保座標系一致，無變形）────
+    // ── Step 1：縮放至顯示尺寸 ────────────────────────────
     onProgress?.('🔍 Gemini 分析圖片語意中...');
-    const W = displayWidth;
-    const H = displayHeight;
     const workingImage = await scaleToDisplay(imageBase64, W, H);
 
-    // ── Step 2：Gemini 偵測物件 + bounding box ────────────
+    // ── Step 2：Gemini 偵測物件 + bounding box + 底色 ─────
     const objects = await detectObjects(workingImage, geminiApiKey);
     const bgMethod = useBiRefNet ? 'BiRefNet' : 'Chroma Key';
     onProgress?.(`✨ 偵測到 ${objects.length} 個物件，使用 ${bgMethod} 去背...`);
@@ -239,25 +252,23 @@ export async function gptLayerSegment(
     // ── Step 3：逐一裁切 + 去背 ───────────────────────────
     for (let i = 0; i < objects.length; i++) {
         const obj = objects[i];
-        onProgress?.(`✂️ 處理第 ${i + 1}/${objects.length} 層：${obj.label}`);
+        const colorName = obj.bg_color;
+        onProgress?.(`✂️ 第 ${i + 1}/${objects.length}：${obj.label}（底色 ${colorName}）`);
         try {
-            // 直接從工作圖（顯示尺寸）裁切 → 座標與 el.width/el.height 完全對應
             const crop = await cropToBBox(workingImage, obj.box_2d, W, H);
 
-            // 去背
             let transparent: string;
             if (useBiRefNet) {
                 try {
                     transparent = await removeBgBiRefNet(crop, falKey!);
                 } catch (e) {
-                    console.warn(`[gptLayerSplit] BiRefNet failed for "${obj.label}", fallback chroma key:`, e);
-                    transparent = await removeMagentaBackground(crop);
+                    console.warn(`[gptLayerSplit] BiRefNet failed for "${obj.label}", fallback chroma key (${colorName}):`, e);
+                    transparent = await removeColorBackground(crop, colorName);
                 }
             } else {
-                transparent = await removeMagentaBackground(crop);
+                transparent = await removeColorBackground(crop, colorName);
             }
 
-            // 放回全尺寸 canvas（W × H），再裁切透明邊緣
             const fullLayer = await placeInFullCanvas(transparent, W, H, obj.box_2d);
             const trimmed   = await trimTransparentPixels(fullLayer);
             layers.push(trimmed);
@@ -275,22 +286,11 @@ export async function gptLayerSegment(
             `Reconstruct the complete background naturally and realistically. ` +
             `Fill all areas where elements were removed with appropriate background content. ` +
             `Preserve the original background colors, lighting, perspective and atmosphere.`,
-            'gpt-image-2',
-            atlasKey,
-            imageBase64,   // 背景補圖送原圖（高畫質），比例由 Atlas 自動偵測
-            1,
-            { ratio: 'Original' },
+            'gpt-image-2', atlasKey, imageBase64, 1, { ratio: 'Original' },
         );
         if (bgResults[0]) {
-            // 背景補圖縮放至顯示尺寸，確保填滿元素不變形
             const bgScaled = await scaleToDisplay(bgResults[0], W, H);
-            layers.unshift({
-                base64: bgScaled,
-                cropRatioX: 0,
-                cropRatioY: 0,
-                cropRatioW: 1,
-                cropRatioH: 1,
-            });
+            layers.unshift({ base64: bgScaled, cropRatioX: 0, cropRatioY: 0, cropRatioW: 1, cropRatioH: 1 });
         }
     } catch (e) {
         console.warn('[gptLayerSplit] Background inpainting failed:', e);
