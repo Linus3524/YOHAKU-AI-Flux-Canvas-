@@ -1152,7 +1152,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                     <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${preserveTransparency ? 'translate-x-5' : 'translate-x-0'}`} />
                                                 </div>
                                             </div>
-                                            {generationModel && generationModel !== 'gemini' && (
+                                            {generationModel && generationModel !== 'gemini' && generationModel !== 'gpt-image-2' && (
                                                 <p className="text-[10px] text-[#FF9500] leading-snug">
                                                     ⚠️ 目前模型不支援生圖透明輸出，風格轉移、視角轉換等功能仍適用
                                                 </p>
