@@ -394,17 +394,13 @@ const App: React.FC = () => {
       showToast('✨ 魔法分層啟動中...');
 
       try {
-          const { layers, transparentSupported } = await gptLayerSegment(
+          const layers = await gptLayerSegment(
               el.src,
               effectiveApiKey || '',
               atlasApiKey,
               (msg) => showToast(msg),
           );
           if (layers.length === 0) throw new Error('未收到任何圖層');
-
-          if (!transparentSupported) {
-              showToast('⚠️ Atlas 不支援透明輸出，圖層可能含背景，建議搭配快速去背使用');
-          }
 
           const baseZ = el.zIndex;
           // 第一層是背景（全尺寸），其餘是物件（貼合邊界）

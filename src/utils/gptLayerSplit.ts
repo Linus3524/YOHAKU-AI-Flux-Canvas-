@@ -1,11 +1,14 @@
 /**
  * GPT Image 2 魔法分層
- * 流程：Gemini 識別語意元素 → GPT Image 2 Edit 逐層提取（透明背景）
- *       → GPT Image 2 Edit 補全背景 → LayerResult[]
+ * 流程：Gemini 識別語意元素
+ *       → GPT Image 2 Edit 逐層隔離（白背景）
+ *       → Atlas Background Remover 去背（透明 PNG）
+ *       → GPT Image 2 Edit 補全背景
+ *       → LayerResult[]
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { callAtlasImg2Img } from './atlasImage';
+import { callAtlasImg2Img, callAtlasBackgroundRemover } from './atlasImage';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
 interface DetectedObject {
@@ -49,27 +52,6 @@ Return ONLY valid JSON array, no markdown:
     return objects;
 }
 
-/** 檢查 base64 圖片是否含有透明像素（alpha < 255）*/
-function hasTransparentPixels(base64: string): Promise<boolean> {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.min(img.naturalWidth, 256);
-            canvas.height = Math.min(img.naturalHeight, 256);
-            const ctx = canvas.getContext('2d')!;
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-            for (let i = 3; i < data.length; i += 4) {
-                if (data[i] < 250) { resolve(true); return; }
-            }
-            resolve(false);
-        };
-        img.onerror = () => resolve(false);
-        img.src = base64;
-    });
-}
-
 /**
  * 主要入口：GPT Image 2 分層提取
  * @param imageBase64  原圖 base64
@@ -82,7 +64,7 @@ export async function gptLayerSegment(
     geminiApiKey: string,
     atlasKey: string,
     onProgress?: (msg: string) => void,
-): Promise<{ layers: LayerResult[]; transparentSupported: boolean }> {
+): Promise<LayerResult[]> {
 
     // ── Step 1：Gemini 識別元素 ────────────────────────────
     onProgress?.('🔍 Gemini 分析圖片語意中...');
@@ -90,33 +72,37 @@ export async function gptLayerSegment(
     onProgress?.(`✨ 偵測到 ${objects.length} 個元素，開始分層提取...`);
 
     const layers: LayerResult[] = [];
-    let transparentSupported = false;
 
-    // ── Step 2：逐層提取 ───────────────────────────────────
+    // ── Step 2：逐層提取（白背景隔離 → Atlas 去背）─────────
     for (let i = 0; i < objects.length; i++) {
         const obj = objects[i];
         onProgress?.(`🎨 提取第 ${i + 1}/${objects.length} 層：${obj.label}`);
         try {
-            const results = await callAtlasImg2Img(
-                `Extract only the "${obj.labelEn}" (${obj.label}) from this image as an isolated element. ` +
-                `Output with a completely transparent background. ` +
-                `Preserve the exact original position, size, proportions, colors, lighting and details of the "${obj.labelEn}". ` +
-                `Do not move, resize, or modify the element in any way. ` +
-                `Everything except the "${obj.labelEn}" must be fully transparent.`,
+            // 2a：GPT Image 2 Edit 把元素隔離在純白背景上
+            const isolated = await callAtlasImg2Img(
+                `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
+                `Replace ALL other areas with a plain solid white background (#FFFFFF). ` +
+                `Preserve every detail of the "${obj.labelEn}": colors, lighting, proportions, edges, and position. ` +
+                `The background must be a perfectly uniform solid white with no gradients, shadows, or other elements.`,
                 'gpt-image-2',
                 atlasKey,
                 imageBase64,
                 1,
-                { ratio: 'Original', transparentBg: true },
+                { ratio: 'Original' },
             );
+            if (!isolated[0]) continue;
 
-            if (!results[0]) continue;
+            // 2b：Atlas Background Remover 去掉白背景 → 透明 PNG
+            onProgress?.(`✂️ 去背第 ${i + 1}/${objects.length} 層：${obj.label}`);
+            let transparentBase64: string;
+            try {
+                transparentBase64 = await callAtlasBackgroundRemover(isolated[0], atlasKey);
+            } catch (bgErr) {
+                console.warn(`[gptLayerSplit] BG remover failed for "${obj.label}", using isolated:`, bgErr);
+                transparentBase64 = isolated[0];
+            }
 
-            // 測試是否真的有透明通道（驗證 Atlas 是否支援）
-            const hasAlpha = await hasTransparentPixels(results[0]);
-            if (hasAlpha) transparentSupported = true;
-
-            const trimmed = await trimTransparentPixels(results[0]);
+            const trimmed = await trimTransparentPixels(transparentBase64);
             layers.push(trimmed);
         } catch (e) {
             console.warn(`[gptLayerSplit] Skip "${obj.label}":`, e);
@@ -153,5 +139,5 @@ export async function gptLayerSegment(
     }
 
     if (layers.length === 0) throw new Error('所有圖層提取均失敗');
-    return { layers, transparentSupported };
+    return layers;
 }
