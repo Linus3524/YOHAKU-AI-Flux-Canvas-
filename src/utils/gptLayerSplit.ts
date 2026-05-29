@@ -210,19 +210,35 @@ async function analyzeBackground(imageBase64: string, apiKey: string): Promise<s
                 parts: [
                     { inlineData: { mimeType, data: cleanBase64 } },
                     {
-                        text: `Describe ONLY the background environment of this image in 1-2 concise English sentences.
-Focus on: location type, lighting, colors, atmosphere, materials/textures visible in the background.
-Do NOT mention any foreground subjects, people, products, or text.
-Example outputs:
-- "Bright indoor space with white walls, soft natural daylight from the left, clean minimal interior."
-- "Outdoor ocean scene with calm blue-green water, clear sky, warm afternoon sunlight."
-- "Urban street at night with bokeh city lights in the background, dark cool tones."
-Return ONLY the background description, nothing else.`,
+                        text: `Analyze ONLY the background of this image (ignore all foreground subjects, people, products, text).
+Return a single JSON object with these fields — no markdown, no extra text:
+{
+  "scene": "one sentence describing the background location and atmosphere",
+  "colors": "dominant background colors with approximate hex or descriptive values (e.g. soft sky blue #87CEEB, warm sand #F5DEB3)",
+  "lighting": "lighting direction, quality and color temperature (e.g. soft diffused light from upper-left, warm 5500K)",
+  "texture": "surface textures or patterns visible in background (e.g. smooth concrete, bokeh blur, gradient sky)",
+  "gradient": "if applicable, describe gradient direction and colors (e.g. top-to-bottom light blue to white)"
+}`,
                     },
                 ],
             },
         });
-        return response.text?.trim() ?? '';
+        const raw = response.text?.trim() ?? '';
+        // 解析 JSON，組合成精準描述字串
+        try {
+            const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(stripped);
+            const parts = [
+                parsed.scene,
+                parsed.colors   ? `Colors: ${parsed.colors}`   : '',
+                parsed.lighting ? `Lighting: ${parsed.lighting}` : '',
+                parsed.texture  ? `Texture: ${parsed.texture}`  : '',
+                parsed.gradient ? `Gradient: ${parsed.gradient}` : '',
+            ].filter(Boolean);
+            return parts.join('. ');
+        } catch {
+            return raw; // 解析失敗就直接用原始文字
+        }
     } catch {
         return '';
     }
@@ -402,8 +418,11 @@ export async function gptLayerSegment(
     onProgress?.('🗺️ 生成背景遮罩，準備補全背景...');
     const maskBase64 = await generateBboxMask(compressedImage, objects);
     const bgInpaintPrompt = bgDescription
-        ? `Reconstruct the removed areas to seamlessly match this background: ${bgDescription} Preserve exact colors, lighting direction, perspective and atmosphere of the surrounding background.`
-        : '';
+        ? `Fill ONLY the masked (transparent) areas. Do NOT alter any existing background pixels outside the masked region.
+Extend and continue the existing surrounding background content naturally into the holes.
+Background reference: ${bgDescription}
+Rules: match exact edge colors pixel-by-pixel, continue gradients/textures seamlessly, minimal reconstruction — only fill what is missing.`
+        : `Fill ONLY the masked (transparent) areas by extending the surrounding background naturally. Do NOT alter any existing pixels outside the masked region. Minimal reconstruction only.`;
     const bgPromise = (maskBase64
         ? callAtlasInpaint(
             bgInpaintPrompt,
