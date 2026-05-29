@@ -416,13 +416,11 @@ const App: React.FC = () => {
               // 位置夾在 [0, 1] 安全範圍
               const clampedX = Math.max(0, Math.min(1, layer.cropRatioX));
               const clampedY = Math.max(0, Math.min(1, layer.cropRatioY));
-              // 尺寸：用 cropRatioW 決定寬度，高度由真實像素比例推算（避免 GPT 輸出比例 ≠ 畫布比例導致變形）
+              // 尺寸：cropRatioW/H 各自對應 GPT 輸出的 W/H 方向縮放，不可混用
+              // layerW = (trimW / GPTOutputW) × el.width
+              // layerH = (trimH / GPTOutputH) × el.height ← 獨立正確，不 clamp 就不變形
               const layerW = isBackground ? el.width  : Math.round(layer.cropRatioW * el.width);
-              const layerH = isBackground ? el.height : (
-                  layer.pixelWidth && layer.pixelHeight
-                      ? Math.round(layerW * (layer.pixelHeight / layer.pixelWidth))
-                      : Math.round(layer.cropRatioH * el.height)
-              );
+              const layerH = isBackground ? el.height : Math.round(layer.cropRatioH * el.height);
               // 中心點 = 圖層區塊左上角 + bbox 偏移 + 半寬/高
               const cx = isBackground
                   ? layerAreaLeft + el.width / 2
