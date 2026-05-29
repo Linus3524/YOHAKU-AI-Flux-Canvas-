@@ -107,8 +107,8 @@ Do NOT split a person from their chair, a rider from their bike, etc.
 Determine count based on actual image complexity — never force layers:
 - Very simple (1-2 objects): return 2-3 layers
 - Moderate (3-5 objects): return 3-5 layers
-- Complex (6+ distinct objects): return 5-8 layers
-Maximum 8 layers. Fewer precise layers beats more noisy layers.
+- Complex (6+ distinct objects): return 5-10 layers
+Maximum 10 layers. Fewer precise layers beats more noisy layers.
 
 ━━━ CATEGORIES ━━━
 - SUBJECT: main person, character, model, portrait
@@ -165,8 +165,8 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         (CATEGORY_PRIORITY[a.category] ?? 5) - (CATEGORY_PRIORITY[b.category] ?? 5)
     );
 
-    // 硬限：最多 8 個物件（避免 API 費用爆炸）
-    if (objects.length > 8) objects = objects.slice(0, 8);
+    // 硬限：最多 10 個物件（避免 API 費用爆炸）
+    if (objects.length > 10) objects = objects.slice(0, 10);
 
     // 安全夾值：bbox + edgeComplexity 預設值
     return objects.map(o => ({
