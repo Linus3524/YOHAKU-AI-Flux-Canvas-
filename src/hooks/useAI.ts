@@ -1143,7 +1143,7 @@ CONSTRAINTS:
                 setIsGenerating(true);
                 setGeneratedImages(null);
                 const atlasQuality = imageSize === '4K' ? '4K' : '2K';
-                const atlasRatio = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
+                const atlasRatio = imageAspectRatio || 'Original';
                 try {
                     // 便利貼參考圖追加在畫布圖片之後
                     const images = await withAtlasWaitToast(() => callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2, { ratio: atlasRatio, quality: atlasQuality, transparentBg: getTransparentBg(atlasPrompt || '') }, hasNoteRefs ? noteRefImgs : undefined));
@@ -1168,7 +1168,7 @@ CONSTRAINTS:
                 setIsGenerating(true);
                 setGeneratedImages(null);
                 const atlasQualityR = imageSize === '4K' ? '4K' : '2K';
-                const atlasRatioR = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
+                const atlasRatioR = imageAspectRatio || 'Original';
                 try {
                     const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 2, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: getTransparentBg(atlasPrompt || '') }, noteRefImgs.slice(1)));
                     if (images.length === 0) throw new Error('未收到任何圖片');
