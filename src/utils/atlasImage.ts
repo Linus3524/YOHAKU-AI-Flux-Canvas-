@@ -280,6 +280,7 @@ interface AtlasCallOptions {
     ratio?: string;       // '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '3:2' | '2:3' | '21:9'
     quality?: '2K' | '4K';
     transparentBg?: boolean; // 要求輸出透明背景（background: 'transparent'）
+    keepAlpha?: boolean;     // 壓縮時使用 PNG 保留 alpha（預設 JPEG 會破壞透明）
 }
 
 function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
@@ -381,7 +382,12 @@ export async function detectClosestRatio(base64: string): Promise<string> {
  * 送給 Atlas 前壓縮圖片：最長邊縮到 1024px，轉 JPEG 85%
  * 大幅減少傳輸量（原圖可能 3-5MB → 壓縮後約 200-400KB），加快 API 處理速度
  */
-export async function compressForAtlas(base64: string, maxPx = 1024, quality = 0.85): Promise<string> {
+export async function compressForAtlas(
+    base64: string,
+    maxPx = 1024,
+    quality = 0.85,
+    keepAlpha = false,  // true → PNG（保留透明），false → JPEG（較小）
+): Promise<string> {
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
@@ -394,7 +400,9 @@ export async function compressForAtlas(base64: string, maxPx = 1024, quality = 0
             canvas.height = Math.round(h * scale);
             const ctx = canvas.getContext('2d')!;
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL('image/jpeg', quality));
+            resolve(keepAlpha
+                ? canvas.toDataURL('image/png')
+                : canvas.toDataURL('image/jpeg', quality));
         };
         img.onerror = () => resolve(base64); // 壓縮失敗就用原圖
         img.src = base64;
@@ -426,9 +434,9 @@ export async function callAtlasImg2Img(
         resolvedOptions = { ...options, ratio: detectedRatio };
     }
 
-    // 送出前壓縮所有參考圖（最長邊 1024px + JPEG 85%），大幅減少傳輸量
+    // 送出前壓縮所有參考圖（最長邊 1024px），keepAlpha 時改用 PNG 保留透明
     const rawImages = [referenceImageBase64, ...(noteRefImages ?? [])].filter(Boolean).slice(0, 8);
-    const allImages = await Promise.all(rawImages.map(img => compressForAtlas(img)));
+    const allImages = await Promise.all(rawImages.map(img => compressForAtlas(img, 1024, 0.85, options?.keepAlpha)));
 
     const submitResults = await Promise.allSettled(
         Array.from({ length: count }, () =>
@@ -542,25 +550,6 @@ export async function callAtlasInpaint(
 
 export function isValidAtlasKey(key: string): boolean {
     return key.startsWith('apikey-') && key.length > 10;
-}
-
-// ── [TEST] Atlas 去背工具 ───────────────────────────────────
-/** atlascloud/image-background-remover 測試用
- *  imageInput: base64 data URI 或 http URL 均可嘗試
- *  回傳: 去背後的 base64 字串（透明 PNG）
- */
-export async function callAtlasBackgroundRemover(
-    imageInput: string,
-    atlasKey: string
-): Promise<string> {
-    const predId = await postGeneration({
-        model: 'atlascloud/image-background-remover',
-        image: imageInput,
-        enable_base64_output: true,
-    }, atlasKey);
-    const results = await pollPrediction(predId, atlasKey);
-    if (!results[0]) throw new Error('Atlas 去背未回傳結果');
-    return results[0];
 }
 
 /** 除錯用：查詢已知 prediction ID */

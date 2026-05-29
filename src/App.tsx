@@ -31,7 +31,7 @@ import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import { downloadImageAsBase64, callAtlasImg2Img } from './utils/atlasImage';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import { birefnetRemoveBg } from './utils/geminiLayer';
-import { gptLayerSegment } from './utils/gptLayerSplit';
+import { gptLayerSegment, detectPrimarySubject, gptSmartRemoveBg } from './utils/gptLayerSplit';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -387,37 +387,37 @@ const App: React.FC = () => {
       }
   }, [falApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
-  // --- GPT Image 2 智慧去背 ---
+  // --- GPT Image 2 智慧去背（BiRefNet 粗輪廓 + GPT 邊緣精修）---
   const handleGptRemoveBackground = useCallback(async () => {
-      if (!atlasApiKey) { showToast('GPT 去背需要 Atlas Key'); setShowKeyModal(true); return; }
+      if (!atlasApiKey) { showToast('GPT 智慧去背需要 Atlas Key'); setShowKeyModal(true); return; }
+      if (!falApiKey)   { showToast('GPT 智慧去背需要 fal.ai Key（BiRefNet 輪廓用）'); setShowKeyModal(true); return; }
       const targets = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
       if (targets.length === 0) return;
       setIsGenerating(true);
       setGeneratingElementIds(targets.map(el => el.id));
-      showToast('✂️ GPT Image 2 去背中...');
+      showToast('🔍 Gemini 分析主體中...');
       try {
           for (const el of targets) {
-              const results = await callAtlasImg2Img(
-                  'Remove the background completely. Keep only the main subject with a fully transparent background. Preserve all details, colors, and edges of the subject exactly as in the original.',
-                  'gpt-image-2',
-                  atlasApiKey,
+              const subject = await detectPrimarySubject(el.src, effectiveApiKey || '');
+              showToast(`🎯 偵測到「${subject.label}」，開始精修去背...`);
+              const result = await gptSmartRemoveBg(
                   el.src,
-                  1,
-                  { transparentBg: true },
+                  subject,
+                  atlasApiKey,
+                  falApiKey,
+                  (msg) => showToast(msg),
               );
-              if (results[0]) {
-                  setElements(prev => prev.map(e => e.id === el.id ? { ...e, src: results[0] } : e));
-                  if (results[0].startsWith('data:')) cacheImage(el.id, results[0]);
-              }
+              setElements(prev => prev.map(e => e.id === el.id ? { ...e, src: result } : e));
+              if (result.startsWith('data:')) cacheImage(el.id, result);
           }
-          showToast('✅ GPT 去背完成！');
+          showToast('✅ GPT 智慧去背完成！');
       } catch (e: any) {
           showToast(`❌ GPT 去背失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
       } finally {
           setIsGenerating(false);
           setGeneratingElementIds([]);
       }
-  }, [atlasApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+  }, [atlasApiKey, falApiKey, effectiveApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
   // --- 魔法分層：GPT Image 2 語意提取 + 背景補圖 ---
   const handleMagicLayer = useCallback(async (elementId: string) => {
