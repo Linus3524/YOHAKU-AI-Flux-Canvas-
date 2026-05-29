@@ -362,6 +362,7 @@ const App: React.FC = () => {
       atlasApiKey,
       generationModel,
       atlasTransparentBg,
+      falApiKey,
   });
 
   // --- BiRefNet v2 去背 ---

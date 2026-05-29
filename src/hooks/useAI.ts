@@ -2,20 +2,22 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import type { CanvasElement, ImageElement, NoteElement, TextElement, FrameElement, ShapeElement, DrawingElement, OutpaintingState } from '../types';
-import { 
-    callGeminiWithRetry, 
-    loadImage, 
-    restoreOriginalAlpha, 
-    createShapeDataUrl, 
-    hasTransparency, 
+import {
+    callGeminiWithRetry,
+    loadImage,
+    restoreOriginalAlpha,
+    createShapeDataUrl,
+    hasTransparency,
     getClosestAspectRatio,
     STYLE_PRESETS,
     calculateImageDifference,
     detectIfIllustration,
-    checkCompositionSimilarity
+    checkCompositionSimilarity,
+    processChromaKey
 } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
 import { callAtlasGenerate, callAtlasImg2Img, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
+import { birefnetRemoveBg } from '../utils/geminiLayer';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -28,9 +30,63 @@ interface UseAIProps {
     atlasApiKey?: string | null;
     generationModel?: string;
     atlasTransparentBg?: boolean;
+    falApiKey?: string | null;
 }
 
-export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel = 'gemini', atlasTransparentBg = false }: UseAIProps) => {
+/** 根據主體主色調選最佳 Chroma Key 底色 */
+function findBestChromaColor(base64: string): Promise<string> {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const size = 80;
+            canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d')!;
+            ctx.drawImage(img, 0, 0, size, size);
+            const data = ctx.getImageData(0, 0, size, size).data;
+            let r = 0, g = 0, b = 0, count = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i + 3] > 50) { r += data[i]; g += data[i + 1]; b += data[i + 2]; count++; }
+            }
+            if (count === 0) { resolve('#00BB44'); return; }
+            r /= count; g /= count; b /= count;
+            const candidates = [
+                { hex: '#00BB44', r: 0, g: 187, b: 68 },
+                { hex: '#2255CC', r: 34, g: 85, b: 204 },
+                { hex: '#CC2200', r: 204, g: 34, b: 0 },
+                { hex: '#FFFFFF', r: 255, g: 255, b: 255 },
+            ];
+            let best = '#00BB44', maxDist = 0;
+            for (const c of candidates) {
+                const dist = Math.sqrt((r - c.r) ** 2 + (g - c.g) ** 2 + (b - c.b) ** 2);
+                if (dist > maxDist) { maxDist = dist; best = c.hex; }
+            }
+            resolve(best);
+        };
+        img.onerror = () => resolve('#FFFFFF');
+        img.src = base64;
+    });
+}
+
+/** 把透明背景壓平成純色底（避免 GPT Edit 把透明當遮罩） */
+function flattenTransparentImage(base64: string, bgColor: string): Promise<string> {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d')!;
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(base64);
+        img.src = base64;
+    });
+}
+
+export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel = 'gemini', atlasTransparentBg = false, falApiKey }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
@@ -41,12 +97,8 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('1K');
     const [preserveTransparency, setPreserveTransparency] = useState(true);
     // 只有 gpt-image-2 支援 background: transparent
-    // preserveTransparency 或 atlasTransparentBg 任一開啟皆觸發
-    const useTransparentBg = (atlasTransparentBg || preserveTransparency) && generationModel === 'gpt-image-2';
-    // 模型不支援透明背景時，在 prompt 中要求白底，方便後續去背
-    const whiteBgSuffix = preserveTransparency && !useTransparentBg
-        ? ' The input image may have a transparent background. Place the subject on a pure white (#FFFFFF) background. No gradients, no environmental backgrounds, no shadows behind the subject.'
-        : '';
+    // preserveTransparency 改用 post-process 處理，不再透過 API 參數觸發
+    const useTransparentBg = atlasTransparentBg && generationModel === 'gpt-image-2';
     const [showStyleLibrary, setShowStyleLibrary] = useState(false);
     const zIndexCounter = useRef(Math.max(0, ...elements.map(e => e.zIndex)) + 1);
 
@@ -76,6 +128,30 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
             clearInterval(timer);
         }
     }, [showToast]);
+
+    /** 生成前準備：若來源有透明且開啟 preserveTransparency → 壓平並記錄底色 */
+    const prepareForGeneration = useCallback(async (src: string): Promise<{
+        src: string; hadTransparency: boolean; bgColor: string;
+    }> => {
+        if (!preserveTransparency) return { src, hadTransparency: false, bgColor: '#FFFFFF' };
+        const transparent = await hasTransparency(src);
+        if (!transparent) return { src, hadTransparency: false, bgColor: '#FFFFFF' };
+        const bgColor = await findBestChromaColor(src);
+        const flatSrc = await flattenTransparentImage(src, bgColor);
+        return { src: flatSrc, hadTransparency: true, bgColor };
+    }, [preserveTransparency]);
+
+    /** 生成後還原：BiRefNet（有 fal key）或 Chroma Key（無 fal key） */
+    const restoreTransparencyFn = useCallback(async (resultSrc: string, bgColor: string): Promise<string> => {
+        if (falApiKey) {
+            try {
+                return await birefnetRemoveBg(resultSrc, falApiKey);
+            } catch (e) {
+                console.warn('[restoreTransparency] BiRefNet failed, fallback chroma key', e);
+            }
+        }
+        return processChromaKey(resultSrc, bgColor);
+    }, [falApiKey]);
 
     // Helper to create client or throw error immediately
     const createAiClient = () => {
@@ -284,17 +360,14 @@ ALWAYS PRESERVE:
             const genAI = createAiClient();
             for (const element of targetElements) {
                 try {
-                    const [header, data] = element.src.split(',');
+                    const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
+                    const [header, data] = flatSrc.split(',');
                     const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
                     const imagePart = { inlineData: { data, mimeType } };
 
-                    const transparencyOverride = preserveTransparency
-                        ? `\n\n---FINAL OVERRIDE---\nThe input image has a transparent background. OUTPUT REQUIREMENT: Place the subject on a PURE WHITE (#FFFFFF) background. No gradients, no shadows behind subject, no environmental backgrounds.`
-                        : '';
-
                     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                         model: imageModel,
-                        contents: { parts: [imagePart, { text: basePrompt + transparencyOverride }] },
+                        contents: { parts: [imagePart, { text: basePrompt }] },
                     }));
 
                     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
@@ -302,15 +375,9 @@ ALWAYS PRESERVE:
                         const generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
                         let finalSrc = generatedSrc;
 
-                        if (preserveTransparency) {
+                        if (hadTransparency) {
                             try {
-                                const similarity = await checkCompositionSimilarity(element.src, generatedSrc);
-                                if (similarity > 0.75) {
-                                    finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
-                                } else {
-                                    showToast("構圖已變化，正在重新去背...");
-                                    finalSrc = await executeDynamicRemoval(generatedSrc, genAI, undefined, imageModel);
-                                }
+                                finalSrc = await restoreTransparencyFn(finalSrc, bgColor);
                             } catch (e) {
                                 console.warn("Failed to restore transparency:", e);
                             }
@@ -329,7 +396,7 @@ ALWAYS PRESERVE:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey]);
+    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, prepareForGeneration, restoreTransparencyFn]);
 
     // handlePasteStyle: 僅供 Style Library 預設風格使用（styleOverride 一定存在）
     // 優先順序：非 Gemini 模型且有 Atlas key → Atlas img2img；否則 → Gemini
@@ -357,19 +424,28 @@ ALWAYS PRESERVE:
                 // ── Atlas img2img 風格套用 ──────────────────────────────
                 const atlasModel = generationModel as AtlasGenerationModel;
                 const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
-                const stylePrompt = (presetMatch?.prompt
+                const stylePrompt = presetMatch?.prompt
                     ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
-                    : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`) + whiteBgSuffix;
+                    : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
 
                 for (const element of targetElements) {
                     try {
-                        let refImage = element.src;
+                        const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
+                        let refImage = flatSrc;
                         if (!refImage.startsWith('data:')) {
                             refImage = await downloadImageAsBase64(refImage);
                         }
                         const images = await withAtlasWaitToast(() => callAtlasImg2Img(stylePrompt, atlasModel, atlasApiKey, refImage, 1, { ratio: '1:1', quality: imageSize === '4K' ? '4K' : '2K', transparentBg: useTransparentBg }));
                         if (images.length > 0) {
-                            setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: images[0] } : el));
+                            let finalSrc = images[0];
+                            if (hadTransparency) {
+                                try {
+                                    finalSrc = await restoreTransparencyFn(finalSrc, bgColor);
+                                } catch (e) {
+                                    console.warn("Failed to restore transparency (Atlas style):", e);
+                                }
+                            }
+                            setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
                         }
                     } catch (err: any) {
                         throw err;
@@ -381,20 +457,15 @@ ALWAYS PRESERVE:
 
                 for (const element of targetElements) {
                     try {
-                        const [header, data] = element.src.split(',');
+                        const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
+                        const [header, data] = flatSrc.split(',');
                         const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
                         const imagePart = { inlineData: { data, mimeType } };
 
                         const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
-                        let prompt = presetMatch?.prompt
+                        const prompt = presetMatch?.prompt
                             ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
                             : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
-
-                        const transparencyOverride = preserveTransparency
-                            ? `\n\n---FINAL OVERRIDE (supersedes all instructions above)---\nThe input image has a transparent background.\nOUTPUT REQUIREMENT: Place the subject on a PURE WHITE (#FFFFFF) background.\nPROHIBITED: gradients, shadows behind subject, environmental backgrounds, textures, any non-white background.\nThis background requirement overrides all style instructions above.`
-                            : '';
-
-                        prompt = prompt + transparencyOverride;
 
                         const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                             model: imageModel,
@@ -406,15 +477,9 @@ ALWAYS PRESERVE:
                             const generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
                             let finalSrc = generatedSrc;
 
-                            if (preserveTransparency) {
+                            if (hadTransparency) {
                                 try {
-                                    const similarity = await checkCompositionSimilarity(element.src, generatedSrc);
-                                    if (similarity > 0.75) {
-                                        finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
-                                    } else {
-                                        showToast("構圖已變化，正在重新去背...");
-                                        finalSrc = await executeDynamicRemoval(generatedSrc, genAI, undefined, imageModel);
-                                    }
+                                    finalSrc = await restoreTransparencyFn(finalSrc, bgColor);
                                 } catch (e) {
                                     console.warn("Failed to restore transparency for style transfer:", e);
                                 }
@@ -435,7 +500,7 @@ ALWAYS PRESERVE:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModel, atlasApiKey, imageSize]);
+    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModel, atlasApiKey, imageSize, prepareForGeneration, restoreTransparencyFn]);
 
     const handleCameraAngle = useCallback(async (anglePrompt: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
@@ -448,10 +513,11 @@ ALWAYS PRESERVE:
         try {
             const genAI = createAiClient();
             for (const element of targetElements) {
-                const [header, data] = element.src.split(',');
+                const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
+                const [header, data] = flatSrc.split(',');
                 const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
                 const imagePart = { inlineData: { data, mimeType } };
-                
+
                 const buildAnglePrompt = (targetPrompt: string): string => {
                     return `
 You are a 3D rendering expert. Re-render this subject from a completely new camera angle.
@@ -468,39 +534,35 @@ STRICT RULES:
 `.trim();
                 };
 
-                const isIllustration = await detectIfIllustration(element.src);
-                const forcePrompt = isIllustration 
+                const isIllustration = await detectIfIllustration(flatSrc);
+                const forcePrompt = isIllustration
                     ? `\nIMPORTANT: Even though this is a 2D illustration, you MUST apply 3D perspective transformation. Force the angle change even if it feels unnatural for 2D art. This is intentional.`
                     : '';
 
-                const transparencyPrompt = preserveTransparency 
-                    ? `\nCRITICAL: The input image has a transparent background. You MUST output the subject on a PURE WHITE background only. Do NOT add any gradients, shadows, textures, or environmental backgrounds. The subject must be perfectly isolated.`
-                    : '';
+                const basePrompt = buildAnglePrompt(anglePrompt) + forcePrompt;
 
-                const basePrompt = buildAnglePrompt(anglePrompt) + forcePrompt + transparencyPrompt;
-                
                 let attempt = 0;
                 let currentPrompt = basePrompt;
                 let generatedSrc = '';
-                
+
                 while (attempt < 3) {
                     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                         model: imageModel,
                         contents: { parts: [imagePart, { text: currentPrompt }] },
                     }));
-                    
+
                     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                     if (!part?.inlineData) break;
-                    
+
                     const resultSrc = `data:image/png;base64,${part.inlineData.data}`;
-                    
-                    const diff = await calculateImageDifference(element.src, resultSrc);
-                    
+
+                    const diff = await calculateImageDifference(flatSrc, resultSrc);
+
                     if (diff > 0.15) {
                         generatedSrc = resultSrc;
                         break;
                     }
-                    
+
                     attempt++;
                     if (attempt < 3) {
                         currentPrompt = `[ATTEMPT ${attempt+1}] PREVIOUS ATTEMPT FAILED — the result looked too similar to the input. You MUST make the perspective change MORE DRAMATIC and OBVIOUS. ` + basePrompt;
@@ -509,29 +571,18 @@ STRICT RULES:
                         generatedSrc = resultSrc; // Fallback to last attempt
                     }
                 }
-                
+
                 if (generatedSrc) {
                     let finalSrc = generatedSrc;
-                    
-                    if (preserveTransparency) {
+
+                    if (hadTransparency) {
                         try {
-                            const isTransparent = await hasTransparency(element.src);
-                            if (isTransparent) {
-                                const similarity = await checkCompositionSimilarity(element.src, generatedSrc);
-                                if (similarity > 0.75) {
-                                    finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
-                                } else {
-                                    showToast("構圖已變化，正在重新去背...");
-                                    finalSrc = await executeDynamicRemoval(generatedSrc, genAI, undefined, imageModel);
-                                }
-                            } else {
-                                finalSrc = await restoreOriginalAlpha(element.src, generatedSrc);
-                            }
-                        } catch (e) { 
-                            console.warn("Transparency processing failed", e); 
+                            finalSrc = await restoreTransparencyFn(finalSrc, bgColor);
+                        } catch (e) {
+                            console.warn("Transparency processing failed", e);
                         }
                     }
-                    
+
                     setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
                 }
             }
@@ -542,7 +593,7 @@ STRICT RULES:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [selectedElementIds, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey]);
+    }, [selectedElementIds, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, prepareForGeneration, restoreTransparencyFn]);
 
     const handleRemoveBackground = useCallback(async (mode: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
@@ -885,47 +936,44 @@ CONSTRAINTS:
         
         try {
             const genAI = createAiClient();
-            const [header, data] = element.src.split(',');
+            const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
+            const [header, data] = flatSrc.split(',');
             const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
             const imagePart = { inlineData: { data, mimeType } };
-            
+
             // 1. Calculate aspect ratio to enforce input shape
             const targetAspectRatio = getClosestAspectRatio(element.width, element.height);
 
             // UPDATED PROMPT: Strict instructions to prevent distortion
-            let prompt = `Task: High-fidelity image upscaling. 
+            let prompt = `Task: High-fidelity image upscaling.
             Action: Upscale the image by ${factor}x.
             CRITICAL INSTRUCTION: Maintain the EXACT aspect ratio and geometry of the original subject content.
             Do NOT stretch, squeeze, or distort the image content to fit the aspect ratio container.
             If the container ratio differs slightly, extend the background naturally instead of distorting the subject.
             Enhance details and sharpness significantly while keeping the structure identical.`;
-    
+
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                 model: imageModel,
                 contents: { parts: [imagePart, { text: prompt }] },
                 config: {
-                    imageConfig: { 
+                    imageConfig: {
                         imageSize: requestedResolution,
-                        aspectRatio: targetAspectRatio 
-                    } 
+                        aspectRatio: targetAspectRatio
+                    }
                 }
             }));
-    
+
             const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
             if (part?.inlineData) {
                 let resultSrc = `data:image/png;base64,${part.inlineData.data}`;
-                
-                if (preserveTransparency) {
-                     try {
-                         const isTransparent = await hasTransparency(element.src);
-                         
-                         if (isTransparent) {
-                             showToast("正在為放大後的圖片進行智慧去背...");
-                             resultSrc = await executeDynamicRemoval(resultSrc, genAI, undefined, imageModel);
-                         }
-                     } catch(e) {
-                         console.warn("Transparency processing for upscale failed", e);
-                     }
+
+                if (hadTransparency) {
+                    try {
+                        showToast("正在為放大後的圖片還原透明背景...");
+                        resultSrc = await restoreTransparencyFn(resultSrc, bgColor);
+                    } catch(e) {
+                        console.warn("Transparency processing for upscale failed", e);
+                    }
                 }
 
                 // 2. Strict dimension control: 
@@ -958,7 +1006,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, preserveTransparency]);
+    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, preserveTransparency, prepareForGeneration, restoreTransparencyFn]);
 
     const handleGenerate = useCallback(async (selectedElements: CanvasElement[]) => {
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
@@ -1019,7 +1067,7 @@ CONSTRAINTS:
                         let imgs: string[];
                         if (hasNoteRefs && canDoImg2Img) {
                             // 有便利貼參考圖 → 用 img2img，以第一張參考圖為主
-                            imgs = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt + whiteBgSuffix, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: useTransparentBg }, noteRefImgs.slice(1)));
+                            imgs = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: useTransparentBg }, noteRefImgs.slice(1)));
                         } else {
                             imgs = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: useTransparentBg }));
                         }
@@ -1056,13 +1104,14 @@ CONSTRAINTS:
                     return;
                 }
                 const firstImg = imageElements.find(el => el.type === 'image' || el.type === 'drawing') as (ImageElement | DrawingElement) | undefined;
-                let refImage = firstImg?.src ?? '';
-                if (!refImage) { showToast("請選取一張圖片作為參考 ⚠️"); return; }
-                if (!refImage.startsWith('data:')) {
-                    refImage = await downloadImageAsBase64(refImage);
-                    if (!refImage.startsWith('data:')) { showToast("無法讀取參考圖片，請確認圖片已正確載入 ⚠️"); return; }
+                let rawRefImage = firstImg?.src ?? '';
+                if (!rawRefImage) { showToast("請選取一張圖片作為參考 ⚠️"); return; }
+                if (!rawRefImage.startsWith('data:')) {
+                    rawRefImage = await downloadImageAsBase64(rawRefImage);
+                    if (!rawRefImage.startsWith('data:')) { showToast("無法讀取參考圖片，請確認圖片已正確載入 ⚠️"); return; }
                 }
-                const img2imgPrompt = (atlasPrompt || 'Keep the overall composition, enhance details and quality') + whiteBgSuffix;
+                const { src: refImage } = await prepareForGeneration(rawRefImage);
+                const img2imgPrompt = atlasPrompt || 'Keep the overall composition, enhance details and quality';
                 setGeneratingElementIds(firstImg ? [firstImg.id] : []);
                 setIsGenerating(true);
                 setGeneratedImages(null);
@@ -1094,7 +1143,7 @@ CONSTRAINTS:
                 const atlasQualityR = imageSize === '4K' ? '4K' : '2K';
                 const atlasRatioR = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
                 try {
-                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt + whiteBgSuffix, atlasModel, atlasApiKey, noteRefImgs[0], 2, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: useTransparentBg }, noteRefImgs.slice(1)));
+                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 2, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: useTransparentBg }, noteRefImgs.slice(1)));
                     if (images.length === 0) throw new Error('未收到任何圖片');
                     setGeneratedImages(images);
                 } catch (e: any) {
@@ -1216,8 +1265,12 @@ CONSTRAINTS:
               targetAspectRatio = '1:1';
           }
           
+          // 生成前：對所有 image element 做透明壓平（記錄第一張的透明狀態用於還原）
+          let firstElHadTransparency = false;
+          let firstElBgColor = '#FFFFFF';
+
           if (imageElements.length > 0) {
-              const imagePartsPromises = imageElements.map(async el => {
+              const imagePartsPromises = imageElements.map(async (el, idx) => {
                   let src = '';
                   if (el.type === 'shape') src = await createShapeDataUrl(el as ShapeElement);
                   else if ('src' in el) src = (el as any).src;
@@ -1228,17 +1281,16 @@ CONSTRAINTS:
                       src = await downloadImageAsBase64(src);
                       if (!src.startsWith('data:')) return null; // 轉換失敗則跳過
                   }
-                  const [header, data] = src.split(',');
+                  // 透明壓平
+                  const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(src);
+                  if (idx === 0) { firstElHadTransparency = hadTransparency; firstElBgColor = bgColor; }
+                  const [header, data] = flatSrc.split(',');
                   const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
                   return { inlineData: { data, mimeType } };
               });
               const resolvedImageParts = (await Promise.all(imagePartsPromises)).filter(p => p !== null);
-              
-              const transparencyPrompt = preserveTransparency 
-                  ? `CRITICAL: The input image has a transparent background. You MUST output the subject on a PURE WHITE background only. Do NOT add any gradients, shadows, textures, or environmental backgrounds. The subject must be perfectly isolated.\n\n`
-                  : '';
-              
-              let promptForEditing = transparencyPrompt + (promptWithRefHint || "Creatively reimagine and enhance the image(s).");
+
+              const promptForEditing = promptWithRefHint || "Creatively reimagine and enhance the image(s).";
 
               const textPart = { text: promptForEditing };
               const noteRefParts = noteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
@@ -1251,7 +1303,7 @@ CONSTRAINTS:
               const noteRefParts = noteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
               parts = [...noteRefParts, textPart];
           }
-          
+
           const generateSingleImage = async () => {
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                 model: imageModel,
@@ -1261,22 +1313,13 @@ CONSTRAINTS:
             for (const part of response.candidates?.[0]?.content?.parts || []) {
                 if (part.inlineData) {
                     let resultSrc = `data:image/png;base64,${part.inlineData.data}`;
-                    
-                    if (preserveTransparency && imageElements.length === 1) {
-                         try {
-                             const originalSrc = (imageElements[0] as ImageElement).src;
-                             if (originalSrc) {
-                                 const similarity = await checkCompositionSimilarity(originalSrc, resultSrc);
-                                 if (similarity > 0.75) {
-                                     resultSrc = await restoreOriginalAlpha(originalSrc, resultSrc);
-                                 } else {
-                                     showToast("構圖已變化，正在重新去背...");
-                                     resultSrc = await executeDynamicRemoval(resultSrc, genAI, undefined, imageModel);
-                                 }
-                             }
-                         } catch (e) {
-                             console.warn("Failed to restore alpha for generated image", e);
-                         }
+
+                    if (firstElHadTransparency && imageElements.length === 1) {
+                        try {
+                            resultSrc = await restoreTransparencyFn(resultSrc, firstElBgColor);
+                        } catch (e) {
+                            console.warn("Failed to restore alpha for generated image", e);
+                        }
                     }
 
                     return resultSrc;
@@ -1295,7 +1338,7 @@ CONSTRAINTS:
           setGeneratingElementIds([]);
           setIsGenerating(false);
         }
-      }, [imageStyle, imageAspectRatio, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModel]);
+      }, [imageStyle, imageAspectRatio, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModel, prepareForGeneration, restoreTransparencyFn]);
 
     return {
         createAiClient,
