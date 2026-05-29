@@ -243,8 +243,8 @@ function generateBboxMask(imageBase64: string, objects: DetectedObject[]): Promi
             // 每個物件 bbox 畫白色（指示 GPT 需填補的區域）
             ctx.fillStyle = '#FFFFFF';
             for (const obj of objects) {
-                // 稍微擴大 10%，確保邊緣殘影也被覆蓋
-                const pad = 0.05;
+                // 微幅擴大邊緣，確保殘影被覆蓋（過大會讓背景大範圍重繪）
+                const pad = 0.02;
                 const x = Math.max(0, (obj.bbox.x - pad)) * canvas.width;
                 const y = Math.max(0, (obj.bbox.y - pad)) * canvas.height;
                 const w = Math.min(canvas.width  - x, (obj.bbox.w + pad * 2) * canvas.width);
