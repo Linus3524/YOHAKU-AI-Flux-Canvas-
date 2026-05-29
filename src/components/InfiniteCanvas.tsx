@@ -1022,7 +1022,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
           </button>
       </div>
 
-      {!outpaintingState && !isGenerating && !croppingElementId && selectedElementIds.length > 0 && !isArtboardSelected && !isOnlyArrowSelected && !shouldHideMenu && menuPosition && (
+      {!outpaintingState && !croppingElementId && selectedElementIds.length > 0 && !isArtboardSelected && !isOnlyArrowSelected && !shouldHideMenu && menuPosition && (
           <div style={{
               position: 'absolute',
               left: menuPosition.left,

@@ -1397,7 +1397,7 @@ const App: React.FC = () => {
             onDuplicate={duplicateSelection}
             onOpenStyleLibrary={() => setShowStyleLibrary(!showStyleLibrary)}
             hasSelection={selectedElementIds.length > 0}
-            isProcessing={isGenerating}
+            isProcessing={selectedElementIds.some(id => generatingElementIds.includes(id))}
             onCrop={handleStartCrop}
             canCrop={selectedElementIds.length === 1 && elements.find(e => e.id === selectedElementIds[0])?.type === 'image'}
             interactionMode={interactionMode}
