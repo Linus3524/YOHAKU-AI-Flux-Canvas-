@@ -101,7 +101,9 @@ Physically touching or functionally related objects MUST be grouped into ONE lay
 - Character + vehicle/mount they are on → ONE layer
 - Product + its stand/base/packaging it rests on → ONE layer
 - Group of identical/similar small objects (e.g. multiple tickets, icons of the same type) → ONE layer
-Do NOT split a person from their chair, a rider from their bike, etc.
+- Brand logo: text + graphic/icon that form a single brand identity → ONE layer (use TEXT category, bbox must cover ALL logo parts)
+- Tagline or slogan text visually grouped with a logo → ONE layer with the logo
+Do NOT split a person from their chair, a rider from their bike, or a logo's text from its graphic symbol.
 
 ━━━ LAYER COUNT RULES ━━━
 Determine count based on actual image complexity — never force layers:
@@ -165,17 +167,26 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         (CATEGORY_PRIORITY[a.category] ?? 5) - (CATEGORY_PRIORITY[b.category] ?? 5)
     );
 
-    // IoU 去重：bbox 重疊超過 50% 視為同一物件，保留優先順序較高的（已排序在前）
-    const iou = (a: DetectedObject['bbox'], b: DetectedObject['bbox']): number => {
+    // 去重：IoU > 0.4（重疊）或單方向包含率 > 0.7（一個大部分被另一個包住）
+    // 常見於 logo 被拆成 TEXT + DECOR 兩層、bbox 大小不同但高度重疊的情況
+    const overlapScore = (a: DetectedObject['bbox'], b: DetectedObject['bbox']): number => {
         const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
         const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
         const intersection = ix * iy;
-        const union = a.w * a.h + b.w * b.h - intersection;
-        return union > 0 ? intersection / union : 0;
+        if (intersection <= 0) return 0;
+        const aArea = a.w * a.h;
+        const bArea = b.w * b.h;
+        const union = aArea + bArea - intersection;
+        const iouVal = union > 0 ? intersection / union : 0;
+        // 包含率：小的 bbox 有多少比例被大的包住
+        const containment = Math.min(aArea, bArea) > 0
+            ? intersection / Math.min(aArea, bArea)
+            : 0;
+        return Math.max(iouVal, containment);
     };
     const deduplicated: DetectedObject[] = [];
     for (const obj of objects) {
-        const isDuplicate = deduplicated.some(kept => iou(kept.bbox, obj.bbox) > 0.5);
+        const isDuplicate = deduplicated.some(kept => overlapScore(kept.bbox, obj.bbox) > 0.6);
         if (!isDuplicate) deduplicated.push(obj);
     }
     objects = deduplicated;
