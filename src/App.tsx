@@ -31,7 +31,7 @@ import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import { downloadImageAsBase64, callAtlasImg2Img } from './utils/atlasImage';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import { birefnetRemoveBg } from './utils/geminiLayer';
-import { gptLayerSegment, detectPrimarySubject, gptSmartRemoveBg } from './utils/gptLayerSplit';
+import { gptLayerSegment } from './utils/gptLayerSplit';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -387,35 +387,6 @@ const App: React.FC = () => {
       }
   }, [falApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
-  // --- GPT Image 2 智慧去背（Gemini 識別主體 → GPT 提取透明背景）---
-  const handleGptRemoveBackground = useCallback(async () => {
-      if (!atlasApiKey) { showToast('GPT 智慧去背需要 Atlas Key'); setShowKeyModal(true); return; }
-      const targets = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
-      if (targets.length === 0) return;
-      setIsGenerating(true);
-      setGeneratingElementIds(targets.map(el => el.id));
-      showToast('🔍 Gemini 分析主體中...');
-      try {
-          for (const el of targets) {
-              const subject = await detectPrimarySubject(el.src, effectiveApiKey || '');
-              showToast(`🎯 偵測到「${subject.label}」`);
-              const result = await gptSmartRemoveBg(
-                  el.src,
-                  subject,
-                  atlasApiKey,
-                  (msg) => showToast(msg),
-              );
-              setElements(prev => prev.map(e => e.id === el.id ? { ...e, src: result } : e));
-              if (result.startsWith('data:')) cacheImage(el.id, result);
-          }
-          showToast('✅ GPT 智慧去背完成！');
-      } catch (e: any) {
-          showToast(`❌ GPT 去背失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
-      } finally {
-          setIsGenerating(false);
-          setGeneratingElementIds([]);
-      }
-  }, [atlasApiKey, effectiveApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
   // --- 魔法分層：GPT Image 2 語意提取 + 背景補圖 ---
   const handleMagicLayer = useCallback(async (elementId: string) => {
@@ -1387,7 +1358,7 @@ const App: React.FC = () => {
         onSetAtlasTransparentBg={setAtlasTransparentBg}
         hasFalKey={!!falApiKey}
         onBiRefNetRemoveBackground={handleBiRefNetRemoveBackground}
-        onAtlasRemoveBackground={atlasApiKey ? handleGptRemoveBackground : undefined}
+        onAtlasRemoveBackground={undefined}
         outpaintingState={outpaintingState}
         onUpdateOutpaintingFrame={handleUpdateOutpaintingFrame}
         onCancelOutpainting={handleCancelOutpainting}
@@ -1619,6 +1590,7 @@ const App: React.FC = () => {
             mergeLayers: handleMergeLayersOverride,
             extractPrompt: handleExtractPrompt,
             magicLayer: handleMagicLayer,
+            clearStorage: () => setShowClearConfirm(true),
           }}
           canChangeColor={canChangeColor}
           elementType={contextMenuElement?.type || null}
