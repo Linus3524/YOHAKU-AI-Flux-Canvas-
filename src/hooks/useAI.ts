@@ -1137,7 +1137,7 @@ CONSTRAINTS:
                     rawRefImage = await downloadImageAsBase64(rawRefImage);
                     if (!rawRefImage.startsWith('data:')) { showToast("無法讀取參考圖片，請確認圖片已正確載入 ⚠️"); return; }
                 }
-                const { src: refImage } = await prepareForGeneration(rawRefImage);
+                const { src: refImage, hadTransparency: refHadTransparency, bgColor: refBgColor } = await prepareForGeneration(rawRefImage);
                 const img2imgPrompt = atlasPrompt || 'Keep the overall composition, enhance details and quality';
                 setGeneratingElementIds(firstImg ? [firstImg.id] : []);
                 setIsGenerating(true);
@@ -1146,8 +1146,12 @@ CONSTRAINTS:
                 const atlasRatio = imageAspectRatio || 'Original';
                 try {
                     // 便利貼參考圖追加在畫布圖片之後
-                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2, { ratio: atlasRatio, quality: atlasQuality, transparentBg: getTransparentBg(atlasPrompt || '') }, hasNoteRefs ? noteRefImgs : undefined));
-                    if (images.length === 0) throw new Error('未收到任何圖片');
+                    const rawImages = await withAtlasWaitToast(() => callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2, { ratio: atlasRatio, quality: atlasQuality, transparentBg: getTransparentBg(atlasPrompt || '') }, hasNoteRefs ? noteRefImgs : undefined));
+                    if (rawImages.length === 0) throw new Error('未收到任何圖片');
+                    // 若來源有透明背景，生成後自動還原透明
+                    const images = refHadTransparency
+                        ? await Promise.all(rawImages.map(img => restoreTransparencyFn(img, refBgColor).catch(() => img)))
+                        : rawImages;
                     setGeneratedImages(images);
                 } catch (e: any) {
                     showToast(`圖生圖失敗：${e.message}`);
