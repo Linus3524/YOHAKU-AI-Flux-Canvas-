@@ -405,7 +405,6 @@ interface InfiniteCanvasProps {
   stylePresets: { id: string, name: string, label: string }[];
   onCameraAngle: (prompt: string) => void;
   onRemoveBackground: (mode: string) => void;
-  onAtlasRemoveBackground?: () => void;
   onBiRefNetRemoveBackground?: () => void;
   hasFalKey?: boolean;
   onHarmonize: () => void;
@@ -517,7 +516,6 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   stylePresets,
   onCameraAngle,
   onRemoveBackground,
-  onAtlasRemoveBackground,
   onBiRefNetRemoveBackground,
   hasFalKey = false,
   onHarmonize,
@@ -1378,15 +1376,6 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 >
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
                                                     快速去背（BiRefNet）
-                                                </button>
-                                            )}
-                                            {hasAtlasKey && onAtlasRemoveBackground && (
-                                                <button
-                                                    onClick={onAtlasRemoveBackground}
-                                                    className="w-full h-9 bg-[#5856D6] text-white rounded-lg text-xs font-medium hover:bg-[#4240c4] transition-colors shadow-sm flex items-center justify-center gap-2"
-                                                >
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
-                                                    GPT 智慧去背
                                                 </button>
                                             )}
 
