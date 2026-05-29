@@ -557,13 +557,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     <MenuItem icon={<MenuIcons.Export />} onClick={() => handleAction(actions.exportCanvas)}>匯出畫布</MenuItem>
                     <MenuItem icon={<MenuIcons.Import />} onClick={() => handleAction(actions.importCanvas)}>匯入畫布</MenuItem>
                     <div className="border-t my-1 border-gray-100/50" />
-                    <button
-                        onClick={() => handleAction(actions.clearStorage)}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
-                    >
-                        <span><MenuIcons.Trash /></span>
-                        清除存檔
-                    </button>
+                    <MenuItem icon={<MenuIcons.Trash />} onClick={() => handleAction(actions.clearStorage)} destructive>清除存檔</MenuItem>
                 </>
             )}
         </div>
