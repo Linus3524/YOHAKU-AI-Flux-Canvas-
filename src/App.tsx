@@ -413,11 +413,16 @@ const App: React.FC = () => {
 
           const newLayerElements: ImageElement[] = layers.map((layer, i) => {
               const isBackground = i === 0;
-              // 位置夾在 [0, 1] 安全範圍，但尺寸保留真實像素比（避免獨立 clamp 造成變形）
+              // 位置夾在 [0, 1] 安全範圍
               const clampedX = Math.max(0, Math.min(1, layer.cropRatioX));
               const clampedY = Math.max(0, Math.min(1, layer.cropRatioY));
+              // 尺寸：用 cropRatioW 決定寬度，高度由真實像素比例推算（避免 GPT 輸出比例 ≠ 畫布比例導致變形）
               const layerW = isBackground ? el.width  : Math.round(layer.cropRatioW * el.width);
-              const layerH = isBackground ? el.height : Math.round(layer.cropRatioH * el.height);
+              const layerH = isBackground ? el.height : (
+                  layer.pixelWidth && layer.pixelHeight
+                      ? Math.round(layerW * (layer.pixelHeight / layer.pixelWidth))
+                      : Math.round(layer.cropRatioH * el.height)
+              );
               // 中心點 = 圖層區塊左上角 + bbox 偏移 + 半寬/高
               const cx = isBackground
                   ? layerAreaLeft + el.width / 2

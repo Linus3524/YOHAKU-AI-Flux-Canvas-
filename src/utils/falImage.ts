@@ -68,6 +68,9 @@ export interface LayerResult {
     cropRatioY: number;
     cropRatioW: number;
     cropRatioH: number;
+    /** 裁切後圖片的真實像素尺寸（用於回貼畫布時保持正確比例） */
+    pixelWidth?: number;
+    pixelHeight?: number;
     /** 圖層名稱（Gemini 偵測的物件名稱） */
     name?: string;
     /** 設計分類標籤 */
@@ -114,6 +117,8 @@ export async function trimTransparentPixels(base64: string): Promise<LayerResult
                 cropRatioY: minY / H,
                 cropRatioW: cW / W,
                 cropRatioH: cH / H,
+                pixelWidth:  cW,
+                pixelHeight: cH,
             });
         };
         img.onerror = () => resolve({ base64, cropRatioX: 0, cropRatioY: 0, cropRatioW: 1, cropRatioH: 1 });
