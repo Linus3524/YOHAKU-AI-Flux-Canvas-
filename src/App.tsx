@@ -210,10 +210,7 @@ const App: React.FC = () => {
   const handleSetGenerationModel = (model: string) => {
     localStorage.setItem('yohaku_gen_model', model);
     setGenerationModel(model);
-    // 切換模型時重置透明背景（其他模型不支援）
-    if (model !== 'gpt-image-2') setAtlasTransparentBg(false);
   };
-  const [atlasTransparentBg, setAtlasTransparentBg] = useState(false);
 
   // --- API Key Management ---
   const [userApiKey, setUserApiKey] = useState<string | null>(() => localStorage.getItem('yohaku_api_key'));
@@ -361,7 +358,6 @@ const App: React.FC = () => {
       imageModel,
       atlasApiKey,
       generationModel,
-      atlasTransparentBg,
       falApiKey,
   });
 
@@ -1360,8 +1356,6 @@ const App: React.FC = () => {
         generationModel={generationModel}
         onSetGenerationModel={handleSetGenerationModel}
         hasAtlasKey={!!atlasApiKey}
-        atlasTransparentBg={atlasTransparentBg}
-        onSetAtlasTransparentBg={setAtlasTransparentBg}
         hasFalKey={!!falApiKey}
         onBiRefNetRemoveBackground={handleBiRefNetRemoveBackground}
         onAtlasRemoveBackground={undefined}

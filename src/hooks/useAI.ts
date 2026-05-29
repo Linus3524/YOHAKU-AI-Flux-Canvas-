@@ -29,7 +29,7 @@ interface UseAIProps {
     imageModel?: string;
     atlasApiKey?: string | null;
     generationModel?: string;
-    atlasTransparentBg?: boolean;
+
     falApiKey?: string | null;
 }
 
@@ -86,7 +86,19 @@ function flattenTransparentImage(base64: string, bgColor: string): Promise<strin
     });
 }
 
-export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel = 'gemini', atlasTransparentBg = false, falApiKey }: UseAIProps) => {
+/** 根據便利貼 prompt 關鍵字判斷是否需要透明背景（僅 GPT Image 2 支援） */
+function detectTransparentBgIntent(prompt: string): boolean {
+    const lower = prompt.toLowerCase();
+    const keywords = [
+        '透明背景', 'transparent background', 'transparent bg',
+        'no background', 'no-background', 'without background',
+        'remove background', '去背', '無背景', '背景透明',
+        'sticker', '貼圖', '貼紙', 'isolated', 'cutout', 'png transparent',
+    ];
+    return keywords.some(kw => lower.includes(kw));
+}
+
+export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel = 'gemini', falApiKey }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
@@ -98,7 +110,9 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [preserveTransparency, setPreserveTransparency] = useState(true);
     // 只有 gpt-image-2 支援 background: transparent
     // preserveTransparency 改用 post-process 處理，不再透過 API 參數觸發
-    const useTransparentBg = atlasTransparentBg && generationModel === 'gpt-image-2';
+    // 根據 prompt 關鍵字自動偵測透明背景需求（僅 GPT Image 2）
+    const isGpt2 = generationModel === 'gpt-image-2';
+    const getTransparentBg = (prompt: string) => isGpt2 && detectTransparentBgIntent(prompt);
     const [showStyleLibrary, setShowStyleLibrary] = useState(false);
     const zIndexCounter = useRef(Math.max(0, ...elements.map(e => e.zIndex)) + 1);
 
@@ -448,7 +462,7 @@ ALWAYS PRESERVE:
                         if (!refImage.startsWith('data:')) {
                             refImage = await downloadImageAsBase64(refImage);
                         }
-                        const images = await withAtlasWaitToast(() => callAtlasImg2Img(stylePrompt, atlasModel, atlasApiKey, refImage, 1, { ratio: '1:1', quality: imageSize === '4K' ? '4K' : '2K', transparentBg: useTransparentBg }));
+                        const images = await withAtlasWaitToast(() => callAtlasImg2Img(stylePrompt, atlasModel, atlasApiKey, refImage, 1, { ratio: '1:1', quality: imageSize === '4K' ? '4K' : '2K' }));
                         if (images.length > 0) {
                             let finalSrc = images[0];
                             if (hadTransparency) {
@@ -1080,9 +1094,9 @@ CONSTRAINTS:
                         let imgs: string[];
                         if (hasNoteRefs && canDoImg2Img) {
                             // 有便利貼參考圖 → 用 img2img，以第一張參考圖為主
-                            imgs = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: useTransparentBg }, noteRefImgs.slice(1)));
+                            imgs = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: getTransparentBg(atlasPrompt || '') }, noteRefImgs.slice(1)));
                         } else {
-                            imgs = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: useTransparentBg }));
+                            imgs = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: getTransparentBg(atlasPrompt || '') }));
                         }
                         if (imgs.length === 0) throw new Error('未收到圖片');
                         const newImageElement: ImageElement = { ...frame, type: 'image', src: imgs[0] };
@@ -1132,7 +1146,7 @@ CONSTRAINTS:
                 const atlasRatio = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
                 try {
                     // 便利貼參考圖追加在畫布圖片之後
-                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2, { ratio: atlasRatio, quality: atlasQuality, transparentBg: useTransparentBg }, hasNoteRefs ? noteRefImgs : undefined));
+                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, 2, { ratio: atlasRatio, quality: atlasQuality, transparentBg: getTransparentBg(atlasPrompt || '') }, hasNoteRefs ? noteRefImgs : undefined));
                     if (images.length === 0) throw new Error('未收到任何圖片');
                     setGeneratedImages(images);
                 } catch (e: any) {
@@ -1156,7 +1170,7 @@ CONSTRAINTS:
                 const atlasQualityR = imageSize === '4K' ? '4K' : '2K';
                 const atlasRatioR = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
                 try {
-                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 2, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: useTransparentBg }, noteRefImgs.slice(1)));
+                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 2, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: getTransparentBg(atlasPrompt || '') }, noteRefImgs.slice(1)));
                     if (images.length === 0) throw new Error('未收到任何圖片');
                     setGeneratedImages(images);
                 } catch (e: any) {
@@ -1179,7 +1193,7 @@ CONSTRAINTS:
             const atlasQuality2 = imageSize === '4K' ? '4K' : '2K';
             const atlasRatio2 = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
             try {
-                const images = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 2, { ratio: atlasRatio2, quality: atlasQuality2, transparentBg: useTransparentBg }));
+                const images = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 2, { ratio: atlasRatio2, quality: atlasQuality2, transparentBg: getTransparentBg(atlasPrompt || '') }));
                 if (images.length === 0) throw new Error('未收到任何圖片');
                 setGeneratedImages(images);
             } catch (e: any) {
