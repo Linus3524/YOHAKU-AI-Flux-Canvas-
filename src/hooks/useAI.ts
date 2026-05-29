@@ -141,17 +141,30 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
         return { src: flatSrc, hadTransparency: true, bgColor };
     }, [preserveTransparency]);
 
-    /** 生成後還原：BiRefNet（有 fal key）或 Chroma Key（無 fal key） */
+    /** 生成後還原透明背景
+     *  優先順序：1) BiRefNet（fal key）→ 2) Gemini AI 去背（executeDynamicRemoval）→ 3) Chroma Key（基本備用）
+     */
     const restoreTransparencyFn = useCallback(async (resultSrc: string, bgColor: string): Promise<string> => {
+        // 1. BiRefNet（品質最佳）
         if (falApiKey) {
             try {
                 return await birefnetRemoveBg(resultSrc, falApiKey);
             } catch (e) {
-                console.warn('[restoreTransparency] BiRefNet failed, fallback chroma key', e);
+                console.warn('[restoreTransparency] BiRefNet failed, trying Gemini...', e);
             }
         }
+        // 2. Gemini AI 去背（無 fal key 時）
+        if (apiKey) {
+            try {
+                const genAI = new GoogleGenAI({ apiKey });
+                return await executeDynamicRemoval(resultSrc, genAI, undefined, imageModel);
+            } catch (e) {
+                console.warn('[restoreTransparency] Gemini removal failed, fallback chroma key', e);
+            }
+        }
+        // 3. Chroma Key（最後備用）
         return processChromaKey(resultSrc, bgColor);
-    }, [falApiKey]);
+    }, [falApiKey, apiKey, imageModel]);
 
     // Helper to create client or throw error immediately
     const createAiClient = () => {
