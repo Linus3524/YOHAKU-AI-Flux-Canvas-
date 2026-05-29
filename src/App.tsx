@@ -416,15 +416,20 @@ const App: React.FC = () => {
 
           const newLayerElements: ImageElement[] = layers.map((layer, i) => {
               const isBackground = i === 0;
-              const layerW = isBackground ? el.width  : Math.round(layer.cropRatioW * el.width);
-              const layerH = isBackground ? el.height : Math.round(layer.cropRatioH * el.height);
+              // 將 bbox 夾在 [0, 1] 內，確保圖層不超出背景邊界
+              const clampedX = Math.max(0, Math.min(1, layer.cropRatioX));
+              const clampedY = Math.max(0, Math.min(1, layer.cropRatioY));
+              const clampedW = Math.max(0.01, Math.min(layer.cropRatioW, 1 - clampedX));
+              const clampedH = Math.max(0.01, Math.min(layer.cropRatioH, 1 - clampedY));
+              const layerW = isBackground ? el.width  : Math.round(clampedW * el.width);
+              const layerH = isBackground ? el.height : Math.round(clampedH * el.height);
               // 中心點 = 圖層區塊左上角 + bbox 偏移 + 半寬/高
               const cx = isBackground
                   ? layerAreaLeft + el.width / 2
-                  : layerAreaLeft + layer.cropRatioX * el.width + layerW / 2;
+                  : layerAreaLeft + clampedX * el.width + layerW / 2;
               const cy = isBackground
                   ? el.position.y
-                  : layerAreaTop + layer.cropRatioY * el.height + layerH / 2;
+                  : layerAreaTop + clampedY * el.height + layerH / 2;
               const layerName = layer.name
                   ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name)
                   : (isBackground ? `${el.name || '圖片'} 背景` : `${el.name || '圖片'} 圖層 ${i}`);
