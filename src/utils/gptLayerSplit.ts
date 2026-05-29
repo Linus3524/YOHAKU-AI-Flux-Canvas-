@@ -175,7 +175,16 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     };
     const deduplicated: DetectedObject[] = [];
     for (const obj of objects) {
-        const isDuplicate = deduplicated.some(kept => iou(kept.bbox, obj.bbox) > 0.5);
+        const isLogoRelated = (cat: string) => cat === 'TEXT' || cat === 'DECOR';
+        const isDuplicate = deduplicated.some(kept => {
+            const score = iou(kept.bbox, obj.bbox);
+            // TEXT ↔ DECOR 組合（logo 文字和圖形）：降低閾值到 0.25
+            if (isLogoRelated(kept.category) && isLogoRelated(obj.category)) {
+                return score > 0.25;
+            }
+            // 其他組合維持原本 0.5
+            return score > 0.5;
+        });
         if (!isDuplicate) deduplicated.push(obj);
     }
     objects = deduplicated;
