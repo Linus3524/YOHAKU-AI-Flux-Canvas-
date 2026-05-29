@@ -205,6 +205,7 @@ async function pollPrediction(predictionId: string, atlasKey: string): Promise<s
         const status = pred.status;
 
         if (status === 'completed' || status === 'succeeded' || status === 'success') {
+            console.log('[Atlas] completed response:', JSON.stringify(json).slice(0, 500));
             const rawOutput =
                 pred.outputs ??
                 pred.output ??
@@ -246,6 +247,7 @@ async function pollPrediction(predictionId: string, atlasKey: string): Promise<s
         }
 
         if (status === 'failed' || status === 'error') {
+            console.log('[Atlas] failed response:', JSON.stringify(json).slice(0, 500));
             throw new Error(`Atlas 生成失敗: ${pred.error || '未知錯誤'}`);
         }
     }
