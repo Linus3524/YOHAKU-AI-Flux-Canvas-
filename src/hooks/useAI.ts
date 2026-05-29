@@ -43,6 +43,10 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     // 只有 gpt-image-2 支援 background: transparent
     // preserveTransparency 或 atlasTransparentBg 任一開啟皆觸發
     const useTransparentBg = (atlasTransparentBg || preserveTransparency) && generationModel === 'gpt-image-2';
+    // 模型不支援透明背景時，在 prompt 中要求白底，方便後續去背
+    const whiteBgSuffix = preserveTransparency && !useTransparentBg
+        ? ' The input image may have a transparent background. Place the subject on a pure white (#FFFFFF) background. No gradients, no environmental backgrounds, no shadows behind the subject.'
+        : '';
     const [showStyleLibrary, setShowStyleLibrary] = useState(false);
     const zIndexCounter = useRef(Math.max(0, ...elements.map(e => e.zIndex)) + 1);
 
@@ -353,9 +357,9 @@ ALWAYS PRESERVE:
                 // ── Atlas img2img 風格套用 ──────────────────────────────
                 const atlasModel = generationModel as AtlasGenerationModel;
                 const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
-                const stylePrompt = presetMatch?.prompt
+                const stylePrompt = (presetMatch?.prompt
                     ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
-                    : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
+                    : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`) + whiteBgSuffix;
 
                 for (const element of targetElements) {
                     try {
@@ -1015,7 +1019,7 @@ CONSTRAINTS:
                         let imgs: string[];
                         if (hasNoteRefs && canDoImg2Img) {
                             // 有便利貼參考圖 → 用 img2img，以第一張參考圖為主
-                            imgs = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: useTransparentBg }, noteRefImgs.slice(1)));
+                            imgs = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt + whiteBgSuffix, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: useTransparentBg }, noteRefImgs.slice(1)));
                         } else {
                             imgs = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: useTransparentBg }));
                         }
@@ -1058,7 +1062,7 @@ CONSTRAINTS:
                     refImage = await downloadImageAsBase64(refImage);
                     if (!refImage.startsWith('data:')) { showToast("無法讀取參考圖片，請確認圖片已正確載入 ⚠️"); return; }
                 }
-                const img2imgPrompt = atlasPrompt || 'Keep the overall composition, enhance details and quality';
+                const img2imgPrompt = (atlasPrompt || 'Keep the overall composition, enhance details and quality') + whiteBgSuffix;
                 setGeneratingElementIds(firstImg ? [firstImg.id] : []);
                 setIsGenerating(true);
                 setGeneratedImages(null);
@@ -1090,7 +1094,7 @@ CONSTRAINTS:
                 const atlasQualityR = imageSize === '4K' ? '4K' : '2K';
                 const atlasRatioR = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
                 try {
-                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 2, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: useTransparentBg }, noteRefImgs.slice(1)));
+                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt + whiteBgSuffix, atlasModel, atlasApiKey, noteRefImgs[0], 2, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: useTransparentBg }, noteRefImgs.slice(1)));
                     if (images.length === 0) throw new Error('未收到任何圖片');
                     setGeneratedImages(images);
                 } catch (e: any) {
