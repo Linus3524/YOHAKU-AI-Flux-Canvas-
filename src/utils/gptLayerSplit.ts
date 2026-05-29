@@ -198,6 +198,36 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     }));
 }
 
+// ── Gemini 快速分析背景類型，回傳英文描述供 GPT Inpaint prompt 使用 ────────────
+async function analyzeBackground(imageBase64: string, apiKey: string): Promise<string> {
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+        const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                parts: [
+                    { inlineData: { mimeType, data: cleanBase64 } },
+                    {
+                        text: `Describe ONLY the background environment of this image in 1-2 concise English sentences.
+Focus on: location type, lighting, colors, atmosphere, materials/textures visible in the background.
+Do NOT mention any foreground subjects, people, products, or text.
+Example outputs:
+- "Bright indoor space with white walls, soft natural daylight from the left, clean minimal interior."
+- "Outdoor ocean scene with calm blue-green water, clear sky, warm afternoon sunlight."
+- "Urban street at night with bokeh city lights in the background, dark cool tones."
+Return ONLY the background description, nothing else.`,
+                    },
+                ],
+            },
+        });
+        return response.text?.trim() ?? '';
+    } catch {
+        return '';
+    }
+}
+
 // ── 用 Gemini bbox 陣列生成黑白遮罩（白=要填補、黑=保留）────────────────────
 function generateBboxMask(imageBase64: string, objects: DetectedObject[]): Promise<string> {
     return new Promise(resolve => {
@@ -360,19 +390,23 @@ export async function gptLayerSegment(
     // Step 2 & 3：物件提取（Promise.all 平行）+ 背景補全（同步開跑，互不等待）
     const labelsList = objects.map(o => `"${o.labelEn}" (${o.label})`).join(', ');
 
-    // ⚡ 預處理：壓縮圖片 + 偵測比例只做一次（省去 N+1 次重複運算）
-    onProgress?.('⚡ 預壓縮圖片 & 偵測比例...');
-    const [compressedImage, detectedRatio] = await Promise.all([
+    // ⚡ 預處理：壓縮圖片 + 偵測比例 + 背景環境分析（三項並行，只做一次）
+    onProgress?.('⚡ 預壓縮圖片、偵測比例、分析背景環境...');
+    const [compressedImage, detectedRatio, bgDescription] = await Promise.all([
         compressForAtlas(imageBase64),
         detectClosestRatio(imageBase64),
+        analyzeBackground(imageBase64, geminiApiKey),
     ]);
 
-    // 背景補全：用 bbox 遮罩做精準 inpainting（同步開始，不等物件提取）
+    // 背景補全：用 bbox 遮罩 + Gemini 背景描述做精準 inpainting（同步開始，不等物件提取）
     onProgress?.('🗺️ 生成背景遮罩，準備補全背景...');
     const maskBase64 = await generateBboxMask(compressedImage, objects);
+    const bgInpaintPrompt = bgDescription
+        ? `Reconstruct the removed areas to seamlessly match this background: ${bgDescription} Preserve exact colors, lighting direction, perspective and atmosphere of the surrounding background.`
+        : '';
     const bgPromise = (maskBase64
         ? callAtlasInpaint(
-            '',  // 空 prompt = 自動根據周圍環境補全
+            bgInpaintPrompt,
             compressedImage,
             maskBase64,
             atlasKey,
@@ -380,6 +414,7 @@ export async function gptLayerSegment(
         : callAtlasImg2Img(
             `Remove the following foreground elements from this image: ${labelsList}. ` +
             `Reconstruct the complete background naturally and realistically. ` +
+            (bgDescription ? `Background environment: ${bgDescription} ` : '') +
             `Fill all areas where elements were removed with appropriate background content. ` +
             `Preserve the original background colors, lighting, perspective and atmosphere.`,
             'gpt-image-2',
