@@ -336,35 +336,28 @@ Example: {"label":"人物","labelEn":"person"}`
  * GPT 智慧去背主函式
  *
  * 流程：
- *   BiRefNet 粗去背（快速建立主體輪廓）
- *   → 直接送給 GPT Image 2（背景已透明，主體邊緣粗糙）
- *   → GPT 精修邊緣細節（髮絲、毛邊等），保持背景透明
+ *   送原圖給 GPT Image 2，指定主體標籤，直接提取透明背景
+ *   （與 BiRefNet 不同：GPT 語意理解主體邊界，可處理複雜輪廓）
  */
 export async function gptSmartRemoveBg(
     imageBase64: string,
     subject: { label: string; labelEn: string },
     atlasKey: string,
-    falKey: string,
     onProgress?: (msg: string) => void,
 ): Promise<string> {
-    // Step 1：BiRefNet 粗去背
-    onProgress?.('✂️ BiRefNet 粗去背中...');
-    const roughResult = await birefnetRemoveBg(imageBase64, falKey);
-
-    // Step 2：GPT 精修邊緣
-    onProgress?.(`✨ GPT 精修「${subject.label}」邊緣中...`);
+    onProgress?.(`✨ GPT 提取「${subject.label}」中...`);
     const detectedRatio = await detectClosestRatio(imageBase64);
     const gptResults = await callAtlasImg2Img(
-        `This is a rough cutout of a "${subject.labelEn}" (${subject.label}) with imprecise edges. ` +
-        `Improve the edge quality: make the silhouette clean, precise and natural. ` +
-        `Fix rough, jagged or halo edges. Restore fine details like hair strands, fur or soft edges. ` +
-        `Keep the subject's colors, lighting and details IDENTICAL to the input — do NOT repaint the subject interior. ` +
-        `The background must remain fully transparent.`,
+        `Extract only the "${subject.labelEn}" (${subject.label}) from this image as an isolated element. ` +
+        `Output with a completely transparent background. ` +
+        `Preserve the exact original position, size, proportions, colors, lighting and details of the "${subject.labelEn}". ` +
+        `Do not move, resize, or modify the element in any way. ` +
+        `Everything except the "${subject.labelEn}" must be fully transparent.`,
         'gpt-image-2',
         atlasKey,
-        roughResult,
+        imageBase64,
         1,
-        { ratio: detectedRatio, transparentBg: true, keepAlpha: true },
+        { ratio: detectedRatio, transparentBg: true },
     );
     if (!gptResults[0]) throw new Error('GPT 未回傳結果');
     return gptResults[0];

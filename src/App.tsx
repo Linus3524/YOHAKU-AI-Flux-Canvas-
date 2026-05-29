@@ -387,10 +387,9 @@ const App: React.FC = () => {
       }
   }, [falApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
-  // --- GPT Image 2 智慧去背（BiRefNet 粗輪廓 + GPT 邊緣精修）---
+  // --- GPT Image 2 智慧去背（Gemini 識別主體 → GPT 提取透明背景）---
   const handleGptRemoveBackground = useCallback(async () => {
       if (!atlasApiKey) { showToast('GPT 智慧去背需要 Atlas Key'); setShowKeyModal(true); return; }
-      if (!falApiKey)   { showToast('GPT 智慧去背需要 fal.ai Key（BiRefNet 輪廓用）'); setShowKeyModal(true); return; }
       const targets = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
       if (targets.length === 0) return;
       setIsGenerating(true);
@@ -399,12 +398,11 @@ const App: React.FC = () => {
       try {
           for (const el of targets) {
               const subject = await detectPrimarySubject(el.src, effectiveApiKey || '');
-              showToast(`🎯 偵測到「${subject.label}」，開始精修去背...`);
+              showToast(`🎯 偵測到「${subject.label}」`);
               const result = await gptSmartRemoveBg(
                   el.src,
                   subject,
                   atlasApiKey,
-                  falApiKey,
                   (msg) => showToast(msg),
               );
               setElements(prev => prev.map(e => e.id === el.id ? { ...e, src: result } : e));
@@ -417,7 +415,7 @@ const App: React.FC = () => {
           setIsGenerating(false);
           setGeneratingElementIds([]);
       }
-  }, [atlasApiKey, falApiKey, effectiveApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+  }, [atlasApiKey, effectiveApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
   // --- 魔法分層：GPT Image 2 語意提取 + 背景補圖 ---
   const handleMagicLayer = useCallback(async (elementId: string) => {
