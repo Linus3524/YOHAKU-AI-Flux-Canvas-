@@ -14,7 +14,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { callAtlasImg2Img, compressForAtlas, detectClosestRatio } from './atlasImage';
+import { callAtlasImg2Img, callAtlasInpaint, compressForAtlas, detectClosestRatio } from './atlasImage';
 import { birefnetRemoveBg } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
@@ -183,6 +183,36 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     }));
 }
 
+// ── 用 Gemini bbox 陣列生成黑白遮罩（白=要填補、黑=保留）────────────────────
+function generateBboxMask(imageBase64: string, objects: DetectedObject[]): Promise<string> {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width  = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d')!;
+            // 黑底（全部保留）
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // 每個物件 bbox 畫白色（指示 GPT 需填補的區域）
+            ctx.fillStyle = '#FFFFFF';
+            for (const obj of objects) {
+                // 稍微擴大 10%，確保邊緣殘影也被覆蓋
+                const pad = 0.05;
+                const x = Math.max(0, (obj.bbox.x - pad)) * canvas.width;
+                const y = Math.max(0, (obj.bbox.y - pad)) * canvas.height;
+                const w = Math.min(canvas.width  - x, (obj.bbox.w + pad * 2) * canvas.width);
+                const h = Math.min(canvas.height - y, (obj.bbox.h + pad * 2) * canvas.height);
+                ctx.fillRect(x, y, w, h);
+            }
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve('');
+        img.src = imageBase64;
+    });
+}
+
 // ── 通用 Chroma Key 去背（任意目標色）───────────────────────────────────────
 // edgeComplexity = 'complex' → 收緊容差，減少誤刪邊緣細節
 async function removeColorBackground(
@@ -322,17 +352,27 @@ export async function gptLayerSegment(
         detectClosestRatio(imageBase64),
     ]);
 
-    // 背景補全立即開始（不等物件提取完成）
-    const bgPromise = callAtlasImg2Img(
-        `Remove the following foreground elements from this image: ${labelsList}. ` +
-        `Reconstruct the complete background naturally and realistically. ` +
-        `Fill all areas where elements were removed with appropriate background content. ` +
-        `Preserve the original background colors, lighting, perspective and atmosphere.`,
-        'gpt-image-2',
-        atlasKey,
-        compressedImage,   // 預壓縮圖
-        1,
-        { ratio: detectedRatio },  // 預偵測比例
+    // 背景補全：用 bbox 遮罩做精準 inpainting（同步開始，不等物件提取）
+    onProgress?.('🗺️ 生成背景遮罩，準備補全背景...');
+    const maskBase64 = await generateBboxMask(compressedImage, objects);
+    const bgPromise = (maskBase64
+        ? callAtlasInpaint(
+            '',  // 空 prompt = 自動根據周圍環境補全
+            compressedImage,
+            maskBase64,
+            atlasKey,
+          )
+        : callAtlasImg2Img(
+            `Remove the following foreground elements from this image: ${labelsList}. ` +
+            `Reconstruct the complete background naturally and realistically. ` +
+            `Fill all areas where elements were removed with appropriate background content. ` +
+            `Preserve the original background colors, lighting, perspective and atmosphere.`,
+            'gpt-image-2',
+            atlasKey,
+            compressedImage,
+            1,
+            { ratio: detectedRatio },
+          ).then(r => r[0] ?? null)
     ).catch(e => { console.warn('[magicLayer] Background inpainting failed:', e); return null; });
 
     // 所有物件平行去背
@@ -350,16 +390,19 @@ export async function gptLayerSegment(
     // 組合結果（背景放首位）
     const layers: LayerResult[] = [];
 
-    if (bgResult?.[0]) {
-        layers.push({
-            base64:     bgResult[0],
-            cropRatioX: 0,
-            cropRatioY: 0,
-            cropRatioW: 1,
-            cropRatioH: 1,
-            name:       '補全背景',
-            category:   'SUBJECT',
-        });
+    if (bgResult) {
+        const bgSrc = typeof bgResult === 'string' ? bgResult : (bgResult as string[])[0];
+        if (bgSrc) {
+            layers.push({
+                base64:     bgSrc,
+                cropRatioX: 0,
+                cropRatioY: 0,
+                cropRatioW: 1,
+                cropRatioH: 1,
+                name:       '補全背景',
+                category:   'SUBJECT',
+            });
+        }
     }
 
     for (const r of objectResults) {
