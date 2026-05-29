@@ -332,169 +332,13 @@ Example: {"label":"人物","labelEn":"person"}`
     return { label: result.label || result.labelEn, labelEn: result.labelEn };
 }
 
-// ── 智慧去背核心工具函式 ─────────────────────────────────────────────────────
-
-/** 取得圖片原始尺寸 */
-function getImageSize(base64: string): Promise<[number, number]> {
-    return new Promise(res => {
-        const img = new Image();
-        img.onload = () => res([img.naturalWidth, img.naturalHeight]);
-        img.onerror = () => res([512, 512]);
-        img.src = base64;
-    });
-}
-
-/** 從透明 PNG 提取 alpha 通道，縮放至目標尺寸 */
-function extractAlphaResized(base64: string, W: number, H: number): Promise<Uint8Array> {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = W; canvas.height = H;
-            const ctx = canvas.getContext('2d')!;
-            ctx.drawImage(img, 0, 0, W, H);
-            const { data } = ctx.getImageData(0, 0, W, H);
-            const alpha = new Uint8Array(W * H);
-            for (let i = 0; i < W * H; i++) alpha[i] = data[i * 4 + 3];
-            resolve(alpha);
-        };
-        img.onerror = reject;
-        img.src = base64;
-    });
-}
-
-/** 分離式 Dilate（先橫後縱，O(W·H·2k)，避免 O(W·H·k²) 的大核心問題） */
-function dilateSep(alpha: Uint8Array, W: number, H: number, k: number): Uint8Array {
-    const tmp = new Uint8Array(W * H);
-    for (let y = 0; y < H; y++)
-        for (let x = 0; x < W; x++) {
-            let v = 0;
-            for (let dx = -k; dx <= k; dx++) { const nx = x + dx; if (nx >= 0 && nx < W) v = Math.max(v, alpha[y * W + nx]); }
-            tmp[y * W + x] = v;
-        }
-    const out = new Uint8Array(W * H);
-    for (let y = 0; y < H; y++)
-        for (let x = 0; x < W; x++) {
-            let v = 0;
-            for (let dy = -k; dy <= k; dy++) { const ny = y + dy; if (ny >= 0 && ny < H) v = Math.max(v, tmp[ny * W + x]); }
-            out[y * W + x] = v;
-        }
-    return out;
-}
-
-/** 分離式 Erode */
-function erodeSep(alpha: Uint8Array, W: number, H: number, k: number): Uint8Array {
-    const tmp = new Uint8Array(W * H);
-    for (let y = 0; y < H; y++)
-        for (let x = 0; x < W; x++) {
-            let v = 255;
-            for (let dx = -k; dx <= k; dx++) { const nx = x + dx; if (nx >= 0 && nx < W) v = Math.min(v, alpha[y * W + nx]); else v = 0; }
-            tmp[y * W + x] = v;
-        }
-    const out = new Uint8Array(W * H);
-    for (let y = 0; y < H; y++)
-        for (let x = 0; x < W; x++) {
-            let v = 255;
-            for (let dy = -k; dy <= k; dy++) { const ny = y + dy; if (ny >= 0 && ny < H) v = Math.min(v, tmp[ny * W + x]); else v = 0; }
-            out[y * W + x] = v;
-        }
-    return out;
-}
-
-/**
- * 建立「邊緣薄環遮罩圖」傳給 GPT：
- *   - 邊緣環（dilated 但未 eroded）→ 透明（GPT 可以修改）
- *   - 其餘所有像素 → 不透明（GPT 看得到但不能動）
- */
-function buildEdgeMaskedImage(
-    imageBase64: string,
-    dilated: Uint8Array,
-    eroded: Uint8Array,
-    W: number, H: number,
-): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = W; canvas.height = H;
-            const ctx = canvas.getContext('2d')!;
-            ctx.drawImage(img, 0, 0, W, H);
-            const id = ctx.getImageData(0, 0, W, H);
-            const d = id.data;
-            for (let i = 0; i < W * H; i++) {
-                const isEdge = dilated[i] > 128 && eroded[i] <= 128;
-                d[i * 4 + 3] = isEdge ? 0 : 255;
-            }
-            ctx.putImageData(id, 0, 0);
-            resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = reject;
-        img.src = imageBase64;
-    });
-}
-
-/**
- * 合成最終結果：
- *   - 主體內部（eroded > 128）：原圖 RGB，alpha = 255
- *   - 邊緣環（dilated > 128 && eroded ≤ 128）：原圖 RGB，alpha 來自 GPT 輸出
- *   - 背景（dilated ≤ 128）：完全透明
- */
-function compositeEdge(
-    originalBase64: string,
-    gptBase64: string,
-    dilated: Uint8Array,
-    eroded: Uint8Array,
-    W: number, H: number,
-): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const origImg = new Image();
-        origImg.onload = () => {
-            const gptImg = new Image();
-            gptImg.onload = () => {
-                // 原圖像素
-                const origC = document.createElement('canvas'); origC.width = W; origC.height = H;
-                const origCtx = origC.getContext('2d')!;
-                origCtx.drawImage(origImg, 0, 0, W, H);
-                const origD = origCtx.getImageData(0, 0, W, H).data;
-
-                // GPT 輸出縮回原圖尺寸，取 alpha
-                const gptC = document.createElement('canvas'); gptC.width = W; gptC.height = H;
-                const gptCtx = gptC.getContext('2d')!;
-                gptCtx.drawImage(gptImg, 0, 0, W, H);
-                const gptD = gptCtx.getImageData(0, 0, W, H).data;
-
-                const out = new Uint8ClampedArray(W * H * 4);
-                for (let i = 0; i < W * H; i++) {
-                    const p = i * 4;
-                    out[p]   = origD[p];
-                    out[p+1] = origD[p+1];
-                    out[p+2] = origD[p+2];
-                    if      (eroded[i]  > 128)                            out[p+3] = 255;          // 主體內部
-                    else if (dilated[i] > 128 && eroded[i] <= 128)        out[p+3] = gptD[p+3];   // 邊緣環用 GPT alpha
-                    else                                                    out[p+3] = 0;            // 背景全透明
-                }
-
-                const outC = document.createElement('canvas'); outC.width = W; outC.height = H;
-                outC.getContext('2d')!.putImageData(new ImageData(out, W, H), 0, 0);
-                resolve(outC.toDataURL('image/png'));
-            };
-            gptImg.onerror = reject;
-            gptImg.src = gptBase64;
-        };
-        origImg.onerror = reject;
-        origImg.src = originalBase64;
-    });
-}
-
 /**
  * GPT 智慧去背主函式
  *
  * 流程：
- *   BiRefNet 粗去背 → 提取 alpha 輪廓
- *   → Dilate - Erode = 主體輪廓薄邊環
- *   → 邊緣環設透明，其餘鎖死 → 送 GPT Image 2
- *   → GPT 只修那圈邊緣 alpha（語意理解）
- *   → 合成：內部用原圖，邊緣用 GPT alpha，背景透明
+ *   BiRefNet 粗去背（快速建立主體輪廓）
+ *   → 直接送給 GPT Image 2（背景已透明，主體邊緣粗糙）
+ *   → GPT 精修邊緣細節（髮絲、毛邊等），保持背景透明
  */
 export async function gptSmartRemoveBg(
     imageBase64: string,
@@ -503,44 +347,27 @@ export async function gptSmartRemoveBg(
     falKey: string,
     onProgress?: (msg: string) => void,
 ): Promise<string> {
-    const [W, H] = await getImageSize(imageBase64);
-
-    // Step 1：BiRefNet 粗輪廓
-    onProgress?.('✂️ BiRefNet 建立粗輪廓...');
+    // Step 1：BiRefNet 粗去背
+    onProgress?.('✂️ BiRefNet 粗去背中...');
     const roughResult = await birefnetRemoveBg(imageBase64, falKey);
 
-    // Step 2：提取 alpha 並計算邊緣薄環
-    const roughAlpha = await extractAlphaResized(roughResult, W, H);
-    const k = Math.max(8, Math.round(Math.min(W, H) * 0.025)); // 短邊 2.5%，最小 8px
-    onProgress?.('🔧 計算輪廓邊緣薄環...');
-    const dilated = dilateSep(roughAlpha, W, H, k);
-    const eroded  = erodeSep(roughAlpha, W, H, k);
-
-    // Step 3：建立 GPT 輸入圖（邊緣環透明）
-    onProgress?.('🎨 準備 GPT 輸入...');
-    const maskedForGpt = await buildEdgeMaskedImage(imageBase64, dilated, eroded, W, H);
-
-    // Step 4：GPT 精修邊緣環 alpha
+    // Step 2：GPT 精修邊緣
     onProgress?.(`✨ GPT 精修「${subject.label}」邊緣中...`);
     const detectedRatio = await detectClosestRatio(imageBase64);
     const gptResults = await callAtlasImg2Img(
-        `Precisely separate the "${subject.labelEn}" (${subject.label}) from the background ` +
-        `in the transparent ring region around the subject's edge. ` +
-        `For each transparent pixel in the ring: set it fully opaque if it belongs to the "${subject.labelEn}", ` +
-        `or keep it fully transparent if it is background. ` +
-        `Use the opaque interior pixels (subject) and opaque exterior pixels (background) as reference. ` +
-        `Do NOT repaint or modify any opaque pixels — only determine the correct alpha for the transparent ring.`,
+        `This is a rough cutout of a "${subject.labelEn}" (${subject.label}) with imprecise edges. ` +
+        `Improve the edge quality: make the silhouette clean, precise and natural. ` +
+        `Fix rough, jagged or halo edges. Restore fine details like hair strands, fur or soft edges. ` +
+        `Keep the subject's colors, lighting and details IDENTICAL to the input — do NOT repaint the subject interior. ` +
+        `The background must remain fully transparent.`,
         'gpt-image-2',
         atlasKey,
-        maskedForGpt,
+        roughResult,
         1,
         { ratio: detectedRatio, transparentBg: true, keepAlpha: true },
     );
     if (!gptResults[0]) throw new Error('GPT 未回傳結果');
-
-    // Step 5：合成最終結果
-    onProgress?.('🔧 合成最終結果...');
-    return compositeEdge(imageBase64, gptResults[0], dilated, eroded, W, H);
+    return gptResults[0];
 }
 
 // ── 主要入口 ─────────────────────────────────────────────────────────────────
