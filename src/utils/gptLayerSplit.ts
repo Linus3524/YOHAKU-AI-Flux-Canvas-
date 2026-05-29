@@ -165,6 +165,21 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         (CATEGORY_PRIORITY[a.category] ?? 5) - (CATEGORY_PRIORITY[b.category] ?? 5)
     );
 
+    // IoU 去重：bbox 重疊超過 50% 視為同一物件，保留優先順序較高的（已排序在前）
+    const iou = (a: DetectedObject['bbox'], b: DetectedObject['bbox']): number => {
+        const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+        const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+        const intersection = ix * iy;
+        const union = a.w * a.h + b.w * b.h - intersection;
+        return union > 0 ? intersection / union : 0;
+    };
+    const deduplicated: DetectedObject[] = [];
+    for (const obj of objects) {
+        const isDuplicate = deduplicated.some(kept => iou(kept.bbox, obj.bbox) > 0.5);
+        if (!isDuplicate) deduplicated.push(obj);
+    }
+    objects = deduplicated;
+
     // 硬限：最多 10 個物件（避免 API 費用爆炸）
     if (objects.length > 10) objects = objects.slice(0, 10);
 
