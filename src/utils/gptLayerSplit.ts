@@ -207,7 +207,51 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     }));
 }
 
-// ── Gemini 快速分析背景類型，回傳英文描述供 GPT Inpaint prompt 使用 ────────────
+// ── Gemini 背景重繪（移除前景物件，補全背景）────────────────────────────────
+async function geminiInpaintBackground(
+    imageBase64: string,
+    objects: DetectedObject[],
+    bgDescription: string,
+    apiKey: string,
+    model: string,
+): Promise<string | null> {
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+        const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/jpeg';
+        const labelsList = objects.map(o => `"${o.labelEn}" (${o.label})`).join(', ');
+
+        const prompt = bgDescription
+            ? `Remove these foreground elements from the image: ${labelsList}.
+Fill each removed area by naturally extending the surrounding background.
+Background reference: ${bgDescription}
+Rules:
+- Match exact edge colors and textures pixel-by-pixel where elements were removed
+- Continue gradients, textures, and patterns seamlessly into the gaps
+- Do NOT change, recolor, or alter any area of the image that was not occupied by the removed elements
+- Minimal reconstruction: only fill what is missing, preserve everything else exactly as-is`
+            : `Remove these foreground elements from the image: ${labelsList}.
+Fill each removed area by naturally extending the surrounding background.
+Rules:
+- Match exact edge colors and textures where elements were removed
+- Continue existing patterns seamlessly
+- Do NOT change any part of the image that was not occupied by the removed elements`;
+
+        const response = await ai.models.generateContent({
+            model,
+            contents: { parts: [{ inlineData: { data: cleanBase64, mimeType } }, { text: prompt }] },
+        });
+
+        const part = response.candidates?.[0]?.content?.parts?.find((p: { inlineData?: { data: string } }) => p.inlineData);
+        if (!part?.inlineData?.data) return null;
+        return `data:image/png;base64,${part.inlineData.data}`;
+    } catch (e) {
+        console.warn('[geminiBackground] Failed:', e);
+        return null;
+    }
+}
+
+// ── Gemini 快速分析背景類型，回傳英文描述供背景重繪 prompt 使用 ───────────────
 async function analyzeBackground(imageBase64: string, apiKey: string): Promise<string> {
     try {
         const ai = new GoogleGenAI({ apiKey });
@@ -380,14 +424,18 @@ async function extractOneLayer(
         const trimmed = await trimTransparentPixels(transparent);
 
         // ⭐ 定位（x,y）用 Gemini bbox（位置接近原圖）
-        //    尺寸（w,h）用 trimTransparentPixels 實際像素比例（防止回貼時比例拉伸）
-        //    兩者各取所長：Gemini 定位準但尺寸是估算，trimmed 尺寸是真實像素
+        //    尺寸（w,h）用 Gemini bbox.w/h（所見即所得：原圖有多大就放多大）
+        //    bboxW/H 直接對應原圖比例，不受 GPT 輸出比例影響 → 無拉伸變形
         return {
             base64:      trimmed.base64,
             cropRatioX:  obj.bbox.x,
             cropRatioY:  obj.bbox.y,
-            cropRatioW:  trimmed.cropRatioW,   // 實際像素寬度比例，不拉伸
-            cropRatioH:  trimmed.cropRatioH,   // 實際像素高度比例，不拉伸
+            cropRatioW:  trimmed.cropRatioW,
+            cropRatioH:  trimmed.cropRatioH,
+            pixelWidth:  trimmed.pixelWidth,
+            pixelHeight: trimmed.pixelHeight,
+            bboxW:       obj.bbox.w,
+            bboxH:       obj.bbox.h,
             name:        obj.label,
             category:    obj.category,
         };
@@ -404,6 +452,7 @@ export async function gptLayerSegment(
     atlasKey: string,
     falKey?: string,
     onProgress?: (msg: string) => void,
+    geminiImageModel = 'gemini-3.1-flash-image-preview',
 ): Promise<LayerResult[]> {
 
     // Step 1：Gemini 識別元素 + bbox + category + bgColor
@@ -423,35 +472,26 @@ export async function gptLayerSegment(
         analyzeBackground(imageBase64, geminiApiKey),
     ]);
 
-    // 背景補全：用 bbox 遮罩 + Gemini 背景描述做精準 inpainting（同步開始，不等物件提取）
-    onProgress?.('🗺️ 生成背景遮罩，準備補全背景...');
-    const maskBase64 = await generateBboxMask(compressedImage, objects);
-    const bgInpaintPrompt = bgDescription
-        ? `Fill ONLY the masked (transparent) areas. Do NOT alter any existing background pixels outside the masked region.
-Extend and continue the existing surrounding background content naturally into the holes.
-Background reference: ${bgDescription}
-Rules: match exact edge colors pixel-by-pixel, continue gradients/textures seamlessly, minimal reconstruction — only fill what is missing.`
-        : `Fill ONLY the masked (transparent) areas by extending the surrounding background naturally. Do NOT alter any existing pixels outside the masked region. Minimal reconstruction only.`;
-    const bgPromise = (maskBase64
-        ? callAtlasInpaint(
-            bgInpaintPrompt,
-            compressedImage,
-            maskBase64,
-            atlasKey,
-          )
-        : callAtlasImg2Img(
-            `Remove the following foreground elements from this image: ${labelsList}. ` +
-            `Reconstruct the complete background naturally and realistically. ` +
-            (bgDescription ? `Background environment: ${bgDescription} ` : '') +
-            `Fill all areas where elements were removed with appropriate background content. ` +
-            `Preserve the original background colors, lighting, perspective and atmosphere.`,
-            'gpt-image-2',
-            atlasKey,
-            compressedImage,
-            1,
-            { ratio: detectedRatio },
-          ).then(r => r[0] ?? null)
-    ).catch(e => { console.warn('[magicLayer] Background inpainting failed:', e); return null; });
+    // 背景補全：Gemini 直接理解語意移除物件並補全背景
+    onProgress?.('🗺️ Gemini 分析背景，準備補全...');
+    const bgPromise = geminiInpaintBackground(
+        compressedImage,
+        objects,
+        bgDescription,
+        geminiApiKey,
+        geminiImageModel,
+    ).then(result => {
+        if (result) return result;
+        // Gemini 失敗時降級：用 GPT Inpaint（需要 mask）
+        console.warn('[magicLayer] Gemini bg failed, falling back to GPT Inpaint');
+        return generateBboxMask(compressedImage, objects).then(maskBase64 => {
+            if (!maskBase64) return null;
+            const fallbackPrompt = bgDescription
+                ? `Fill ONLY the masked areas. Do NOT alter pixels outside the mask. Background: ${bgDescription}. Match edge colors and extend textures seamlessly.`
+                : `Fill ONLY the masked areas by extending surrounding background naturally. Do not alter anything outside the mask.`;
+            return callAtlasInpaint(fallbackPrompt, compressedImage, maskBase64, atlasKey).catch(() => null);
+        });
+    }).catch(e => { console.warn('[magicLayer] Background failed:', e); return null; });
 
     // 所有物件平行去背
     const objectResults = await Promise.all(

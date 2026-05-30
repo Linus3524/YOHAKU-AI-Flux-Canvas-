@@ -71,6 +71,13 @@ export interface LayerResult {
     /** 裁切後圖片的真實像素尺寸（用於回貼畫布時保持正確比例） */
     pixelWidth?: number;
     pixelHeight?: number;
+    /**
+     * Gemini 偵測的原始 bbox 尺寸比例（0~1，相對於整張原圖）
+     * 用於「所見即所得」的畫布放置：bboxW × el.width = 原圖中物件真實大小
+     * 與 cropRatioW/H 的差異：後者是 GPT 輸出圖的裁切比例（受 GPT 輸出比例影響）
+     */
+    bboxW?: number;
+    bboxH?: number;
     /** 圖層名稱（Gemini 偵測的物件名稱） */
     name?: string;
     /** 設計分類標籤 */
