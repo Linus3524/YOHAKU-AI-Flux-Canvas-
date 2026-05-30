@@ -1615,9 +1615,30 @@ const App: React.FC = () => {
       )}
 
       {isDraggingOver && (
-        <div className="absolute inset-0 z-[100] bg-white/60 backdrop-blur-sm flex items-center justify-center pointer-events-none">
-          <div className="text-[#1D1D1F] text-3xl font-bold p-12 border-4 border-dashed border-[#1D1D1F]/20 rounded-3xl bg-white/80 shadow-2xl">
-            釋放以新增圖片
+        <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse at center, rgba(175,82,222,0.08) 0%, rgba(88,86,214,0.06) 40%, rgba(255,255,255,0.55) 100%)', backdropFilter: 'blur(12px)' }}>
+          {/* 邊框光暈 */}
+          <div className="absolute inset-4 rounded-[2rem] pointer-events-none"
+            style={{ border: '1.5px dashed rgba(175,82,222,0.35)', boxShadow: 'inset 0 0 60px rgba(175,82,222,0.06)' }} />
+          {/* 中央卡片 */}
+          <div className="flex flex-col items-center gap-3 px-11 py-8 rounded-2xl"
+            style={{
+              background: 'rgba(255,255,255,0.82)',
+              boxShadow: '0 24px 64px rgba(88,86,214,0.12), 0 4px 16px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)',
+              border: '1px solid rgba(175,82,222,0.18)',
+              backdropFilter: 'blur(20px)',
+            }}>
+            {/* 圖示 */}
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, #AF52DE 0%, #5856D6 100%)', boxShadow: '0 6px 18px rgba(88,86,214,0.28)' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="3" ry="3"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+            </div>
+            <p className="text-[#1D1D1F] font-semibold text-lg tracking-tight leading-tight">釋放以新增圖片</p>
+            <p className="text-[#86868B] text-xs tracking-wide">支援 PNG・JPG・WEBP・GIF</p>
           </div>
         </div>
       )}
