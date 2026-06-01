@@ -82,6 +82,16 @@ export interface LayerResult {
     name?: string;
     /** 設計分類標籤 */
     category?: string;
+    /** v2.0 語意欄位（先存不消費，供未來重排版/AI改稿用）*/
+    layerType?: string;
+    semanticRole?: string;
+    /** v2.0 四軸風險分數 */
+    riskScore?: {
+        semanticRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+        extractionRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+        placementRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+        backgroundRisk?: 'LOW' | 'MEDIUM' | 'HIGH';
+    };
 }
 
 /**

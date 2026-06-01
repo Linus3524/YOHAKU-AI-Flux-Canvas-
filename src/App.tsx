@@ -417,15 +417,10 @@ const App: React.FC = () => {
               // 位置夾在 [0, 1] 安全範圍
               const clampedX = Math.max(0, Math.min(1, layer.cropRatioX));
               const clampedY = Math.max(0, Math.min(1, layer.cropRatioY));
-              // 尺寸：優先用 Gemini bbox（所見即所得，原圖比例精準）
-              // bboxW × el.width = 物件在原圖佔的實際寬度，不受 GPT 輸出比例影響
-              // width 用 bboxW，height 用 pixelH/pixelW native ratio 修正防止 Gemini 估算誤差
-              const rawW = isBackground ? el.width : Math.round((layer.bboxW ?? layer.cropRatioW) * el.width);
-              const layerW = rawW;
-              const layerH = isBackground ? el.height
-                  : (layer.pixelWidth && layer.pixelHeight && rawW > 0)
-                      ? Math.round(rawW * layer.pixelHeight / layer.pixelWidth)
-                      : Math.round((layer.bboxH ?? layer.cropRatioH) * el.height);
+              // v2.0 Mask 驅動幾何：cropRatioW/H 是「去背後真實像素」相對原圖的比例
+              // W 用 el.width 換算、H 用 el.height 換算 → 兩者同源於原圖空間，永不變形
+              const layerW = isBackground ? el.width  : Math.round(layer.cropRatioW * el.width);
+              const layerH = isBackground ? el.height : Math.round(layer.cropRatioH * el.height);
               // 中心點 = 圖層區塊左上角 + bbox 偏移 + 半寬/高
               const cx = isBackground
                   ? layerAreaLeft + el.width / 2
@@ -433,8 +428,12 @@ const App: React.FC = () => {
               const cy = isBackground
                   ? el.position.y
                   : layerAreaTop + clampedY * el.height + layerH / 2;
+              // v2.0：HIGH 風險在圖層名稱標 ⚠️（方便辨識可能有問題的層）
+              const rs = layer.riskScore;
+              const hasHighRisk = rs && (rs.semanticRisk === 'HIGH' || rs.extractionRisk === 'HIGH' || rs.placementRisk === 'HIGH' || rs.backgroundRisk === 'HIGH');
+              const riskMark = hasHighRisk ? '⚠️ ' : '';
               const layerName = layer.name
-                  ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name)
+                  ? `${riskMark}${layer.category ? `[${layer.category}] ${layer.name}` : layer.name}`
                   : (isBackground ? `${el.name || '圖片'} 背景` : `${el.name || '圖片'} 圖層 ${i}`);
               return {
                   ...el,
