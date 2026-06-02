@@ -435,7 +435,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                         boxShadow: '0 2px 16px rgba(0,0,0,0.08)',
                         zIndex: element.zIndex,
                         pointerEvents: interactionMode === 'select' ? 'auto' : 'none',
-                        cursor: interactionMode === 'select' ? 'move' : 'default',
+                        cursor: element.isLocked ? 'default' : (interactionMode === 'select' ? 'move' : 'default'),
                         isolation: 'isolate',
                     }}
                     onMouseDown={(e) => handleInteractionStart(e, 'drag')}

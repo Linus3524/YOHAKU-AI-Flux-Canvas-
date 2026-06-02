@@ -32,6 +32,7 @@ interface ContextMenuProps {
     flipVertical: (elementId: string) => void;
     changeColor: (color: string) => void;
     downloadImage: (elementId: string) => void;
+    downloadImages: (elementIds: string[]) => void;
     exportArtboard: (elementId: string) => void;
     copyStyle: (elementId: string) => void;
     pasteStyle: (elementIds: string[]) => void;
@@ -58,6 +59,7 @@ interface ContextMenuProps {
   hasCopiedStyle: boolean;
   // State props
   selectionCount: number;
+  selectedElementIds: string[];
   isGrouped: boolean;
   isLocked: boolean;
   isVisible: boolean;
@@ -213,11 +215,12 @@ const MenuItem: React.FC<{ onClick: () => void; children: React.ReactNode; disab
 export const ContextMenu: React.FC<ContextMenuProps> = ({ 
     menuData, 
     onClose, 
-    actions, 
-    canChangeColor, 
-    elementType, 
+    actions,
+    canChangeColor,
+    elementType,
     hasCopiedStyle,
     selectionCount,
+    selectedElementIds,
     isGrouped,
     isLocked,
     isVisible
@@ -426,8 +429,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                         
                         {(elementType === 'image' || elementType === 'drawing') && (
                             <>
-                                <MenuItem icon={<MenuIcons.Download />} onClick={() => handleAction(() => actions.downloadImage(menuData.elementId!))}>
-                                    下載圖片
+                                <MenuItem
+                                    icon={<MenuIcons.Download />}
+                                    onClick={() => handleAction(() =>
+                                        selectionCount > 1
+                                            ? actions.downloadImages(selectedElementIds)
+                                            : actions.downloadImage(menuData.elementId!)
+                                    )}
+                                >
+                                    {selectionCount > 1 ? `下載圖片（${selectionCount} 張）` : '下載圖片'}
                                 </MenuItem>
                                 <div className="border-t my-1 border-gray-100/50" />
                             </>

@@ -6,6 +6,7 @@ interface ArtboardPanelProps {
     element: ArtboardElement;
     onUpdate: (updates: Partial<ArtboardElement>) => void;
     onExport: () => void;
+    onExportSVG: () => void;
     onClose: () => void;
 }
 
@@ -15,7 +16,7 @@ const ArtboardIcon = () => (
     </svg>
 );
 
-export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate, onExport, onClose }) => {
+export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate, onExport, onExportSVG, onClose }) => {
     const [widthInput, setWidthInput]   = useState(String(Math.round(element.width)));
     const [heightInput, setHeightInput] = useState(String(Math.round(element.height)));
     
@@ -219,13 +220,20 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                     </div>
                 </div>
 
-                {/* Export Button */}
-                <div className="pt-4 border-t border-gray-100">
-                    <button 
+                {/* Export Buttons */}
+                <div className="pt-4 border-t border-gray-100 flex flex-col gap-2">
+                    <button
                         onClick={onExport}
                         className="w-full py-2.5 bg-[#007AFF] text-white rounded-xl text-sm font-bold hover:bg-[#0066CC] transition-colors shadow-sm active:scale-95"
                     >
-                        匯出此工作區域
+                        匯出此工作區域（PNG）
+                    </button>
+                    <button
+                        onClick={onExportSVG}
+                        className="w-full py-2.5 bg-[#1D1D1F] text-white rounded-xl text-sm font-bold hover:bg-[#333] transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-2"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                        匯出工作區域（SVG）
                     </button>
                 </div>
             </div>

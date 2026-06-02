@@ -1,6 +1,7 @@
 import type { CanvasElement, ArtboardElement, ImageElement, TextElement, ShapeElement } from '../../types';
 import { loadImage, createShapeDataUrl } from '../../utils/helpers';
 import { drawTextOnCanvas } from '../../utils/textCanvas';
+import { jsPDF } from 'jspdf';
 
 // 判斷元素是否與工作區域有交集 (Bounding Box Intersection)
 export const isElementInArtboard = (el: CanvasElement, ab: ArtboardElement): boolean => {
@@ -335,4 +336,181 @@ export const downloadMultipleArtboards = async (
             await new Promise(resolve => setTimeout(resolve, 400));
         }
     }
+};
+
+/**
+ * 將所有工作區域匯出為一份 PDF（每個 Artboard 一頁）
+ * 頁面尺寸依 Artboard 實際比例決定，以 pt 為單位（1px = 0.75pt）
+ */
+export const exportArtboardsAsPDF = async (
+    artboards: ArtboardElement[],
+    allElements: CanvasElement[],
+    filename = 'YOHAKU-export',
+): Promise<void> => {
+    if (artboards.length === 0) return;
+
+    // 渲染第一張決定方向，之後每頁各自設定
+    const PX_TO_PT = 0.75;
+
+    let pdf: jsPDF | null = null;
+
+    for (let i = 0; i < artboards.length; i++) {
+        const ab = artboards[i];
+        const dataUrl = await exportArtboardAsImage(ab, allElements, 2); // 2x 高清
+
+        const wPt = ab.width  * PX_TO_PT;
+        const hPt = ab.height * PX_TO_PT;
+        const orientation = wPt >= hPt ? 'landscape' : 'portrait';
+
+        if (i === 0) {
+            pdf = new jsPDF({ orientation, unit: 'pt', format: [wPt, hPt] });
+        } else {
+            pdf!.addPage([wPt, hPt], orientation);
+        }
+
+        pdf!.addImage(dataUrl, 'PNG', 0, 0, wPt, hPt, undefined, 'FAST');
+    }
+
+    pdf!.save(`${filename}.pdf`);
+};
+
+// ─── SVG 匯出 ───────────────────────────────────────────────────────────────
+
+function escapeXml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+
+/**
+ * 單一 Artboard → SVG 字串
+ * 圖片為獨立 <image>，文字為 <text>，形狀為向量
+ */
+export const exportArtboardAsSVG = async (
+    artboard: ArtboardElement,
+    allElements: CanvasElement[],
+): Promise<string> => {
+    const targets = allElements
+        .filter(el => isElementInArtboard(el, artboard) && el.type !== 'note')
+        .sort((a, b) => a.zIndex - b.zIndex);
+
+    const ox = artboard.position.x - artboard.width  / 2;
+    const oy = artboard.position.y - artboard.height / 2;
+
+    const parts: string[] = [];
+
+    for (const el of targets) {
+        const cx  = el.position.x - ox;
+        const cy  = el.position.y - oy;
+        const x   = cx - el.width  / 2;
+        const y   = cy - el.height / 2;
+        const rot = el.rotation ? `rotate(${el.rotation} ${cx} ${cy})` : '';
+        const tr  = rot ? `transform="${rot}"` : '';
+        const op  = (el.opacity ?? 1) < 1 ? `opacity="${el.opacity}"` : '';
+
+        if (el.type === 'image' || el.type === 'drawing') {
+            const src = (el as any).src as string;
+            if (!src) continue;
+
+            // xlink:href（SVG 1.1 / Illustrator）+ href（SVG 2.0）雙重相容
+            parts.push(
+                `<image ${tr} ${op} x="${x.toFixed(2)}" y="${y.toFixed(2)}" ` +
+                `width="${el.width}" height="${el.height}" ` +
+                `xlink:href="${src}" href="${src}" preserveAspectRatio="none"/>`
+            );
+
+        } else if (el.type === 'text') {
+            const te = el as TextElement;
+            const weight = te.isBold   ? 'bold'   : 'normal';
+            const style  = te.isItalic ? 'italic' : 'normal';
+            const deco   = te.isUnderline ? 'underline' : 'none';
+            const anchor = te.align === 'center' ? 'middle' : te.align === 'right' ? 'end' : 'start';
+            const anchorX = te.align === 'center' ? cx : te.align === 'right' ? x + el.width : x;
+            const lineH   = te.fontSize * (te.lineHeight ?? 1.3);
+            const lines   = te.text.split('\n');
+
+            const tspans = lines.map((line, i) =>
+                `<tspan x="${anchorX.toFixed(2)}" dy="${i === 0 ? 0 : lineH}">${escapeXml(line || ' ')}</tspan>`
+            ).join('');
+
+            parts.push(
+                `<text ${tr} ${op} ` +
+                `x="${anchorX.toFixed(2)}" y="${(y + te.fontSize).toFixed(2)}" ` +
+                `font-size="${te.fontSize}" font-family="${escapeXml(te.fontFamily)}" ` +
+                `font-weight="${weight}" font-style="${style}" text-decoration="${deco}" ` +
+                `fill="${te.color}" text-anchor="${anchor}">${tspans}</text>`
+            );
+
+        } else if (el.type === 'shape') {
+            const se = el as ShapeElement;
+            const hw = el.width  / 2;
+            const hh = el.height / 2;
+            let shapeTag = '';
+
+            if (se.shapeType === 'rectangle' || se.shapeType === 'rounded_rect') {
+                const rx = se.shapeType === 'rounded_rect' ? Math.min(hw, hh) * 0.2 : 0;
+                shapeTag = `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${el.width}" height="${el.height}" rx="${rx}" ry="${rx}"`;
+            } else if (se.shapeType === 'circle') {
+                shapeTag = `<ellipse cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" rx="${hw}" ry="${hh}"`;
+            } else {
+                // 其他形狀 fallback：render to PNG 然後 <image>
+                parts.push(
+                    `<!-- ${se.shapeType} shape rendered as image -->`
+                );
+                continue;
+            }
+
+            const fillAttr   = `fill="${se.fillColor || 'transparent'}"`;
+            const strokeAttr = se.strokeWidth
+                ? `stroke="${se.strokeColor || '#000'}" stroke-width="${se.strokeWidth}"`
+                : 'stroke="none"';
+
+            parts.push(`${shapeTag} ${tr} ${op} ${fillAttr} ${strokeAttr}/>`);
+
+        } else if (el.type === 'arrow') {
+            const ae = el as any;
+            const sx = ae.start.x - ox;
+            const sy = ae.start.y - oy;
+            const ex2 = ae.end.x - ox;
+            const ey2 = ae.end.y - oy;
+            const sw   = ae.strokeWidth || 2;
+            const color = ae.color || '#1D1D1F';
+
+            parts.push(
+                `<line ${op} x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" ` +
+                `x2="${ex2.toFixed(2)}" y2="${ey2.toFixed(2)}" ` +
+                `stroke="${color}" stroke-width="${sw}" stroke-linecap="round"/>`
+            );
+        }
+    }
+
+    return [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"`,
+        `     width="${artboard.width}" height="${artboard.height}"`,
+        `     viewBox="0 0 ${artboard.width} ${artboard.height}">`,
+        `  <rect width="${artboard.width}" height="${artboard.height}" fill="${artboard.backgroundColor || '#ffffff'}"/>`,
+        ...parts.map(p => '  ' + p),
+        '</svg>',
+    ].join('\n');
+};
+
+/** 下載單一 Artboard SVG 檔案 */
+export const downloadArtboardAsSVG = async (
+    artboard: ArtboardElement,
+    allElements: CanvasElement[],
+): Promise<void> => {
+    const svgStr = await exportArtboardAsSVG(artboard, allElements);
+    const blob   = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const url    = URL.createObjectURL(blob);
+    const link   = document.createElement('a');
+    link.href     = url;
+    link.download = `${artboard.artboardName || 'artboard'}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 };

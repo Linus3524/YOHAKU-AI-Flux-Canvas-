@@ -21,7 +21,7 @@ import { TextPropertyPanel } from './components/TextPropertyPanel';
 import { ShapePropertyPanel } from './components/ShapePropertyPanel'; 
 import { ArrowPropertyPanel } from './components/ArrowPropertyPanel';
 import { FloatingAssistant } from './components/FloatingAssistant'; 
-import { ArtboardPanel, downloadArtboard, downloadMultipleArtboards } from './features/artboard';
+import { ArtboardPanel, downloadArtboard, downloadMultipleArtboards, exportArtboardsAsPDF } from './features/artboard';
 import { useCanvas } from './hooks/useCanvas';
 import { useAI } from './hooks/useAI';
 import { STYLE_PRESETS, COLORS, isCJK, wrapTextCanvas, loadImage, createShapeDataUrl, restoreOriginalAlpha, getClosestAspectRatio, measureTextVisualBounds, renderImageElementToDataUrl } from './utils/helpers';
@@ -33,6 +33,7 @@ import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCach
 import { birefnetRemoveBg } from './utils/geminiLayer';
 import { gptLayerSegment } from './utils/gptLayerSplit';
 import { detectTextBlocks } from './utils/ocrService';
+import { SVGExportModal } from './components/SVGExportModal';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -217,6 +218,7 @@ const App: React.FC = () => {
   const [userApiKey, setUserApiKey] = useState<string | null>(() => localStorage.getItem('yohaku_api_key'));
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showSVGExportModal, setShowSVGExportModal] = useState(false);
   const [showStoragePopover, setShowStoragePopover] = useState(false);
 
   // The 'effectiveApiKey' holds the string value (strictly local storage for BYOK).
@@ -1005,6 +1007,38 @@ const App: React.FC = () => {
       }));
   };
 
+  const downloadImages = useCallback(async (elementIds: string[]) => {
+      const imageEls = elements.filter(
+          el => elementIds.includes(el.id) && (el.type === 'image' || el.type === 'drawing') && (el as any).src
+      );
+      for (let i = 0; i < imageEls.length; i++) {
+          const element = imageEls[i] as any;
+          const hasEffects = element.shadowEnabled || (element.fade && element.fade.direction !== 'none');
+          const dataUrl = hasEffects
+              ? await renderImageElementToDataUrl({
+                    src: element.src,
+                    width: element.width,
+                    height: element.height,
+                    shadowEnabled: element.shadowEnabled,
+                    shadowColor: element.shadowColor,
+                    shadowBlur: element.shadowBlur,
+                    shadowOffsetX: element.shadowOffsetX,
+                    shadowOffsetY: element.shadowOffsetY,
+                    fade: element.fade,
+                })
+              : element.src;
+          const link = document.createElement('a');
+          link.href = dataUrl;
+          let filename = element.name ? element.name.trim() : `canvas-image-${i + 1}`;
+          if (!filename.toLowerCase().endsWith('.png')) filename = `${filename}.png`;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          if (i < imageEls.length - 1) await new Promise(r => setTimeout(r, 300));
+      }
+  }, [elements]);
+
   const downloadImage = useCallback(async (elementId: string) => {
     if (!elementId) return;
     const element = elements.find(el => el.id === elementId);
@@ -1250,6 +1284,14 @@ const App: React.FC = () => {
               onSubmitAtlas={handleSaveAtlasKey}
               falKey={falApiKey || ''}
               onSubmitFal={handleSaveFalKey}
+          />
+      )}
+
+      {showSVGExportModal && (
+          <SVGExportModal
+              artboards={elements.filter(el => el.type === 'artboard') as any[]}
+              allElements={elements}
+              onClose={() => setShowSVGExportModal(false)}
           />
       )}
 
@@ -1547,6 +1589,7 @@ const App: React.FC = () => {
                   el.id === artboardForPanel.id ? { ...el, ...updates } : el
               ))}
               onExport={() => downloadArtboard(artboardForPanel, elements)}
+              onExportSVG={() => setShowSVGExportModal(true)}
               onClose={() => setSelectedElementIds([])}
           />
       )}
@@ -1641,6 +1684,7 @@ const App: React.FC = () => {
             flipVertical: handleFlipVertical,
             changeColor: handleColorChange,
             downloadImage,
+            downloadImages,
             copyStyle: handleCopyStyle,
             pasteStyle: (elementIds: string[]) => setStylePasteModal({ targetIds: elementIds }),
             exportCanvas: handleExportCanvas,
@@ -1668,6 +1712,7 @@ const App: React.FC = () => {
           elementType={contextMenuElement?.type || null}
           hasCopiedStyle={!!copiedStyle}
           selectionCount={selectedElementIds.length}
+          selectedElementIds={selectedElementIds}
           isGrouped={!!isGrouped}
           isLocked={isLocked}
           isVisible={isVisible}
