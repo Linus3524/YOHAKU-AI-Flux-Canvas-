@@ -210,7 +210,7 @@ export const STYLE_PRESETS = [
   },
   {
     id: 'Retro Ghost Fest', name: '台式復古中元', label: 'Retro Ghost Fest',
-    prompt: 'Transform into 1980s Taiwanese Ghost Festival (中元普渡) retro aesthetic: eerie neon red and green temple lighting, stylized Taoist talisman (符咒) patterns overlaid, dramatic smoky incense atmosphere, vintage Taiwanese street market grit, raw local subculture mysticism.'
+    prompt: '將圖片轉換為1980年代台灣中元普渡的復古視覺風格：農曆七月夜市巷弄中溫暖的紅色紙燈籠光暈、燃燒金紙的火焰光影、供桌上的香火煙霧繚繞、野台戲的老舊木製舞台背板、褪色的台灣老街底片顆粒感，主色調為琥珀黃與廟宇紅，充滿台灣本土民俗儀式氛圍。'
   },
 
   // ── 次文化少女暗黑美學 ────────────────────────────────────────
