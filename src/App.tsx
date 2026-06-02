@@ -367,16 +367,16 @@ const App: React.FC = () => {
   });
 
   // --- BiRefNet v2 去背 ---
-  const handleBiRefNetRemoveBackground = useCallback(async () => {
+  const handleBiRefNetRemoveBackground = useCallback(async (model: string = 'Matting') => {
       if (!falApiKey) { showToast('需要 fal.ai API Key，請在設定中輸入'); setShowKeyModal(true); return; }
       const targets = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
       if (targets.length === 0) return;
       setIsGenerating(true);
       setGeneratingElementIds(targets.map(el => el.id));
-      showToast('🔍 BiRefNet v2 去背中...');
+      showToast(`🔍 BiRefNet v2 去背中（${model}）...`);
       try {
           for (const el of targets) {
-              const result = await birefnetRemoveBg(el.src, falApiKey);
+              const result = await birefnetRemoveBg(el.src, falApiKey, model as any);
               setElements(prev => prev.map(e => e.id === el.id ? { ...e, src: result } : e));
               if (result.startsWith('data:')) cacheImage(el.id, result);
           }
@@ -1604,46 +1604,109 @@ const App: React.FC = () => {
       )}
 
       {generatedImages && generatedImages.length > 0 && (
-        <div className="fixed inset-0 z-[2000] bg-[#F5F5F7]/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setGeneratedImages(null)}>
-          <div className="bg-white rounded-3xl shadow-[0_20px_40px_rgba(0,0,0,0.1)] border border-black/5 p-8 max-w-5xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6 flex-shrink-0">
-              <h2 className="text-2xl font-bold text-[#1D1D1F]">生成結果</h2>
-              <button onClick={() => setGeneratedImages(null)} className="w-10 h-10 flex items-center justify-center rounded-full bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5E5] hover:text-black transition-colors" title="關閉">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
+        <div
+          className="fixed inset-0 z-[2000] flex items-center justify-center p-6"
+          style={{ background: 'rgba(15,17,21,0.78)', backdropFilter: 'blur(10px)' }}
+          onClick={() => setGeneratedImages(null)}
+        >
+          <div
+            className="relative flex flex-col"
+            style={{
+              background: 'rgba(28,31,38,0.92)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 32px 64px -16px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.05)',
+              borderRadius: '24px',
+              padding: '2rem',
+              width: '100%',
+              maxWidth: generatedImages.length === 1 ? '440px' : '820px',
+              maxHeight: '90vh',
+              animation: 'resultModalPop 0.35s cubic-bezier(0.16,1,0.3,1) forwards',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <style>{`
+              @keyframes resultModalPop {
+                from { opacity: 0; transform: scale(0.95) translateY(12px); }
+                to   { opacity: 1; transform: scale(1)    translateY(0);    }
+              }
+              .result-img-card .card-action-overlay { opacity: 0; }
+              .result-img-card:hover .card-action-overlay { opacity: 1; }
+              .result-img-card .card-action-btns { opacity: 0; transform: translateY(12px); transition: opacity 0.25s ease, transform 0.25s ease; }
+              .result-img-card:hover .card-action-btns { opacity: 1; transform: translateY(0); }
+              .result-close-btn { transition: background 0.2s ease, transform 0.25s ease; }
+              .result-close-btn:hover { transform: rotate(90deg); background: rgba(255,255,255,0.2) !important; }
+            `}</style>
+
+            {/* 標題列 */}
+            <div className="flex items-start justify-between mb-5 pr-10">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-semibold text-white tracking-tight">生成結果</h2>
+                  <span className="text-[10px] font-normal text-gray-500 border border-white/10 px-1.5 py-px rounded">{generatedImages.length} 張</span>
+                </div>
+                <p className="text-[11px] text-gray-600 mt-0.5">選擇要加入畫布或下載的圖片</p>
+              </div>
             </div>
-            <div className={`grid gap-4 overflow-y-auto p-1 ${
-                generatedImages.length === 1 ? 'grid-cols-1 max-w-lg mx-auto w-full' :
-                generatedImages.length === 2 ? 'grid-cols-2' :
-                'grid-cols-2'
-            }`}>
+
+            {/* 關閉按鈕 */}
+            <button
+              onClick={() => setGeneratedImages(null)}
+              className="result-close-btn absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white border border-white/10"
+              style={{ background: 'rgba(255,255,255,0.08)' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+
+            {/* 圖片區域 */}
+            <div className={`overflow-y-auto ${generatedImages.length > 1 ? 'grid grid-cols-2 gap-4' : ''}`}>
               {generatedImages.map((imgSrc, index) => (
-                <div key={index} className="group relative rounded-2xl overflow-hidden bg-[#F5F5F7] border border-black/5">
-                  <div className="flex items-center justify-center aspect-square p-4">
-                     <img
-                       src={imgSrc}
-                       alt={`Generated by AI ${index + 1}`}
-                       className="w-full h-full object-contain shadow-sm"
-                       referrerPolicy="no-referrer"
-                     />
+                <div
+                  key={index}
+                  className="result-img-card relative rounded-2xl overflow-hidden bg-black"
+                  style={{
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+                    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                    aspectRatio: generatedImages.length === 1 ? 'auto' : '4/5',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 20px 44px rgba(0,0,0,0.5)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = '0 10px 30px rgba(0,0,0,0.4)'; }}
+                >
+                  <img
+                    src={imgSrc}
+                    alt={`Generated ${index + 1}`}
+                    className="w-full h-full"
+                    style={{ objectFit: generatedImages.length === 1 ? 'contain' : 'cover', display: 'block', maxHeight: generatedImages.length === 1 ? '62vh' : undefined }}
+                    referrerPolicy="no-referrer"
+                  />
+                  {/* 懸停漸層遮罩 */}
+                  <div
+                    className="card-action-overlay absolute inset-0 flex flex-col justify-end p-4"
+                    style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.18) 55%, transparent 100%)', transition: 'opacity 0.3s ease' }}
+                  >
+                    <div className="card-action-btns flex flex-col gap-2">
+                      <button
+                        onClick={() => addGeneratedImageToCanvas(imgSrc)}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-white text-black hover:bg-gray-100 active:scale-[0.98] transition-all"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        新增至畫布
+                      </button>
+                      <button
+                        onClick={() => downloadGeneratedImage(imgSrc)}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-white active:scale-[0.98] transition-all"
+                        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(4px)' }}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        下載
+                      </button>
+                    </div>
                   </div>
-                  {generatedImages.length === 1 ? (
-                    <div className="p-4 bg-white/90 backdrop-blur-md border-t border-black/5 flex justify-center gap-3">
-                      <button onClick={() => addGeneratedImageToCanvas(imgSrc)} className="px-4 py-2 text-sm font-medium bg-black text-white rounded-full hover:bg-gray-800 shadow-lg transition-all">新增至畫布</button>
-                      <button onClick={() => downloadGeneratedImage(imgSrc)} className="px-4 py-2 text-sm font-medium bg-white text-[#1D1D1F] border border-black/10 rounded-full hover:bg-[#F5F5F7] transition-all">下載</button>
-                    </div>
-                  ) : (
-                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-black/5 flex justify-center gap-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                      <button onClick={() => addGeneratedImageToCanvas(imgSrc)} className="px-4 py-2 text-sm font-medium bg-black text-white rounded-full hover:bg-gray-800 shadow-lg transition-all">新增至畫布</button>
-                      <button onClick={() => downloadGeneratedImage(imgSrc)} className="px-4 py-2 text-sm font-medium bg-white text-[#1D1D1F] border border-black/10 rounded-full hover:bg-[#F5F5F7] transition-all">下載</button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
-            <div className="mt-6 flex justify-end gap-3 flex-shrink-0">
-              <button onClick={() => setGeneratedImages(null)} className="px-5 py-2.5 text-sm font-medium text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#F5F5F7] rounded-full transition-all">關閉</button>
-            </div>
+
+            {/* 底部提示 */}
+            <p className="text-center text-[11px] text-gray-600 mt-5">點擊視窗外部區域可關閉</p>
           </div>
         </div>
       )}

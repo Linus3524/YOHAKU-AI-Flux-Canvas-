@@ -406,7 +406,7 @@ interface InfiniteCanvasProps {
   stylePresets: { id: string, name: string, label: string }[];
   onCameraAngle: (prompt: string) => void;
   onRemoveBackground: (mode: string) => void;
-  onBiRefNetRemoveBackground?: () => void;
+  onBiRefNetRemoveBackground?: (model: string) => void;
   hasFalKey?: boolean;
   onHarmonize: () => void;
   isGenerating: boolean;
@@ -455,7 +455,10 @@ const CameraIcons = {
 
 // ── 生成分裂按鈕（左：生成、右：選張數）────────────────────────────────────
 const GenerateSplitButton: React.FC<{ onGenerate: (count: 1 | 2 | 3 | 4) => void }> = ({ onGenerate }) => {
-    const [count, setCount] = useState<1 | 2 | 3 | 4>(2);
+    const [count, setCount] = useState<1 | 2 | 3 | 4>(() => {
+        const saved = localStorage.getItem('yohaku_gen_count');
+        return ([1, 2, 3, 4].includes(Number(saved)) ? Number(saved) : 2) as 1 | 2 | 3 | 4;
+    });
     const [open, setOpen] = useState(false);
     return (
         <div className="relative w-full">
@@ -489,7 +492,7 @@ const GenerateSplitButton: React.FC<{ onGenerate: (count: 1 | 2 | 3 | 4) => void
                         {([1, 2, 3, 4] as const).map(n => (
                             <button
                                 key={n}
-                                onClick={() => { setCount(n); setOpen(false); }}
+                                onClick={() => { setCount(n); localStorage.setItem('yohaku_gen_count', String(n)); setOpen(false); }}
                                 className={`w-full px-3 py-2.5 text-center text-sm font-medium transition-colors ${
                                     count === n
                                         ? 'bg-[#F5F5F7] text-[#AF52DE] font-semibold'
@@ -602,9 +605,11 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [showGen, setShowGen] = useState(true);
   const [showTools, setShowTools] = useState(true);
   const [showCamera, setShowCamera] = useState(false);
-  const [showAppearance, setShowAppearance] = useState(true); // ✅ 新增
+  const [showAppearance, setShowAppearance] = useState(false);
   const menuDragStartRef = useRef<Point>({ x: 0, y: 0 });
   const [upscaleFactor, setUpscaleFactor] = useState<number>(2);
+  const [birefnetModel, setBirefnetModel] = useState<string>('Matting');
+  const [birefnetOpen, setBirefnetOpen] = useState(false);
   const [ratioOpen, setRatioOpen] = useState(false);
   const ratioRef = useRef<HTMLDivElement>(null);
   const isArtboardSelected = useMemo(() => elements.some(el => selectedElementIds.includes(el.id) && el.type === 'artboard'), [elements, selectedElementIds]);
@@ -1393,15 +1398,65 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>
                                                 智慧去背
                                             </button>
-                                            {hasFalKey && onBiRefNetRemoveBackground && (
-                                                <button
-                                                    onClick={onBiRefNetRemoveBackground}
-                                                    className="w-full h-9 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors shadow-sm flex items-center justify-center gap-2"
-                                                >
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
-                                                    快速去背（BiRefNet）
-                                                </button>
-                                            )}
+                                            {hasFalKey && onBiRefNetRemoveBackground && (() => {
+                                                const birefnetOptions = [
+                                                    { key: 'General Use (Light)',    label: '輕量',    desc: 'Logo / 標準字 / 純色背景' },
+                                                    { key: 'General Use (Heavy)',    label: '重量級',  desc: '產品 / 光滑物件 / 漸層背景' },
+                                                    { key: 'Portrait',               label: '人像',    desc: '人物 / 臉部 / 髮型優化' },
+                                                    { key: 'Matting',                label: '髮絲',    desc: '毛髮 / 婚紗 / 玻璃透明物' },
+                                                    { key: 'General Use (Light 2K)', label: '輕量 2K', desc: '高解析度大圖（輕量版）' },
+                                                    { key: 'General Use (Dynamic)',  label: '動態',    desc: '自動解析度 / 尺寸不固定' },
+                                                ] as { key: string; label: string; desc: string }[];
+                                                const currentOpt = birefnetOptions.find(o => o.key === birefnetModel) ?? birefnetOptions[0];
+                                                return (
+                                                    <div className="relative w-full">
+                                                        <div className="flex w-full rounded-lg overflow-hidden bg-orange-500 shadow-sm shadow-orange-500/20">
+                                                            {/* 左：執行去背 */}
+                                                            <button
+                                                                onClick={() => onBiRefNetRemoveBackground(birefnetModel)}
+                                                                className="flex-1 flex items-center justify-center gap-2 text-white py-2.5 text-xs font-semibold hover:bg-white/10 transition-colors active:bg-white/20"
+                                                            >
+                                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+                                                                BiRefNet 快速去背
+                                                            </button>
+                                                            <div className="w-[1.5px] bg-white/30 my-2"/>
+                                                            {/* 右：顯示目前模式 + 開下拉 */}
+                                                            <button
+                                                                onClick={() => setBirefnetOpen(v => !v)}
+                                                                className="flex items-center gap-1 px-3 text-white/90 hover:bg-white/10 transition-colors active:bg-white/20"
+                                                                aria-label="選擇去背模式"
+                                                            >
+                                                                <span className="text-[11px] font-semibold whitespace-nowrap">{currentOpt.label}</span>
+                                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                    <polyline points="6 9 12 15 18 9"/>
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                        {birefnetOpen && (
+                                                            <>
+                                                                <div className="fixed inset-0 z-40" onClick={() => setBirefnetOpen(false)}/>
+                                                                <div className="absolute top-full mt-2 right-0 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-gray-100 overflow-hidden z-50 min-w-[160px]">
+                                                                    {birefnetOptions.map(opt => (
+                                                                        <button
+                                                                            key={opt.key}
+                                                                            onClick={() => { setBirefnetModel(opt.key); setBirefnetOpen(false); }}
+                                                                            className={`w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-orange-50 transition-colors ${birefnetModel === opt.key ? 'bg-orange-50' : ''}`}
+                                                                        >
+                                                                            <div>
+                                                                                <div className="text-xs font-semibold text-[#1D1D1F]">{opt.label}</div>
+                                                                                <div className="text-[10px] text-[#86868B]">{opt.desc}</div>
+                                                                            </div>
+                                                                            {birefnetModel === opt.key && (
+                                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F97316" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                                            )}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
 
                                             <div className="flex gap-2 h-9">
                                                 <div className="flex bg-[#F5F5F7] rounded-lg p-0.5 h-full items-center">
