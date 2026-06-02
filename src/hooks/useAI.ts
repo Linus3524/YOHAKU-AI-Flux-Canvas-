@@ -1117,8 +1117,10 @@ CONSTRAINTS:
             let atlasPrompt = noteText;
             if (imageStyle && imageStyle !== 'Default') {
                 const styleObj = STYLE_PRESETS.find(s => s.label === imageStyle || s.name === imageStyle);
-                const styleLabel = styleObj ? styleObj.label : imageStyle;
-                atlasPrompt = atlasPrompt ? `${atlasPrompt}, ${styleLabel} style` : `${styleLabel} style`;
+                const styleDesc = styleObj?.prompt
+                    ? `Apply this visual style to the image (keep original subject and composition): ${styleObj.prompt}`
+                    : `${imageStyle} style`;
+                atlasPrompt = atlasPrompt ? `${atlasPrompt}. ${styleDesc}` : styleDesc;
             }
 
             // 收集便利貼中的參考圖（base64）
@@ -1274,8 +1276,10 @@ CONSTRAINTS:
           let finalInstructions = instructions;
           if (imageStyle && imageStyle !== 'Default') {
               const styleObj = STYLE_PRESETS.find(s => s.label === imageStyle || s.name === imageStyle);
-              const styleLabel = styleObj ? styleObj.label : imageStyle;
-              finalInstructions = instructions ? `${instructions}, ${styleLabel} Style` : `${styleLabel} Style`;
+              const styleDesc = styleObj?.prompt
+                  ? `Apply this visual style to the image (keep original subject and composition): ${styleObj.prompt}`
+                  : `${imageStyle} style`;
+              finalInstructions = instructions ? `${instructions}. ${styleDesc}` : styleDesc;
           }
 
           // 收集便利貼的參考圖（最多4張，按編號①②③④）
