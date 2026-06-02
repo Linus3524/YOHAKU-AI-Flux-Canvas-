@@ -560,17 +560,10 @@ ALWAYS PRESERVE:
         setGeneratingElementIds([targetElements[0].id]);
         setIsGenerating(true);
         showToast(`正在轉換視角...`);
-    
-        try {
-            const genAI = createAiClient();
-            for (const element of targetElements) {
-                const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
-                const [header, data] = flatSrc.split(',');
-                const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                const imagePart = { inlineData: { data, mimeType } };
 
-                const buildAnglePrompt = (targetPrompt: string): string => {
-                    return `
+        // 視角 prompt（單次生成，不再做 diff 重試）
+        const buildAnglePrompt = (targetPrompt: string, isIllustration: boolean): string => {
+            const base = `
 You are a 3D rendering expert. Re-render this subject from a completely new camera angle.
 
 CURRENT VIEW: Assume the original image is a standard front/eye-level shot.
@@ -583,49 +576,67 @@ STRICT RULES:
 4. The background should remain simple and consistent with the original.
 5. If the subject is a character: show the correct body parts visible from this angle.
 `.trim();
-                };
+            return isIllustration
+                ? base + `\nIMPORTANT: Even though this is a 2D illustration, you MUST apply 3D perspective transformation. Force the angle change even if it feels unnatural for 2D art. This is intentional.`
+                : base;
+        };
 
+        // 結果放在原圖右側 30px
+        const placeResult = (element: ImageElement, finalSrc: string) => {
+            const GAP = 30;
+            const newX = element.position.x + element.width / 2 + GAP + element.width / 2;
+            setElements(prev => [
+                ...prev,
+                {
+                    ...element,
+                    id: `${element.id}_angle_${Date.now()}`,
+                    src: finalSrc,
+                    position: { x: newX, y: element.position.y },
+                    name: `${element.name || '圖片'} 視角`,
+                    zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
+                } as ImageElement,
+            ]);
+        };
+
+        // 是否走 Atlas（非 Gemini 模型 + 有 key + 支援 img2img）
+        const useAtlas = generationModel !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModel as AtlasGenerationModel);
+
+        try {
+            const genAI = useAtlas ? null : createAiClient();
+
+            for (const element of targetElements) {
+                // 透明背景：先壓平成純色底（AI 無法處理 alpha），生成後再還原透明
+                const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
                 const isIllustration = await detectIfIllustration(flatSrc);
-                const forcePrompt = isIllustration
-                    ? `\nIMPORTANT: Even though this is a 2D illustration, you MUST apply 3D perspective transformation. Force the angle change even if it feels unnatural for 2D art. This is intentional.`
-                    : '';
+                const prompt = buildAnglePrompt(anglePrompt, isIllustration);
 
-                const basePrompt = buildAnglePrompt(anglePrompt) + forcePrompt;
-
-                let attempt = 0;
-                let currentPrompt = basePrompt;
                 let generatedSrc = '';
 
-                while (attempt < 3) {
-                    const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                if (useAtlas) {
+                    // ── Atlas img2img 路徑 ──────────────────────────────
+                    const atlasModel = generationModel as AtlasGenerationModel;
+                    let refImage = flatSrc;
+                    if (!refImage.startsWith('data:')) refImage = await downloadImageAsBase64(refImage);
+                    const ratio = imageAspectRatio || 'Original';
+                    const quality = imageSize === '4K' ? '4K' : '2K';
+                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, refImage, 1, { ratio, quality }));
+                    if (images.length > 0) generatedSrc = images[0];
+                } else {
+                    // ── Gemini 路徑（單次生成）──────────────────────────
+                    const [header, data] = flatSrc.split(',');
+                    const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                    const imagePart = { inlineData: { data, mimeType } };
+                    const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI!.models.generateContent({
                         model: imageModel,
-                        contents: { parts: [imagePart, { text: currentPrompt }] },
+                        contents: { parts: [imagePart, { text: prompt }] },
                     }));
-
                     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                    if (!part?.inlineData) break;
-
-                    const resultSrc = `data:image/png;base64,${part.inlineData.data}`;
-
-                    const diff = await calculateImageDifference(flatSrc, resultSrc);
-
-                    if (diff > 0.15) {
-                        generatedSrc = resultSrc;
-                        break;
-                    }
-
-                    attempt++;
-                    if (attempt < 3) {
-                        currentPrompt = `[ATTEMPT ${attempt+1}] PREVIOUS ATTEMPT FAILED — the result looked too similar to the input. You MUST make the perspective change MORE DRAMATIC and OBVIOUS. ` + basePrompt;
-                        showToast(`視角變化不明顯，正在加強重試... (${attempt}/3)`);
-                    } else {
-                        generatedSrc = resultSrc; // Fallback to last attempt
-                    }
+                    if (part?.inlineData) generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
                 }
 
                 if (generatedSrc) {
                     let finalSrc = generatedSrc;
-
+                    // 還原透明背景（BiRefNet → Gemini 去背 → Chroma Key）
                     if (hadTransparency) {
                         try {
                             finalSrc = await restoreTransparencyFn(finalSrc, bgColor);
@@ -633,22 +644,7 @@ STRICT RULES:
                             console.warn("Transparency processing failed", e);
                         }
                     }
-
-                    // 新圖放在原圖右側 30px，原圖保留不動
-                    const GAP = 30;
-                    const newX = element.position.x + element.width / 2 + GAP + element.width / 2;
-                    const newY = element.position.y;
-                    setElements(prev => [
-                        ...prev,
-                        {
-                            ...element,
-                            id: `${element.id}_angle_${Date.now()}`,
-                            src: finalSrc,
-                            position: { x: newX, y: newY },
-                            name: `${element.name || '圖片'} 視角`,
-                            zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
-                        } as ImageElement,
-                    ]);
+                    placeResult(element, finalSrc);
                 }
             }
             showToast("視角轉換完成！✨");
@@ -658,7 +654,7 @@ STRICT RULES:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [selectedElementIds, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, prepareForGeneration, restoreTransparencyFn]);
+    }, [selectedElementIds, elements, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModel, atlasApiKey, imageAspectRatio, imageSize, prepareForGeneration, restoreTransparencyFn]);
 
     const handleRemoveBackground = useCallback(async (mode: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
