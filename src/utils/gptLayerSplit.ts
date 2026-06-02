@@ -178,11 +178,8 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         const isLogoRelated = (cat: string) => cat === 'TEXT' || cat === 'DECOR';
         const isDuplicate = deduplicated.some(kept => {
             const score = iou(kept.bbox, obj.bbox);
-            // TEXT ↔ DECOR 組合（logo 文字和圖形）：降低閾值到 0.25
-            if (isLogoRelated(kept.category) && isLogoRelated(obj.category)) {
-                return score > 0.25;
-            }
-            // 其他組合維持原本 0.5
+            // TEXT ↔ DECOR 組合：降低閾值到 0.25
+            if (isLogoRelated(kept.category) && isLogoRelated(obj.category)) return score > 0.25;
             return score > 0.5;
         });
         if (!isDuplicate) deduplicated.push(obj);
@@ -368,13 +365,130 @@ async function removeColorBackground(
     });
 }
 
+// ── Step 1.5：背景均一化（Gemini 輸出背景可能有雜訊，強制清乾淨讓 BiRefNet 看到好對比）──
+async function uniformizeBackground(base64: string, bgHex: string): Promise<string> {
+    const tR = parseInt(bgHex.slice(1, 3), 16);
+    const tG = parseInt(bgHex.slice(3, 5), 16);
+    const tB = parseInt(bgHex.slice(5, 7), 16);
+    const threshold = 55;
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d')!;
+            ctx.drawImage(img, 0, 0);
+            const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const d = id.data;
+            for (let i = 0; i < d.length; i += 4) {
+                const dr = d[i] - tR, dg = d[i + 1] - tG, db = d[i + 2] - tB;
+                if (Math.sqrt(dr * dr + dg * dg + db * db) < threshold) {
+                    d[i] = tR; d[i + 1] = tG; d[i + 2] = tB;
+                }
+            }
+            ctx.putImageData(id, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(base64);
+        img.src = base64;
+    });
+}
+
+// ── Step 2b.5：Despill — 清除 Chroma Key 邊緣的背景色污染 ────────────────────
+// BiRefNet 路徑不需要（BiRefNet alpha 本身已乾淨）；只在 Chroma Key 路徑使用
+async function despillEdges(transparentBase64: string, bgHex: string): Promise<string> {
+    const tR = parseInt(bgHex.slice(1, 3), 16);
+    const tG = parseInt(bgHex.slice(3, 5), 16);
+    const tB = parseInt(bgHex.slice(5, 7), 16);
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d')!;
+            ctx.drawImage(img, 0, 0);
+            const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const d = id.data;
+            for (let i = 0; i < d.length; i += 4) {
+                const alpha = d[i + 3];
+                if (alpha > 10 && alpha < 245) {
+                    // 逆向去除背景色污染：original = (blended - bg*(1-t)) / t
+                    const t = alpha / 255;
+                    d[i]     = Math.round(Math.min(255, Math.max(0, (d[i]     - tR * (1 - t)) / t)));
+                    d[i + 1] = Math.round(Math.min(255, Math.max(0, (d[i + 1] - tG * (1 - t)) / t)));
+                    d[i + 2] = Math.round(Math.min(255, Math.max(0, (d[i + 2] - tB * (1 - t)) / t)));
+                }
+            }
+            ctx.putImageData(id, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(transparentBase64);
+        img.src = transparentBase64;
+    });
+}
+
+// ── Step 2c：原圖 RGB + Alpha Mask 合成（像素 100% 來自原圖）──────────────────
+// alphaMask 會自動縮放至原圖尺寸（處理壓縮圖與原圖解析度不一致的問題）
+async function compositeOriginalWithAlpha(
+    originalBase64: string,
+    alphaMaskBase64: string,
+): Promise<string> {
+    return new Promise(resolve => {
+        const origImg = new Image(), alphaImg = new Image();
+        let loaded = 0;
+        const onLoad = () => {
+            if (++loaded < 2) return;
+            const canvas = document.createElement('canvas');
+            canvas.width  = origImg.naturalWidth;
+            canvas.height = origImg.naturalHeight;
+            const ctx = canvas.getContext('2d')!;
+            ctx.drawImage(origImg, 0, 0);
+            ctx.globalCompositeOperation = 'destination-in';
+            ctx.drawImage(alphaImg, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        origImg.onload = onLoad; alphaImg.onload = onLoad;
+        origImg.onerror = () => resolve(originalBase64);
+        alphaImg.onerror = () => resolve(originalBase64);
+        origImg.src = originalBase64; alphaImg.src = alphaMaskBase64;
+    });
+}
+
+// ── Gemini Fallback：無 Atlas Key 時用 Gemini Flash Image 生成隔離圖 ──────────
+async function geminiIsolateOnSolidBg(
+    obj: DetectedObject,
+    imageBase64: string,
+    apiKey: string,
+    model: string,
+    bgColor: { hex: string; rgb: string },
+): Promise<string> {
+    const ai = new GoogleGenAI({ apiKey });
+    const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+    const mimeType    = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
+    const prompt =
+        `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
+        `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
+        `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
+        `The background must be a perfectly uniform solid color with NO gradients, NO shadows, NO variations. ` +
+        `Do NOT blend or feather the object edges into the background. Hard, clean boundary required.`;
+    const response = await ai.models.generateContent({
+        model,
+        contents: { parts: [{ inlineData: { data: cleanBase64, mimeType } }, { text: prompt }] },
+    });
+    const part = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+    if (!part?.inlineData?.data) throw new Error('Gemini isolation 未回傳圖片');
+    return `data:image/png;base64,${part.inlineData.data}`;
+}
+
 // ── 單一物件提取（供 Promise.all 並發）──────────────────────────────────────
 async function extractOneLayer(
     obj: DetectedObject,
-    compressedImage: string,   // 預壓縮好的圖（只壓一次）
-    detectedRatio: string,     // 預偵測好的比例（只偵測一次）
-    atlasKey: string,
+    compressedImage: string,       // 預壓縮好的圖（只壓一次，給隔離模型用）
+    detectedRatio: string,
+    atlasKey: string | undefined,  // 可選：有則用 GPT Image 2，無則降級 Gemini
     falKey: string | undefined,
+    geminiApiKey: string,          // Gemini fallback 用
+    geminiImageModel: string,      // Gemini 隔離 model
     onProgress?: (msg: string) => void,
 ): Promise<LayerResult | null> {
     // TEXT / DECOR 類別：硬邊幾何形狀，BiRefNet 反而會誤判字母負空間
@@ -384,58 +498,63 @@ async function extractOneLayer(
     const bgColor = BG_COLOR_MAP[obj.bgColor] ?? BG_COLOR_MAP.GRAY;
 
     try {
-        // 2a：GPT Image 2 Edit — 保留目標物件，填純色背景
-        const isolated = await callAtlasImg2Img(
-            `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
-            `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
-            `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
-            `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations. ` +
-            `CRITICAL: Do NOT blend or feather the object edges into the background. ` +
-            `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
-            `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.`,
-            'gpt-image-2',
-            atlasKey,
-            compressedImage,   // 直接傳預壓縮圖，跳過內部壓縮
-            1,
-            { ratio: detectedRatio },  // 直接傳比例字串，跳過內部偵測
-        );
-        if (!isolated[0]) return null;
+        // ── 2a：隔離生成（GPT Image 2 優先；無 Atlas Key 降級 Gemini Flash Image）──
+        let isolatedSrc: string;
+        if (atlasKey) {
+            const isolated = await callAtlasImg2Img(
+                `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
+                `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
+                `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
+                `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations. ` +
+                `CRITICAL: Do NOT blend or feather the object edges into the background. ` +
+                `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
+                `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.`,
+                'gpt-image-2',
+                atlasKey,
+                compressedImage,
+                1,
+                { ratio: detectedRatio },
+            );
+            if (!isolated[0]) return null;
+            isolatedSrc = isolated[0];
+        } else {
+            isolatedSrc = await geminiIsolateOnSolidBg(obj, compressedImage, geminiApiKey, geminiImageModel, bgColor);
+        }
 
-        // 2b：去背（BiRefNet 優先，timeout 後降級 Chroma Key）
-        // complex edge → timeout 3min；simple edge → timeout 2min
+        // ── 2a.5：背景均一化（修正 Gemini 背景殘留雜訊，確保 BiRefNet 看到乾淨對比）──
+        isolatedSrc = await uniformizeBackground(isolatedSrc, bgColor.hex);
+
+        // ── 2b：去背（BiRefNet 優先，timeout 後降級 Chroma Key）──────────────
         const method = useBiRefNet ? `BiRefNet${obj.edgeComplexity === 'complex' ? '/複雜邊緣' : ''}` : 'Chroma Key';
         onProgress?.(`✂️ 去背：${obj.label}（${method}）`);
         const birefnetTimeout = obj.edgeComplexity === 'complex' ? 180_000 : 120_000;
+
         let transparent: string;
         if (useBiRefNet) {
             transparent = await withTimeout(
-                birefnetRemoveBg(isolated[0], falKey!),
+                birefnetRemoveBg(isolatedSrc, falKey!),
                 birefnetTimeout,
                 () => {
                     console.warn(`[magicLayer] BiRefNet timeout for "${obj.label}", fallback chroma key`);
-                    return removeColorBackground(isolated[0], bgColor.hex, obj.edgeComplexity);
+                    return removeColorBackground(isolatedSrc, bgColor.hex, obj.edgeComplexity);
                 },
             );
         } else {
-            transparent = await removeColorBackground(isolated[0], bgColor.hex, obj.edgeComplexity);
+            // TEXT / DECOR 或無 falKey → Chroma Key
+            transparent = await removeColorBackground(isolatedSrc, bgColor.hex, obj.edgeComplexity);
         }
 
-        // 2c：裁切透明邊緣
+        // ── 2c：裁切透明邊緣 ──────────────────────────────────────────────────
         const trimmed = await trimTransparentPixels(transparent);
 
-        // ⭐ 定位（x,y）用 Gemini bbox（位置接近原圖）
-        //    尺寸（w,h）用 Gemini bbox.w/h（所見即所得：原圖有多大就放多大）
-        //    bboxW/H 直接對應原圖比例，不受 GPT 輸出比例影響 → 無拉伸變形
         return {
             base64:      trimmed.base64,
-            cropRatioX:  obj.bbox.x,
-            cropRatioY:  obj.bbox.y,
+            cropRatioX:  trimmed.cropRatioX,
+            cropRatioY:  trimmed.cropRatioY,
             cropRatioW:  trimmed.cropRatioW,
             cropRatioH:  trimmed.cropRatioH,
             pixelWidth:  trimmed.pixelWidth,
             pixelHeight: trimmed.pixelHeight,
-            bboxW:       obj.bbox.w,
-            bboxH:       obj.bbox.h,
             name:        obj.label,
             category:    obj.category,
         };
@@ -449,7 +568,7 @@ async function extractOneLayer(
 export async function gptLayerSegment(
     imageBase64: string,
     geminiApiKey: string,
-    atlasKey: string,
+    atlasKey: string | undefined,  // 可選：有則用 GPT Image 2，無則 Gemini fallback
     falKey?: string,
     onProgress?: (msg: string) => void,
     geminiImageModel = 'gemini-3.1-flash-image-preview',
@@ -472,32 +591,41 @@ export async function gptLayerSegment(
         analyzeBackground(imageBase64, geminiApiKey),
     ]);
 
-    // 背景補全：Gemini 直接理解語意移除物件並補全背景
-    onProgress?.('🗺️ Gemini 分析背景，準備補全...');
-    const bgPromise = geminiInpaintBackground(
-        compressedImage,
-        objects,
-        bgDescription,
-        geminiApiKey,
-        geminiImageModel,
-    ).then(result => {
-        if (result) return result;
-        // Gemini 失敗時降級：用 GPT Inpaint（需要 mask）
-        console.warn('[magicLayer] Gemini bg failed, falling back to GPT Inpaint');
-        return generateBboxMask(compressedImage, objects).then(maskBase64 => {
-            if (!maskBase64) return null;
-            const fallbackPrompt = bgDescription
-                ? `Fill ONLY the masked areas. Do NOT alter pixels outside the mask. Background: ${bgDescription}. Match edge colors and extend textures seamlessly.`
-                : `Fill ONLY the masked areas by extending surrounding background naturally. Do not alter anything outside the mask.`;
-            return callAtlasInpaint(fallbackPrompt, compressedImage, maskBase64, atlasKey).catch(() => null);
-        });
-    }).catch(e => { console.warn('[magicLayer] Background failed:', e); return null; });
+    // 背景補全：GPT Inpaint 優先（品質佳）；無 Atlas Key 或失敗才降級 Gemini
+    onProgress?.('🗺️ 背景分析，準備補全...');
+    const bgPromise = (async () => {
+        if (atlasKey) {
+            try {
+                const maskBase64 = await generateBboxMask(compressedImage, objects);
+                if (maskBase64) {
+                    const gptPrompt = bgDescription
+                        ? `Fill ONLY the masked areas. Do NOT alter pixels outside the mask. Background: ${bgDescription}. Match edge colors and extend textures seamlessly.`
+                        : `Fill ONLY the masked areas by extending surrounding background naturally. Do not alter anything outside the mask.`;
+                    const result = await callAtlasInpaint(gptPrompt, compressedImage, maskBase64, atlasKey);
+                    if (result) return result;
+                }
+            } catch (e) {
+                console.warn('[magicLayer] GPT Inpaint failed, falling back to Gemini', e);
+            }
+        }
+        return geminiInpaintBackground(compressedImage, objects, bgDescription, geminiApiKey, geminiImageModel)
+            .catch(e => { console.warn('[magicLayer] Background failed:', e); return null; });
+    })();
 
     // 所有物件平行去背
     const objectResults = await Promise.all(
         objects.map((obj, i) => {
             onProgress?.(`🎨 提取第 ${i + 1}/${objects.length} 層：${obj.label}`);
-            return extractOneLayer(obj, compressedImage, detectedRatio, atlasKey, falKey, onProgress);
+            return extractOneLayer(
+                obj,
+                compressedImage,
+                detectedRatio,
+                atlasKey,
+                falKey,
+                geminiApiKey,
+                geminiImageModel,
+                onProgress,
+            );
         })
     );
 

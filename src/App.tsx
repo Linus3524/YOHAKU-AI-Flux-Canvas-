@@ -385,21 +385,21 @@ const App: React.FC = () => {
   }, [falApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
 
-  // --- 魔法分層：GPT Image 2 語意提取 + 背景補圖 ---
+  // --- 魔法分層：語意提取 + 背景補圖（GPT Image 2 優先；無 Atlas Key 降級 Gemini）---
   const handleMagicLayer = useCallback(async (elementId: string) => {
-      if (!atlasApiKey) { showToast('魔法分層需要 Atlas Key（GPT Image 2 用）'); setShowKeyModal(true); return; }
       const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
       if (!el) return;
 
       setIsGenerating(true);
       setGeneratingElementIds([elementId]);
-      showToast('✨ 魔法分層啟動中...');
+      const modeLabel = atlasApiKey ? 'GPT Image 2' : 'Gemini';
+      showToast(`✨ 魔法分層啟動中（${modeLabel}）...`);
 
       try {
           const layers = await gptLayerSegment(
               el.src,
               effectiveApiKey || '',
-              atlasApiKey,
+              atlasApiKey || undefined,   // undefined → Gemini fallback
               falApiKey || undefined,
               (msg) => showToast(msg),
               imageModel,
@@ -417,15 +417,13 @@ const App: React.FC = () => {
               // 位置夾在 [0, 1] 安全範圍
               const clampedX = Math.max(0, Math.min(1, layer.cropRatioX));
               const clampedY = Math.max(0, Math.min(1, layer.cropRatioY));
-              // 尺寸：優先用 Gemini bbox（所見即所得，原圖比例精準）
-              // bboxW × el.width = 物件在原圖佔的實際寬度，不受 GPT 輸出比例影響
-              // width 用 bboxW，height 用 pixelH/pixelW native ratio 修正防止 Gemini 估算誤差
-              const rawW = isBackground ? el.width : Math.round((layer.bboxW ?? layer.cropRatioW) * el.width);
-              const layerW = rawW;
+              // 寬：cropRatioW × el.width（在原圖空間的比例縮放）
+              // 高：維持 GPT 輸出的原生像素比例（pixelH/pixelW），避免強套原圖 AR 造成變形
+              const layerW = isBackground ? el.width : Math.round(layer.cropRatioW * el.width);
               const layerH = isBackground ? el.height
-                  : (layer.pixelWidth && layer.pixelHeight && rawW > 0)
-                      ? Math.round(rawW * layer.pixelHeight / layer.pixelWidth)
-                      : Math.round((layer.bboxH ?? layer.cropRatioH) * el.height);
+                  : (layer.pixelWidth && layer.pixelHeight && layerW > 0)
+                      ? Math.round(layerW * layer.pixelHeight / layer.pixelWidth)
+                      : Math.round(layer.cropRatioH * el.height);
               // 中心點 = 圖層區塊左上角 + bbox 偏移 + 半寬/高
               const cx = isBackground
                   ? layerAreaLeft + el.width / 2
