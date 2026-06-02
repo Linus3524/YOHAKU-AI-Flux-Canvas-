@@ -32,6 +32,7 @@ import { downloadImageAsBase64, callAtlasImg2Img } from './utils/atlasImage';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import { birefnetRemoveBg } from './utils/geminiLayer';
 import { gptLayerSegment } from './utils/gptLayerSplit';
+import { detectTextBlocks } from './utils/ocrService';
 import type { 
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -460,6 +461,68 @@ const App: React.FC = () => {
           setGeneratingElementIds([]);
       }
   }, [atlasApiKey, effectiveApiKey, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+
+  // --- OCR 文字辨識轉換 ---
+  const handleOCRConvert = useCallback(async (elementId: string) => {
+      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
+      if (!el) return;
+
+      setIsGenerating(true);
+      setGeneratingElementIds([elementId]);
+      showToast('🔍 正在辨識文字...');
+
+      try {
+          const blocks = await detectTextBlocks(el.src, effectiveApiKey || '');
+          if (blocks.length === 0) { showToast('未偵測到文字'); return; }
+
+          const newTextElements: TextElement[] = blocks.map((block, i) => {
+              // 以圖片在畫布的實際像素換算 TextElement 的 position / width / height / fontSize
+              const imgLeft   = el.position.x - el.width  / 2;
+              const imgTop    = el.position.y - el.height / 2;
+
+              const blockW    = block.bbox.w * el.width;
+              const blockH    = block.bbox.h * el.height;
+              const blockX    = imgLeft + block.bbox.x * el.width  + blockW / 2;
+              const blockY    = imgTop  + block.bbox.y * el.height + blockH / 2;
+
+              // fontSize：區塊高度 / 行數 × 0.78（預留行距）
+              const fontSize  = Math.round((blockH / block.lines) * 0.78);
+
+              return {
+                  id: `ocr_${Date.now()}_${i}`,
+                  type: 'text' as const,
+                  text: block.text,
+                  position: { x: blockX, y: blockY },
+                  width:  blockW,
+                  height: blockH,
+                  rotation: 0,
+                  zIndex: el.zIndex + i + 1,
+                  isVisible: true,
+                  isLocked: false,
+                  name: `文字 ${i + 1}`,
+                  groupId: null,
+                  fontFamily: '"Noto Sans TC", sans-serif',
+                  fontSize: Math.max(8, Math.min(fontSize, 200)),
+                  color: block.colorHex,
+                  align: block.align,
+                  letterSpacing: 0,
+                  lineHeight: 1.3,
+                  isBold: block.isBold,
+                  isItalic: block.isItalic,
+                  isUnderline: false,
+                  isWidthLocked: true,
+              };
+          });
+
+          setElements(prev => [...prev, ...newTextElements]);
+          showToast(`✅ 辨識完成！新增 ${blocks.length} 個文字物件`);
+      } catch (e: any) {
+          showToast(`❌ 文字辨識失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
+      } finally {
+          setIsGenerating(false);
+          setGeneratingElementIds([]);
+      }
+  }, [effectiveApiKey, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
   // --- WRAPPED updateElements to Sync Outpainting Frame ---
   const updateElements = useCallback((updatedElement: CanvasElement, dragDelta?: Point) => {
@@ -1598,6 +1661,7 @@ const App: React.FC = () => {
             mergeLayers: handleMergeLayersOverride,
             extractPrompt: handleExtractPrompt,
             magicLayer: handleMagicLayer,
+            ocrConvert: handleOCRConvert,
             clearStorage: () => setShowClearConfirm(true),
           }}
           canChangeColor={canChangeColor}

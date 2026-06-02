@@ -50,6 +50,7 @@ interface ContextMenuProps {
     mergeLayers: () => void; 
     extractPrompt: (elementId: string) => void;
     magicLayer: (elementId: string) => void;
+    ocrConvert: (elementId: string) => void;
     clearStorage: () => void;
   };
   canChangeColor: boolean;
@@ -183,6 +184,7 @@ const MenuIcons = {
     </svg>
   ),
   Search: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
+  OCR: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9V4h5"/><path d="M15 4h5v5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="10" x2="12" y2="16"/></svg>,
 };
 
 const ASPECT_RATIOS = [
@@ -399,6 +401,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                 <div className="border-t my-1 border-gray-100/50" />
                                 <MenuItem icon={<MenuIcons.Wand />} onClick={() => handleAction(() => actions.magicLayer(menuData.elementId!))}>
                                     魔法分層
+                                </MenuItem>
+                                <MenuItem icon={<MenuIcons.OCR />} onClick={() => handleAction(() => actions.ocrConvert(menuData.elementId!))}>
+                                    文字辨識轉換
                                 </MenuItem>
                                 <MenuItem icon={<MenuIcons.Edit />} onClick={() => handleAction(() => actions.startImageEdit(menuData.elementId!))}>
                                     局部重繪與圖片編輯
