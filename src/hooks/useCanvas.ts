@@ -177,8 +177,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         addElement({
           type: 'note',
           position: position || getCenterOfViewport(),
-          width: 150,
-          height: 100,
+          width: 300,
+          height: 350,
           rotation: 0,
           content: '新筆記',
           color: COLORS.filter(c => c.name !== '透明')[Math.floor(Math.random() * (COLORS.length - 1))].bg,

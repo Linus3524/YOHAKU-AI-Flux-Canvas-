@@ -607,10 +607,13 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             el.width < 130 ? 'hidden' :
                             el.width < 210 ? 'compact' : 'full';
 
-                        // 字體/圖示大小隨元素寬度線性縮放
+                        // 字體/圖示大小隨元素寬度線性縮放，並加入反向縮放補償
+                        // 公式：css_size = max(base * scaleFactor, minScreen / zoom)
+                        // → 螢幕實際大小 = max(base * scaleFactor * zoom, minScreen)
                         const scaleFactor = Math.min(1, Math.max(0.7, (el.width - 130) / 200));
-                        const numFontSize  = Math.round(12 * scaleFactor);  // 數字大小
-                        const iconSize     = Math.round(14 * scaleFactor);  // 上傳圖示
+                        const MIN_REF = 9;   // 螢幕最小可讀大小 (px)
+                        const numFontSize  = Math.max(Math.round(12 * scaleFactor), MIN_REF / zoom);
+                        const iconSize     = Math.max(Math.round(14 * scaleFactor), MIN_REF / zoom);
                         const labelFontSize = Math.round(9 * scaleFactor);  // "上傳參考圖"
 
                         return (
@@ -618,10 +621,10 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                 {/* 參考圖區塊 */}
                                 {refMode !== 'hidden' && (isSelected || hasAnyRef) && (
                                     <div
-                                        className="px-2 pt-2 pb-1.5 flex-shrink-0"
+                                        className="px-3 pt-3 pb-2 flex-shrink-0"
                                         onMouseDown={e => e.stopPropagation()}
                                     >
-                                        <div className="grid grid-cols-4 gap-1.5">
+                                        <div className="grid grid-cols-4 gap-2">
                                             {[0,1,2,3].map(idx => {
                                                 const src = refImgs[idx];
                                                 return (
@@ -711,7 +714,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                             })}
                                         </div>
                                         {/* 分隔線：rgba 透明，自適應任何便利貼底色 */}
-                                        <div className="mt-1.5 border-t" style={{ borderColor: 'rgba(0,0,0,0.05)' }} />
+                                        <div className="mt-2.5 border-t" style={{ borderColor: 'rgba(0,0,0,0.05)' }} />
                                     </div>
                                 )}
 
@@ -722,7 +725,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                 */}
                                 {(() => {
                                     const BASE_FONT  = 15;   // 正常縮放下的字體大小 (px)
-                                    const MIN_SCREEN = 13;   // 螢幕最小可讀大小 (px)
+                                    const MIN_SCREEN = 12;   // 螢幕最小可讀大小 (px)
                                     const noteFontSize = Math.max(BASE_FONT, MIN_SCREEN / zoom);
                                     // padding 同步縮小，避免低縮放時 padding 過大
                                     const notePadH = Math.round(Math.max(12, 24 / zoom));
