@@ -42,7 +42,7 @@ const FEATURE_DOCS = [
     items: [
       { title: "一鍵生成圖片", desc: "框選圖片、手繪或便利貼，AI 根據內容生成高品質圖片。生成期間畫布不鎖定，可繼續操作其他物件。" },
       { title: "圖片逆向分析", desc: "右鍵點擊圖片選「提取提示詞」，AI 生成中英對照的詠唱咒語。" },
-      { title: "Magic Style 風格庫", desc: "內建 36+ 種藝術風格（賽博龐克、水彩、浮世繪等），一鍵套用至選取圖片。" },
+      { title: "Magic Style 風格庫", desc: "內建 110+ 種藝術風格，涵蓋 10 大分類：繪畫插畫、動漫漫畫、攝影底片、數位藝術、特殊材質、次文化少女暗黑、新世代潮流、節慶限定、歷史宗教、稀有新趨勢。一鍵套用至選取圖片，生成設定面板也可預設參考風格。" },
       { title: "風格複製", desc: "AI 解構色彩、光影、畫風等 10 個維度，提供紋理模式/藝術樣式/手動三種方式貼上。" },
       { title: "擴展圖片", desc: "拖曳外框定義擴展區域，AI 無縫填補空白處（支援自動發想提示詞）。" },
       { title: "智慧去背", desc: "右鍵選「快速去背」，優先使用 BiRefNet v2（需 fal.ai Key）精確分割主體；無 fal.ai Key 時改由 Gemini AI 分析去背。" },
@@ -404,7 +404,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   ))}
                   {/* Shortcuts */}
                   <div className="bg-gray-50 border border-gray-100 rounded-xl p-6 shadow-sm">
-                    <h3 className="text-[11px] font-bold text-yohaku-text-muted tracking-widest mb-4 uppercase">8. 常用快捷鍵 (SHORTCUTS)</h3>
+                    <h3 className="text-[11px] font-bold text-yohaku-text-muted tracking-widest mb-4 uppercase">{FEATURE_DOCS.length + 1}. 常用快捷鍵 (SHORTCUTS)</h3>
                     <div className="grid grid-cols-4 gap-3 text-center">
                       {SHORTCUTS.map((s, i) => (
                         <div key={i}>
