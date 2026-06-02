@@ -97,22 +97,22 @@ const AdjustmentSlider: React.FC<{
   onReset: () => void;
 }> = ({ label, value, defaultValue, min, max, onChange, onReset }) => {
   const isModified = value !== defaultValue;
+  // Parse "亮度 (Brightness)" → ["亮度", "Brightness"]
+  const match = label.match(/^(.+?)\s*\((.+)\)$/);
+  const labelMain = match ? match[1].trim() : label;
+  const labelEn = match ? match[2] : '';
   return (
     <div className="w-full">
-      <div className="flex justify-between items-center mb-1.5">
-        <label className="text-xs font-bold text-[#86868B] uppercase tracking-wide">{label}</label>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-[#1D1D1F] w-8 text-right">{value.toFixed(0)}</span>
+      <div className="flex justify-between items-center">
+        <span className="text-[11px] font-bold text-gray-600 uppercase">
+          {labelMain}
+          {labelEn && <span className="text-gray-400 font-normal ml-1">({labelEn})</span>}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-bold text-gray-900 w-6 text-right">{value.toFixed(0)}</span>
           {isModified && (
-            <button
-              onClick={onReset}
-              className="text-[10px] text-[#007AFF] hover:underline transition-opacity"
-              title="重置"
-            >
-              重置
-            </button>
+            <button onClick={onReset} className="text-[10px] text-blue-500 hover:underline" title="重置">重置</button>
           )}
-          {!isModified && <span className="w-7" />}
         </div>
       </div>
       <input
@@ -121,7 +121,7 @@ const AdjustmentSlider: React.FC<{
         max={max}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black hover:accent-gray-800 transition-all"
+        className="img-editor-slider"
       />
     </div>
   );
@@ -134,18 +134,18 @@ const CollapsibleSection: React.FC<{
 }> = ({ title, defaultOpen = true, children }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div>
+    <div className="py-4 border-b border-gray-100 last:border-b-0">
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between py-1 mb-2 group"
+        className="w-full flex items-center justify-between mb-4 cursor-pointer group"
       >
-        <span className="text-xs font-bold text-[#86868B] uppercase tracking-wider">{title}</span>
+        <h3 className="text-[11px] font-bold text-gray-400 tracking-widest uppercase">{title}</h3>
         <svg
-          width="12" height="12" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-          className={`text-[#86868B] transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
+          width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          className={`text-gray-400 group-hover:text-gray-600 transition-transform duration-200 ${open ? '' : 'rotate-180'}`}
         >
-          <polyline points="6 9 12 15 18 9" />
+          <polyline points="18 15 12 9 6 15" />
         </svg>
       </button>
       {open && <div className="space-y-4">{children}</div>}
@@ -930,316 +930,329 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
   }, [adjustments, areAdjustmentsBaked]);
 
 
+  // ── dot sizes for brush size selector
+  const dotSizeMap: Record<number, string> = { 10: 'w-1.5 h-1.5', 20: 'w-2.5 h-2.5', 40: 'w-3.5 h-3.5', 60: 'w-[18px] h-[18px]' };
+
   return (
-    <div className="absolute inset-0 z-[4000] bg-[#F5F5F7]/90 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-7xl h-[95vh] flex flex-col overflow-hidden border border-black/5" onClick={e => e.stopPropagation()}>
-        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white flex-shrink-0">
-          <h2 className="text-xl font-bold text-[#1D1D1F]">局部重繪與圖片編輯</h2>
+    <div className="fixed inset-0 z-[7000] bg-[#F5F5F7]/90 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
+      {/* Custom slider CSS */}
+      <style>{`
+        .img-editor-slider { -webkit-appearance:none; appearance:none; width:100%; height:4px; background:#e2e8f0; border-radius:2px; outline:none; margin:12px 0; cursor:pointer; }
+        .img-editor-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%; background:#3b82f6; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.2); border:2px solid white; transition:transform .1s; }
+        .img-editor-slider::-webkit-slider-thumb:hover { transform:scale(1.2); }
+        .img-editor-scrollbar::-webkit-scrollbar { width:6px; }
+        .img-editor-scrollbar::-webkit-scrollbar-track { background:transparent; }
+        .img-editor-scrollbar::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:10px; }
+        .img-editor-tool-btn { color:#64748b; border-radius:8px; transition:all .2s; }
+        .img-editor-tool-btn:hover { background:#f1f5f9; color:#1e293b; }
+        .img-editor-tool-btn.active { background:#1e293b; color:white; box-shadow:0 2px 4px rgba(0,0,0,.1); }
+        .img-editor-prompt:focus-within { border-color:#a855f7; box-shadow:0 0 0 3px rgba(168,85,247,.1); }
+      `}</style>
+
+      <div
+        className="bg-white border border-black/[0.08] rounded-[24px] w-full max-w-[1300px] h-[88vh] flex flex-col overflow-hidden"
+        style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.15), inset 0 0 0 1px rgba(255,255,255,0.8)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Header ── */}
+        <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100 bg-white flex-shrink-0">
           <div className="flex items-center gap-3">
-            {/* Engine toggle in header — always visible */}
-            {canSwitchEngine && (
-              <div className="flex items-center bg-[#F5F5F7] rounded-lg p-0.5 border border-gray-100">
-                <button
-                  onClick={() => setInpaintEngine('gpt')}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${inpaintEngine === 'gpt' ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
-                >GPT Image 2</button>
-                <button
-                  onClick={() => { if (apiKey) setInpaintEngine('gemini'); }}
-                  disabled={!apiKey}
-                  title={!apiKey ? '需要 Gemini API Key' : ''}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${inpaintEngine === 'gemini' ? 'bg-white text-[#1D1D1F] shadow-sm' : !apiKey ? 'text-gray-300 cursor-not-allowed' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
-                >Gemini</button>
+            <h1 className="text-[16px] font-bold text-gray-900">局部重繪與圖片編輯</h1>
+
+            {/* Model / Engine switcher */}
+            {canSwitchEngine ? (
+              <div className="relative flex items-center bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                <div className="pl-2.5 pr-2 py-1 border-r border-gray-200 flex items-center pointer-events-none">
+                  <span className="text-[10px] font-medium text-gray-500">Model</span>
+                </div>
+                <div className="relative">
+                  <select
+                    value={inpaintEngine}
+                    onChange={e => {
+                      const val = e.target.value as 'gpt' | 'gemini';
+                      if (val === 'gemini' && !apiKey) return;
+                      setInpaintEngine(val);
+                    }}
+                    className="appearance-none bg-transparent py-1 pl-2 pr-6 text-[11px] font-bold text-purple-600 focus:outline-none cursor-pointer"
+                  >
+                    <option value="gpt">GPT Image 2</option>
+                    <option value="gemini" disabled={!apiKey}>Gemini{!apiKey ? ' (需 API Key)' : ''}</option>
+                  </select>
+                  <svg className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </div>
               </div>
-            )}
-            <button onClick={onClose} className="text-[#86868B] hover:text-[#1D1D1F] text-2xl leading-none transition-colors">&times;</button>
+            ) : apiKey ? (
+              <div className="flex items-center bg-gray-50 border border-gray-200 rounded-md px-2.5 py-1">
+                <span className="text-[10px] font-medium text-gray-500 mr-2 border-r border-gray-200 pr-2">Model</span>
+                <span className="text-[11px] font-bold text-purple-600">Gemini</span>
+              </div>
+            ) : null}
           </div>
+
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-800 transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
         </div>
-        
-        <div className="flex flex-row flex-grow min-h-0">
+
+        {/* ── Body ── */}
+        <div className="flex-1 flex overflow-hidden">
+
+          {/* ── Left: Canvas + AI command ── */}
+          <div className="flex-1 flex flex-col p-6 bg-[#f8fafc] overflow-hidden gap-4">
+
+            {/* Canvas */}
             <div
-                ref={containerRef}
-                className={`flex-grow p-6 bg-[#FAFAFA] overflow-hidden relative select-none ${cursorClass}`}
-                onMouseDown={startDrawing}
-                onMouseUp={finishDrawing}
-                onMouseLeave={finishDrawing}
-                onMouseMove={draw}
-                onWheel={handleWheel}
+              ref={containerRef}
+              className={`flex-1 rounded-2xl border border-gray-200 overflow-hidden relative select-none ${cursorClass}`}
+              style={{
+                backgroundColor: '#f8fafc',
+                backgroundImage: 'linear-gradient(45deg,#e2e8f0 25%,transparent 25%),linear-gradient(-45deg,#e2e8f0 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e2e8f0 75%),linear-gradient(-45deg,transparent 75%,#e2e8f0 75%)',
+                backgroundSize: '20px 20px',
+                backgroundPosition: '0 0,0 10px,10px -10px,-10px 0px',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.04)',
+              }}
+              onMouseDown={startDrawing}
+              onMouseUp={finishDrawing}
+              onMouseLeave={finishDrawing}
+              onMouseMove={draw}
+              onWheel={handleWheel}
             >
-            {(isLoading || isBaking || isAdjusting) && (
-                    <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-sm flex flex-col items-center justify-center text-[#1D1D1F]">
-                        <svg className="animate-spin h-10 w-10 text-black mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <p className="text-lg font-semibold">{isAdjusting ? "套用調整中..." : (isBaking && !isLoading ? "套用調整中..." : "正在編輯...")}</p>
-                    </div>
-                )}
-                
-                {previewImageSrc ? (
-                    <div className="w-full h-full flex items-center justify-center relative">
-                        <img 
-                            src={showOriginalComparison ? currentImageSrc : previewImageSrc} 
-                            alt="Preview" 
-                            className="object-contain max-w-full max-h-full shadow-lg rounded-lg transition-opacity duration-200" 
-                        />
-                        {showOriginalComparison && (
-                            <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium backdrop-blur-md">
-                                原圖
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <div
-                        className="relative"
-                        style={{
-                            width: imageRef.current?.naturalWidth,
-                            height: imageRef.current?.naturalHeight,
-                            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                            transformOrigin: 'top left',
-                        }}
-                    >
-                        <div className="relative w-full h-full shadow-2xl shadow-black/5" style={imageFilterStyle}>
-                            <img ref={imageRef} src={imageSrcForDisplay} alt="Editable" className="block pointer-events-none max-w-none" />
-                             {!areAdjustmentsBaked && adjustments.temperature > 0 && (
-                                <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(255, 165, 0)', opacity: adjustments.temperature / 100, mixBlendMode: 'overlay' }} />
-                            )}
-                            {!areAdjustmentsBaked && adjustments.temperature < 0 && (
-                                <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(0, 100, 255)', opacity: -adjustments.temperature / 100, mixBlendMode: 'overlay' }} />
-                            )}
-                             {!areAdjustmentsBaked && adjustments.tint > 0 && (
-                                <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(255, 0, 255)', opacity: adjustments.tint / 100, mixBlendMode: 'overlay' }} />
-                            )}
-                            {!areAdjustmentsBaked && adjustments.tint < 0 && (
-                                <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(0, 255, 0)', opacity: -adjustments.tint / 100, mixBlendMode: 'overlay' }} />
-                            )}
-                        </div>
-                        <canvas
-                            ref={maskCanvasRef}
-                            className={`absolute top-0 left-0 pointer-events-none transition-opacity duration-200 ${isMaskVisible ? 'opacity-100' : 'opacity-0'}`}
-                        />
-                    </div>
-                )}
-            </div>
+              {/* Loading overlay */}
+              {(isLoading || isBaking || isAdjusting) && (
+                <div className="absolute inset-0 z-30 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center text-gray-800">
+                  <svg className="animate-spin h-9 w-9 text-gray-800 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <p className="text-[14px] font-semibold text-gray-700">
+                    {isAdjusting ? '套用調整中...' : isBaking && !isLoading ? '套用調整中...' : '正在編輯...'}
+                  </p>
+                </div>
+              )}
 
-            <div className="w-[300px] flex-shrink-0 border-l border-gray-100 bg-white flex flex-col">
-                 <div className="flex-grow p-5 space-y-5 overflow-y-auto">
-                    <div className="flex items-center justify-between">
-                         <h3 className="text-sm font-bold text-[#1D1D1F] uppercase tracking-wider">調整參數</h3>
-                         <button onClick={() => setAdjustments(defaultAdjustments)} className="text-xs text-[#007AFF] hover:underline">重置所有</button>
-                    </div>
-                    
-                    <CollapsibleSection title="基本" defaultOpen={true}>
-                     <AdjustmentSlider label="亮度 (Brightness)" value={adjustments.brightness} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({...a, brightness: val}))} onReset={() => setAdjustments(a => ({...a, brightness: 100}))} />
-                     <AdjustmentSlider label="對比 (Contrast)" value={adjustments.contrast} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({...a, contrast: val}))} onReset={() => setAdjustments(a => ({...a, contrast: 100}))} />
-                     <AdjustmentSlider label="飽和度 (Saturation)" value={adjustments.saturation} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({...a, saturation: val}))} onReset={() => setAdjustments(a => ({...a, saturation: 100}))} />
-                    </CollapsibleSection>
+              {/* Image / Preview display */}
+              {previewImageSrc ? (
+                <div className="w-full h-full flex items-center justify-center relative">
+                  <img
+                    src={showOriginalComparison ? currentImageSrc : previewImageSrc}
+                    alt="Preview"
+                    className="object-contain max-w-full max-h-full shadow-lg rounded-lg transition-opacity duration-200"
+                  />
+                  {showOriginalComparison && (
+                    <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium backdrop-blur-md">原圖</div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  className="relative"
+                  style={{
+                    width: imageRef.current?.naturalWidth,
+                    height: imageRef.current?.naturalHeight,
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    transformOrigin: 'top left',
+                  }}
+                >
+                  <div className="relative w-full h-full" style={imageFilterStyle}>
+                    <img ref={imageRef} src={imageSrcForDisplay} alt="Editable" className="block pointer-events-none max-w-none" />
+                    {!areAdjustmentsBaked && adjustments.temperature > 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(255,165,0)', opacity: adjustments.temperature / 100, mixBlendMode: 'overlay' }} />}
+                    {!areAdjustmentsBaked && adjustments.temperature < 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(0,100,255)', opacity: -adjustments.temperature / 100, mixBlendMode: 'overlay' }} />}
+                    {!areAdjustmentsBaked && adjustments.tint > 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(255,0,255)', opacity: adjustments.tint / 100, mixBlendMode: 'overlay' }} />}
+                    {!areAdjustmentsBaked && adjustments.tint < 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(0,255,0)', opacity: -adjustments.tint / 100, mixBlendMode: 'overlay' }} />}
+                  </div>
+                  <canvas ref={maskCanvasRef} className={`absolute top-0 left-0 pointer-events-none transition-opacity duration-200 ${isMaskVisible ? 'opacity-100' : 'opacity-0'}`} />
+                </div>
+              )}
 
-                    <div className="h-px bg-gray-100 w-full" />
-
-                    <CollapsibleSection title="色彩" defaultOpen={true}>
-                     <AdjustmentSlider label="色溫 (Temperature)" value={adjustments.temperature} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({...a, temperature: val}))} onReset={() => setAdjustments(a => ({...a, temperature: 0}))} />
-                     <AdjustmentSlider label="色調 (Tint)" value={adjustments.tint} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({...a, tint: val}))} onReset={() => setAdjustments(a => ({...a, tint: 0}))} />
-                    </CollapsibleSection>
-
-                    <div className="h-px bg-gray-100 w-full" />
-
-                    <CollapsibleSection title="細節" defaultOpen={false}>
-                     <AdjustmentSlider label="亮部 (Highlight)" value={adjustments.highlight} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({...a, highlight: val}))} onReset={() => setAdjustments(a => ({...a, highlight: 0}))} />
-                     <AdjustmentSlider label="陰影 (Shadow)" value={adjustments.shadow} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({...a, shadow: val}))} onReset={() => setAdjustments(a => ({...a, shadow: 0}))} />
-                     <AdjustmentSlider label="銳化 (Sharpness)" value={adjustments.sharpness} defaultValue={0} min={0} max={100} onChange={val => setAdjustments(a => ({...a, sharpness: val}))} onReset={() => setAdjustments(a => ({...a, sharpness: 0}))} />
-                    </CollapsibleSection>
-                 </div>
-            </div>
-        </div>
-
-
-        <div className="p-4 border-t border-gray-100 flex flex-wrap items-center gap-4 bg-white flex-shrink-0">
-         {previewImageSrc ? (
-            <div className="w-full flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <p className="text-sm font-semibold text-[#1D1D1F]">預覽結果</p>
-                    <button 
+              {/* ── Floating pill toolbar ── */}
+              {!isLoading && !isBaking && (
+                <div
+                  className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md border border-gray-100 rounded-full px-4 py-2 flex items-center gap-4 z-20"
+                  style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}
+                  onMouseDown={e => e.stopPropagation()}
+                  onPointerDown={e => e.stopPropagation()}
+                >
+                  {previewImageSrc ? (
+                    /* ── Preview controls ── */
+                    <>
+                      <button
                         onMouseDown={() => setShowOriginalComparison(true)}
                         onMouseUp={() => setShowOriginalComparison(false)}
                         onMouseLeave={() => setShowOriginalComparison(false)}
-                        onTouchStart={() => setShowOriginalComparison(true)}
-                        onTouchEnd={() => setShowOriginalComparison(false)}
-                        className="px-3 py-1.5 text-xs font-medium text-[#007AFF] bg-[#007AFF]/10 hover:bg-[#007AFF]/20 rounded-full transition-colors active:scale-95 flex items-center gap-1 cursor-pointer select-none"
-                    >
+                        className="img-editor-tool-btn w-8 h-8 flex items-center justify-center select-none"
+                        title="按住查看原圖"
+                      >
                         <EditIcons.Eye />
-                        按住查看原圖
-                    </button>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={handleDiscardPreview} disabled={isLoading} className="px-4 py-2 text-sm font-medium text-[#1D1D1F] bg-[#F5F5F7] hover:bg-[#E5E5E5] rounded-full transition-all">捨棄</button>
-                    <button onClick={handleRegenerate} disabled={isLoading} className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-full transition-all shadow-md">重新生成</button>
-                    <button onClick={handleApplyPreview} disabled={isLoading} className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-full transition-all shadow-md">套用並繼續</button>
-                    <button onClick={handleSave} disabled={isLoading || isBaking} className="px-4 py-2 text-sm font-medium text-white bg-black hover:bg-gray-800 rounded-full transition-all shadow-md">儲存為新圖片</button>
-                </div>
-            </div>
-         ) : (
-            <>
-              <div className="w-full flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4 flex-nowrap overflow-x-auto scrollbar-hide py-1">
-                    {/* Tool Selection - Text Labels */}
-                    <div className="flex items-center bg-[#F5F5F7] rounded-lg p-1 border border-gray-100 flex-shrink-0">
-                        <button 
-                            onClick={() => setTool('brush')} 
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${tool === 'brush' ? 'bg-black text-white shadow-md' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
-                            title="筆刷 (Brush)"
+                      </button>
+                      <div className="w-px h-5 bg-gray-200" />
+                      <button onClick={handleDiscardPreview} className="img-editor-tool-btn px-3 py-1 text-[12px] font-medium rounded-lg">捨棄</button>
+                      <button onClick={handleRegenerate} className="img-editor-tool-btn px-3 py-1 text-[12px] font-medium rounded-lg text-orange-500 hover:bg-orange-50">重新生成</button>
+                      <button onClick={handleApplyPreview} className="img-editor-tool-btn px-3 py-1 text-[12px] font-medium rounded-lg text-green-600 hover:bg-green-50">套用並繼續</button>
+                      <div className="w-px h-5 bg-gray-200" />
+                      <span className="text-[11px] text-gray-400 font-medium">預覽結果</span>
+                    </>
+                  ) : (
+                    /* ── Drawing controls ── */
+                    <>
+                      {/* Tool buttons */}
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          onClick={() => setTool('brush')}
+                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${tool === 'brush' ? ' active' : ''}`}
+                          title="筆刷"
                         >
-                            筆刷
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z" /><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="M2 2l7.586 7.586" /><circle cx="11" cy="11" r="2" /></svg>
                         </button>
-                        <button 
-                            onClick={() => setTool('eraser')} 
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${tool === 'eraser' ? 'bg-black text-white shadow-md' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
-                            title="橡皮擦 (Eraser)"
+                        <button
+                          onClick={() => setTool('eraser')}
+                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${tool === 'eraser' ? ' active' : ''}`}
+                          title="橡皮擦"
                         >
-                            橡皮擦
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" /><line x1="22" y1="21" x2="7" y2="21" /><line x1="5" y1="11" x2="14" y2="20" /></svg>
                         </button>
-                        <button 
-                            onClick={() => setTool('hand')} 
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${tool === 'hand' ? 'bg-black text-white shadow-md' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
-                            title="抓手 (Hand Tool)"
+                        <button
+                          onClick={() => setTool('hand')}
+                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${tool === 'hand' ? ' active' : ''}`}
+                          title="抓手"
                         >
-                            抓手
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" /><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" /><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" /></svg>
                         </button>
-                    </div>
-
-                    {/* Brush Size */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider hidden sm:inline">Size</span>
-                      <div className="flex items-center gap-1 bg-[#F5F5F7] p-1 rounded-full border border-gray-100">
-                          {BRUSH_SIZES.map(size => (
-                              <button key={size} onClick={() => setBrushSize(size)} className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${brushSize === size ? 'bg-white shadow-sm ring-1 ring-black/5' : 'hover:bg-white/50'}`}>
-                                  <span className="block rounded-full bg-[#1D1D1F]" style={{ width: Math.max(2, size/3), height: Math.max(2, size/3) }}></span>
-                              </button>
-                          ))}
                       </div>
-                    </div>
 
-                    <div className="w-px h-6 bg-gray-200 flex-shrink-0" />
+                      <div className="w-px h-5 bg-gray-200" />
 
-                    {/* Zoom Control */}
-                     <div className="flex items-center gap-2 text-sm flex-shrink-0">
-                         <span className="text-[#86868B] hidden sm:inline">縮放</span>
-                         <input type="range" min={MIN_ZOOM} max={MAX_ZOOM} step="0.01" value={zoom} onChange={(e) => handleZoomSlider(parseFloat(e.target.value))} className="w-16 accent-black" />
-                         <span className="w-8 text-right font-mono text-[#1D1D1F] text-xs">{(zoom * 100).toFixed(0)}%</span>
-                     </div>
+                      {/* Brush size dots */}
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Size</span>
+                        <div className="flex items-center gap-2.5">
+                          {BRUSH_SIZES.map(size => (
+                            <div
+                              key={size}
+                              onClick={() => setBrushSize(size)}
+                              className={`rounded-full cursor-pointer transition-all ${dotSizeMap[size] || 'w-3 h-3'} ${brushSize === size ? 'bg-[#1e293b]' : 'bg-[#cbd5e1] hover:bg-[#94a3b8]'}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
 
-                    <div className="w-px h-6 bg-gray-200 flex-shrink-0" />
+                      <div className="w-px h-5 bg-gray-200" />
 
-                    {/* History & Actions */}
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button onClick={undo} disabled={!canUndo} className="p-1.5 rounded-md text-[#1D1D1F] hover:bg-[#F5F5F7] disabled:text-gray-300 disabled:bg-transparent transition-all" title="復原"><EditIcons.Undo /></button>
-                      <button onClick={redo} disabled={!canRedo} className="p-1.5 rounded-md text-[#1D1D1F] hover:bg-[#F5F5F7] disabled:text-gray-300 disabled:bg-transparent transition-all" title="重做"><EditIcons.Redo /></button>
-                      
-                      <button onClick={clearMask} className="p-1.5 rounded-md text-[#1D1D1F] hover:bg-[#F5F5F7] transition-all ml-1" title="清除筆跡"><EditIcons.Trash /></button>
-                       <button 
-                            onClick={() => setIsMaskVisible(!isMaskVisible)} 
-                            className={`p-1.5 rounded-md transition-all ml-1 ${isMaskVisible ? 'text-red-500 bg-red-50' : 'text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#F5F5F7]'}`}
-                            title={isMaskVisible ? '隱藏遮罩' : '顯示遮罩'}
+                      {/* Actions */}
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={undo} disabled={!canUndo} className="img-editor-tool-btn w-8 h-8 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed" title="復原"><EditIcons.Undo /></button>
+                        <button onClick={redo} disabled={!canRedo} className="img-editor-tool-btn w-8 h-8 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed" title="重做"><EditIcons.Redo /></button>
+                        <button onClick={clearMask} className="img-editor-tool-btn w-8 h-8 flex items-center justify-center hover:text-red-500" title="清除遮罩"><EditIcons.Trash /></button>
+                        <button
+                          onClick={() => setIsMaskVisible(!isMaskVisible)}
+                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${isMaskVisible ? ' text-purple-600 bg-purple-50' : ''}`}
+                          title={isMaskVisible ? '隱藏遮罩' : '顯示遮罩'}
                         >
-                            {isMaskVisible ? <EditIcons.Eye /> : <EditIcons.EyeOff />}
+                          {isMaskVisible ? <EditIcons.Eye /> : <EditIcons.EyeOff />}
                         </button>
-                    </div>
+                      </div>
+
+                      <div className="w-px h-5 bg-gray-200" />
+
+                      {/* Zoom % */}
+                      <span className="text-[12px] text-gray-500 font-medium w-9 text-right tabular-nums">{(zoom * 100).toFixed(0)}%</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ── AI Command card (hidden in preview mode) ── */}
+            {!previewImageSrc && (
+              <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex gap-4 flex-shrink-0 img-editor-prompt transition-all">
+                {/* Left: textarea + reference */}
+                <div className="flex-1 flex flex-col gap-3 min-w-0">
+                  <textarea
+                    rows={2}
+                    value={prompt}
+                    onChange={e => {
+                      setPrompt(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                    }}
+                    placeholder={
+                      referenceImages.length > 0
+                        ? '✨ 已有參考圖，可額外補充描述（選填）...'
+                        : pendingAction === 'remove'
+                        ? '✨ 描述移除後希望填補的背景內容（選填）...'
+                        : '✨ 輸入描述，或上傳參考圖指定替換物件，再點選右側按鈕...'
+                    }
+                    className="w-full bg-transparent border-none text-[14px] text-gray-800 focus:outline-none resize-none placeholder-gray-400 leading-relaxed"
+                    style={{ minHeight: '52px' }}
+                  />
+
+                  {/* Reference images row */}
+                  <div className="flex items-center gap-2 flex-wrap border-t border-gray-50 pt-3">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex-shrink-0">參考圖</span>
+
+                    {/* Thumbnails */}
+                    {referenceImages.map((src, idx) => (
+                      <div key={idx} className="relative w-9 h-9 flex-shrink-0 rounded-lg overflow-hidden border border-gray-200 group">
+                        <img src={src} alt={`參考圖 ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          onClick={() => setReferenceImages(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold"
+                          title="移除"
+                        >×</button>
+                      </div>
+                    ))}
+
+                    {/* Add buttons */}
+                    {referenceImages.length < MAX_REFERENCE_IMAGES && (
+                      <>
+                        <button
+                          onClick={() => refFileInputRef.current?.click()}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 transition-colors"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                          上傳
+                        </button>
+                        {canvasImages.filter(img => img.id !== element.id).length > 0 && (
+                          <button
+                            onClick={() => setShowCanvasPicker(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 transition-colors"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                            從畫布
+                          </button>
+                        )}
+                      </>
+                    )}
+
+                    <span className="text-[11px] text-gray-400 ml-1 hidden lg:inline">
+                      {referenceImages.length > 0
+                        ? `${referenceImages.length}/${MAX_REFERENCE_IMAGES} 張・AI 將把遮罩區替換成參考圖的物件或風格`
+                        : '可上傳參考圖，讓 AI 將遮罩區替換成指定物件或套用風格'}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-[#1D1D1F] bg-[#F5F5F7] hover:bg-[#E5E5E5] rounded-full transition-all">取消</button>
-                    <button onClick={handleSave} disabled={isBaking} className="px-4 py-2 text-sm font-medium text-white bg-black hover:bg-gray-800 rounded-full transition-all shadow-md">儲存為新圖片</button>
-                </div>
-              </div>
+                <div className="w-px bg-gray-100 flex-shrink-0" />
 
-              {/* Prompt + action buttons */}
-              <div className="w-full flex items-start gap-3 mt-1">
-                <textarea
-                  rows={3}
-                  value={prompt}
-                  onChange={e => {
-                    setPrompt(e.target.value);
-                    e.target.style.height = 'auto';
-                    e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
-                  }}
-                  placeholder={
-                    referenceImages.length > 0
-                      ? '✨ 已有參考圖，可額外補充描述（選填）：例如「調整成暖色調」...'
-                      : pendingAction === 'remove'
-                      ? '✨ 描述移除後希望填補的背景內容（選填）...'
-                      : pendingAction === 'edit'
-                      ? '✨ 描述想要替換的內容，或上傳參考圖直接指定物件...'
-                      : '✨ 輸入描述，或上傳參考圖指定替換物件，再點選右側按鈕...'
-                  }
-                  className="flex-grow p-3 bg-[#F5F5F7] border border-transparent focus:bg-white focus:border-black/10 focus:ring-4 focus:ring-black/5 rounded-xl transition-all outline-none text-sm resize-none leading-relaxed"
-                  style={{ minHeight: '76px' }}
-                />
-                <div className="flex flex-col gap-2 flex-shrink-0">
+                {/* Right: action buttons */}
+                <div className="flex flex-col gap-2 w-[124px] justify-center flex-shrink-0">
                   <button
                     onClick={() => { setPendingAction('edit'); handleSubmit('edit'); }}
                     disabled={isLoading || isBaking}
-                    className="px-5 py-2.5 text-sm font-semibold text-white bg-[#AF52DE] hover:bg-[#9F42CE] rounded-full transition-all shadow-md disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
+                    className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-[13px] font-bold rounded-xl shadow-md transition-all hover:shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-wait"
                   >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                     編輯物件
                   </button>
                   <button
                     onClick={() => { setPendingAction('remove'); handleSubmit('remove'); }}
                     disabled={isLoading || isBaking}
-                    className="px-5 py-2.5 text-sm font-semibold text-[#FF3B30] bg-white border border-[#FF3B30]/40 hover:bg-[#FF3B30]/5 rounded-full transition-all disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
+                    className="w-full py-2.5 bg-white border-2 border-red-100 hover:bg-red-50 text-red-500 text-[13px] font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-wait"
                   >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
                     移除物件
                   </button>
                 </div>
-              </div>
 
-              {/* Reference images row */}
-              <div className="w-full flex items-center gap-2 mt-1 relative">
-                <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide flex-shrink-0">參考圖</span>
-                <div className="flex items-center gap-2">
-                  {/* Existing reference thumbnails */}
-                  {referenceImages.map((src, idx) => (
-                    <div key={idx} className="relative w-10 h-10 flex-shrink-0 rounded-lg overflow-hidden border border-gray-200 group">
-                      <img src={src} alt={`參考圖 ${idx + 1}`} className="w-full h-full object-cover" />
-                      <button
-                        onClick={() => setReferenceImages(prev => prev.filter((_, i) => i !== idx))}
-                        className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold rounded-lg"
-                        title="移除"
-                      >×</button>
-                    </div>
-                  ))}
-
-                  {/* Add buttons */}
-                  {referenceImages.length < MAX_REFERENCE_IMAGES && (
-                    <>
-                      <button
-                        onClick={() => refFileInputRef.current?.click()}
-                        className="h-10 px-3 flex items-center gap-1.5 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 text-gray-500 hover:text-gray-600 transition-colors text-xs font-medium whitespace-nowrap"
-                        title="從本機上傳圖片"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        上傳
-                      </button>
-                      {canvasImages.filter(img => img.id !== element.id).length > 0 && (
-                        <button
-                          onClick={() => setShowCanvasPicker(true)}
-                          className="h-10 px-3 flex items-center gap-1.5 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 text-gray-500 hover:text-gray-600 transition-colors text-xs font-medium whitespace-nowrap"
-                          title="從畫布現有圖片選取"
-                        >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                          從畫布
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {referenceImages.length > 0 && (
-                  <span className="text-[10px] text-[#86868B]">{referenceImages.length}/{MAX_REFERENCE_IMAGES} 張・AI 將把遮罩區替換成參考圖的物件或風格</span>
-                )}
-                {referenceImages.length === 0 && (
-                  <span className="text-[10px] text-[#86868B]">選填・可上傳參考圖，讓 AI 將遮罩區替換成指定物件或套用參考風格</span>
-                )}
-
-                {/* Hidden file input for local upload */}
+                {/* Hidden file input */}
                 <input
                   ref={refFileInputRef}
                   type="file"
@@ -1260,64 +1273,105 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
                   }}
                 />
               </div>
+            )}
+          </div>
 
-              {/* Canvas image picker popup */}
-              {showCanvasPicker && (
-                <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowCanvasPicker(false)}>
-                  <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 w-[480px] max-h-[60vh] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between flex-shrink-0">
-                      <div>
-                        <p className="text-sm font-bold text-[#1D1D1F]">從畫布選取參考圖</p>
-                        <p className="text-xs text-[#86868B] mt-0.5">最多可再選 {MAX_REFERENCE_IMAGES - referenceImages.length} 張</p>
-                      </div>
-                      <button onClick={() => setShowCanvasPicker(false)} className="text-[#86868B] hover:text-[#1D1D1F] text-xl leading-none transition-colors">&times;</button>
-                    </div>
-                    <div className="overflow-y-auto grid grid-cols-4 gap-3">
-                      {canvasImages.filter(img => img.id !== element.id).map(img => {
-                        const alreadySelected = referenceImages.includes(img.src);
-                        const canSelect = !alreadySelected && referenceImages.length < MAX_REFERENCE_IMAGES;
-                        return (
-                          <button
-                            key={img.id}
-                            disabled={!canSelect && !alreadySelected}
-                            onClick={() => {
-                              if (alreadySelected) {
-                                setReferenceImages(prev => prev.filter(s => s !== img.src));
-                              } else if (canSelect) {
-                                setReferenceImages(prev => [...prev, img.src]);
-                              }
-                            }}
-                            className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
-                              alreadySelected
-                                ? 'border-[#AF52DE] ring-2 ring-[#AF52DE]/30'
-                                : canSelect
-                                ? 'border-transparent hover:border-gray-300'
-                                : 'border-transparent opacity-40 cursor-not-allowed'
-                            }`}
-                          >
-                            <img src={img.src} alt={img.name || '圖片'} className="w-full h-full object-cover" />
-                            {alreadySelected && (
-                              <div className="absolute inset-0 bg-[#AF52DE]/20 flex items-center justify-center">
-                                <div className="w-6 h-6 rounded-full bg-[#AF52DE] text-white flex items-center justify-center text-xs font-bold">✓</div>
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <button
-                      onClick={() => setShowCanvasPicker(false)}
-                      className="flex-shrink-0 w-full py-2.5 text-sm font-semibold text-white bg-black hover:bg-gray-800 rounded-full transition-all"
-                    >
-                      確認 ({referenceImages.length} 張已選)
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-         )}
+          {/* ── Right: params panel ── */}
+          <div className="w-[320px] bg-white border-l border-gray-100 flex flex-col flex-shrink-0">
+            <div className="px-5 py-4 flex items-center justify-between border-b border-gray-50 flex-shrink-0">
+              <h2 className="text-[14px] font-bold text-gray-800">調整參數</h2>
+              <button onClick={() => setAdjustments(defaultAdjustments)} className="text-[12px] font-medium text-blue-500 hover:text-blue-700 transition-colors">重置所有</button>
+            </div>
+
+            {/* Scrollable sliders */}
+            <div className="flex-1 overflow-y-auto px-5 py-1 img-editor-scrollbar">
+              <CollapsibleSection title="基本" defaultOpen={true}>
+                <AdjustmentSlider label="亮度 (Brightness)" value={adjustments.brightness} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({ ...a, brightness: val }))} onReset={() => setAdjustments(a => ({ ...a, brightness: 100 }))} />
+                <AdjustmentSlider label="對比 (Contrast)" value={adjustments.contrast} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({ ...a, contrast: val }))} onReset={() => setAdjustments(a => ({ ...a, contrast: 100 }))} />
+                <AdjustmentSlider label="飽和度 (Saturation)" value={adjustments.saturation} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({ ...a, saturation: val }))} onReset={() => setAdjustments(a => ({ ...a, saturation: 100 }))} />
+              </CollapsibleSection>
+
+              <CollapsibleSection title="色彩" defaultOpen={true}>
+                <AdjustmentSlider label="色溫 (Temperature)" value={adjustments.temperature} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, temperature: val }))} onReset={() => setAdjustments(a => ({ ...a, temperature: 0 }))} />
+                <AdjustmentSlider label="色調 (Tint)" value={adjustments.tint} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, tint: val }))} onReset={() => setAdjustments(a => ({ ...a, tint: 0 }))} />
+              </CollapsibleSection>
+
+              <CollapsibleSection title="細節" defaultOpen={false}>
+                <AdjustmentSlider label="亮部 (Highlight)" value={adjustments.highlight} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, highlight: val }))} onReset={() => setAdjustments(a => ({ ...a, highlight: 0 }))} />
+                <AdjustmentSlider label="陰影 (Shadow)" value={adjustments.shadow} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, shadow: val }))} onReset={() => setAdjustments(a => ({ ...a, shadow: 0 }))} />
+                <AdjustmentSlider label="銳化 (Sharpness)" value={adjustments.sharpness} defaultValue={0} min={0} max={100} onChange={val => setAdjustments(a => ({ ...a, sharpness: val }))} onReset={() => setAdjustments(a => ({ ...a, sharpness: 0 }))} />
+              </CollapsibleSection>
+            </div>
+
+            {/* Footer: 取消 + 儲存 */}
+            <div className="p-5 border-t border-gray-100 bg-gray-50/50 flex gap-3 flex-shrink-0">
+              <button
+                onClick={onClose}
+                className="flex-1 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 text-[13px] font-bold rounded-xl transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isBaking}
+                className="flex-1 py-3 bg-black hover:bg-gray-800 text-white text-[13px] font-bold rounded-xl shadow-md transition-all hover:shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
+                儲存圖片
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Canvas image picker */}
+      {showCanvasPicker && (
+        <div className="fixed inset-0 z-[7001] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowCanvasPicker(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 w-[480px] max-h-[60vh] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between flex-shrink-0">
+              <div>
+                <p className="text-sm font-bold text-[#1D1D1F]">從畫布選取參考圖</p>
+                <p className="text-xs text-[#86868B] mt-0.5">最多可再選 {MAX_REFERENCE_IMAGES - referenceImages.length} 張</p>
+              </div>
+              <button onClick={() => setShowCanvasPicker(false)} className="text-[#86868B] hover:text-[#1D1D1F] text-xl leading-none transition-colors">&times;</button>
+            </div>
+            <div className="overflow-y-auto grid grid-cols-4 gap-3">
+              {canvasImages.filter(img => img.id !== element.id).map(img => {
+                const alreadySelected = referenceImages.includes(img.src);
+                const canSelect = !alreadySelected && referenceImages.length < MAX_REFERENCE_IMAGES;
+                return (
+                  <button
+                    key={img.id}
+                    disabled={!canSelect && !alreadySelected}
+                    onClick={() => {
+                      if (alreadySelected) setReferenceImages(prev => prev.filter(s => s !== img.src));
+                      else if (canSelect) setReferenceImages(prev => [...prev, img.src]);
+                    }}
+                    className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
+                      alreadySelected ? 'border-[#AF52DE] ring-2 ring-[#AF52DE]/30'
+                        : canSelect ? 'border-transparent hover:border-gray-300'
+                        : 'border-transparent opacity-40 cursor-not-allowed'
+                    }`}
+                  >
+                    <img src={img.src} alt={img.name || '圖片'} className="w-full h-full object-cover" />
+                    {alreadySelected && (
+                      <div className="absolute inset-0 bg-[#AF52DE]/20 flex items-center justify-center">
+                        <div className="w-6 h-6 rounded-full bg-[#AF52DE] text-white flex items-center justify-center text-xs font-bold">✓</div>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => setShowCanvasPicker(false)}
+              className="flex-shrink-0 w-full py-2.5 text-sm font-semibold text-white bg-black hover:bg-gray-800 rounded-full transition-all"
+            >
+              確認 ({referenceImages.length} 張已選)
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

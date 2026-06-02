@@ -190,7 +190,7 @@ export const DrawingModal: React.FC<DrawingModalProps> = ({ element, onSave, onC
   }
 
   return (
-    <div className="absolute inset-0 z-40 bg-[#F5F5F7]/90 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-[7000] bg-[#F5F5F7]/90 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden border border-black/5" onClick={e => e.stopPropagation()}>
         <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white flex-shrink-0">
           <h2 className="text-xl font-bold text-[#1D1D1F]">繪圖板 (透明背景)</h2>

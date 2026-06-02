@@ -1274,7 +1274,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <FloatingAssistant onCreateSticky={handleAiCreateSticky} onAskAI={handleAskAI} />
+      <FloatingAssistant onCreateSticky={handleAiCreateSticky} onAskAI={handleAskAI} isHidden={isFocusMode} />
 
       {showKeyModal && (
           <ApiKeyModal

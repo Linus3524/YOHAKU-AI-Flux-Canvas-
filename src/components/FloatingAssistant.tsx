@@ -108,6 +108,7 @@ interface ChatMessage {
 interface FloatingAssistantProps {
   onAskAI?: (prompt: string) => Promise<string>;
   onCreateSticky?: (text: string) => void;
+  isHidden?: boolean;
 }
 
 // ─── Nav Items ────────────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; purple?: b
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, onCreateSticky }) => {
+export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, onCreateSticky, isHidden = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<Section>('about');
   const [position, setPosition] = useState({ x: 16, y: 16 });
@@ -241,6 +242,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
   const handleCreateSticky = (text: string) => {
     if (onCreateSticky) { onCreateSticky(text); setIsOpen(false); }
   };
+
+  if (isHidden) return null;
 
   return (
     <>

@@ -157,6 +157,8 @@ const OutpaintingFrame: React.FC<OutpaintingFrameProps> = ({ outpaintingState, z
     );
 };
 
+const PANEL_W = 384;
+
 const DraggableOutpaintingPanel: React.FC<{
     outpaintingPrompt: string;
     setOutpaintingPrompt: (val: string) => void;
@@ -164,13 +166,29 @@ const DraggableOutpaintingPanel: React.FC<{
     handleAutoPrompt: () => void;
     onGenerate: () => void;
     onCancel: () => void;
-}> = ({ outpaintingPrompt, setOutpaintingPrompt, isAutoPrompting, handleAutoPrompt, onGenerate, onCancel }) => {
-    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 200, y: window.innerHeight - 140 });
+    // Screen coordinates of the image's RIGHT edge and TOP edge, for initial placement
+    frameScreenRight?: number;
+    frameScreenTop?: number;
+}> = ({ outpaintingPrompt, setOutpaintingPrompt, isAutoPrompting, handleAutoPrompt, onGenerate, onCancel, frameScreenRight, frameScreenTop }) => {
+    const PANEL_H_EST = 220;
+    const GAP = 20;
+    // Place panel to the right of the frame; fall back to right side of viewport
+    const initX = frameScreenRight != null
+        ? Math.min(frameScreenRight + GAP, window.innerWidth - PANEL_W - 8)
+        : window.innerWidth - PANEL_W - 24;
+    const initY = frameScreenTop != null
+        ? Math.max(8, Math.min(frameScreenTop, window.innerHeight - PANEL_H_EST - 8))
+        : Math.max(8, window.innerHeight / 2 - PANEL_H_EST / 2);
+
+    const [position, setPosition] = useState({ x: initX, y: initY });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef({ x: 0, y: 0 });
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        if ((e.target as HTMLElement).tagName === 'TEXTAREA' || (e.target as HTMLElement).tagName === 'BUTTON') return;
+        // Only start drag from the panel background / header — not buttons, inputs, svg children
+        const tag = (e.target as HTMLElement).tagName.toUpperCase();
+        if (tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'SELECT') return;
+        e.stopPropagation(); // prevent InfiniteCanvas from handling this event
         setIsDragging(true);
         dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y };
     };
@@ -197,48 +215,120 @@ const DraggableOutpaintingPanel: React.FC<{
     }, [isDragging]);
 
     return (
-        <div 
-            style={{ left: position.x, top: position.y }}
-            className={`fixed z-[1001] bg-white/90 backdrop-blur-xl p-4 rounded-2xl shadow-2xl border border-white/50 flex flex-col gap-3 min-w-[400px] max-w-[500px] animate-fade-in-up ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        <div
+            style={{
+                left: position.x,
+                top: position.y,
+                background: 'rgba(255,255,255,0.95)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(0,0,0,0.06)',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 10px 25px -5px rgba(0,0,0,0.1)',
+                borderRadius: 16,
+                width: PANEL_W,
+            }}
+            className={`fixed z-[1001] overflow-hidden flex flex-col animate-fade-in-up ${isDragging ? 'cursor-grabbing' : ''}`}
             onMouseDown={handleMouseDown}
         >
-             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                 <div className="flex items-center gap-2">
-                     <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor" className="text-black/10"><circle cx="1" cy="1" r="1"/><circle cx="1" cy="5" r="1"/><circle cx="1" cy="9" r="1"/><circle cx="5" cy="1" r="1"/><circle cx="5" cy="5" r="1"/><circle cx="5" cy="9" r="1"/></svg>
-                     <h3 className="font-bold text-[#1D1D1F]">AI 擴圖 (Outpainting)</h3>
-                 </div>
-                 <button onClick={onCancel} className="text-[#86868B] hover:text-[#1D1D1F]">&times;</button>
-             </div>
-             
-             <div className="flex gap-2 items-start">
-                 <div className="relative flex-grow">
-                    <textarea 
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                    <svg
+                        className={`flex-shrink-0 transition-colors ${isDragging ? 'text-[#94a3b8] cursor-grabbing' : 'text-[#cbd5e1] hover:text-[#94a3b8] cursor-grab'}`}
+                        width="14" height="14" viewBox="0 0 24 24" fill="currentColor"
+                    >
+                        <circle cx="8" cy="4" r="1.5"/><circle cx="16" cy="4" r="1.5"/>
+                        <circle cx="8" cy="12" r="1.5"/><circle cx="16" cy="12" r="1.5"/>
+                        <circle cx="8" cy="20" r="1.5"/><circle cx="16" cy="20" r="1.5"/>
+                    </svg>
+                    <h2 className="text-[13px] font-bold text-gray-900 tracking-tight">
+                        AI 擴圖
+                        <span className="text-gray-400 font-medium text-[11px] ml-1">(Outpainting)</span>
+                    </h2>
+                </div>
+                <button
+                    onClick={onCancel}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className="text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 hover:bg-gray-100 p-1 rounded-md"
+                >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            {/* Content */}
+            <div className="px-4 pb-4 pt-3">
+                {/* Command area */}
+                <div
+                    className="flex flex-col rounded-xl border transition-all duration-200 overflow-hidden"
+                    style={{ background: '#f8fafc', borderColor: '#e2e8f0' }}
+                    onFocus={(e) => {
+                        const el = e.currentTarget as HTMLDivElement;
+                        el.style.background = '#ffffff';
+                        el.style.borderColor = '#c084fc';
+                        el.style.boxShadow = '0 0 0 3px rgba(192,132,252,0.1)';
+                    }}
+                    onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget)) {
+                            const el = e.currentTarget as HTMLDivElement;
+                            el.style.background = '#f8fafc';
+                            el.style.borderColor = '#e2e8f0';
+                            el.style.boxShadow = 'none';
+                        }
+                    }}
+                >
+                    <textarea
                         value={outpaintingPrompt}
                         onChange={(e) => setOutpaintingPrompt(e.target.value)}
-                        placeholder="描述擴展區域的內容..." 
-                        className="w-full bg-[#F5F5F7] border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-black/5 outline-none cursor-text resize-y min-h-[50px] max-h-[150px] leading-relaxed"
-                        onMouseDown={(e) => e.stopPropagation()} 
-                        rows={2}
-                    />
-                    <button 
-                        onClick={handleAutoPrompt}
-                        disabled={isAutoPrompting}
-                        className="absolute right-1 bottom-1 px-2.5 py-1 text-[10px] font-bold text-[#AF52DE] bg-white/80 backdrop-blur-sm rounded-lg shadow-sm border border-gray-100 hover:bg-gray-50 transition-all disabled:opacity-50 z-10"
+                        placeholder="描述擴展區域的內容，或點擊下方由 AI 為您發想..."
+                        rows={3}
+                        className="w-full bg-transparent border-none text-[13px] text-gray-800 placeholder-gray-400 px-3 py-2.5 outline-none leading-relaxed resize-y"
+                        style={{ minHeight: 72, maxHeight: 200 }}
                         onMouseDown={(e) => e.stopPropagation()}
-                    >
-                        {isAutoPrompting ? '分析中...' : '✨ 自動發想'}
-                    </button>
-                 </div>
-                 <button 
-                    onClick={onGenerate}
-                    className="bg-black text-white px-5 py-2.5 rounded-xl font-medium text-sm hover:bg-gray-800 transition-all shadow-lg shadow-black/10 h-fit whitespace-nowrap"
-                    onMouseDown={(e) => e.stopPropagation()}
-                 >
-                     生成
-                 </button>
-             </div>
-             <p className="text-[10px] text-[#86868B]">拖曳紫色虛線框調整生成範圍。提示詞越精確，效果越好。</p>
-         </div>
+                    />
+
+                    {/* Action row */}
+                    <div className="flex items-center justify-between px-2.5 py-2 border-t border-gray-100">
+                        <button
+                            onClick={handleAutoPrompt}
+                            disabled={isAutoPrompting}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50"
+                            style={{ background: 'rgba(168,85,247,0.08)', color: '#9333ea' }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168,85,247,0.15)'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168,85,247,0.08)'; }}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364-.707-.707M6.343 6.343l-.707-.707m12.728 0-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/>
+                            </svg>
+                            {isAutoPrompting ? '分析中...' : '自動發想'}
+                        </button>
+
+                        <button
+                            onClick={onGenerate}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="text-white px-4 py-1.5 rounded-lg text-[12px] font-bold flex items-center gap-1.5 transition-all"
+                            style={{ background: 'linear-gradient(135deg,#a855f7 0%,#8b5cf6 100%)', boxShadow: '0 4px 12px rgba(139,92,246,0.25)' }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 16px rgba(139,92,246,0.35)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(139,92,246,0.25)'; (e.currentTarget as HTMLButtonElement).style.transform = 'none'; }}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                            </svg>
+                            生成
+                        </button>
+                    </div>
+                </div>
+
+                {/* Microcopy hint */}
+                <div className="mt-2.5 flex items-start gap-1.5 text-[10px] text-gray-500 leading-relaxed">
+                    <svg className="text-purple-400 mt-0.5 flex-shrink-0" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <p>拖曳畫布上的 <span className="font-medium text-purple-600">紫色虛線框</span> 調整生成範圍。提示詞越精確，生成效果越好。</p>
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -1039,13 +1129,25 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
       </div>
 
       {outpaintingState && (
-         <DraggableOutpaintingPanel 
+         <DraggableOutpaintingPanel
             outpaintingPrompt={outpaintingPrompt}
             setOutpaintingPrompt={setOutpaintingPrompt}
             isAutoPrompting={isAutoPrompting}
             handleAutoPrompt={handleAutoPrompt}
             onGenerate={() => onOutpaintingGenerate(outpaintingPrompt)}
             onCancel={onCancelOutpainting}
+            frameScreenRight={(() => {
+              const r = canvasRef.current?.getBoundingClientRect();
+              if (!r) return undefined;
+              // frame right edge in screen coords
+              const frameRight = r.left + (outpaintingState.frame.position.x + outpaintingState.frame.width) * zoom + pan.x;
+              return frameRight;
+            })()}
+            frameScreenTop={(() => {
+              const r = canvasRef.current?.getBoundingClientRect();
+              if (!r) return undefined;
+              return r.top + outpaintingState.frame.position.y * zoom + pan.y;
+            })()}
          />
       )}
       
