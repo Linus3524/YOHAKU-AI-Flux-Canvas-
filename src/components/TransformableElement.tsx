@@ -627,15 +627,24 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                 return (
                                                     <div key={idx} className="relative aspect-square">
                                                         {src ? (
-                                                            /* 已有圖片：顯示縮圖 */
-                                                            <div className="relative w-full h-full rounded-md overflow-hidden border border-[#1D1D1F]/15">
-                                                                <img src={src} className="w-full h-full object-cover" draggable={false} />
+                                                            /* ── 已有圖片：白底實線框 + 縮圖 ── */
+                                                            <div
+                                                                className="relative w-full h-full rounded-lg overflow-hidden"
+                                                                style={{
+                                                                    background: '#ffffff',
+                                                                    border: '1px solid rgba(0,0,0,0.10)',
+                                                                    padding: 2,
+                                                                }}
+                                                            >
+                                                                <img src={src} className="w-full h-full object-cover rounded-md" draggable={false} />
                                                                 {/* 數字標示 */}
-                                                                <div className="absolute top-0.5 left-1 text-white font-bold drop-shadow-md select-none"
-                                                                    style={{ fontSize: numFontSize }}>
+                                                                <div
+                                                                    className="absolute top-1 left-1.5 text-white font-bold drop-shadow-md select-none"
+                                                                    style={{ fontSize: numFontSize }}
+                                                                >
                                                                     {idx + 1}
                                                                 </div>
-                                                                {/* 刪除按鈕（compact 時縮小） */}
+                                                                {/* 刪除按鈕 */}
                                                                 <button
                                                                     onClick={e => handleRefRemove(e, idx)}
                                                                     className="absolute top-0.5 right-0.5 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white leading-none transition-colors"
@@ -643,12 +652,32 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                                 >✕</button>
                                                             </div>
                                                         ) : (
-                                                            /* 空槽 */
-                                                            <label className={`flex flex-col items-center justify-center w-full h-full rounded-md cursor-pointer transition-colors
-                                                                ${refMode === 'full'
-                                                                    ? 'border-2 border-dashed border-[#1D1D1F]/20 hover:border-[#1D1D1F]/40 gap-0.5'
-                                                                    : 'gap-0' /* compact：無虛線框，只顯示數字 */
-                                                                }`}>
+                                                            /* ── 空槽：半透明白底虛線框 ── */
+                                                            <label
+                                                                className={`flex flex-col items-center justify-center w-full h-full rounded-lg cursor-pointer transition-all select-none
+                                                                    ${refMode === 'full' ? 'gap-0.5' : 'gap-0'}`}
+                                                                style={{
+                                                                    background: 'rgba(255,255,255,0.40)',
+                                                                    border: '1px dashed rgba(0,0,0,0.15)',
+                                                                    color: 'rgba(0,0,0,0.40)',
+                                                                }}
+                                                                onMouseEnter={e => {
+                                                                    const el = e.currentTarget as HTMLLabelElement;
+                                                                    el.style.background = 'rgba(255,255,255,0.80)';
+                                                                    el.style.borderColor = 'rgba(0,0,0,0.30)';
+                                                                    el.style.color = 'rgba(0,0,0,0.60)';
+                                                                    el.style.transform = 'translateY(-2px)';
+                                                                    el.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.06)';
+                                                                }}
+                                                                onMouseLeave={e => {
+                                                                    const el = e.currentTarget as HTMLLabelElement;
+                                                                    el.style.background = 'rgba(255,255,255,0.40)';
+                                                                    el.style.borderColor = 'rgba(0,0,0,0.15)';
+                                                                    el.style.color = 'rgba(0,0,0,0.40)';
+                                                                    el.style.transform = '';
+                                                                    el.style.boxShadow = '';
+                                                                }}
+                                                            >
                                                                 <input
                                                                     type="file"
                                                                     accept="image/*"
@@ -661,21 +690,19 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                                     onMouseDown={e => e.stopPropagation()}
                                                                 />
                                                                 {/* 數字 */}
-                                                                <span className="text-[#1D1D1F]/40 font-semibold select-none"
-                                                                    style={{ fontSize: numFontSize + 1 }}>
+                                                                <span
+                                                                    className="font-bold select-none"
+                                                                    style={{ fontSize: numFontSize, opacity: 0.5, marginBottom: 1 }}
+                                                                >
                                                                     {idx + 1}
                                                                 </span>
                                                                 {/* 上傳圖示（full 模式才顯示） */}
                                                                 {refMode === 'full' && (
-                                                                    <>
-                                                                        <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[#1D1D1F]/40">
-                                                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-                                                                        </svg>
-                                                                        <span className="text-[#1D1D1F]/40 select-none"
-                                                                            style={{ fontSize: labelFontSize }}>
-                                                                            上傳參考圖
-                                                                        </span>
-                                                                    </>
+                                                                    <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                                                        <polyline points="17 8 12 3 7 8"/>
+                                                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                                                    </svg>
                                                                 )}
                                                             </label>
                                                         )}
@@ -683,26 +710,50 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                 );
                                             })}
                                         </div>
-                                        <div className="mt-1.5 border-t border-[#1D1D1F]/10" />
+                                        {/* 分隔線：rgba 透明，自適應任何便利貼底色 */}
+                                        <div className="mt-1.5 border-t" style={{ borderColor: 'rgba(0,0,0,0.05)' }} />
                                     </div>
                                 )}
 
-                                {/* 文字區 */}
-                                <textarea
-                                    ref={textareaRef}
-                                    value={el.content}
-                                    readOnly={!isEditing || el.isLocked || interactionMode === 'hand'}
-                                    onChange={(e) => onUpdate({ ...el, content: e.target.value })}
-                                    onBlur={() => setIsEditing(false)}
-                                    onMouseDown={(e) => {
-                                        if (e.button !== 0 || el.isLocked || interactionMode === 'hand') return;
-                                        onSelect(element.id, e.shiftKey);
-                                        if (isEditing) e.stopPropagation();
-                                    }}
-                                    className={`flex-1 min-h-0 bg-transparent text-[#1D1D1F] px-6 py-4 resize-none border-none focus:outline-none placeholder-[#1D1D1F]/40 ${isEditing ? 'cursor-text' : (el.isLocked ? 'cursor-not-allowed' : 'cursor-move')} ${el.textAlign === 'center' ? 'text-center' : 'text-left'}`}
-                                    style={{ fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.6', fontWeight: 300 }}
-                                    placeholder={el.isLocked ? "" : "請輸入內容..."}
-                                />
+                                {/* 文字區
+                                    字體大小反向補償縮放：確保螢幕上永遠 ≥ 13px 可讀
+                                    公式：css_size = max(base, minScreen / zoom)
+                                    → 螢幕實際大小 = css_size * zoom = max(base*zoom, minScreen)
+                                */}
+                                {(() => {
+                                    const BASE_FONT  = 15;   // 正常縮放下的字體大小 (px)
+                                    const MIN_SCREEN = 13;   // 螢幕最小可讀大小 (px)
+                                    const noteFontSize = Math.max(BASE_FONT, MIN_SCREEN / zoom);
+                                    // padding 同步縮小，避免低縮放時 padding 過大
+                                    const notePadH = Math.round(Math.max(12, 24 / zoom));
+                                    const notePadV = Math.round(Math.max(10, 16 / zoom));
+                                    return (
+                                        <textarea
+                                            ref={textareaRef}
+                                            value={el.content}
+                                            readOnly={!isEditing || el.isLocked || interactionMode === 'hand'}
+                                            onChange={(e) => onUpdate({ ...el, content: e.target.value })}
+                                            onBlur={() => setIsEditing(false)}
+                                            onMouseDown={(e) => {
+                                                if (e.button !== 0 || el.isLocked || interactionMode === 'hand') return;
+                                                onSelect(element.id, e.shiftKey);
+                                                if (isEditing) e.stopPropagation();
+                                            }}
+                                            className={`flex-1 min-h-0 bg-transparent text-[#1D1D1F] resize-none border-none focus:outline-none placeholder-[#1D1D1F]/40 ${isEditing ? 'cursor-text' : (el.isLocked ? 'cursor-not-allowed' : 'cursor-move')} ${el.textAlign === 'center' ? 'text-center' : 'text-left'}`}
+                                            style={{
+                                                fontFamily: 'inherit',
+                                                fontSize: noteFontSize,
+                                                lineHeight: '1.6',
+                                                fontWeight: 300,
+                                                paddingLeft: notePadH,
+                                                paddingRight: notePadH,
+                                                paddingTop: notePadV,
+                                                paddingBottom: notePadV,
+                                            }}
+                                            placeholder={el.isLocked ? "" : "請輸入內容..."}
+                                        />
+                                    );
+                                })()}
                             </div>
                         );
                     }
