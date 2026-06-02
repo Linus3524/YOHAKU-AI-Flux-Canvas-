@@ -15,7 +15,7 @@
 
 import { GoogleGenAI } from '@google/genai';
 import { callAtlasImg2Img, callAtlasInpaint, compressForAtlas, detectClosestRatio } from './atlasImage';
-import { birefnetRemoveBg } from './geminiLayer';
+import { birefnetRemoveBg, selectBiRefNetModel } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
 // ── 背景色方案 ──────────────────────────────────────────────────────────────
@@ -525,14 +525,16 @@ async function extractOneLayer(
         isolatedSrc = await uniformizeBackground(isolatedSrc, bgColor.hex);
 
         // ── 2b：去背（BiRefNet 優先，timeout 後降級 Chroma Key）──────────────
-        const method = useBiRefNet ? `BiRefNet${obj.edgeComplexity === 'complex' ? '/複雜邊緣' : ''}` : 'Chroma Key';
+        // 依 category + edgeComplexity 自動選型：Portrait/Matting/Light
+        const birefnetModel = selectBiRefNetModel(obj.edgeComplexity, obj.category);
+        const method = useBiRefNet ? `BiRefNet(${birefnetModel})` : 'Chroma Key';
         onProgress?.(`✂️ 去背：${obj.label}（${method}）`);
         const birefnetTimeout = obj.edgeComplexity === 'complex' ? 180_000 : 120_000;
 
         let transparent: string;
         if (useBiRefNet) {
             transparent = await withTimeout(
-                birefnetRemoveBg(isolatedSrc, falKey!),
+                birefnetRemoveBg(isolatedSrc, falKey!, birefnetModel),
                 birefnetTimeout,
                 () => {
                     console.warn(`[magicLayer] BiRefNet timeout for "${obj.label}", fallback chroma key`);

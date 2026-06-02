@@ -104,8 +104,36 @@ function resizeToMatch(base64: string, targetW: number, targetH: number): Promis
     });
 }
 
+export type BiRefNetModel =
+    | 'General Use (Light)'
+    | 'General Use (Light 2K)'
+    | 'General Use (Heavy)'
+    | 'Matting'
+    | 'Portrait'
+    | 'General Use (Dynamic)';
+
+/**
+ * 依去背目標自動選型：
+ *   人像 + complex edge → Portrait（人像微調，髮型結構優化）
+ *   任意 + complex edge → Matting（連續 alpha，毛邊/玻璃/網紗）
+ *   任意 + simple edge  → General Use (Light)（快速、省費）
+ *   未指定              → Matting（安全預設）
+ */
+export function selectBiRefNetModel(
+    edgeComplexity?: 'simple' | 'complex',
+    category?: string,
+): BiRefNetModel {
+    if (edgeComplexity === 'simple') return 'General Use (Light)';
+    if (category === 'SUBJECT') return 'Portrait';
+    return 'Matting';
+}
+
 /** 使用 fal-ai/birefnet 去除裁切圖的背景，回傳透明 PNG base64 */
-async function removeBgBiRefNet(cropBase64: string, falKey: string): Promise<string> {
+async function removeBgBiRefNet(
+    cropBase64: string,
+    falKey: string,
+    model: BiRefNetModel = 'Matting',
+): Promise<string> {
     // ⚠️ operating_resolution: '2048x2048' 可能讓輸出尺寸與輸入不一致，
     //    事先記錄輸入尺寸，回傳後強制 resize 回原始比例，防止回貼時變形。
     const inputDims = await getImageDims(cropBase64).catch(() => null);
@@ -117,7 +145,7 @@ async function removeBgBiRefNet(cropBase64: string, falKey: string): Promise<str
     const result = await fal.subscribe('fal-ai/birefnet/v2', {
         input: {
             image_url: imageUrl,
-            model: 'Matting',
+            model,
             operating_resolution: '2048x2048',
             output_format: 'png',
             refine_foreground: true,
@@ -145,10 +173,14 @@ async function removeBgBiRefNet(cropBase64: string, falKey: string): Promise<str
  * 單張圖片 BiRefNet v2 去背（整張圖直接去背，不裁切）
  * @param imageBase64  原圖 base64
  * @param falKey       fal.ai API Key
- * @returns 去背後透明 PNG base64
+ * @param model        BiRefNet 模型（預設 Matting）
  */
-export async function birefnetRemoveBg(imageBase64: string, falKey: string): Promise<string> {
-    return removeBgBiRefNet(imageBase64, falKey);
+export async function birefnetRemoveBg(
+    imageBase64: string,
+    falKey: string,
+    model: BiRefNetModel = 'Matting',
+): Promise<string> {
+    return removeBgBiRefNet(imageBase64, falKey, model);
 }
 
 /**
