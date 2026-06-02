@@ -410,7 +410,15 @@ ALWAYS PRESERVE:
                             }
                         }
 
-                        setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
+                        // 結果放在原圖右側 30px
+                        setElements(prev => [...prev, {
+                            ...element,
+                            id: `${element.id}_style_${Date.now()}`,
+                            src: finalSrc,
+                            position: { x: element.position.x + element.width / 2 + 30 + element.width / 2, y: element.position.y },
+                            name: `${element.name || '圖片'} 風格`,
+                            zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
+                        } as ImageElement]);
                     }
                 } catch (err: any) {
                     throw err;
@@ -472,7 +480,15 @@ ALWAYS PRESERVE:
                                     console.warn("Failed to restore transparency (Atlas style):", e);
                                 }
                             }
-                            setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
+                            // Atlas 風格結果放在原圖右側 30px
+                            setElements(prev => [...prev, {
+                                ...element,
+                                id: `${element.id}_style_${Date.now()}`,
+                                src: finalSrc,
+                                position: { x: element.position.x + element.width / 2 + 30 + element.width / 2, y: element.position.y },
+                                name: `${element.name || '圖片'} 風格`,
+                                zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
+                            } as ImageElement]);
                         }
                     } catch (err: any) {
                         throw err;
@@ -512,7 +528,15 @@ ALWAYS PRESERVE:
                                 }
                             }
 
-                            setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
+                            // Gemini 風格結果放在原圖右側 30px
+                            setElements(prev => [...prev, {
+                                ...element,
+                                id: `${element.id}_style_${Date.now()}`,
+                                src: finalSrc,
+                                position: { x: element.position.x + element.width / 2 + 30 + element.width / 2, y: element.position.y },
+                                name: `${element.name || '圖片'} 風格`,
+                                zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
+                            } as ImageElement]);
                         }
                     } catch (err: any) {
                         throw err;
@@ -610,7 +634,21 @@ STRICT RULES:
                         }
                     }
 
-                    setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: finalSrc } : el));
+                    // 新圖放在原圖右側 30px，原圖保留不動
+                    const GAP = 30;
+                    const newX = element.position.x + element.width / 2 + GAP + element.width / 2;
+                    const newY = element.position.y;
+                    setElements(prev => [
+                        ...prev,
+                        {
+                            ...element,
+                            id: `${element.id}_angle_${Date.now()}`,
+                            src: finalSrc,
+                            position: { x: newX, y: newY },
+                            name: `${element.name || '圖片'} 視角`,
+                            zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
+                        } as ImageElement,
+                    ]);
                 }
             }
             showToast("視角轉換完成！✨");
@@ -810,15 +848,19 @@ CONSTRAINTS:
                 const newId = `${Date.now()}-harmonized`;
                 const maxZ = Math.max(0, ...elements.map(e => e.zIndex));
 
+                // 結果放在 bounding box 右側 30px，原圖保留不動
+                const allX = visualElements.map(el => el.position.x + el.width / 2);
+                const rightEdge = Math.max(...allX);
+                const GAP = 30;
                 const newElement: ImageElement = {
                     id: newId,
                     type: 'image',
                     src: finalSrc,
-                    position: { x: baseElement.position.x, y: baseElement.position.y },
+                    position: { x: rightEdge + GAP + width / 2, y: baseElement.position.y },
                     width: width,
                     height: height,
                     rotation: baseElement.rotation,
-                    zIndex: maxZ + 1, 
+                    zIndex: maxZ + 1,
                     isVisible: true,
                     isLocked: false,
                     name: 'Harmonized Image',
