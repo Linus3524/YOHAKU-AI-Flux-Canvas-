@@ -117,7 +117,7 @@ async function removeBgBiRefNet(cropBase64: string, falKey: string): Promise<str
     const result = await fal.subscribe('fal-ai/birefnet/v2', {
         input: {
             image_url: imageUrl,
-            model: 'General Use (Heavy)',
+            model: 'Matting',
             operating_resolution: '2048x2048',
             output_format: 'png',
             refine_foreground: true,

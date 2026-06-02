@@ -51,10 +51,10 @@ function findBestChromaColor(base64: string): Promise<string> {
             if (count === 0) { resolve('#00BB44'); return; }
             r /= count; g /= count; b /= count;
             const candidates = [
-                { hex: '#00BB44', r: 0, g: 187, b: 68 },
-                { hex: '#2255CC', r: 34, g: 85, b: 204 },
-                { hex: '#CC2200', r: 204, g: 34, b: 0 },
-                { hex: '#FFFFFF', r: 255, g: 255, b: 255 },
+                { hex: '#00FF00', r: 0, g: 255, b: 0 },   // 純綠（螢光綠）
+                { hex: '#0000FF', r: 0, g: 0, b: 255 },   // 純藍
+                { hex: '#FF0000', r: 255, g: 0, b: 0 },   // 純紅
+                { hex: '#FF00FF', r: 255, g: 0, b: 255 }, // 洋紅
             ];
             let best = '#00BB44', maxDist = 0;
             for (const c of candidates) {
@@ -581,10 +581,24 @@ STRICT RULES:
                 : base;
         };
 
-        // 結果放在原圖右側 30px
-        const placeResult = (element: ImageElement, finalSrc: string) => {
+        // 取得生成圖的原生像素尺寸
+        const getDims = (src: string) => new Promise<{ w: number; h: number }>((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+            img.onerror = () => resolve({ w: 0, h: 0 });
+            img.src = src;
+        });
+
+        // 結果放在原圖右側 30px，依生成圖原生比例顯示（避免被原圖比例壓變形）
+        const placeResult = async (element: ImageElement, finalSrc: string) => {
             const GAP = 30;
-            const newX = element.position.x + element.width / 2 + GAP + element.width / 2;
+            // 寬度維持原圖寬，高度依生成圖的原生比例換算
+            const dims = await getDims(finalSrc);
+            const newW = element.width;
+            const newH = (dims.w > 0 && dims.h > 0)
+                ? Math.round(newW * dims.h / dims.w)
+                : element.height;
+            const newX = element.position.x + element.width / 2 + GAP + newW / 2;
             setElements(prev => [
                 ...prev,
                 {
@@ -592,6 +606,8 @@ STRICT RULES:
                     id: `${element.id}_angle_${Date.now()}`,
                     src: finalSrc,
                     position: { x: newX, y: element.position.y },
+                    width: newW,
+                    height: newH,
                     name: `${element.name || '圖片'} 視角`,
                     zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
                 } as ImageElement,
@@ -644,7 +660,7 @@ STRICT RULES:
                             console.warn("Transparency processing failed", e);
                         }
                     }
-                    placeResult(element, finalSrc);
+                    await placeResult(element, finalSrc);
                 }
             }
             showToast("視角轉換完成！✨");
