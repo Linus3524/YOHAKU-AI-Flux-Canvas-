@@ -70,6 +70,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     const shapeStartPointRef = useRef<Point | null>(null);
     const zIndexCounter = useRef(1);
     const canvasApiRef = useRef<CanvasApi>(null);
+    // 拖曳/縮放/旋轉手勢中：true = 下一次 updateElements 是手勢首幀，需新增一筆歷史（保住手勢前狀態）
+    const transformPendingRef = useRef(false);
 
     // --- LocalStorage Auto-Save ---
     const [storageStatus, setStorageStatus] = useState<StorageStatus>('saved');
@@ -377,11 +379,27 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         selectedElementIdsRef.current = selectedElementIds;
     }, [selectedElementIds]);
 
+    // 手勢開始（mousedown 拖曳/縮放/旋轉）：標記下一次 updateElements 為首幀
+    const beginTransform = useCallback(() => {
+        transformPendingRef.current = true;
+    }, []);
+
+    // 手勢結束（mouseup）：清除首幀標記。歷史已在首幀新增，這裡不再 commit 重複
+    const endTransform = useCallback(() => {
+        transformPendingRef.current = false;
+    }, []);
+
     const updateElements = useCallback((updatedElement: CanvasElement, dragDelta?: Point) => {
+        // 手勢首幀 → addToHistory:true（新增一筆，保住手勢前狀態 S0）
+        // 後續幀     → addToHistory:false（原地覆寫工作副本）
+        const isFirstFrame = transformPendingRef.current;
         setElements(prevElements => {
             const leaderId = updatedElement.id;
             const leaderInState = prevElements.find(el => el.id === leaderId);
             if (!leaderInState) return prevElements;
+
+            // 真正產生變更時才「消耗」首幀標記，避免無位移的 no-op 提早消耗
+            const consumeFirstFrame = () => { transformPendingRef.current = false; };
 
             if (dragDelta) {
                 // Leader-Follower Logic: Calculate actual delta relative to current state
@@ -396,12 +414,13 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 const groupId = updatedElement.groupId;
                 const selectedSet = new Set(selectedElementIdsRef.current);
 
+                consumeFirstFrame();
                 return prevElements.map(el => {
                     if (el.id === leaderId) return updatedElement;
-                    
+
                     const isSameGroup = groupId && el.groupId === groupId && el.isVisible;
                     const isSelected = selectedSet.has(el.id);
-                    
+
                     if ((isSameGroup || isSelected) && !el.isLocked) {
                         // Move followers by the same actual delta
                         if (el.type === 'arrow') {
@@ -418,8 +437,9 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 });
             }
             // Non-drag update (e.g. resize)
+            consumeFirstFrame();
             return prevElements.map(el => (el.id === leaderId ? updatedElement : el));
-        }, { addToHistory: false });
+        }, { addToHistory: isFirstFrame });
     }, [setElements]);
 
     // --- Merge Logic ---
@@ -1466,6 +1486,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         handleSelectElement,
         handleMarqueeSelect,
         updateElements,
+        beginTransform,
+        endTransform,
         handleMergeLayers,
         handleStartCrop,
         handleCancelCrop,

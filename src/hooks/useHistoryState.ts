@@ -5,45 +5,56 @@ type SetStateOptions = {
   addToHistory?: boolean;
 };
 
-export const useHistoryState = <T>(initialState: T) => {
-  const [history, setHistory] = useState<T[]>([initialState]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+type Internal<T> = {
+  history: T[];
+  index: number;
+};
 
-  const state = history[currentIndex];
-  const canUndo = currentIndex > 0;
-  const canRedo = currentIndex < history.length - 1;
+export const useHistoryState = <T>(initialState: T) => {
+  const [internal, setInternal] = useState<Internal<T>>({
+    history: [initialState],
+    index: 0,
+  });
+
+  const state = internal.history[internal.index];
+  const canUndo = internal.index > 0;
+  const canRedo = internal.index < internal.history.length - 1;
 
   const setState = useCallback((
     action: T | ((prevState: T) => T),
     options: SetStateOptions = { addToHistory: true }
   ) => {
-    const resolvedState = typeof action === 'function'
-      ? (action as (prevState: T) => T)(history[currentIndex])
-      : action;
+    // functional update：避免 stale closure 造成連續 setState 互相覆蓋（幽靈歷史）
+    setInternal(prev => {
+      const cur = prev.history[prev.index];
+      const resolvedState = typeof action === 'function'
+        ? (action as (prevState: T) => T)(cur)
+        : action;
 
-    if (options.addToHistory) {
-      const newHistory = history.slice(0, currentIndex + 1);
-      newHistory.push(resolvedState);
-      setHistory(newHistory);
-      setCurrentIndex(newHistory.length - 1);
-    } else {
-      const newHistory = [...history];
-      newHistory[currentIndex] = resolvedState;
-      setHistory(newHistory);
-    }
-  }, [history, currentIndex]);
+      if (options.addToHistory) {
+        // 去重：與當前 head 完全相同（同一個 reference）就不新增
+        // 攔掉 `setState(prev => prev, { addToHistory: true })` 這類重複 commit
+        if (resolvedState === cur) return prev;
+
+        const newHistory = prev.history.slice(0, prev.index + 1);
+        newHistory.push(resolvedState);
+        return { history: newHistory, index: newHistory.length - 1 };
+      }
+
+      // 原地覆寫當前 checkpoint（不新增歷史）
+      const newHistory = [...prev.history];
+      newHistory[prev.index] = resolvedState;
+      return { history: newHistory, index: prev.index };
+    });
+  }, []);
 
   const undo = useCallback(() => {
-    if (canUndo) {
-      setCurrentIndex(prevIndex => prevIndex - 1);
-    }
-  }, [canUndo]);
+    setInternal(prev => (prev.index > 0 ? { ...prev, index: prev.index - 1 } : prev));
+  }, []);
 
   const redo = useCallback(() => {
-    if (canRedo) {
-      setCurrentIndex(prevIndex => prevIndex + 1);
-    }
-  }, [canRedo]);
-  
+    setInternal(prev => (prev.index < prev.history.length - 1 ? { ...prev, index: prev.index + 1 } : prev));
+  }, []);
+
   return { state, setState, undo, redo, canUndo, canRedo };
 };

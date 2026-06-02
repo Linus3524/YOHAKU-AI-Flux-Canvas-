@@ -14,6 +14,7 @@ interface TransformableElementProps {
   zoom: number;
   onSelect: (id: string, shiftKey: boolean) => void;
   onUpdate: (element: CanvasElement, dragDelta?: Point) => void;
+  onInteractionStart?: () => void;
   onInteractionEnd: () => void;
   onContextMenu: (e: React.MouseEvent, worldPoint: Point, elementId: string) => void;
   onEditDrawing: (elementId: string) => void;
@@ -47,7 +48,7 @@ type Interaction = {
   resizeHandle?: ResizeHandle;
 } | null;
 
-export const TransformableElement: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld }) => {
+export const TransformableElement: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld }) => {
   const [interaction, setInteraction] = useState<Interaction>(null);
   const [isEditing, setIsEditing] = useState(false);
   const elementRef = useRef<HTMLDivElement>(null);
@@ -220,8 +221,10 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
           interactionDetails.startAngle = Math.atan2(startPoint.y - centerY, startPoint.x - centerX);
       }
       hasMovedRef.current = false;
+      // 通知手勢開始：讓歷史在首幀新增一筆，保住手勢前狀態（修復幽靈歷史）
+      onInteractionStart?.();
       setInteraction(interactionDetails);
-    }, [element, onSelect, isOutpainting]);
+    }, [element, onSelect, isOutpainting, onInteractionStart]);
 
     const handleInteractionMove = useCallback((e: MouseEvent) => {
         if (!interaction) return;

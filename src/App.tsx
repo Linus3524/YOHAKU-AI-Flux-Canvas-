@@ -279,7 +279,9 @@ const App: React.FC = () => {
       handleSelectElement,
       handleMarqueeSelect,
       updateElements: originalUpdateElements, // Rename to use wrapper
-      handleMergeLayers: originalMergeLayers, 
+      beginTransform,
+      endTransform,
+      handleMergeLayers: originalMergeLayers,
       handleStartCrop,
       handleCancelCrop,
       handleApplyCrop,
@@ -753,8 +755,9 @@ const App: React.FC = () => {
   const isFocusMode = !!editingImage || !!editingDrawing;
 
   const handleInteractionEnd = useCallback(() => {
-    setElements(prev => prev, { addToHistory: true });
-  }, [setElements]);
+    // 歷史已在手勢首幀新增（保住手勢前狀態），這裡只需清除首幀標記，不再 commit 重複
+    endTransform();
+  }, [endTransform]);
 
   const getResetViewCallback = useCallback((callback: () => void) => {
     setResetView(() => callback);
@@ -1340,6 +1343,7 @@ const App: React.FC = () => {
         onSelectElement={handleSelectElement}
         onMarqueeSelect={handleMarqueeSelect}
         onUpdateElement={updateElements}
+        onInteractionStart={beginTransform}
         onInteractionEnd={handleInteractionEnd}
         setResetViewCallback={getResetViewCallback} 
         onGenerate={handleGenerate}

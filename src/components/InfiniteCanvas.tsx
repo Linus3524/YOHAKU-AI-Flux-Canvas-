@@ -380,6 +380,7 @@ interface InfiniteCanvasProps {
   onSelectElement: (id: string | null, shiftKey: boolean) => void;
   onMarqueeSelect: (ids: string[], shiftKey: boolean) => void;
   onUpdateElement: (element: CanvasElement, dragDelta?: Point) => void;
+  onInteractionStart?: () => void;
   onInteractionEnd: () => void;
   setResetViewCallback: (callback: () => void) => void;
   onGenerate: (selectedElements: CanvasElement[]) => void;
@@ -488,7 +489,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   selectedElementIds, 
   onSelectElement,
   onMarqueeSelect, 
-  onUpdateElement, 
+  onUpdateElement,
+  onInteractionStart,
   onInteractionEnd,
   setResetViewCallback,
   onGenerate,
@@ -891,6 +893,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
             zoom={zoom}
             onSelect={onSelectElement}
             onUpdate={onUpdateElement}
+            onInteractionStart={onInteractionStart}
             onInteractionEnd={onInteractionEnd}
             onContextMenu={(e, screenPoint, id) => onContextMenu(e, screenToWorld(screenPoint), id)}
             onEditDrawing={onEditDrawing}
