@@ -170,6 +170,314 @@ export const STYLE_PRESETS = [
     id: 'Risograph', name: '孔版印刷', label: 'Risograph',
     prompt: 'Transform into Risograph print aesthetic: limited 2-3 color ink layers with visible misregistration offset, grainy halftone dot texture, slightly translucent ink overlap creating new mixed colors, zine and indie print culture, fluorescent ink colors (fluo pink, teal, yellow).'
   },
+
+  // ── 節慶限定 ────────────────────────────────────────────────
+  {
+    id: 'Lunar New Year', name: '台式新春喜慶', label: 'Lunar New Year',
+    prompt: 'Transform into modern Lunar New Year celebration: rich crimson and imperial gold foil accents, traditional intricate paper-cutting patterns, dynamic festive typography energy, elegant Chinese ink flourishes, red lanterns and firecracker bursts, auspicious joyful atmosphere.'
+  },
+  {
+    id: 'Japanese Matsuri', name: '日系夏日祭典', label: 'Japanese Matsuri',
+    prompt: 'Transform into traditional Japanese summer festival (夏祭り): deep indigo night sky illuminated by glowing warm paper lanterns (chochin), vibrant festival food stall colors, exploding fireworks bokeh in background, uchiwa fan and yukata textile motifs, lively summer night atmosphere.'
+  },
+  {
+    id: 'Sakura Ohanami', name: '浪漫櫻花祭', label: 'Sakura Ohanami',
+    prompt: 'Transform into airy Japanese cherry blossom festival (お花見): soft pastel pink sakura petals drifting in gentle breeze, golden hour spring sunlight filtering through blossoms, minimalist clean composition, romantic spring Tokyo vibe, delicate petal bokeh background.'
+  },
+  {
+    id: 'Mid-Autumn Moon', name: '中秋明月夜', label: 'Mid-Autumn Moon',
+    prompt: 'Transform into mystical Mid-Autumn festival: giant luminous golden full moon dominating composition, deep midnight blue star-filled sky, delicate jade rabbit and osmanthus silhouettes, glowing traditional lanterns reflecting on water, elegant ethereal mooncake festival atmosphere.'
+  },
+  {
+    id: 'Cozy Christmas', name: '北歐聖誕冬景', label: 'Cozy Christmas',
+    prompt: 'Transform into cozy Nordic Christmas aesthetic: rich pine green and velvet crimson color palette, warm glowing golden fairy lights bokeh, soft fluffy falling snowflakes, rustic dark wood and knit textures, warm hygge candlelight holiday mood, Scandinavian winter comfort.'
+  },
+  {
+    id: 'Spooky Halloween', name: '萬聖搞怪霓虹', label: 'Spooky Halloween',
+    prompt: 'Transform into playful Halloween horror: neon pumpkin orange and toxic acid green, deep dark purple night sky, glowing carved jack-o-lantern expressions, subtle cobweb and bat overlays, high contrast spooky party vibe, fun-scary not terrifying mood.'
+  },
+  {
+    id: 'Valentine Romance', name: '西洋浪漫情人', label: 'Valentine Romance',
+    prompt: 'Transform into luxurious Valentine\'s Day romance: saturated ruby red and soft blush pink gradient, rich warm candlelight glow, elegant rose petal textures scattered across surface, romantic soft-focus bokeh blur, velvet and satin material feel, intimate and passionate mood.'
+  },
+  {
+    id: 'Japanese Shogatsu', name: '日系和風正月', label: 'Japanese Shogatsu',
+    prompt: 'Transform into sacred Japanese New Year (正月): auspicious red and white Kohaku color scheme, elegant gold pine, bamboo and plum blossom (松竹梅) accents, minimalist modern Shinto torii gate aesthetic, crisp clean winter holiday atmosphere, celebratory fresh start energy.'
+  },
+  {
+    id: 'Easter Pastel', name: '復活節粉彩', label: 'Easter Pastel',
+    prompt: 'Transform into playful Easter holiday: soft pastel marshmallow colors (mint green, baby blue, lemon yellow, lilac), cute hidden Easter egg patterns, whimsical spring floral and bunny accents, cheerful bright spring morning aesthetic, gentle and joyful mood.'
+  },
+  {
+    id: 'Retro Ghost Fest', name: '台式復古中元', label: 'Retro Ghost Fest',
+    prompt: 'Transform into 1980s Taiwanese Ghost Festival (中元普渡) retro aesthetic: eerie neon red and green temple lighting, stylized Taoist talisman (符咒) patterns overlaid, dramatic smoky incense atmosphere, vintage Taiwanese street market grit, raw local subculture mysticism.'
+  },
+
+  // ── 次文化少女暗黑美學 ────────────────────────────────────────
+  {
+    id: 'Coquette', name: '芭蕾少女風', label: 'Coquette',
+    prompt: 'Transform into coquette balletcore aesthetic: soft pastel pink and cream tones, delicate silk ribbons and bows, pearl overlays, vintage lace textures, romantic and nostalgic feminine mood, tulle layers, soft backlighting halo.'
+  },
+  {
+    id: 'Jelly Candy', name: '軟萌果凍感', label: 'Jelly Candy',
+    prompt: 'Transform into 2026 jelly candy aesthetic: semi-translucent glossy textures, high-shine rubberized surfaces, vibrant gummy candy colors (cherry red, lemon yellow, grape purple), dewy highlights, playful squishy forms, liquid jelly blush color palette.'
+  },
+  {
+    id: 'Y2K McBling', name: '千禧閃粉辣妹', label: 'Y2K McBling',
+    prompt: 'Transform into early 2000s Y2K McBling aesthetic: rhinestone glitter sparkle effects, hot pink and chrome silver metallic color palette, bedazzled gemstone texturing, cyber-fairy butterfly wings, glossy high-contrast pop culture vibes, Paris Hilton era maximalism.'
+  },
+  {
+    id: 'Decora Pop', name: '原宿超載可愛', label: 'Decora Pop',
+    prompt: 'Transform into Harajuku Decora pop style: colorful plastic hair clips and accessories overloading every surface, chaotic rainbow color scheme, layered cute sticker bomb textures, maximalist toy and candy aesthetic, hyper-energetic playful kawaii overload.'
+  },
+  {
+    id: 'Vamp Romantic', name: '暗黑吸血浪漫', label: 'Vamp Romantic',
+    prompt: 'Transform into 2026 Vamp Romantic aesthetic: deep crimson and crushed black velvet tones, Carmilla gothic influence, dramatic candlelit shadows on stone walls, lace chokers and pearl jewelry, dark romantic elegance with seductive mysterious undertones.'
+  },
+  {
+    id: 'Weirdcore', name: '怪誕夢境流', label: 'Weirdcore',
+    prompt: 'Transform into surreal Weirdcore aesthetic: low-res flash photography textures, liminal empty spaces, uncanny dreamlike juxtapositions, pixelated eyes or floating clouds, nostalgic yet deeply unsettling subculture mood, wrong lighting and odd angles.'
+  },
+  {
+    id: 'Analog Horror', name: '類比恐怖影帶', label: 'Analog Horror',
+    prompt: 'Transform into analog horror style: 1980s VHS tracking distortion bands, CRT monitor screen glare and curvature, low-fidelity muted color leaks, eerie public emergency broadcast typography, grainy psychological suspense atmosphere, corrupted signal decay.'
+  },
+  {
+    id: 'Pastel Goth', name: '軟萌暗黑風', label: 'Pastel Goth',
+    prompt: 'Transform into Pastel Goth creepy-cute aesthetic: soft lavender, mint and baby pink colors mixed with black skulls and inverted crosses, kawaii gothic illustration, cute-but-dark contrast, pastel rainbow paired with occult symbols.'
+  },
+  {
+    id: 'Whimsigothic', name: '空靈巫術風', label: 'Whimsigothic',
+    prompt: 'Transform into Whimsigothic aesthetic: celestial sun, moon and star motifs, dark witchy mystical elements, velvet and brocade fabric textures, deep jewel tones (emerald, sapphire, amethyst), candles and crystals, mystical bohemian vibe.'
+  },
+  {
+    id: 'Alien Core', name: '外星靈動科幻', label: 'Alien Core',
+    prompt: 'Transform into Extra Celestial Alien Core aesthetic: opalescent iridescent surface sheen, soft dewy bioluminescent glow, futuristic extraterrestrial organic structures, icy metallic chrome accents, translucent membrane textures, ethereal sci-fi otherworldly mood.'
+  },
+  {
+    id: 'Fairy Grunge', name: '微光廢土仙子', label: 'Fairy Grunge',
+    prompt: 'Transform into Fairy Grunge subculture style: earthy muted tones (moss green, muddy brown, slate gray), distressed raw frayed edge textures, ethereal translucent fairy wings layered over heavy grunge grain and paint splatters, contradiction of delicate and dirty.'
+  },
+  {
+    id: 'Glacier Blue', name: '極地冰霜冷調', label: 'Glacier Blue',
+    prompt: 'Transform into Glacier Cool Blue aesthetic: frosted icy surface textures, sharp crystal and ice refraction patterns, strictly monochromatic pale ice blue and absolute white color palette, stark frozen glacier atmosphere, clean metallic shimmer highlights, no warmth at all.'
+  },
+  {
+    id: 'Naïve Art', name: '原生稚拙藝術', label: 'Naïve Art',
+    prompt: 'Transform into Naïve art painting style: intentional imperfections and wobbly unsteady lines, deceptively simple loose scratchy marks, awkward character proportions with flat perspective, raw childlike authenticity, crayon or tempera paint texture, rejecting digital polish entirely.'
+  },
+  {
+    id: 'Fractured Glass', name: '碎裂玻璃稜鏡', label: 'Fractured Glass',
+    prompt: 'Transform into fractured glass refraction effect: layered broken glass shards at multiple angles, sharp prism-like light splitting into rainbow spectra, dynamic lens flare rainbow streaks, geometric glass cutting plane overlays, futuristic tension and high visual depth.'
+  },
+
+  // ── 新世代潮流 ──────────────────────────────────────────────
+  {
+    id: 'Neubrutalism', name: '新野獸派', label: 'Neubrutalism',
+    prompt: 'Transform into Neubrutalism graphic design: thick black outlines (#000000), high-contrast stark drop shadows offset to bottom-right, flat vibrant pastel backgrounds with zero gradients, bold oversized typography elements, asymmetric raw layouts, anti-design web aesthetic.'
+  },
+  {
+    id: 'Claymorphism', name: '黏土玩具', label: 'Claymorphism',
+    prompt: 'Transform into claymorphism 3D illustration: soft inflated rounded 3D shapes as if sculpted from clay, matte clay surface texture, subtle inner shadows for depth illusion, glossy plastic toy highlights on rounded edges, playful cheerful character or object proportions, pastel color palette.'
+  },
+  {
+    id: 'Acid Graphics', name: '酸性液態金屬', label: 'Acid Graphics',
+    prompt: 'Transform into Acid Graphics design: liquid chrome and metallic textures, psychedelic iridescent mercury-like reflections, swirling silver and oil-slick color waves, high-tech tribal vector overlays, dark underground club flyer aesthetic, hypnotic metallic distortion.'
+  },
+  {
+    id: 'Xerox Lo-Fi', name: '影印機殘留', label: 'Xerox Lo-Fi',
+    prompt: 'Transform into high-contrast vintage photocopy aesthetic: rough toner grain texture, blown-out crushed blacks, faint horizontal scan lines, trailing toner dust artifacts, low-fidelity zine print look, strictly monochromatic black and white, raw underground DIY feel.'
+  },
+  {
+    id: 'Frutiger Aero', name: '千禧泡泡未來', label: 'Frutiger Aero',
+    prompt: 'Transform into Frutiger Aero aesthetic from the late 2000s: glossy glass spheres and water droplets, vibrant green and sky blue aurora gradients, shiny reflective plastics, organic nature-meets-technology design, soft glowing light blooms, tech-optimism nostalgia from 2004–2012 Windows Vista era.'
+  },
+  {
+    id: 'Groovy Retro', name: '70年代迷幻', label: 'Groovy Retro',
+    prompt: 'Transform into 70s psychedelic groovy art: melting and swirling organic shapes, warm retro color palette (mustard yellow, burnt orange, avocado green, harvest gold), wavy fluid flowing lines, concentric rainbow halos, hippie counterculture poster aesthetic, peace-era typography feel.'
+  },
+  {
+    id: 'Spatial UI', name: '空間UI透鏡', label: 'Spatial UI',
+    prompt: 'Transform into Apple Vision Pro spatial UI aesthetic: realistic volumetric frosted glass panels with refraction, dynamic pass-through environment shadows cast on surfaces, subtle outer glow emissions, deep multi-layered interface depth, ultra-clean white and translucent materials, serene futuristic calm.'
+  },
+  {
+    id: 'Fish-eye Lens', name: '街頭魚眼視角', label: 'Fish-eye Lens',
+    prompt: 'Transform into extreme fish-eye lens photography: circular ultra-wide angle barrel distortion, dramatically stretched outer edges, heavy chromatic aberration fringing at borders, raw grainy film texture, 90s underground skateboard and streetwear documentary look.'
+  },
+  {
+    id: 'Woodcut Print', name: '粗獷木刻版畫', label: 'Woodcut Print',
+    prompt: 'Transform into traditional linocut woodblock print: coarse hand-carved textures with visible gouge marks, raw blocky ink applications, deliberate imperfect edges, high contrast black ink on cream paper, distressed worn look, expressionist German woodcut or folk art influence.'
+  },
+  {
+    id: 'Thermal Heat', name: '熱顯像感應', label: 'Thermal Heat',
+    prompt: 'Transform into infrared thermal imaging camera style: vibrant heat-mapped gradient spectrum (white and yellow for hottest areas, orange-red for mid heat, deep blue and purple for coldest areas), no photographic textures — pure thermal color data, high contrast trippy scientific look.'
+  },
+  {
+    id: 'Neo-Bauhaus', name: '包浩斯數據', label: 'Neo-Bauhaus',
+    prompt: 'Transform into strict Bauhaus infographic design: rigid geometric grid alignment, clean primary colors (red, yellow, blue, black) on muted warm beige background, utilitarian sans-serif layout, circles squares and triangles as core compositional elements, 1920s Dessau school aesthetic.'
+  },
+  {
+    id: 'Sticker Collage', name: '貼紙標籤拼貼', label: 'Sticker Collage',
+    prompt: 'Transform into die-cut sticker collage: overlapping layers of stickers with thick white outer border around each element, mix of glossy and matte sticker surface textures, soft drop shadows between overlapping layers, playful chaotic arrangement, colorful and energetic scrapbook aesthetic.'
+  },
+  {
+    id: 'Biophilic', name: '光影侘寂自然', label: 'Biophilic',
+    prompt: 'Transform into biophilic minimalism aesthetic: organic leaf and branch shadows projected softly onto raw concrete, linen or rice paper walls, soft diffused natural side-daylight, earthy organic textures, quiet contemplative wabi-sabi atmosphere, muted neutral palette with one organic accent.'
+  },
+  {
+    id: 'Maximalism', name: '極大主義混亂', label: 'Maximalism',
+    prompt: 'Transform into maximalist visual overload art: dense collage of overlapping text layers, mixed media patterns clashing, conflicting textures stacked together, kaleidoscopic color combinations, chaotic high-energy composition leaving no empty space, anti-minimalism sensory overload, every surface covered.'
+  },
+
+  // ── 歷史與宗教 ──────────────────────────────────────────────
+  {
+    id: 'Showa Retro', name: '日式昭和復古', label: 'Showa Retro',
+    prompt: 'Transform into 1960s Japanese Showa retro style: warm nostalgic color grading with faded yellows and warm reds, hand-drawn vintage signage and shop awning look, faded printed ink textures on aged paper, cozy mid-century neighborhood shotengai shop aesthetic.'
+  },
+  {
+    id: 'Byzantine Mosaic', name: '拜占庭馬賽克', label: 'Byzantine Mosaic',
+    prompt: 'Transform into sacred Byzantine mosaic art: intricate tiling patterns made of tiny gold leaf and colored stone tesserae, flat religious icon style with no perspective, majestic golden background glow, divine historical texture, Hagia Sophia or Ravenna basilica influence.'
+  },
+  {
+    id: 'Soviet Constructivism', name: '蘇聯構成主義', label: 'Soviet Constructivism',
+    prompt: 'Transform into Soviet Constructivism propaganda poster: bold geometric shapes with stark diagonal layouts, limited striking color palette (crimson red, deep black, cream white), aggressive political avant-garde graphic design, El Lissitzky and Rodchenko influence, typographic dynamism.'
+  },
+  {
+    id: 'Taisho Roman', name: '大正浪漫', label: 'Taisho Roman',
+    prompt: 'Transform into Japanese Taisho Roman aesthetic (1912–1926): early 20th-century fusion of Eastern and Western culture, stained glass motifs, vintage kimono geometric patterns blended with European Art Nouveau flourishes, nostalgic romantic elegance, soft sepia tones.'
+  },
+  {
+    id: 'Sacred Stained Glass', name: '宗教彩繪玻璃', label: 'Sacred Stained Glass',
+    prompt: 'Transform into Gothic cathedral stained glass window: translucent vibrant jewel-colored glass panels (ruby red, cobalt blue, emerald green), thick black lead line outlines separating each section, divine light rays streaming through, luminous backlit religious art style.'
+  },
+  {
+    id: 'Imperial Propaganda', name: '日式戰爭海報', label: 'Imperial Propaganda',
+    prompt: 'Transform into wartime Japanese propaganda poster art: distressed coarse paper texture, bold dynamic Kanji typography with rising sun rays motif, vintage militaristic hand-painted ink wash aesthetic, high contrast red and black palette, 1940s Imperial Japan visual language.'
+  },
+
+  // ── 稀有與新趨勢 ────────────────────────────────────────────
+  {
+    id: 'Glass Block', name: '玻璃棱鏡畸變', label: 'Glass Block',
+    prompt: 'Transform into Glass Block privacy glass architectural trend: heavy vertical ribbing refractive textures, translucent barrier distortions, imagery refracted and smeared beneath fluted architectural glass panels, multi-layered depth and frosted obscuring effect.'
+  },
+  {
+    id: 'Brute Force', name: '熟成粗獷主義', label: 'Brute Force',
+    prompt: 'Transform into mature Brute Force raw layout style: naked grid structures, deadpan raw composition, heavy stacked black-and-white sans-serif typography, zero decoration or ornamentation, brutally honest anti-aesthetic, pure functional information architecture.'
+  },
+  {
+    id: 'Bronze Age', name: '青銅器時代', label: 'Bronze Age',
+    prompt: 'Transform into Bronze Age metalwork aesthetic: weathered metallic warm bronze tones, heavy green mineral verdigris patina textures, ancient ceremonial vessel surface patterns, deeply textured hammered metal appearance, simultaneously ancient and futuristic artisanal feel.'
+  },
+  {
+    id: 'Obsidian Black', name: '黑曜石奢華', label: 'Obsidian Black',
+    prompt: 'Transform into Obsidian luxury dark aesthetic: deep glossy liquid jet-black background, ultra-sharp contrast between matte and mirror-sheen black coatings, volcanic glass surface texture, mysterious premium dark aura, minimal light reflections cutting through deep darkness.'
+  },
+  {
+    id: 'Prompt Playground', name: '提示詞遊樂場', label: 'Prompt Playground',
+    prompt: 'Transform into Prompt Playground tech-art style: retro UI structural elements, accidental spreadsheet grid backdrops, code snippet and terminal overlays integrated into art composition, toggles and dropdown window motifs, lo-fi tech-empowerment creative energy.'
+  },
+  {
+    id: 'Cyber Hacker', name: '電子世界駭客風', label: 'Cyber Hacker',
+    prompt: 'Transform into terminal hacker aesthetic: cascading neon green code rain falling vertically, glowing monospace typography, terminal command-line prompt layout, digital glitch scan artifacts, matrix-style grid overlay, deep absolute black cyber void background.'
+  },
+  {
+    id: 'Reality Warp', name: '現實扭曲流', label: 'Reality Warp',
+    prompt: 'Transform into 2026 Reality Warp subculture: editorial layouts smashed with surreal digital distortion elements, liminal empty spaces, uncanny reality filters, dreamy psychological juxtapositions, detached cool tone color grading, familiar made deeply strange.'
+  },
+  {
+    id: 'Trinket Curation', name: '標本物件陳列', label: 'Trinket Curation',
+    prompt: 'Transform into Trinket Curation flat-lay aesthetic: everyday symbolic small objects (vintage coins, old keys, crystals, stamps) arranged in neat museum-style geometric shadow boxes, clean scrapbook flat-lay composition, soft directional studio lighting on each object.'
+  },
+  {
+    id: 'Aerochrome', name: '紅外線底片', label: 'Aerochrome',
+    prompt: 'Transform into Kodak Aerochrome infrared photography: surreal color-swapped landscape where foliage and vegetation turn into hyper-vivid crimson and electric magenta, high-contrast deep dark teal and near-black skies, dreamlike alien natural world.'
+  },
+  {
+    id: 'Modern Kintsugi', name: '現代金繕美學', label: 'Modern Kintsugi',
+    prompt: 'Transform into minimalist Kintsugi art: deep matte charcoal or black backdrop, fractured gold joinery lines running organically and elegantly across broken elements, wabi-sabi philosophy of beautiful imperfection, refined broken geometry repaired with liquid gold.'
+  },
+  {
+    id: 'Solarpunk', name: '日光永續未來', label: 'Solarpunk',
+    prompt: 'Transform into Solarpunk eco-optimism aesthetic: organic Art Nouveau architectural curves wrapped around modern solar panels, lush hydroponic vertical garden greenery, warm brass and copper accents, stained glass filtering warm sunlight, hopeful sustainable future utopia.'
+  },
+  {
+    id: 'Lunarpunk', name: '月光螢光生態', label: 'Lunarpunk',
+    prompt: 'Transform into Lunarpunk night ecology aesthetic: deep spiritual indigo and cold silver color scheme, glowing bioluminescent mushrooms and moss, ethereal moonlight rays through forest canopy, mystical organic technology, magic and science coexisting at night.'
+  },
+  {
+    id: 'Cassette Futurism', name: '卡帶未來主義', label: 'Cassette Futurism',
+    prompt: 'Transform into 80s Cassette Futurism aesthetic: clunky beige and gray plastic personal computer hardware textures, green phosphor CRT monitor screen scanlines, physical clicky mechanical keyboard buttons, analog magnetic tape data drive aesthetic, retrofuturistic optimism.'
+  },
+  {
+    id: 'Gorpcore Topo', name: '機能戶外等高線', label: 'Gorpcore Topo',
+    prompt: 'Transform into Gorpcore technical outdoor topographic style: clean vector topographic elevation contour line maps, alpine GPS coordinate data overlays, tactical military grid lines, earthy neutral trail tones (khaki, sage green, safety orange), functional outdoor gear aesthetic.'
+  },
+  {
+    id: 'Dark Academia', name: '暗黑學院古典', label: 'Dark Academia',
+    prompt: 'Transform into Dark Academia lifestyle aesthetic: old heavy leather-bound book textures, antique cursive calligraphy ink sketches on yellowed paper, candlelit dark mahogany library tables, moody classical university atmosphere, ivy league collegiate mystery.'
+  },
+  {
+    id: 'Rococo Opulence', name: '洛可可金奢', label: 'Rococo Opulence',
+    prompt: 'Transform into 18th-century Rococo extravagance: intricate asymmetric gold scrollwork gilding, pastel marble dust and plaster texture, cherub and ornate floral motifs, extreme classical palace luxury, Versailles Hall of Mirrors opulence, powdery soft color palette.'
+  },
+  {
+    id: 'Explorecore', name: '探索核心', label: 'Explorecore',
+    prompt: 'Transform into Explorecore independent publishing aesthetic: clean Substack or zine-style editorial layout, beautifully simple graphic arrangements, elegant classic serif typography, generous generous whitespace breathing room, slow thoughtful media calm intelligence.'
+  },
+  {
+    id: 'Subspace Wireframe', name: '次空間向量網格', label: 'Subspace Wireframe',
+    prompt: 'Transform into 90s virtual reality subspace wireframe: glowing neon electric blue or cyan vector wireframe grid lines extending infinitely into absolute pitch-black void, retro CGI cyber void space, Tron or early VR simulation aesthetic.'
+  },
+  {
+    id: 'Botanical Plate', name: '19世紀植物圖鑑', label: 'Botanical Plate',
+    prompt: 'Transform into 19th-century scientific botanical illustration plate: hand-colored copperplate engraving with fine line details, aged ivory parchment paper texture, precise botanical specimen study with Latin taxonomy calligraphy labels, natural history museum archive aesthetic.'
+  },
+  {
+    id: 'Acid Fade', name: '酸性漸層融化', label: 'Acid Fade',
+    prompt: 'Transform into Acid Fade psychedelic design: trippy liquefied heatwave color blur, smooth seamless transitions of vibrating pure saturated color gradients melting into each other, playful optimistic psychedelic optical smear effect, no hard edges anywhere.'
+  },
+
+  // ── 手繪與動漫特化 ──────────────────────────────────────────
+  {
+    id: 'Concept Watercolor', name: '原畫水彩風', label: 'Concept Watercolor',
+    prompt: 'Transform into light novel concept art watercolor: delicate fine-line ink work, translucent washed layers of pale indigo and amber, airy atmospheric background, soft bleeding edges, ethereal fluid character design aesthetic.'
+  },
+  {
+    id: 'Transparent Wash', name: '透明水彩風', label: 'Transparent Wash',
+    prompt: 'Transform into traditional Japanese transparent watercolor (透明水彩): clear layered washes, pigment pooling naturally at edge outlines, visible cold-press paper grain texture, luminous wet-on-wet gradients, pure luminosity.'
+  },
+  {
+    id: 'Retro Cel Anime', name: '90年代賽璐璐片', label: 'Retro Cel Anime',
+    prompt: 'Transform into 1990s retro anime cel sheet style: sharp physical hand-inked outlines, solid flat cel-shading with exactly one layer of hard shadow, slight dust and acetate sheet reflection artifacts, vintage VHS scan grade color.'
+  },
+  {
+    id: 'Radiant Shinkai', name: '極致光影動漫', label: 'Radiant Shinkai',
+    prompt: 'Transform into radiant cinematic anime: hyper-detailed cumulonimbus clouds, intense golden hour rim lighting, dramatic lens flares, vibrant deep blue and blazing orange color science, Makoto Shinkai Your Name influence.'
+  },
+  {
+    id: 'Soft KyoAni', name: '輕柔日常動漫', label: 'Soft KyoAni',
+    prompt: 'Transform into slice-of-life soft focus moe anime: delicate feather-light line art, soft chromatic aberration glow, highly detailed hair strand highlights, gentle emotional ambient lighting, Kyoto Animation K-On influence.'
+  },
+  {
+    id: 'City Pop Graphic', name: '時髦City Pop插畫', label: 'City Pop Graphic',
+    prompt: 'Transform into retro-modern City Pop anime illustration: sharp geometric outlines, flat neon-pastel color blocks, 1980s Tokyo fashion aesthetic, stark graphic contrast, clean minimalist layout, Hisashi Eguchi manga cover style.'
+  },
+  {
+    id: 'Fine Pencil Tech', name: '細膩色鉛筆', label: 'Fine Pencil Tech',
+    prompt: 'Transform into detailed colored pencil illustration: visible wax pigment texture on heavy sketch paper, intricate layered cross-hatching for shadows, soft feathered blending transitions, sharp defined edges mixed with pencil dust grain.'
+  },
+  {
+    id: 'Storybook Pencil', name: '童話繪本色鉛筆', label: 'Storybook Pencil',
+    prompt: 'Transform into whimsical storybook colored pencil illustration: light loose sketchy outlines, deliberate whitespace, gentle cross-hatch shading, cozy childhood fairy tale picture book aesthetic, warm textured watercolor paper surface.'
+  },
+  {
+    id: 'Copic Manga', name: 'Copics麥克筆漫畫', label: 'Copic Manga',
+    prompt: 'Transform into professional Copic marker manga illustration: alcohol marker smooth gradient blending, visible marker overlap streaks, sharp technical multi-liner ink outlines, vibrant hand-colored Shonen Jump magazine cover style.'
+  },
+  {
+    id: 'Industrial Marker', name: '工程速寫麥克筆', label: 'Industrial Marker',
+    prompt: 'Transform into dynamic architectural sketch marker rendering: rapid directional marker strokes, raw bleeding ink edges, high-contrast black and cool gray shadow blocks, sharp white gel pen edge highlights, raw industrial design concept sketch aesthetic.'
+  },
 ];
 
 export const getRandomPosition = () => ({
