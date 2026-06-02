@@ -252,7 +252,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
         onMouseDown={handleMouseDown}
         onClick={handleFabClick}
         style={{ left: position.x, top: position.y }}
-        className={`fixed z-[3000] w-14 h-14 rounded-full bg-white/70 backdrop-blur-xl flex items-center justify-center
+        className={`fixed z-[6003] w-14 h-14 rounded-full bg-white/70 backdrop-blur-xl flex items-center justify-center
           shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_0_0_1px_rgba(255,255,255,0.6)]
           ${isDragging ? 'cursor-grabbing' : 'cursor-grab transition-all duration-500 hover:scale-110 hover:bg-white active:scale-95'}`}
         title="YOHAKU 功能助手"
@@ -273,7 +273,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
       {isOpen && (
         <div
           style={{ left: panelLeft, top: panelTop, width: panelW, height: panelH }}
-          className="fixed z-[2999] flex bg-white/85 backdrop-blur-xl border border-white/30 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.15)] rounded-2xl overflow-hidden animate-fade-in-up origin-bottom"
+          className="fixed z-[6002] flex bg-white/85 backdrop-blur-xl border border-white/30 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.15)] rounded-2xl overflow-hidden animate-fade-in-up origin-bottom"
           onClick={e => e.stopPropagation()}
         >
           {/* ── Sidebar ─────────────────────────────────────────────────────── */}
