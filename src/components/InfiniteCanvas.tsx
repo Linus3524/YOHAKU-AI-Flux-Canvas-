@@ -439,18 +439,18 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 5;
 
 const CameraIcons = {
-    TopLeft: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10"/><path d="M7 7v10"/></svg>, 
-    Top: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>, 
-    TopRight: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M17 7H7"/><path d="M17 7v10"/></svg>, 
-    NW: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="19" x2="5" y2="5"></line><polyline points="19 5 5 5 5 19"></polyline></svg>,
-    N:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>,
-    NE: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="19" x2="19" y2="5"></line><polyline points="5 5 19 5 19 5 19 19"></polyline></svg>,
-    W:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>,
-    Center: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="6" /></svg>,
-    E:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>,
-    SW: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"></line><polyline points="19 19 5 19 5 5"></polyline></svg>,
-    S:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>,
-    SE: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="5" x2="19" y2="19"></line><polyline points="5 19 19 19 19 5"></polyline></svg>,
+    TopLeft: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10"/><path d="M7 7v10"/></svg>,
+    Top: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>,
+    TopRight: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M17 7H7"/><path d="M17 7v10"/></svg>,
+    NW: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="17" x2="7" y2="7"/><polyline points="7 17 7 7 17 7"/></svg>,
+    N:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>,
+    NE: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>,
+    W:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
+    Center: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="3"/></svg>,
+    E:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+    SW: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg>,
+    S:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>,
+    SE: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>,
 };
 
 // ── 生成分裂按鈕（左：生成、右：選張數）────────────────────────────────────
@@ -1093,69 +1093,74 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
               zIndex: 50,
           }}>
               {isMenuExpanded ? (
-                <div 
-                    className="floating-menu bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] border border-white/50 p-4 flex flex-col gap-4 min-w-[320px] animate-fade-in-up"
+                <div
+                    className="floating-menu flex flex-col min-w-[300px] animate-fade-in-up"
                     style={{
-                        cursor: isDraggingMenu ? 'grabbing' : 'grab'
+                        cursor: isDraggingMenu ? 'grabbing' : 'grab',
+                        background: 'rgba(255,255,255,0.97)',
+                        backdropFilter: 'blur(20px)',
+                        border: '1px solid rgba(0,0,0,0.06)',
+                        boxShadow: '0 10px 40px -10px rgba(0,0,0,0.1)',
+                        borderRadius: '20px',
                     }}
                     onMouseDown={handleMenuMouseDown}
                 >
-                    <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-gray-200 rounded-full opacity-50" />
-                    
-                    <div className="flex items-center justify-between mt-1 mb-2 pl-1 pr-1">
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-[#86868B] uppercase tracking-wider select-none">
-                                {selectedElementIds.length} 個物件已選取
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                             <button onClick={() => setIsMenuExpanded(false)} className="text-[#86868B] hover:text-[#1D1D1F] transition-colors p-1 rounded-full hover:bg-black/5" title="收折選單">
-                                 <SelectionMenuIcons.Collapse />
-                             </button>
-                        </div>
+                    {/* 頂部把手 */}
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-gray-200 rounded-full" />
+
+                    {/* Header */}
+                    <div className="px-5 pt-5 pb-3 flex items-center justify-between border-b border-[#f1f5f9]">
+                        <span className="text-[13px] font-semibold text-gray-700 select-none">
+                            {selectedElementIds.length} 個物件已選取
+                        </span>
+                        <button onClick={() => setIsMenuExpanded(false)} className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-black/5" title="收折選單">
+                            <SelectionMenuIcons.Collapse />
+                        </button>
                     </div>
 
+                    {/* 按鈕區 */}
+                    <div className="px-5 pt-4 pb-2 flex flex-col gap-2.5">
                     {selectedImagesCount >= 2 && (
-                        <button 
+                        <button
                             onClick={onHarmonize}
-                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-2 rounded-xl text-sm font-semibold shadow-md shadow-orange-500/20 hover:opacity-90 transition-all active:scale-95"
+                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-2.5 rounded-xl text-[13px] font-semibold shadow-sm shadow-orange-500/20 hover:opacity-90 transition-all active:scale-95"
                         >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                             一鍵調和
                         </button>
                     )}
-
                     {elements.filter(el => selectedElementIds.includes(el.id)).some(el => ['image', 'drawing', 'shape', 'text', 'note'].includes(el.type)) && (
                         <GenerateSplitButton
                             onGenerate={(count) => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)), count)}
                         />
                     )}
-                    
+                    </div>
+
                     {showGenerativeSettings && (
-                        <div className="-mx-4 flex flex-col">
-                            <div className="h-px bg-gray-100 w-full" />
-                            
+                        <div className="flex flex-col">
+                            <div className="h-px bg-[#f1f5f9] mx-5" />
+
                             {/* 生成設定 */}
-                            <div 
-                                className="flex justify-between items-center px-4 py-2.5 cursor-pointer hover:bg-gray-50"
+                            <div
+                                className="flex justify-between items-center px-5 py-3 cursor-pointer hover:bg-gray-50/80"
                                 onClick={() => setShowGen(!showGen)}
                             >
-                                <span className="text-xs font-semibold text-[#1D1D1F]">生成設定</span>
-                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+                                <span className="text-[12px] font-bold text-gray-900">生成設定</span>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                                     style={{ transform: showGen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                                    <path d="M2 3.5l3 3 3-3" stroke="#86868B" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <polyline points="6 9 12 15 18 9"/>
                                 </svg>
                             </div>
                             {showGen && (
-                                <div className="px-4 pb-3 flex flex-col gap-3">
+                                <div className="px-5 pb-4 flex flex-col gap-3">
                                     {/* 生圖模型 */}
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-semibold text-[#1D1D1F]">生圖模型</label>
+                                        <label className="text-[11px] font-medium text-gray-500">生圖模型</label>
                                         <div className="relative">
                                             <select
                                                 value={generationModel}
                                                 onChange={(e) => onSetGenerationModel?.(e.target.value)}
-                                                className="w-full bg-[#F5F5F7] border-none rounded-lg px-3 py-2 text-sm text-[#1D1D1F] focus:ring-2 focus:ring-black/5 cursor-pointer appearance-none"
+                                                className="w-full bg-[#f8fafc] border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-700 cursor-pointer appearance-none hover:bg-[#f1f5f9] focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-colors"
                                             >
                                                 <option value="gemini">Gemini 3 Flash / Pro（預設）</option>
                                                 <option value="gpt-image-2" disabled={!hasAtlasKey}>GPT Image 2{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
@@ -1163,12 +1168,12 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 <option value="seedream-v5" disabled={!hasAtlasKey}>即夢 Seedream v5 Lite{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
                                                 <option value="qwen-image-2" disabled={!hasAtlasKey}>通義千問 Qwen Image 2.0{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
                                             </select>
-                                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#86868B]">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-gray-400">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
                                             </div>
                                         </div>
                                         {!hasAtlasKey && (
-                                            <p className="text-[10px] text-[#86868B]">輸入 Atlas Cloud Key 後可使用 GPT Image 2 / 即夢模型</p>
+                                            <p className="text-[10px] text-gray-400">輸入 Atlas Cloud Key 後可使用 GPT Image 2 / 即夢模型</p>
                                         )}
                                     </div>
 
@@ -1188,18 +1193,18 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                     )}
 
                                     <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-semibold text-[#1D1D1F]">參考風格</label>
+                                        <label className="text-[11px] font-medium text-gray-500">參考風格</label>
                                         <div className="relative">
-                                            <select 
-                                                value={imageStyle} 
+                                            <select
+                                                value={imageStyle}
                                                 onChange={(e) => onSetImageStyle(e.target.value)}
-                                                className="w-full bg-[#F5F5F7] border-none rounded-lg px-3 py-2 text-sm text-[#1D1D1F] focus:ring-2 focus:ring-black/5 cursor-pointer appearance-none"
+                                                className="w-full bg-[#f8fafc] border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-700 cursor-pointer appearance-none hover:bg-[#f1f5f9] focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-colors"
                                             >
                                                 <option value="Default">無</option>
                                                 {stylePresets.map(s => <option key={s.id} value={s.label}>{s.name}</option>)}
                                             </select>
-                                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#86868B]">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-gray-400">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
                                             </div>
                                         </div>
                                     </div>
@@ -1349,16 +1354,16 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
 
                                     {/* 輸出解析度（Gemini 才顯示，Atlas 已整合進比例下拉） */}
                                     {(generationModel === 'gemini' || !generationModel) && <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-semibold text-[#1D1D1F]">輸出解析度</label>
-                                        <div className="flex gap-2">
+                                        <label className="text-[11px] font-medium text-gray-500">輸出解析度</label>
+                                        <div className="flex bg-[#f1f5f9] p-1 rounded-lg gap-1">
                                             {(['1K', '2K', '4K'] as const).map(size => (
                                                 <button
                                                     key={size}
                                                     onClick={() => onSetImageSize(size)}
-                                                    className={`flex-1 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                                                    className={`flex-1 py-1.5 rounded-md text-[12px] font-medium transition-all ${
                                                         imageSize === size
-                                                            ? 'bg-[#1D1D1F] text-white border-[#1D1D1F]'
-                                                            : 'bg-[#F5F5F7] text-[#1D1D1F] border-transparent hover:border-black/20'
+                                                            ? 'bg-[#1e293b] text-white shadow-sm'
+                                                            : 'text-gray-500 hover:text-gray-700'
                                                     }`}
                                                 >
                                                     {size}
@@ -1366,7 +1371,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                             ))}
                                         </div>
                                         {imageSize !== '1K' && (
-                                            <p className="text-[10px] text-[#86868B]">
+                                            <p className="text-[10px] text-gray-400">
                                                 {imageSize === '2K' ? '較高畫質，費用約 1.7x' : '最高畫質，費用約 2.5x'}
                                             </p>
                                         )}
@@ -1376,26 +1381,26 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
 
                             {selectedElementIds.length === 1 && elements.find(el => el.id === selectedElementIds[0])?.type === 'image' && (
                                 <>
-                                    <div className="h-px bg-gray-100 w-full" />
-                                    
+                                    <div className="h-px bg-[#f1f5f9] mx-5 my-1" />
+
                                     {/* 圖片工具 */}
-                                    <div 
-                                        className="flex justify-between items-center px-4 py-2.5 cursor-pointer hover:bg-gray-50"
+                                    <div
+                                        className="flex justify-between items-center px-5 py-3 cursor-pointer hover:bg-gray-50/80"
                                         onClick={() => setShowTools(!showTools)}
                                     >
-                                        <span className="text-xs font-semibold text-[#1D1D1F]">圖片工具</span>
-                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+                                        <span className="text-[12px] font-bold text-gray-900">圖片工具</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                                             style={{ transform: showTools ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                                            <path d="M2 3.5l3 3 3-3" stroke="#86868B" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                                            <polyline points="6 9 12 15 18 9"/>
                                         </svg>
                                     </div>
                                     {showTools && (
-                                        <div className="px-4 pb-3 flex flex-col gap-3">
+                                        <div className="px-5 pb-4 flex flex-col gap-2.5">
                                             <button
                                                 onClick={() => onRemoveBackground('enhanced')}
-                                                className="w-full h-9 bg-black text-white rounded-lg text-xs font-medium hover:bg-gray-800 transition-colors shadow-sm flex items-center justify-center gap-2"
+                                                className="w-full py-2.5 bg-[#1e293b] text-white rounded-xl text-[13px] font-medium hover:bg-[#0f172a] transition-colors flex items-center justify-center gap-2"
                                             >
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
                                                 智慧去背
                                             </button>
                                             {hasFalKey && onBiRefNetRemoveBackground && (() => {
@@ -1410,24 +1415,24 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 const currentOpt = birefnetOptions.find(o => o.key === birefnetModel) ?? birefnetOptions[0];
                                                 return (
                                                     <div className="relative w-full">
-                                                        <div className="flex w-full rounded-lg overflow-hidden bg-orange-500 shadow-sm shadow-orange-500/20">
-                                                            {/* 左：執行去背 */}
+                                                        <div className="flex w-full rounded-xl overflow-hidden border border-gray-200 bg-[#f8fafc]">
+                                                            {/* 左：執行去背（白底 + 橘色 icon） */}
                                                             <button
                                                                 onClick={() => onBiRefNetRemoveBackground(birefnetModel)}
-                                                                className="flex-1 flex items-center justify-center gap-2 text-white py-2.5 text-xs font-semibold hover:bg-white/10 transition-colors active:bg-white/20"
+                                                                className="flex-1 flex items-center justify-center gap-2 bg-white text-gray-800 py-2.5 text-[13px] font-medium hover:bg-gray-50 transition-colors"
                                                             >
-                                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+                                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
                                                                 BiRefNet 快速去背
                                                             </button>
-                                                            <div className="w-[1.5px] bg-white/30 my-2"/>
-                                                            {/* 右：顯示目前模式 + 開下拉 */}
+                                                            <div className="w-px bg-gray-200 my-0"/>
+                                                            {/* 右：模式選擇（灰底） */}
                                                             <button
                                                                 onClick={() => setBirefnetOpen(v => !v)}
-                                                                className="flex items-center gap-1 px-3 text-white/90 hover:bg-white/10 transition-colors active:bg-white/20"
+                                                                className="flex items-center gap-1 px-3 bg-[#f8fafc] text-gray-600 hover:bg-gray-100 transition-colors"
                                                                 aria-label="選擇去背模式"
                                                             >
-                                                                <span className="text-[11px] font-semibold whitespace-nowrap">{currentOpt.label}</span>
-                                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                <span className="text-[12px] font-medium whitespace-nowrap">{currentOpt.label}</span>
+                                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                                     <polyline points="6 9 12 15 18 9"/>
                                                                 </svg>
                                                             </button>
@@ -1458,44 +1463,43 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 );
                                             })()}
 
-                                            <div className="flex gap-2 h-9">
-                                                <div className="flex bg-[#F5F5F7] rounded-lg p-0.5 h-full items-center">
-                                                    <button 
+                                            <div className="flex gap-2">
+                                                <div className="flex bg-[#f1f5f9] p-1 rounded-xl w-[88px]">
+                                                    <button
                                                         onClick={() => setUpscaleFactor(2)}
-                                                        className={`px-3 h-full flex items-center text-[10px] font-medium rounded-md transition-all ${upscaleFactor === 2 ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
+                                                        className={`flex-1 py-1.5 text-[12px] font-medium rounded-lg transition-all ${upscaleFactor === 2 ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
                                                     >2x</button>
-                                                    <button 
+                                                    <button
                                                         onClick={() => setUpscaleFactor(4)}
-                                                        className={`px-3 h-full flex items-center text-[10px] font-medium rounded-md transition-all ${upscaleFactor === 4 ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
+                                                        className={`flex-1 py-1.5 text-[12px] font-medium rounded-lg transition-all ${upscaleFactor === 4 ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
                                                     >4x</button>
                                                 </div>
-                                                <button 
+                                                <button
                                                     onClick={() => onUpscale(upscaleFactor)}
-                                                    className="flex-1 h-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg shadow-sm transition-colors active:scale-95 flex items-center justify-center gap-1.5"
+                                                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-800 text-[13px] font-medium rounded-xl transition-colors active:scale-95 flex items-center justify-center gap-1.5"
                                                 >
-                                                    <SelectionMenuIcons.Upscale />
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1"/></svg>
                                                     智能放大
                                                 </button>
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="h-px bg-gray-100 w-full" />
-
-                                    <div className="border-t border-gray-100">
+                                    {/* 外觀區塊 - 灰底背景區隔 */}
+                                    <div className="mt-2 bg-[#f8fafc] border-t border-gray-100">
                                       <div
-                                        className="flex justify-between items-center px-4 py-2.5 cursor-pointer hover:bg-gray-50"
+                                        className="flex justify-between items-center px-5 py-3 cursor-pointer hover:bg-gray-100/60"
                                         onClick={() => setShowAppearance(!showAppearance)}
                                       >
-                                        <span className="text-xs font-semibold text-[#1D1D1F]">外觀</span>
-                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+                                        <span className="text-[12px] font-bold text-gray-900">外觀</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                                           style={{ transform: showAppearance ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                                          <path d="M2 3.5l3 3 3-3" stroke="#86868B" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                                          <polyline points="6 9 12 15 18 9"/>
                                         </svg>
                                       </div>
                                       {showAppearance && (
-                                        <div className="px-4 pb-3">
-                                          <AppearancePanel 
+                                        <div className="px-5 pb-4">
+                                          <AppearancePanel
                                               element={elements.find(el => el.id === selectedElementIds[0])!}
                                               onUpdate={(updates) => {
                                                   const el = elements.find(e => e.id === selectedElementIds[0]);
@@ -1506,40 +1510,37 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                       )}
                                     </div>
 
-                                    <div className="h-px bg-gray-100 w-full" />
-                                    
                                     {/* 視角控制器 */}
-                                    <div 
-                                        className="flex justify-between items-center px-4 py-2.5 cursor-pointer hover:bg-gray-50"
+                                    <div className="border-t border-gray-100">
+                                    <div
+                                        className="flex justify-between items-center px-5 py-3 cursor-pointer hover:bg-gray-50/80"
                                         onClick={() => setShowCamera(!showCamera)}
                                     >
-                                        <span className="text-xs font-semibold text-[#1D1D1F]">視角控制器</span>
-                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+                                        <span className="text-[12px] font-bold text-gray-900">視角控制器</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                                             style={{ transform: showCamera ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                                            <path d="M2 3.5l3 3 3-3" stroke="#86868B" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                                            <polyline points="6 9 12 15 18 9"/>
                                         </svg>
                                     </div>
                                     {showCamera && (
-                                        <div className="px-4 pb-3 flex flex-col gap-2">
-                                            <div className="bg-[#D1D1D6] p-1.5 rounded-xl shadow-inner">
-                                                <div className="grid grid-cols-3 gap-1.5">
-                                                    {CAMERA_ANGLES.map(angle => (
-                                                    <button
-                                                        key={angle.id}
-                                                        onClick={() => onCameraAngle(angle.prompt)}
-                                                        title={angle.label}
-                                                        className="group relative bg-white shadow-[0_1px_0_rgba(0,0,0,0.3)] rounded-[6px] h-10 flex items-center justify-center text-[#1D1D1F] hover:bg-white active:bg-[#E5E5EA] active:translate-y-[1px] active:shadow-none transition-all duration-75"
-                                                    >
-                                                        <span className="opacity-80 group-hover:opacity-100 scale-90">{angle.icon}</span>
-                                                    </button>
-                                                    ))}
-                                                </div>
+                                        <div className="px-5 pb-5 flex flex-col gap-3">
+                                            <div className="grid grid-cols-3 gap-[6px]">
+                                                {CAMERA_ANGLES.map(angle => (
+                                                <button
+                                                    key={angle.id}
+                                                    onClick={() => onCameraAngle(angle.prompt)}
+                                                    title={angle.label}
+                                                    className="h-9 flex items-center justify-center rounded-lg border border-[#e2e8f0] text-[#64748b] transition-all hover:bg-[#e2e8f0] hover:text-[#334155] active:bg-[#f1f5f9]"
+                                                    style={{ background: '#f8fafc' }}
+                                                >
+                                                    {angle.icon}
+                                                </button>
+                                                ))}
                                             </div>
-                                            <div className="text-center mt-1">
-                                                <span className="text-[10px] text-[#86868B]">點擊調整 AI 生成視角</span>
-                                            </div>
+                                            <p className="text-center text-[10px] text-gray-400">點擊調整 AI 生成視角</p>
                                         </div>
                                     )}
+                                    </div>{/* border-t wrapper close */}
                                 </>
                             )}
                         </div>
