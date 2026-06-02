@@ -1612,7 +1612,11 @@ const App: React.FC = () => {
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto p-1">
+            <div className={`grid gap-4 overflow-y-auto p-1 ${
+                generatedImages.length === 1 ? 'grid-cols-1 max-w-lg mx-auto w-full' :
+                generatedImages.length === 2 ? 'grid-cols-2' :
+                'grid-cols-2'
+            }`}>
               {generatedImages.map((imgSrc, index) => (
                 <div key={index} className="group relative rounded-2xl overflow-hidden bg-[#F5F5F7] border border-black/5">
                   <div className="flex items-center justify-center aspect-square p-4">
@@ -1623,10 +1627,17 @@ const App: React.FC = () => {
                        referrerPolicy="no-referrer"
                      />
                   </div>
-                  <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-black/5 flex justify-center gap-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                    <button onClick={() => addGeneratedImageToCanvas(imgSrc)} className="px-4 py-2 text-sm font-medium bg-black text-white rounded-full hover:bg-gray-800 shadow-lg transition-all">新增至畫布</button>
-                    <button onClick={() => downloadGeneratedImage(imgSrc)} className="px-4 py-2 text-sm font-medium bg-white text-[#1D1D1F] border border-black/10 rounded-full hover:bg-[#F5F5F7] transition-all">下載</button>
-                  </div>
+                  {generatedImages.length === 1 ? (
+                    <div className="p-4 bg-white/90 backdrop-blur-md border-t border-black/5 flex justify-center gap-3">
+                      <button onClick={() => addGeneratedImageToCanvas(imgSrc)} className="px-4 py-2 text-sm font-medium bg-black text-white rounded-full hover:bg-gray-800 shadow-lg transition-all">新增至畫布</button>
+                      <button onClick={() => downloadGeneratedImage(imgSrc)} className="px-4 py-2 text-sm font-medium bg-white text-[#1D1D1F] border border-black/10 rounded-full hover:bg-[#F5F5F7] transition-all">下載</button>
+                    </div>
+                  ) : (
+                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-black/5 flex justify-center gap-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                      <button onClick={() => addGeneratedImageToCanvas(imgSrc)} className="px-4 py-2 text-sm font-medium bg-black text-white rounded-full hover:bg-gray-800 shadow-lg transition-all">新增至畫布</button>
+                      <button onClick={() => downloadGeneratedImage(imgSrc)} className="px-4 py-2 text-sm font-medium bg-white text-[#1D1D1F] border border-black/10 rounded-full hover:bg-[#F5F5F7] transition-all">下載</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

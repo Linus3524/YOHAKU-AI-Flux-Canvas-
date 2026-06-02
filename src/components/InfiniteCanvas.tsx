@@ -383,7 +383,7 @@ interface InfiniteCanvasProps {
   onInteractionStart?: () => void;
   onInteractionEnd: () => void;
   setResetViewCallback: (callback: () => void) => void;
-  onGenerate: (selectedElements: CanvasElement[]) => void;
+  onGenerate: (selectedElements: CanvasElement[], count?: 1 | 2 | 3 | 4) => void;
   onContextMenu: (e: React.MouseEvent, worldPoint: Point, elementId: string | null) => void;
   onEditDrawing: (elementId: string) => void;
   onCopySelection: () => void;
@@ -451,6 +451,59 @@ const CameraIcons = {
     SW: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"></line><polyline points="19 19 5 19 5 5"></polyline></svg>,
     S:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>,
     SE: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="5" x2="19" y2="19"></line><polyline points="5 19 19 19 19 5"></polyline></svg>,
+};
+
+// ── 生成分裂按鈕（左：生成、右：選張數）────────────────────────────────────
+const GenerateSplitButton: React.FC<{ onGenerate: (count: 1 | 2 | 3 | 4) => void }> = ({ onGenerate }) => {
+    const [count, setCount] = useState<1 | 2 | 3 | 4>(2);
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="relative w-full">
+            <div className="flex w-full rounded-xl bg-gradient-to-r from-[#AF52DE] to-[#5856D6] shadow-lg shadow-purple-500/20">
+                {/* 左：生成按鈕，用目前選的張數 */}
+                <button
+                    onClick={() => onGenerate(count)}
+                    className="flex-1 flex items-center justify-center gap-2 text-white py-3 text-sm font-semibold hover:bg-white/10 transition-colors active:bg-white/20 rounded-l-xl"
+                >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+                    一鍵生成圖片
+                </button>
+                <div className="w-[1.5px] bg-white/30 my-2.5"/>
+                {/* 右：顯示目前張數 + 展開選單 */}
+                <button
+                    onClick={() => setOpen(v => !v)}
+                    className="flex items-center gap-1 px-3 text-white/90 rounded-r-xl hover:bg-white/10 transition-colors active:bg-white/20"
+                    aria-label="選擇生成張數"
+                >
+                    <span className="text-xs font-semibold tabular-nums">{count}</span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+            </div>
+
+            {open && (
+                <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpen(false)}/>
+                    <div className="absolute top-full mt-2 right-0 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-gray-100 overflow-hidden z-50 w-[68px]">
+                        {([1, 2, 3, 4] as const).map(n => (
+                            <button
+                                key={n}
+                                onClick={() => { setCount(n); setOpen(false); }}
+                                className={`w-full px-3 py-2.5 text-center text-sm font-medium transition-colors ${
+                                    count === n
+                                        ? 'bg-[#F5F5F7] text-[#AF52DE] font-semibold'
+                                        : 'text-[#1D1D1F] hover:bg-[#F5F5F7]'
+                                }`}
+                            >
+                                {n} 張
+                            </button>
+                        ))}
+                    </div>
+                </>
+            )}
+        </div>
+    );
 };
 
 const SelectionMenuIcons = {
@@ -1068,15 +1121,9 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                     )}
 
                     {elements.filter(el => selectedElementIds.includes(el.id)).some(el => ['image', 'drawing', 'shape', 'text', 'note'].includes(el.type)) && (
-                        <div className="flex w-full">
-                            <button 
-                                onClick={() => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)))}
-                                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#AF52DE] to-[#5856D6] text-white py-3 rounded-xl text-sm font-semibold shadow-lg shadow-purple-500/20 hover:opacity-90 transition-all active:scale-95"
-                            >
-                                <SelectionMenuIcons.MagicFilled />
-                                一鍵生成圖片
-                            </button>
-                        </div>
+                        <GenerateSplitButton
+                            onGenerate={(count) => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)), count)}
+                        />
                     )}
                     
                     {showGenerativeSettings && (
