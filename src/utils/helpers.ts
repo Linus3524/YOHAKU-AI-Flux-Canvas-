@@ -71,14 +71,6 @@ export const STYLE_PRESETS = [
 
   // ── 攝影與底片 ──────────────────────────────────────────────
   {
-    id: 'Vintage 1950s', name: '復古底片', label: 'Vintage 1950s Film Stock',
-    prompt: 'Transform into 1950s vintage film photography: faded desaturated colors, warm yellow-orange film grain, slight vignette, Kodachrome color palette, retro mid-century aesthetic, soft lens halation on bright areas.'
-  },
-  {
-    id: 'Polaroid', name: '拍立得', label: 'Polaroid Overtone',
-    prompt: 'Transform into Polaroid instant photo aesthetic: slightly overexposed bright center, cool blue-green color shift in shadows, soft focus edges, slight color bleed and chemical imperfections, warm whites, vintage snapshot feel.'
-  },
-  {
     id: 'Noir', name: '黑白電影', label: 'Film Noir Photography',
     prompt: 'Transform into Film Noir black and white photography: extreme high contrast, deep crushed blacks, bright harsh highlights, dramatic side lighting with strong shadows, 1940s detective movie aesthetic, no color at all — pure monochrome.'
   },
@@ -477,6 +469,138 @@ export const STYLE_PRESETS = [
   {
     id: 'Industrial Marker', name: '工程速寫麥克筆', label: 'Industrial Marker Sketch',
     prompt: 'Transform into dynamic architectural sketch marker rendering: rapid directional marker strokes, raw bleeding ink edges, high-contrast black and cool gray shadow blocks, sharp white gel pen edge highlights, raw industrial design concept sketch aesthetic.'
+  },
+
+  // ── 經典數位相機與 CCD 模擬 ────────────────────────────────────
+  {
+    id: 'Canon IXUS CCD', name: '早期佳能卡片機風', label: 'Canon IXUS Early 2000s',
+    prompt: 'Transform using Early 2000s Canon IXUS digital camera style: 4:3 aspect ratio, slightly overexposed flash, Y2K soft digital noise, warm compact sensor color rendering, snapshot aesthetic.'
+  },
+  {
+    id: 'Canon A620 CCD', name: '佳能老數位相機', label: 'Canon PowerShot A620',
+    prompt: 'Transform using Canon PowerShot A620 aesthetic: CCD sensor color rendering, rich warm skin tones, vintage digital bloom on highlights, early 2000s compact digital photograph feel.'
+  },
+  {
+    id: 'Nikon S200 CCD', name: '尼康冷調數位相機', label: 'Nikon Coolpix S200',
+    prompt: 'Transform using Nikon Coolpix S200 digital camera style: cool blue undertones, sharp rendering, early compact digital photograph, clinical precise color science.'
+  },
+  {
+    id: 'Leica CCD', name: '萊卡高對比冷白CCD', label: 'Leica M8 CCD',
+    prompt: 'Transform using Leica M8 CCD sensor aesthetic: high contrast, crisp cool white balance, deep shadow rendering, cinematic street snapshot quality, micro-detail precision.'
+  },
+  {
+    id: 'CCD Negative Film', name: 'CCD 負片', label: 'CCD Negative Emulation',
+    prompt: 'Transform into vintage CCD sensor emulating negative film: high color saturation, slightly green-tinted shadows, warm skin tones, organic digital-analog hybrid grain texture.'
+  },
+  {
+    id: 'DV Camcorder', name: '復古低畫質錄影帶', label: '90s DV Camcorder Hi8',
+    prompt: 'Transform into 90s handheld DV camcorder footage style: interlaced scan lines, low resolution compression artifacts, motion blur, warm overexposed highlights, raw unstabilized snapshot energy.'
+  },
+  {
+    id: 'Polaroid Instant Film', name: '拍立得即時顯影', label: 'Polaroid Instant Film',
+    prompt: 'Transform into Polaroid instant film photograph: square frame, faded colors, low contrast shadows, warm nostalgic tint, slight chemical color shift at edges, overexposed center bloom.'
+  },
+  {
+    id: 'Fujifilm Superia', name: '富士經典正片', label: 'Fujifilm Superia Film',
+    prompt: 'Transform using Fujifilm Superia film stock: pronounced green-teal tones, rich organic grain, soft highlights, Japanese street snapshot feel, subtle skin warmth with lifted cool shadows.'
+  },
+  {
+    id: 'Kodak Portra 400', name: '柯達經典暖調底片', label: 'Kodak Portra 400 Film',
+    prompt: 'Transform using Kodak Portra 400 film style: warm golden undertones, fine organic film grain, soft creamy skin rendering, gentle highlight roll-off, timeless portrait film aesthetic.'
+  },
+  {
+    id: '135mm Analog Film', name: '復古135膠卷', label: 'Classic 135mm Analog Film',
+    prompt: 'Transform into classic 135mm analog film photography: cinematic grain texture, subtle light leaks at frame edges, rich tonal gradation, warm mid-century color palette, organic film halation.'
+  },
+
+  // ── 光學硬體與 AI 氛圍 ─────────────────────────────────────────
+  {
+    id: 'Fuji Direct Flash', name: '富士硬閃光直打', label: 'Fujifilm Direct Flash',
+    prompt: 'Transform using Fujifilm style direct camera flash photography: harsh direct on-camera lighting, deep sharp shadows behind subject, flat overlit foreground, raw snapshot documentary energy.'
+  },
+  {
+    id: 'Telephoto Compression', name: '大光圈長焦壓縮', label: 'Telephoto Lens Compression',
+    prompt: 'Transform using telephoto lens compression: 85mm or 135mm focal length rendering, shallow depth of field, creamy background bokeh blur, subject isolation with compressed spatial layers.'
+  },
+  {
+    id: 'DSLR 50mm', name: '標準單眼大光圈', label: 'DSLR 50mm f/1.4',
+    prompt: 'Transform using DSLR photography, shot on 50mm f/1.4 lens: natural background blur, crisp subject isolation, neutral color rendering, professional editorial photograph quality.'
+  },
+  {
+    id: 'Commercial Portrait', name: '商業人像大師光影', label: 'Commercial Editorial Portrait',
+    prompt: 'Transform into commercial editorial portrait: professional studio lighting setup, rim light on subject edges, high-end fashion magazine aesthetic, clean controlled shadows, polished skin rendering.'
+  },
+  {
+    id: 'DJI Pocket Vlog', name: '現代Vlog廣角', label: 'DJI Osmo Pocket 3 Vlog',
+    prompt: 'Transform using DJI Osmo Pocket 3 aesthetic: ultra-wide angle lens, crisp modern digital sharpness, vibrant high dynamic range, smooth stabilized tracking shot feel, contemporary vlog color science.'
+  },
+  {
+    id: 'Golden Hour Backlight', name: '夕陽逆光金黃', label: 'Golden Hour Rim Light',
+    prompt: 'Transform into intense golden hour sunset photography: rim lighting from behind, warm amber and gold color cast, cinematic sun flare streaks, rich warm atmospheric haze.'
+  },
+  {
+    id: 'Blue Hour Twilight', name: '暮光藍調時刻', label: 'Blue Hour Photography',
+    prompt: 'Transform into blue hour photography: twilight ambiance, deep indigo sky gradient, soft ambient city lights, melancholic cool mood, gentle exposure balance between sky and ground.'
+  },
+  {
+    id: 'Japanese Airy High Key', name: '日系清透高光', label: 'Japanese Airy High Key',
+    prompt: 'Transform into bright sunny day high-key photography: clean desaturated shadows, airy light aesthetic, crisp whites, pure blue sky, lifted exposure, Japanese natural light photography style.'
+  },
+  {
+    id: 'Ocean Cool Tone', name: '海洋度假冷調', label: 'Ocean Side Cool Tone',
+    prompt: 'Transform using ocean-side photography color grading: aquamarine and cyan color cast, coastal breeze atmosphere, daylight reflection on water, fresh cool desaturated tone.'
+  },
+  {
+    id: 'German Lens Muted Green', name: '德系深邃冷綠調', label: 'German Lens Dark Green',
+    prompt: 'Transform using classic German lens aesthetic: deep muted greens, moody desaturated tones, heavy contrast, rich dark textures, Zeiss or Leitz Elmarit color rendering character.'
+  },
+  {
+    id: 'Ricoh GR Street', name: '理光GR文青定焦', label: 'Ricoh GR Street Photography',
+    prompt: 'Transform using Ricoh GR street photography style: high contrast, high sharpness, snapshot aesthetic, subtle vignetting, 28mm wide angle rendering, gritty urban documentary feel.'
+  },
+  {
+    id: 'Ricoh Positive Film', name: '理光正片綠調', label: 'Ricoh Positive Film Green',
+    prompt: 'Transform using Ricoh signature positive film effect: saturated foliage green tones, warm organic skin rendering, rich micro-contrast, vibrant yet natural color reproduction.'
+  },
+  {
+    id: 'Fujifilm X-T', name: '富士X-T', label: 'Fujifilm X-Trans Classic Chrome',
+    prompt: 'Transform using Fujifilm X-Trans sensor emulation with Classic Chrome film simulation: soft matte skin tones, desaturated blues, lifted shadows, cinematic low-contrast film mood.'
+  },
+  {
+    id: 'Hasselblad Medium Format', name: '哈蘇中片幅電影底片', label: 'Hasselblad Kodak Vision3 5207',
+    prompt: 'Transform using medium format 6x6 camera quality with Kodak Vision3 250D cinema film stock: extreme dynamic range, ultra-realistic tonal depth, creamy highlights, micro-textured shadow gradation.'
+  },
+  {
+    id: 'Olympus Zuiko Blue', name: '奧林巴斯日系清透', label: 'Olympus Zuiko Sky Blue',
+    prompt: 'Transform using Olympus Zuiko lens signature: high micro-contrast, crisp sky-blue color science (Olympus Blue), sharp edge detail, clean neutral skin tones, bright airy rendering.'
+  },
+  {
+    id: 'Fujifilm FinePix Retro', name: '富士新復古數位相機', label: 'Fujifilm FinePix Early Digital',
+    prompt: 'Transform using early Fujifilm FinePix digital camera vibe: organic warm skin tones, subtle filmic digital noise, high-key pastel rendering, early 2000s digital consumer camera feel.'
+  },
+  {
+    id: 'Canon High End Compact', name: '佳能高階隨身機', label: 'Canon High-End Compact Vlog',
+    prompt: 'Transform using modern high-end compact vlogger camera aesthetics: warm skin tone optimization, bright clean exposures, smooth background blur, contemporary Canon color science rendering.'
+  },
+  {
+    id: 'Apple iPhone XS HDR', name: '蘋果經典手機發色', label: 'Apple iPhone Smart HDR',
+    prompt: 'Transform using Apple Smart HDR computational photography look: slightly flattened contrast, highly optimized computational lighting balance, daytime realism, clean clinical color accuracy.'
+  },
+  {
+    id: 'Polaroid Digital Print', name: '拍立得數位版', label: 'Hybrid Digital Instant Print',
+    prompt: 'Transform into hybrid digital instant print style: high contrast, slightly blown-out highlights, dynamic range compression, square crop feel, modern instant photo aesthetic.'
+  },
+  {
+    id: 'Olympus XZ1 CCD', name: '奧林巴斯大光圈CCD', label: 'Olympus XZ1 Premium CCD',
+    prompt: 'Transform using 2010s Olympus XZ1 premium CCD sensor: bright f/1.8 lens bloom on highlights, rich color depth, vintage premium digital compact rendering, warm saturated tones.'
+  },
+  {
+    id: 'Fujifilm Panorama', name: '富士全景寬螢幕底片', label: 'Fujifilm Disposable Panoramic',
+    prompt: 'Transform using disposable camera aesthetic: fixed focus rendering, slight plastic lens barrel distortion, horizontal wide panoramic crop, authentic cheap lens vignette, raw film snapshot texture.'
+  },
+  {
+    id: 'Olympus Film SLR', name: '奧林巴斯底片單眼', label: 'Olympus Analog SLR 70s',
+    prompt: 'Transform using 70s Olympus analog SLR film camera feel: rich organic halation around light sources, vintage high contrast film rendering, mechanical shutter aesthetic, warm analog color depth.'
   },
 ];
 
