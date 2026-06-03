@@ -550,8 +550,9 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           <span className="font-bold text-gray-700">瀏覽器支援：</span>
                           <span className="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full text-[10px]">Chrome ✓</span>
                           <span className="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full text-[10px]">Edge ✓</span>
-                          <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded-full text-[10px]">Firefox / Safari（降級）</span>
+                          <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded-full text-[10px]">Firefox / Safari</span>
                         </div>
+                        <p className="text-gray-600 leading-relaxed mb-2"><strong className="text-gray-700">Firefox / Safari 降級模式：</strong>不支援直接寫入檔案，Cmd+S 與右鍵選單改為顯示「匯出畫布」（強制下載新 .json 檔）與「匯入畫布」（選擇舊 .json 開啟）。LocalStorage 自動存檔仍正常運作。</p>
                         <p className="text-gray-600 leading-relaxed"><strong className="text-orange-600">Brave：</strong>網址列輸入 <code className="bg-orange-50 text-orange-700 px-1 rounded border border-orange-100 font-mono text-[10px]">brave://flags</code>，搜尋「file system」，找到 File System Access API 設為 Enabled，重啟即可。</p>
                       </div>
                     </div>
