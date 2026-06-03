@@ -19,19 +19,19 @@ export const STYLE_PRESETS = [
 
   // ── 繪畫與插畫 ──────────────────────────────────────────────
   {
-    id: 'Minimalist', name: '極簡', label: 'Minimalist',
+    id: 'Minimalist', name: '極簡主義', label: 'Minimalist',
     prompt: 'Transform into minimalist style: reduce to essential shapes only, maximum white space, flat colors with no gradients, clean geometric forms, remove all unnecessary detail, Swiss design influence.'
   },
   {
-    id: 'Watercolor', name: '水彩暈染', label: 'Watercolor',
+    id: 'Watercolor', name: '水彩暈染', label: 'Watercolor Bleed',
     prompt: 'Transform into expressive watercolor painting: soft wet-on-wet color bleeding at edges, visible paper texture, translucent layered washes, organic brushstrokes, colors bleed and merge naturally, white paper showing through highlights.'
   },
   {
-    id: 'Oil Painting', name: '油畫質感', label: 'Oil Painting',
+    id: 'Oil Painting', name: '古典油畫質感', label: 'Classical Oil Painting',
     prompt: 'Transform into classical oil painting: thick impasto brushstrokes with visible texture, rich saturated colors, dramatic chiaroscuro lighting, Renaissance or Baroque influence, painterly edges with soft blending in shadows.'
   },
   {
-    id: 'Sketch', name: '素描線條', label: 'Sketch',
+    id: 'Sketch', name: '素描線條', label: 'Pencil Sketch Lines',
     prompt: 'Transform into pencil sketch: hand-drawn graphite lines, cross-hatching for shadows, loose gestural strokes, white paper background, varying line weight from thin to bold, minimal color — monochromatic gray tones only.'
   },
   {
@@ -45,15 +45,15 @@ export const STYLE_PRESETS = [
 
   // ── 動漫與漫畫 ──────────────────────────────────────────────
   {
-    id: 'Comic Book', name: '美式漫畫', label: 'Comic Book',
+    id: 'Comic Book', name: '美式漫畫', label: 'American Comic Book Style',
     prompt: 'Transform into American comic book style: bold black ink outlines, Ben-Day dots halftone shading, flat primary colors, dynamic action lines, Marvel or DC Comics influence, high contrast cel-shading.'
   },
   {
-    id: 'Japanese Anime', name: '日系動漫', label: 'Japanese Anime',
+    id: 'Japanese Anime', name: '日系動漫', label: 'Japanese Anime Style',
     prompt: 'Transform into Japanese anime illustration style: clean vector-like outlines, cel-shaded flat colors with sharp highlight spots, large expressive eyes if characters present, pastel color palette, Studio Ghibli or modern anime aesthetic.'
   },
   {
-    id: 'Manga Ink', name: '漫畫墨線', label: 'Manga Ink',
+    id: 'Manga Ink', name: '漫畫墨線', label: 'Manga Ink Lineart',
     prompt: 'Transform into black and white manga style: precise ink linework, screen tone dot patterns for shading, high contrast black and white only, speed lines for motion, dramatic shadow shapes, Shonen manga aesthetic.'
   },
   {
@@ -65,29 +65,29 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Korean webtoon style: clean modern line art, soft pastel color palette, subtle gradient shading, contemporary fashion and character design, LINE Webtoon aesthetic, slightly realistic proportions with large eyes.'
   },
   {
-    id: 'Mecha', name: '機甲鋼彈', label: 'Mecha Gundam Style',
+    id: 'Mecha', name: '機甲鋼彈', label: 'Mecha Gundam Aesthetic',
     prompt: 'Transform into Gundam mecha illustration style: hard surface mechanical armor panels, technical linework with panel lines and rivets, metallic color schemes (gray, white, red, blue), sharp angular geometric forms, Sunrise anime mecha design influence.'
   },
 
   // ── 攝影與底片 ──────────────────────────────────────────────
   {
-    id: 'Vintage 1950s', name: '復古底片', label: 'Vintage 1950s',
+    id: 'Vintage 1950s', name: '復古底片', label: 'Vintage 1950s Film Stock',
     prompt: 'Transform into 1950s vintage film photography: faded desaturated colors, warm yellow-orange film grain, slight vignette, Kodachrome color palette, retro mid-century aesthetic, soft lens halation on bright areas.'
   },
   {
-    id: 'Polaroid', name: '拍立得', label: 'Polaroid',
+    id: 'Polaroid', name: '拍立得', label: 'Polaroid Overtone',
     prompt: 'Transform into Polaroid instant photo aesthetic: slightly overexposed bright center, cool blue-green color shift in shadows, soft focus edges, slight color bleed and chemical imperfections, warm whites, vintage snapshot feel.'
   },
   {
-    id: 'Noir', name: '黑白電影', label: 'Noir',
+    id: 'Noir', name: '黑白電影', label: 'Film Noir Photography',
     prompt: 'Transform into Film Noir black and white photography: extreme high contrast, deep crushed blacks, bright harsh highlights, dramatic side lighting with strong shadows, 1940s detective movie aesthetic, no color at all — pure monochrome.'
   },
   {
-    id: 'Sepia Old', name: '懷舊泛黃', label: 'Sepia Old',
+    id: 'Sepia Old', name: '懷舊泛黃', label: 'Vintage Sepia',
     prompt: 'Transform into antique sepia photograph: warm brown monochrome tones, aged paper yellowing, heavy film grain and scratches, vignette darkening at corners, 1900s Victorian era photography aesthetic, faded and slightly overexposed.'
   },
   {
-    id: 'Lomo', name: 'Lomo暗角', label: 'Lomo Photography',
+    id: 'Lomo', name: 'Lomo暗角', label: 'Lomo Photography Vignette',
     prompt: 'Transform into Lomography film style: extreme dark vignette at all corners, oversaturated vivid colors, slight lens distortion, cross-processed color shifts (cyan in shadows, yellow in highlights), accidental light leaks, raw unfiltered film energy.'
   },
   {
@@ -101,7 +101,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Cyberpunk aesthetic: neon pink, cyan and purple lighting, rain-slicked reflective surfaces, high-tech low-life urban atmosphere, holographic overlays, dark dystopian mood, Blade Runner and Ghost in the Shell influence.'
   },
   {
-    id: 'Pop Art', name: '普普風', label: 'Pop Art',
+    id: 'Pop Art', name: '普普藝術', label: 'Pop Art Screenprint',
     prompt: 'Transform into Pop Art style: bold flat primary colors (red, yellow, blue, black), Ben-Day dot printing texture, thick black outlines, Andy Warhol or Roy Lichtenstein influence, graphic and commercial aesthetic, halftone dot patterns.'
   },
   {
@@ -109,15 +109,15 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into neon glow aesthetic: glowing neon light effects in pink, cyan and electric blue, dark background with luminous color blooms, neon sign light bleed, 80s nightclub atmosphere, electric glow halos around all edges.'
   },
   {
-    id: 'Pixel Art', name: '像素風', label: 'Pixel Art',
+    id: 'Pixel Art', name: '像素風', label: 'Pixel Art 8-bit / 16-bit',
     prompt: 'Transform into retro pixel art: visible large square pixels, limited 16-32 color palette, no anti-aliasing, 8-bit or 16-bit video game aesthetic, chunky pixelated forms, NES or SNES era game sprite style.'
   },
   {
-    id: 'Glassmorphism', name: '毛玻璃', label: 'Glassmorphism',
+    id: 'Glassmorphism', name: '毛玻璃', label: 'Glassmorphism UI',
     prompt: 'Transform into glassmorphism UI aesthetic: frosted glass translucent panels, backdrop blur effect, subtle white border highlights, soft pastel gradient backgrounds visible through glass, clean modern tech product design aesthetic.'
   },
   {
-    id: 'Glitch Effect', name: '故障藝術', label: 'Glitch Effect',
+    id: 'Glitch Effect', name: '故障藝術', label: 'Glitch Effect Artifacts',
     prompt: 'Transform into digital glitch art: RGB color channel separation (chromatic aberration), horizontal scan line displacement, pixel sorting artifacts, corrupted data visual noise, VHS tracking errors, cyberpunk digital decay aesthetic.'
   },
   {
@@ -125,7 +125,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Vaporwave aesthetic: pink and purple pastel palette, retro 80s-90s nostalgia, Greek marble statues, palm trees, sunset gradients, synthwave grid lines, Windows 95 pixel fonts influence, dreamy lo-fi atmosphere.'
   },
   {
-    id: 'Flat Design', name: '扁平化', label: 'Flat Design',
+    id: 'Flat Design', name: '扁平化', label: 'Flat Design Minimal',
     prompt: 'Transform into flat design illustration: zero shadows or gradients, bold geometric shapes, limited flat color palette, clean vector graphic aesthetic, modern app icon style, Material Design or iOS icon influence.'
   },
 
@@ -135,11 +135,11 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into soft matte pastel aesthetic: desaturated dusty pastel colors (blush pink, sage green, lavender, cream), no glossy highlights, soft diffused lighting, gentle and calming mood, modern Korean or Japanese lifestyle photography feel.'
   },
   {
-    id: 'Gothic', name: '哥德暗黑', label: 'Gothic',
+    id: 'Gothic', name: '哥德暗黑', label: 'Gothic Noir',
     prompt: 'Transform into Gothic dark art: deep blacks and dark purples, dramatic candlelight or moonlight, Victorian architectural elements, intricate ornamental details, dark romantic atmosphere, medieval cathedral aesthetic, ominous and mysterious mood.'
   },
   {
-    id: 'Grunge', name: '髒髒搖滾', label: 'Grunge',
+    id: 'Grunge', name: '髒髒搖滾', label: 'Grunge Texture',
     prompt: 'Transform into grunge aesthetic: distressed textures, rough torn edges, splattered ink and paint, washed-out desaturated colors, worn and degraded surfaces, 90s alternative rock DIY visual culture, raw and unpolished energy.'
   },
   {
@@ -151,7 +151,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into duotone color treatment: replace all shadows with deep electric blue (#0a0a8e) and all highlights with hot pink (#ff2d9b), high contrast graphic design aesthetic, Spotify-style duotone poster effect, all midtones blend between the two colors.'
   },
   {
-    id: 'Paper Cutout', name: '剪紙陰影', label: 'Paper Cutout',
+    id: 'Paper Cutout', name: '剪紙陰影', label: 'Paper Cutout Layered',
     prompt: 'Transform into paper cutout collage art: layered flat paper shapes with visible drop shadows between layers, craft paper texture, precise cut edges, shadow depth suggesting physical paper layers, matisse or kara walker inspired silhouette style.'
   },
   {
@@ -163,37 +163,37 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into muted earth tone palette: terracotta, warm sand, olive green, burnt sienna, raw umber, dusty rose — all desaturated warm neutrals, natural organic aesthetic, Scandinavian or Japanese wabi-sabi interior design feel.'
   },
   {
-    id: 'Blueprint', name: '藍圖工程', label: 'Blueprint',
+    id: 'Blueprint', name: '藍圖工程', label: 'Blueprint Cyanotype',
     prompt: 'Transform into architectural blueprint technical drawing: white or cyan linework on deep Prussian blue background, precise technical annotation lines, measurement indicators, engineering drafting aesthetic, isometric or orthographic projection feel.'
   },
   {
-    id: 'Risograph', name: '孔版印刷', label: 'Risograph',
+    id: 'Risograph', name: '孔版印刷', label: 'Risograph Print Overlay',
     prompt: 'Transform into Risograph print aesthetic: limited 2-3 color ink layers with visible misregistration offset, grainy halftone dot texture, slightly translucent ink overlap creating new mixed colors, zine and indie print culture, fluorescent ink colors (fluo pink, teal, yellow).'
   },
 
   // ── 節慶限定 ────────────────────────────────────────────────
   {
-    id: 'Lunar New Year', name: '台式新春喜慶', label: 'Lunar New Year',
+    id: 'Lunar New Year', name: '台式新春喜慶', label: 'Lunar New Year Traditional Red',
     prompt: 'Transform into modern Lunar New Year celebration: rich crimson and imperial gold foil accents, traditional intricate paper-cutting patterns, dynamic festive typography energy, elegant Chinese ink flourishes, red lanterns and firecracker bursts, auspicious joyful atmosphere.'
   },
   {
-    id: 'Japanese Matsuri', name: '日系夏日祭典', label: 'Japanese Matsuri',
+    id: 'Japanese Matsuri', name: '日系夏日祭典', label: 'Japanese Matsuri Festivities',
     prompt: 'Transform into traditional Japanese summer festival (夏祭り): deep indigo night sky illuminated by glowing warm paper lanterns (chochin), vibrant festival food stall colors, exploding fireworks bokeh in background, uchiwa fan and yukata textile motifs, lively summer night atmosphere.'
   },
   {
-    id: 'Sakura Ohanami', name: '浪漫櫻花祭', label: 'Sakura Ohanami',
+    id: 'Sakura Ohanami', name: '浪漫櫻花祭', label: 'Sakura Ohanami Cherry Blossom',
     prompt: 'Transform into airy Japanese cherry blossom festival (お花見): soft pastel pink sakura petals drifting in gentle breeze, golden hour spring sunlight filtering through blossoms, minimalist clean composition, romantic spring Tokyo vibe, delicate petal bokeh background.'
   },
   {
-    id: 'Mid-Autumn Moon', name: '中秋明月夜', label: 'Mid-Autumn Moon',
+    id: 'Mid-Autumn Moon', name: '中秋明月夜', label: 'Mid-Autumn Moonlit',
     prompt: 'Transform into mystical Mid-Autumn festival: giant luminous golden full moon dominating composition, deep midnight blue star-filled sky, delicate jade rabbit and osmanthus silhouettes, glowing traditional lanterns reflecting on water, elegant ethereal mooncake festival atmosphere.'
   },
   {
-    id: 'Cozy Christmas', name: '北歐聖誕冬景', label: 'Cozy Christmas',
+    id: 'Cozy Christmas', name: '北歐聖誕冬景', label: 'Cozy Christmas Hygge',
     prompt: 'Transform into cozy Nordic Christmas aesthetic: rich pine green and velvet crimson color palette, warm glowing golden fairy lights bokeh, soft fluffy falling snowflakes, rustic dark wood and knit textures, warm hygge candlelight holiday mood, Scandinavian winter comfort.'
   },
   {
-    id: 'Spooky Halloween', name: '萬聖搞怪霓虹', label: 'Spooky Halloween',
+    id: 'Spooky Halloween', name: '萬聖搞怪霓虹', label: 'Spooky Halloween Neon',
     prompt: 'Transform into playful Halloween horror: neon pumpkin orange and toxic acid green, deep dark purple night sky, glowing carved jack-o-lantern expressions, subtle cobweb and bat overlays, high contrast spooky party vibe, fun-scary not terrifying mood.'
   },
   {
@@ -201,15 +201,15 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into luxurious Valentine\'s Day romance: saturated ruby red and soft blush pink gradient, rich warm candlelight glow, elegant rose petal textures scattered across surface, romantic soft-focus bokeh blur, velvet and satin material feel, intimate and passionate mood.'
   },
   {
-    id: 'Japanese Shogatsu', name: '日系和風正月', label: 'Japanese Shogatsu',
+    id: 'Japanese Shogatsu', name: '日系和風正月', label: 'Japanese Shogatsu Elegance',
     prompt: 'Transform into sacred Japanese New Year (正月): auspicious red and white Kohaku color scheme, elegant gold pine, bamboo and plum blossom (松竹梅) accents, minimalist modern Shinto torii gate aesthetic, crisp clean winter holiday atmosphere, celebratory fresh start energy.'
   },
   {
-    id: 'Easter Pastel', name: '復活節粉彩', label: 'Easter Pastel',
+    id: 'Easter Pastel', name: '復活節粉彩', label: 'Easter Pastel Egg',
     prompt: 'Transform into playful Easter holiday: soft pastel marshmallow colors (mint green, baby blue, lemon yellow, lilac), cute hidden Easter egg patterns, whimsical spring floral and bunny accents, cheerful bright spring morning aesthetic, gentle and joyful mood.'
   },
   {
-    id: 'Retro Ghost Fest', name: '台式復古中元', label: 'Retro Ghost Fest',
+    id: 'Retro Ghost Fest', name: '台式復古中元', label: 'Taiwanese Retro Ghost Fest',
     prompt: '將圖片轉換為1980年代台灣中元普渡的復古視覺風格：農曆七月夜市巷弄中溫暖的紅色紙燈籠光暈、燃燒金紙的火焰光影、供桌上的香火煙霧繚繞、野台戲的老舊木製舞台背板、褪色的台灣老街底片顆粒感，主色調為琥珀黃與廟宇紅，充滿台灣本土民俗儀式氛圍。'
   },
 
@@ -439,7 +439,7 @@ export const STYLE_PRESETS = [
 
   // ── 手繪與動漫特化 ──────────────────────────────────────────
   {
-    id: 'Concept Watercolor', name: '原畫水彩風', label: 'Concept Watercolor',
+    id: 'Concept Watercolor', name: '原畫水彩風', label: 'Concept Art Watercolor',
     prompt: 'Transform into light novel concept art watercolor: delicate fine-line ink work, translucent washed layers of pale indigo and amber, airy atmospheric background, soft bleeding edges, ethereal fluid character design aesthetic.'
   },
   {
@@ -447,35 +447,35 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into traditional Japanese transparent watercolor (透明水彩): clear layered washes, pigment pooling naturally at edge outlines, visible cold-press paper grain texture, luminous wet-on-wet gradients, pure luminosity.'
   },
   {
-    id: 'Retro Cel Anime', name: '90年代賽璐璐片', label: 'Retro Cel Anime',
+    id: 'Retro Cel Anime', name: '90年代賽璐璐片', label: 'Retro 1990s Cel Anime',
     prompt: 'Transform into 1990s retro anime cel sheet style: sharp physical hand-inked outlines, solid flat cel-shading with exactly one layer of hard shadow, slight dust and acetate sheet reflection artifacts, vintage VHS scan grade color.'
   },
   {
-    id: 'Radiant Shinkai', name: '極致光影動漫', label: 'Radiant Shinkai',
+    id: 'Radiant Shinkai', name: '極致光影動漫', label: 'Radiant Shinkai Lens Flare',
     prompt: 'Transform into radiant cinematic anime: hyper-detailed cumulonimbus clouds, intense golden hour rim lighting, dramatic lens flares, vibrant deep blue and blazing orange color science, Makoto Shinkai Your Name influence.'
   },
   {
-    id: 'Soft KyoAni', name: '輕柔日常動漫', label: 'Soft KyoAni',
+    id: 'Soft KyoAni', name: '輕柔日常動漫', label: 'Soft KyoAni Aesthetic',
     prompt: 'Transform into slice-of-life soft focus moe anime: delicate feather-light line art, soft chromatic aberration glow, highly detailed hair strand highlights, gentle emotional ambient lighting, Kyoto Animation K-On influence.'
   },
   {
-    id: 'City Pop Graphic', name: '時髦City Pop插畫', label: 'City Pop Graphic',
+    id: 'City Pop Graphic', name: '時髦City Pop插畫', label: 'City Pop Graphic Retro',
     prompt: 'Transform into retro-modern City Pop anime illustration: sharp geometric outlines, flat neon-pastel color blocks, 1980s Tokyo fashion aesthetic, stark graphic contrast, clean minimalist layout, Hisashi Eguchi manga cover style.'
   },
   {
-    id: 'Fine Pencil Tech', name: '細膩色鉛筆', label: 'Fine Pencil Tech',
+    id: 'Fine Pencil Tech', name: '細膩色鉛筆', label: 'Fine Colored Pencil',
     prompt: 'Transform into detailed colored pencil illustration: visible wax pigment texture on heavy sketch paper, intricate layered cross-hatching for shadows, soft feathered blending transitions, sharp defined edges mixed with pencil dust grain.'
   },
   {
-    id: 'Storybook Pencil', name: '童話繪本色鉛筆', label: 'Storybook Pencil',
+    id: 'Storybook Pencil', name: '童話繪本色鉛筆', label: 'Storybook Pencil Illustration',
     prompt: 'Transform into whimsical storybook colored pencil illustration: light loose sketchy outlines, deliberate whitespace, gentle cross-hatch shading, cozy childhood fairy tale picture book aesthetic, warm textured watercolor paper surface.'
   },
   {
-    id: 'Copic Manga', name: 'Copics麥克筆漫畫', label: 'Copic Manga',
+    id: 'Copic Manga', name: 'Copics麥克筆漫畫', label: 'Copic Marker Manga',
     prompt: 'Transform into professional Copic marker manga illustration: alcohol marker smooth gradient blending, visible marker overlap streaks, sharp technical multi-liner ink outlines, vibrant hand-colored Shonen Jump magazine cover style.'
   },
   {
-    id: 'Industrial Marker', name: '工程速寫麥克筆', label: 'Industrial Marker',
+    id: 'Industrial Marker', name: '工程速寫麥克筆', label: 'Industrial Marker Sketch',
     prompt: 'Transform into dynamic architectural sketch marker rendering: rapid directional marker strokes, raw bleeding ink edges, high-contrast black and cool gray shadow blocks, sharp white gel pen edge highlights, raw industrial design concept sketch aesthetic.'
   },
 ];
