@@ -258,18 +258,18 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
         onMouseDown={handleMouseDown}
         onClick={handleFabClick}
         style={{ left: position.x, top: position.y }}
-        className={`fixed z-[6003] w-14 h-14 rounded-full bg-white/70 backdrop-blur-xl flex items-center justify-center
+        className={`fixed z-[6003] w-11 h-11 rounded-full bg-white/70 backdrop-blur-xl flex items-center justify-center
           shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_0_0_1px_rgba(255,255,255,0.6)]
           ${isDragging ? 'cursor-grabbing' : 'cursor-grab transition-all duration-500 hover:scale-110 hover:bg-white active:scale-95'}`}
         title="YOHAKU 功能助手"
       >
         {/* Lightning icon */}
-        <svg className={`w-5 h-5 text-gray-700 absolute transition-all duration-500 ${isOpen ? 'opacity-0 scale-50 rotate-90' : 'opacity-100 scale-100'}`}
+        <svg className={`w-4 h-4 text-gray-700 absolute transition-all duration-500 ${isOpen ? 'opacity-0 scale-50 rotate-90' : 'opacity-100 scale-100'}`}
           xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
         </svg>
         {/* X icon */}
-        <svg className={`w-5 h-5 text-gray-700 absolute transition-all duration-500 ${isOpen ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-50 -rotate-90'}`}
+        <svg className={`w-4 h-4 text-gray-700 absolute transition-all duration-500 ${isOpen ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-50 -rotate-90'}`}
           xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
         </svg>

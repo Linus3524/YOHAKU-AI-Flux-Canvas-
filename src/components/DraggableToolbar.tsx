@@ -50,17 +50,17 @@ const Icons = {
     </svg>
   ),
   Select: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path><path d="M13 13l6 6"></path>
     </svg>
   ),
   Hand: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"></path><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
     </svg>
   ),
   Note: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
       <polyline points="14 2 14 8 20 8"/>
       <line x1="16" y1="13" x2="8" y2="13"/>
@@ -69,32 +69,32 @@ const Icons = {
     </svg>
   ),
   Text: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="4 7 4 4 20 4 20 7"></polyline>
       <line x1="9" y1="20" x2="15" y2="20"></line>
       <line x1="12" y1="4" x2="12" y2="20"></line>
     </svg>
   ),
   Draw: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 19l7-7 3 3-7 7-3-3z"/>
       <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
       <path d="M2 2l7.586 7.586"/>
     </svg>
   ),
   Arrow: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <line x1="5" y1="12" x2="19" y2="12"/>
       <polyline points="12 5 19 12 12 19"/>
     </svg>
   ),
   Shape: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
     </svg>
   ),
   Add: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <line x1="12" y1="5" x2="12" y2="19"></line>
       <line x1="5" y1="12" x2="19" y2="12"></line>
     </svg>
@@ -114,30 +114,30 @@ const Icons = {
     </svg>
   ),
   Copy: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
     </svg>
   ),
   Undo: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 7v6h6"/>
       <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
     </svg>
   ),
   Redo: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 7v6h-6"/>
       <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/>
     </svg>
   ),
   Magic: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
     </svg>
   ),
   Crop: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="6" cy="6" r="3" />
       <circle cx="6" cy="18" r="3" />
       <line x1="20" y1="4" x2="8.12" y2="15.88" />
@@ -146,7 +146,7 @@ const Icons = {
     </svg>
   ),
   Patterns: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2l10 7-3.5 13H5.5L2 9z"/>
     </svg>
   ),
@@ -340,7 +340,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
       }}
       onMouseDown={handleMouseDown}
       className={`
-        fixed z-[999] flex items-center gap-2 px-2 py-2
+        fixed z-[999] flex items-center gap-1 px-1.5 py-1.5
         bg-white/80 backdrop-blur-xl
         rounded-full
         border border-white/50
@@ -350,12 +350,12 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
       `}
     >
       {/* Grip Handle */}
-      <div className="pl-3 pr-1 cursor-grab flex items-center justify-center opacity-40 hover:opacity-80 transition-opacity">
+      <div className="pl-2 pr-0.5 cursor-grab flex items-center justify-center opacity-40 hover:opacity-80 transition-opacity">
         <Icons.Grip />
       </div>
 
       {/* Interaction Mode Switcher */}
-      <div className="flex bg-black/5 rounded-2xl p-1 gap-1">
+      <div className="flex bg-black/5 rounded-2xl p-0.5 gap-0.5">
           <ToolButton 
             onClick={() => onSetInteractionMode('select')} 
             icon={<Icons.Select />} 
@@ -370,7 +370,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
           />
       </div>
 
-      <div className="w-px h-8 bg-black/5 mx-1" />
+      <div className="w-px h-6 bg-black/5 mx-0.5" />
 
       {/* Creation Tools */}
       <ToolButton onClick={onAddNote} icon={<Icons.Note />} label="便利貼" />
@@ -577,23 +577,23 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
           )}
       </div>
 
-      <div className="w-px h-8 bg-black/5 mx-1" />
+      <div className="w-px h-6 bg-black/5 mx-0.5" />
       
       {/* Duplicate Tool */}
       <ToolButton onClick={onDuplicate} icon={<Icons.Copy />} label="複製" disabled={!hasSelection} />
 
-      <div className="w-px h-8 bg-black/5 mx-1" />
+      <div className="w-px h-6 bg-black/5 mx-0.5" />
 
       {/* History Controls */}
       <ToolButton onClick={onUndo} icon={<Icons.Undo />} label="復原" disabled={!canUndo} />
       <ToolButton onClick={onRedo} icon={<Icons.Redo />} label="重做" disabled={!canRedo} />
       
-      <div className="w-px h-8 bg-black/5 mx-1" />
+      <div className="w-px h-6 bg-black/5 mx-0.5" />
 
       {/* Crop Tool */}
       <ToolButton onClick={onCrop} icon={<Icons.Crop />} label="裁剪" disabled={!canCrop} />
 
-      <div className="w-px h-8 bg-black/5 mx-1" />
+      <div className="w-px h-6 bg-black/5 mx-0.5" />
 
       {/* Magic Button */}
       {selectedElement?.type !== 'artboard' && (
@@ -604,19 +604,19 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
           }}
           disabled={isProcessing}
           className={`
-              group flex flex-col items-center justify-center gap-1.5 px-4 py-2 rounded-2xl transition-all duration-200
+              group flex flex-col items-center justify-center gap-1 px-3 py-1.5 rounded-xl transition-all duration-200
               ${isProcessing
                   ? 'opacity-50 cursor-wait'
                   : 'hover:bg-purple-50 active:scale-95'}
           `}
         >
           <div className={`
-              flex items-center justify-center w-5 h-5 transition-all
+              flex items-center justify-center w-4 h-4 transition-all
               ${isProcessing ? 'animate-spin border-2 border-[#AF52DE] border-t-transparent rounded-full' : 'text-[#AF52DE]'}
           `}>
                 {!isProcessing && <Icons.Magic />}
           </div>
-          <span className={`text-[10px] font-medium leading-none tracking-tight ${isProcessing ? 'text-yohaku-text-muted' : 'text-yohaku-text-muted group-hover:text-[#AF52DE]'}`}>
+          <span className={`text-[9px] font-medium leading-none tracking-tight ${isProcessing ? 'text-yohaku-text-muted' : 'text-yohaku-text-muted group-hover:text-[#AF52DE]'}`}>
               Magic
           </span>
         </button>
@@ -631,16 +631,16 @@ const ToolButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React
     onClick={onClick}
     disabled={disabled}
     className={`
-      flex flex-col items-center justify-center gap-1.5 px-4 py-2 rounded-2xl transition-all duration-200
-      ${disabled 
-        ? 'opacity-30 cursor-not-allowed' 
-        : active 
+      flex flex-col items-center justify-center gap-1 px-3 py-1.5 rounded-xl transition-all duration-200
+      ${disabled
+        ? 'opacity-30 cursor-not-allowed'
+        : active
             ? 'bg-black text-white shadow-lg shadow-black/20'
             : 'hover:bg-black/5 text-yohaku-text-muted hover:text-yohaku-text-main active:scale-95'}
-      min-w-[60px]
+      min-w-[48px]
     `}
   >
     <div className="text-current">{icon}</div>
-    <span className="text-[10px] font-medium tracking-tight leading-none text-current">{label}</span>
+    <span className="text-[9px] font-medium tracking-tight leading-none text-current">{label}</span>
   </button>
 );

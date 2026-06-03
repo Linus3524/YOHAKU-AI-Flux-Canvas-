@@ -81,8 +81,25 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     // Keep ref in sync so save callbacks don't capture stale state
     useEffect(() => { currentFileHandleRef.current = currentFileHandle; }, [currentFileHandle]);
 
-    // On mount: restore persisted file handle and verify permission
+    // On mount: restore persisted file handle only if localStorage has canvas data
     useEffect(() => {
+        // If canvas is empty (or only has the default welcome note) on startup, the file link is stale — clear it
+        const savedRaw = localStorage.getItem(STORAGE_KEY);
+        let hasCanvasData = false;
+        try {
+            const parsed = JSON.parse(savedRaw ?? '[]') as CanvasElement[];
+            // 有真實內容 = 不是空陣列，且不是只有歡迎便利貼
+            hasCanvasData = Array.isArray(parsed) &&
+                parsed.length > 0 &&
+                !(parsed.length === 1 && parsed[0].id === 'welcome-note');
+        } catch {}
+
+        if (!hasCanvasData) {
+            // Canvas is empty → disconnect from any linked file silently
+            clearFileHandle();
+            return;
+        }
+
         loadFileHandle().then(async (handle) => {
             if (!handle) return;
             const ok = await verifyHandlePermission(handle);
@@ -1014,6 +1031,30 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         setElements(prev => prev.map(el => el.id === id ? { ...el, isLocked: !el.isLocked } : el), { addToHistory: false });
     }, [setElements]);
 
+    /** Toggle visibility for all members of a group (based on majority state) */
+    const handleToggleGroupVisibility = useCallback((groupId: string) => {
+        setElements(prev => {
+            const members = prev.filter(el => el.groupId === groupId);
+            if (members.length === 0) return prev;
+            // If all visible → hide all; otherwise → show all
+            const allVisible = members.every(el => el.isVisible);
+            const newVisible = !allVisible;
+            return prev.map(el => el.groupId === groupId ? { ...el, isVisible: newVisible } : el);
+        }, { addToHistory: false });
+    }, [setElements]);
+
+    /** Toggle lock for all members of a group */
+    const handleToggleGroupLock = useCallback((groupId: string) => {
+        setElements(prev => {
+            const members = prev.filter(el => el.groupId === groupId);
+            if (members.length === 0) return prev;
+            // If all locked → unlock all; otherwise → lock all
+            const allLocked = members.every(el => el.isLocked);
+            const newLocked = !allLocked;
+            return prev.map(el => el.groupId === groupId ? { ...el, isLocked: newLocked } : el);
+        }, { addToHistory: false });
+    }, [setElements]);
+
     const handleRename = useCallback((id: string, newName: string) => {
         setElements(prev => prev.map(el => el.id === id ? { ...el, name: newName } : el));
     }, [setElements]);
@@ -1024,14 +1065,32 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         setElements(prev => {
             const sourceIndex = prev.findIndex(el => el.id === sourceId);
             const targetIndex = prev.findIndex(el => el.id === targetId);
-            
+
             if (sourceIndex === -1 || targetIndex === -1) return prev;
 
             const newElements = [...prev];
             const [movedElement] = newElements.splice(sourceIndex, 1);
             newElements.splice(targetIndex, 0, movedElement);
-            
+
             return newElements.map((el, index) => ({ ...el, zIndex: index + 1 }));
+        });
+    }, [setElements]);
+
+    /** Move all members of a group to be adjacent to targetId in layer order */
+    const handleGroupLayerDragDrop = useCallback((groupId: string, targetId: string) => {
+        setElements(prev => {
+            const groupMembers = prev.filter(el => el.groupId === groupId);
+            if (groupMembers.length === 0) return prev;
+            // If the target is itself a group member, do nothing
+            if (groupMembers.some(m => m.id === targetId)) return prev;
+            // Remove all group members from the array
+            const withoutGroup = prev.filter(el => el.groupId !== groupId);
+            const targetIndex = withoutGroup.findIndex(el => el.id === targetId);
+            if (targetIndex === -1) return prev;
+            // Insert group members right before the target position
+            const result = [...withoutGroup];
+            result.splice(targetIndex, 0, ...groupMembers);
+            return result.map((el, index) => ({ ...el, zIndex: index + 1 }));
         });
     }, [setElements]);
 
@@ -1638,8 +1697,11 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         handleApplyCrop,
         handleToggleVisibility,
         handleToggleLock,
+        handleToggleGroupVisibility,
+        handleToggleGroupLock,
         handleRename,
         handleLayerDragDrop,
+        handleGroupLayerDragDrop,
         handleDeleteLayer,
         handleGroup,
         handleUngroup,

@@ -291,8 +291,11 @@ const App: React.FC = () => {
       handleApplyCrop,
       handleToggleVisibility,
       handleToggleLock,
+      handleToggleGroupVisibility,
+      handleToggleGroupLock,
       handleRename,
       handleLayerDragDrop,
+      handleGroupLayerDragDrop,
       handleDeleteLayer,
       handleGroup,
       handleUngroup,
@@ -1755,7 +1758,10 @@ const App: React.FC = () => {
             }}
             onToggleVisibility={handleToggleVisibility}
             onToggleLock={handleToggleLock}
+            onToggleGroupVisibility={handleToggleGroupVisibility}
+            onToggleGroupLock={handleToggleGroupLock}
             onReorder={handleLayerDragDrop}
+            onReorderGroup={handleGroupLayerDragDrop}
             onRename={handleRename}
             onGroup={handleGroup}
             onUngroup={handleUngroup}
@@ -2007,6 +2013,8 @@ const App: React.FC = () => {
           isGrouped={!!isGrouped}
           isLocked={isLocked}
           isVisible={isVisible}
+          hasLockedElements={elements.some(el => el.isLocked)}
+          hasHiddenElements={elements.some(el => !el.isVisible)}
         />
       )}
 

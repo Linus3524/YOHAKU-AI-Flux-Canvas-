@@ -109,21 +109,21 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 position: 'fixed',
                 left: position.x,
                 top: position.y,
-                width: 320,
+                width: 256,
                 zIndex: 5000,
             }}
             className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.12)] border border-white/50 flex flex-col overflow-hidden animate-fade-in-right"
         >
             {/* Header */}
-            <div 
-                className={`p-4 border-b border-black/5 bg-white/50 flex justify-between items-center select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+            <div
+                className={`p-3 border-b border-black/5 bg-white/50 flex justify-between items-center select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                 onMouseDown={handleMouseDown}
             >
-                <div className="flex items-center gap-2 pointer-events-none">
+                <div className="flex items-center gap-1.5 pointer-events-none">
                     <ArtboardIcon />
-                    <span className="text-sm font-bold text-[#1D1D1F]">工作區域設定</span>
+                    <span className="text-xs font-bold text-[#1D1D1F]">工作區域設定</span>
                 </div>
-                <button 
+                <button
                     onClick={(e) => { e.stopPropagation(); setIsOpen(false); }}
                     className="text-[#86868B] hover:text-[#1D1D1F] p-1 rounded-md hover:bg-black/5 transition-colors cursor-pointer"
                 >
@@ -131,34 +131,34 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 </button>
             </div>
 
-            <div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
+            <div className="p-3 space-y-3 overflow-y-auto max-h-[70vh]">
                 {/* Name */}
-                <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#86868B] uppercase tracking-wider">名稱</label>
-                    <input 
+                <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">名稱</label>
+                    <input
                         type="text"
                         value={element.artboardName}
                         onChange={(e) => onUpdate({ artboardName: e.target.value })}
-                        className="w-full bg-[#F5F5F7] border border-transparent focus:border-[#007AFF] rounded-lg px-3 py-2 text-sm outline-none transition-colors"
+                        className="w-full bg-[#F5F5F7] border border-transparent focus:border-[#007AFF] rounded-lg px-2.5 py-1.5 text-xs outline-none transition-colors"
                     />
                 </div>
 
                 {/* Preset Size */}
-                <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#86868B] uppercase tracking-wider">尺寸預設</label>
+                <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">尺寸預設</label>
                     <select
                         value={element.presetName || ''}
                         onChange={(e) => {
                             const preset = ARTBOARD_PRESETS.find(p => p.name === e.target.value);
                             if (preset) {
-                                onUpdate({ 
-                                    width: Math.round(preset.w), 
-                                    height: Math.round(preset.h), 
-                                    presetName: preset.name 
+                                onUpdate({
+                                    width: Math.round(preset.w),
+                                    height: Math.round(preset.h),
+                                    presetName: preset.name
                                 });
                             }
                         }}
-                        className="w-full bg-[#F5F5F7] border border-transparent focus:border-[#007AFF] rounded-lg px-3 py-2 text-sm outline-none transition-colors"
+                        className="w-full bg-[#F5F5F7] border border-transparent focus:border-[#007AFF] rounded-lg px-2.5 py-1.5 text-xs outline-none transition-colors"
                     >
                         <option value="" disabled>選擇尺寸...</option>
                         {ARTBOARD_PRESETS.map(preset => (
@@ -170,10 +170,10 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 </div>
 
                 {/* Custom Size */}
-                <div className="flex gap-2">
-                    <div className="flex-1 space-y-1.5">
-                        <label className="text-xs font-bold text-[#86868B] uppercase tracking-wider">寬度</label>
-                        <input 
+                <div className="flex gap-1.5">
+                    <div className="flex-1 space-y-1">
+                        <label className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">寬度</label>
+                        <input
                             type="number"
                             value={widthInput}
                             onChange={e => setWidthInput(e.target.value)}
@@ -182,12 +182,12 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                                 setWidthInput(String(val));
                                 onUpdate({ width: val, presetName: '自訂尺寸' });
                             }}
-                            className="w-full bg-[#F5F5F7] border border-transparent focus:border-[#007AFF] rounded-lg px-3 py-2 text-sm outline-none transition-colors"
+                            className="w-full bg-[#F5F5F7] border border-transparent focus:border-[#007AFF] rounded-lg px-2.5 py-1.5 text-xs outline-none transition-colors"
                         />
                     </div>
-                    <div className="flex-1 space-y-1.5">
-                        <label className="text-xs font-bold text-[#86868B] uppercase tracking-wider">高度</label>
-                        <input 
+                    <div className="flex-1 space-y-1">
+                        <label className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">高度</label>
+                        <input
                             type="number"
                             value={heightInput}
                             onChange={e => setHeightInput(e.target.value)}
@@ -196,23 +196,23 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                                 setHeightInput(String(val));
                                 onUpdate({ height: val, presetName: '自訂尺寸' });
                             }}
-                            className="w-full bg-[#F5F5F7] border border-transparent focus:border-[#007AFF] rounded-lg px-3 py-2 text-sm outline-none transition-colors"
+                            className="w-full bg-[#F5F5F7] border border-transparent focus:border-[#007AFF] rounded-lg px-2.5 py-1.5 text-xs outline-none transition-colors"
                         />
                     </div>
                 </div>
 
                 {/* Background Color */}
-                <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#86868B] uppercase tracking-wider">背景顏色</label>
-                    <div className="flex gap-2">
-                        <button 
+                <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">背景顏色</label>
+                    <div className="flex gap-1.5">
+                        <button
                             onClick={() => onUpdate({ backgroundColor: '#ffffff' })}
-                            className={`w-8 h-8 rounded-full border-2 ${element.backgroundColor === '#ffffff' ? 'border-[#007AFF]' : 'border-gray-200'} bg-white`}
+                            className={`w-6 h-6 rounded-full border-2 ${element.backgroundColor === '#ffffff' ? 'border-[#007AFF]' : 'border-gray-200'} bg-white`}
                             title="白色"
                         />
-                        <button 
+                        <button
                             onClick={() => onUpdate({ backgroundColor: 'transparent' })}
-                            className={`w-8 h-8 rounded-full border-2 ${element.backgroundColor === 'transparent' ? 'border-[#007AFF]' : 'border-gray-200'} bg-gray-100 flex items-center justify-center`}
+                            className={`w-6 h-6 rounded-full border-2 ${element.backgroundColor === 'transparent' ? 'border-[#007AFF]' : 'border-gray-200'} bg-gray-100 flex items-center justify-center`}
                             title="透明"
                         >
                             <div className="w-full h-full rounded-full" style={{ backgroundImage: 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)', backgroundSize: '8px 8px', backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px' }} />
@@ -221,18 +221,18 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 </div>
 
                 {/* Export Buttons */}
-                <div className="pt-4 border-t border-gray-100 flex flex-col gap-2">
+                <div className="pt-3 border-t border-gray-100 flex flex-col gap-1.5">
                     <button
                         onClick={onExport}
-                        className="w-full py-2.5 bg-[#007AFF] text-white rounded-xl text-sm font-bold hover:bg-[#0066CC] transition-colors shadow-sm active:scale-95"
+                        className="w-full py-2 bg-[#007AFF] text-white rounded-xl text-xs font-bold hover:bg-[#0066CC] transition-colors shadow-sm active:scale-95"
                     >
                         匯出此工作區域（PNG）
                     </button>
                     <button
                         onClick={onExportSVG}
-                        className="w-full py-2.5 bg-[#1D1D1F] text-white rounded-xl text-sm font-bold hover:bg-[#333] transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-2"
+                        className="w-full py-2 bg-[#1D1D1F] text-white rounded-xl text-xs font-bold hover:bg-[#333] transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
                         匯出工作區域（SVG）
                     </button>
                 </div>

@@ -1136,7 +1136,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
         {/* ── 群組等比縮放邊框 ── */}
         {groupBounds && !croppingElementId && (() => {
           const { x, y, w, h } = groupBounds;
-          const PAD = 6;
+          const PAD = 0;
           const cornerHandles: ['nw'|'ne'|'sw'|'se'|'n'|'s'|'e'|'w', React.CSSProperties, string][] = [
             ['nw', { top: -5, left:  -5 }, 'cursor-nw-resize'],
             ['ne', { top: -5, right: -5 }, 'cursor-ne-resize'],
@@ -1280,35 +1280,35 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
          />
       )}
       
-      <div className="absolute bottom-6 right-6 z-20 flex items-center gap-3">
-          <div className="flex items-center bg-white/90 backdrop-blur-xl rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.08)] border border-black/5 p-1 h-10">
-              <button 
+      <div className="absolute bottom-6 right-6 z-20 flex items-center gap-2">
+          <div className="flex items-center bg-white/90 backdrop-blur-xl rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.08)] border border-black/5 p-0.5 h-9">
+              <button
                   onClick={() => handleZoomStep(-0.1)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 text-[#1D1D1F] transition-colors"
+                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-black/5 text-[#1D1D1F] transition-colors"
                   aria-label="Zoom Out"
               >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               </button>
-              
-              <span className="w-12 text-center text-xs font-mono font-medium text-[#1D1D1F] select-none">
+
+              <span className="w-10 text-center text-[11px] font-mono font-medium text-[#1D1D1F] select-none">
                   {Math.round(zoom * 100)}%
               </span>
 
-              <button 
+              <button
                   onClick={() => handleZoomStep(0.1)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 text-[#1D1D1F] transition-colors"
+                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-black/5 text-[#1D1D1F] transition-colors"
                   aria-label="Zoom In"
               >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               </button>
           </div>
 
-          <button 
+          <button
               onClick={handleFitToScreen}
-              className="w-10 h-10 bg-white/90 backdrop-blur-xl rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.08)] border border-black/5 flex items-center justify-center text-[#1D1D1F] hover:bg-white hover:scale-105 transition-all active:scale-95"
+              className="w-9 h-9 bg-white/90 backdrop-blur-xl rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.08)] border border-black/5 flex items-center justify-center text-[#1D1D1F] hover:bg-white hover:scale-105 transition-all active:scale-95"
               title="適合畫面 (Fit to Screen)"
           >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
               </svg>
           </button>
