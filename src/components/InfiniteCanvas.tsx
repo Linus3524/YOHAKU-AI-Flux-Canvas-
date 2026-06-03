@@ -845,15 +845,32 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
       const scaleX = nw / sb.w;
       const scaleY = nh / sb.h;
 
-      onUpdateMultipleElements(startElements.map(el => ({
-        ...el,
-        position: {
-          x: ox + (el.position.x - sb.x) * scaleX,
-          y: oy + (el.position.y - sb.y) * scaleY,
-        },
-        width:  Math.max(4, el.width  * scaleX),
-        height: Math.max(4, el.height * scaleY),
-      })));
+      onUpdateMultipleElements(startElements.map(el => {
+        const base = {
+          ...el,
+          position: {
+            x: ox + (el.position.x - sb.x) * scaleX,
+            y: oy + (el.position.y - sb.y) * scaleY,
+          },
+          width:  Math.max(4, el.width  * scaleX),
+          height: Math.max(4, el.height * scaleY),
+        };
+        // 箭頭：同步縮放 start / end 端點
+        if (el.type === 'arrow') {
+          const a = el as any;
+          return { ...base,
+            start: { x: ox + (a.start.x - sb.x) * scaleX, y: oy + (a.start.y - sb.y) * scaleY },
+            end:   { x: ox + (a.end.x   - sb.x) * scaleX, y: oy + (a.end.y   - sb.y) * scaleY },
+          };
+        }
+        // 文字：同步縮放 fontSize（取 scaleX/scaleY 平均，最小 8px）
+        if (el.type === 'text') {
+          const t = el as any;
+          const avgScale = (scaleX + scaleY) / 2;
+          return { ...base, fontSize: Math.max(8, Math.round(t.fontSize * avgScale)) };
+        }
+        return base;
+      }));
       return;
     }
 

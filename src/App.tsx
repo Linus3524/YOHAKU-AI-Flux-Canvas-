@@ -319,6 +319,29 @@ const App: React.FC = () => {
       clearStorage,
   } = useCanvas(showToast);
 
+  // ── 存檔確認 Modal ──────────────────────────────────────────
+  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
+
+  // 有既有 handle 時先跳確認，否則直接開 Save As
+  const handleSaveFileWithConfirm = useCallback(() => {
+    if (currentFileName) {
+      setSaveConfirmOpen(true);
+    } else {
+      handleSaveFile();
+    }
+  }, [currentFileName, handleSaveFile]);
+
+  const handleSaveConfirmProceed = useCallback(async () => {
+    setSaveConfirmOpen(false);
+    await handleSaveFile();
+  }, [handleSaveFile]);
+
+  const handleSaveConfirmDiscard = useCallback(async () => {
+    setSaveConfirmOpen(false);
+    await handleNewCanvas(); // 清除 handle，下次存檔會開 Save As
+    showToast('已中斷連結，下次存檔將另存新檔');
+  }, [handleNewCanvas, showToast]);
+
   // Wrap handleDeleteLayer to also clean up IndexedDB cache
   const handleDeleteLayerWithCache = useCallback((id: string) => {
     const el = elements.find(e => e.id === id);
@@ -1268,7 +1291,7 @@ const App: React.FC = () => {
       if (isCtrlOrCmd) {
         if (e.key.toLowerCase() === 's') {
           e.preventDefault();
-          if (e.shiftKey) handleSaveAsFile(); else handleSaveFile();
+          if (e.shiftKey) handleSaveAsFile(); else handleSaveFileWithConfirm();
           return;
         }
       }
@@ -1285,7 +1308,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [deleteElement, undo, redo, editingDrawing, editingImage, outpaintingState, copySelection, pasteSelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, setElements, handleCancelOutpainting, handleSaveFile, handleSaveAsFile]);
+  }, [deleteElement, undo, redo, editingDrawing, editingImage, outpaintingState, copySelection, pasteSelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
   
   useEffect(() => {
     const preventDefaults = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
@@ -1529,6 +1552,35 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* ── 存檔確認 Modal ── */}
+      {saveConfirmOpen && (
+        <div className="fixed inset-0 z-[7500] flex items-center justify-center bg-black/25 backdrop-blur-sm" onClick={() => setSaveConfirmOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] border border-black/8 w-[360px] p-6" onClick={e => e.stopPropagation()}>
+            <div className="mb-5">
+              <h3 className="font-semibold text-[#1D1D1F] text-[15px] mb-1">覆蓋存檔</h3>
+              <p className="text-[12px] text-[#86868B] leading-relaxed">
+                確定要覆蓋桌面的 <span className="font-medium text-[#1D1D1F]">「{currentFileName}」</span>？
+                <br />此操作無法復原。
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSaveConfirmOpen(false)}
+                className="flex-1 py-2.5 rounded-xl border border-black/10 text-[#1D1D1F] text-[13px] font-medium hover:bg-gray-50 transition-colors"
+              >取消</button>
+              <button
+                onClick={handleSaveConfirmDiscard}
+                className="flex-1 py-2.5 rounded-xl border border-black/10 text-[#86868B] text-[13px] font-medium hover:bg-gray-50 transition-colors"
+              >中斷連結</button>
+              <button
+                onClick={handleSaveConfirmProceed}
+                className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-[13px] font-medium hover:bg-gray-700 transition-colors"
+              >存檔</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showStyleLibrary && (() => {
         const STYLE_CATEGORIES = [
           { label: '🖌 繪畫與插畫',       ids: ['Minimalist','Watercolor','Oil Painting','Sketch','Impressionism','Chinese Ink Wash','Concept Watercolor','Transparent Wash','Fine Pencil Tech','Storybook Pencil','Industrial Marker'] },
@@ -1676,7 +1728,7 @@ const App: React.FC = () => {
             onSelectShapeTool={handleSelectShapeTool}
             onExportCanvas={handleExportCanvas}
             onImportCanvas={triggerImportCanvas}
-            onSaveFile={handleSaveFile}
+            onSaveFile={handleSaveFileWithConfirm}
             onSaveAsFile={handleSaveAsFile}
             onOpenFile={triggerImportCanvas}
             currentFileName={currentFileName}
@@ -1927,7 +1979,7 @@ const App: React.FC = () => {
                 if (artboard) downloadArtboard(artboard, elements);
             },
             importCanvas: triggerImportCanvas,
-            saveFile: handleSaveFile,
+            saveFile: handleSaveFileWithConfirm,
             saveAsFile: handleSaveAsFile,
             openFile: triggerImportCanvas,
             isFileSystemSupported,
