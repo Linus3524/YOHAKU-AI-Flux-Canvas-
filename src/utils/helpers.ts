@@ -365,8 +365,8 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Obsidian luxury dark aesthetic: deep glossy liquid jet-black background, ultra-sharp contrast between matte and mirror-sheen black coatings, volcanic glass surface texture, mysterious premium dark aura, minimal light reflections cutting through deep darkness.'
   },
   {
-    id: 'Prompt Playground', name: '提示詞遊樂場', label: 'Prompt Playground',
-    prompt: 'Transform into Prompt Playground tech-art style: retro UI structural elements, accidental spreadsheet grid backdrops, code snippet and terminal overlays integrated into art composition, toggles and dropdown window motifs, lo-fi tech-empowerment creative energy.'
+    id: 'Prompt Playground', name: '軟體介面藝術', label: 'Software Interface Art',
+    prompt: 'Transform into Software Interface Art style: UI elements and application windows embedded as artistic motifs, spreadsheet grid textures, terminal code overlays, dialog boxes and dropdown menus as compositional layers, screen-captured interface fragments collaged into fine art, digital materiality aesthetic.'
   },
   {
     id: 'Cyber Hacker', name: '電子世界駭客風', label: 'Cyber Hacker',
