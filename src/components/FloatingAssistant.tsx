@@ -79,7 +79,8 @@ const FEATURE_DOCS = [
     color: "text-yohaku-text-main",
     items: [
       { title: "轉換為圖片", desc: "對文字、形狀、箭頭右鍵轉換，採用 3 倍超取樣確保清晰銳利。" },
-      { title: "復原/重做 & 匯出匯入", desc: "完整歷史記錄支援，並可將畫布匯出為 JSON 備份或匯入還原。" },
+      { title: "復原/重做", desc: "完整歷史記錄支援，Cmd+Z 復原、Cmd+Shift+Z 重做。" },
+      { title: "檔案儲存系統", desc: "支援真實檔案存取：Cmd+S 儲存至同一個 .json 檔、Cmd+Shift+S 另存新檔、右鍵選單可開啟舊檔。畫布同時也會每秒自動存入瀏覽器本地（LocalStorage），不怕意外關閉。\n\n瀏覽器支援：Chrome ✓、Edge ✓、Brave ✓（需手動啟用，見下方說明）、Firefox / Safari 自動降級為匯出/匯入模式。\n\nBrave 啟用教學：在網址列輸入 brave://flags，搜尋「file system」，找到 File System Access API 相關選項設為 Enabled，重新啟動 Brave 即可使用完整存檔功能。" },
       { title: "清除存檔", desc: "右鍵點擊空白畫布，選底部紅色「清除存檔」，可清除所有本地儲存資料（LocalStorage），釋放空間或解決容量警告。操作不可復原，請謹慎使用。" }
     ]
   },
@@ -88,6 +89,8 @@ const FEATURE_DOCS = [
 const SHORTCUTS = [
   { key: 'Space', label: '抓手工具' },
   { key: 'Ctrl+Z/Y', label: '復原/重做' },
+  { key: 'Ctrl+S', label: '儲存檔案' },
+  { key: 'Ctrl+Shift+S', label: '另存新檔' },
   { key: 'Ctrl + D', label: '複製' },
   { key: 'Ctrl + G', label: '群組/解散' },
   { key: 'Alt + 拖曳', label: '就地複製' },
