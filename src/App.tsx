@@ -282,6 +282,7 @@ const App: React.FC = () => {
       handleSelectElement,
       handleMarqueeSelect,
       updateElements: originalUpdateElements, // Rename to use wrapper
+      updateMultipleElements,
       beginTransform,
       endTransform,
       handleMergeLayers: originalMergeLayers,
@@ -1637,6 +1638,7 @@ const App: React.FC = () => {
         onCameraAngle={handleCameraAngle}
         onRemoveBackground={handleRemoveBackground}
 
+        onUpdateMultipleElements={updateMultipleElements}
         onHarmonize={handleHarmonize}
         isGenerating={isGenerating}
         generatingElementIds={generatingElementIds}

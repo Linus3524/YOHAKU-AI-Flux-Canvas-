@@ -23,6 +23,7 @@ interface TransformableElementProps {
   onDragEnd?: () => void;
   interactionMode: 'select' | 'hand';
   screenToWorld: (screenPoint: Point) => Point;
+  disableResizeHandles?: boolean;
 }
 
 type ResizeHandle = 'se' | 'sw' | 'ne' | 'nw' | 'e' | 'w' | 's' | 'n';
@@ -48,7 +49,7 @@ type Interaction = {
   resizeHandle?: ResizeHandle;
 } | null;
 
-export const TransformableElement: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld }) => {
+export const TransformableElement: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld, disableResizeHandles }) => {
   const [interaction, setInteraction] = useState<Interaction>(null);
   const [isEditing, setIsEditing] = useState(false);
   const elementRef = useRef<HTMLDivElement>(null);
@@ -1300,10 +1301,10 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             <div className="absolute left-1/2 -translate-x-1/2 w-px pointer-events-none opacity-40"
                                 style={{ top: -12, height: 12, backgroundColor: getLayerColor(element.type) }} />
 
-                            {/* Curved text: box is always auto-sized — suppress all resize handles */}
+                            {/* Curved text or group mode: suppress individual resize handles */}
                             {(() => {
                                 const isCurvedText = element.type === 'text' && Math.abs((element as any).curveStrength || 0) > 0.1;
-                                if (isCurvedText) return null;
+                                if (isCurvedText || disableResizeHandles) return null;
                                 return (
                                     <>
                                         {/* Corner handles：中心精確對齊選取框角落（7px 正方形，偏移 -3px = 半寬） */}

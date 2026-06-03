@@ -416,6 +416,14 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         transformPendingRef.current = false;
     }, []);
 
+    // 批次更新多個元素（群組等比縮放用）
+    const updateMultipleElements = useCallback((updatedElements: CanvasElement[]) => {
+        const isFirstFrame = transformPendingRef.current;
+        transformPendingRef.current = false;
+        const map = new Map(updatedElements.map(el => [el.id, el]));
+        setElements(prev => prev.map(el => map.has(el.id) ? map.get(el.id)! : el), { addToHistory: isFirstFrame });
+    }, [setElements]);
+
     const updateElements = useCallback((updatedElement: CanvasElement, dragDelta?: Point) => {
         // 手勢首幀 → addToHistory:true（新增一筆，保住手勢前狀態 S0）
         // 後續幀     → addToHistory:false（原地覆寫工作副本）
@@ -1621,6 +1629,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         handleSelectElement,
         handleMarqueeSelect,
         updateElements,
+        updateMultipleElements,
         beginTransform,
         endTransform,
         handleMergeLayers,

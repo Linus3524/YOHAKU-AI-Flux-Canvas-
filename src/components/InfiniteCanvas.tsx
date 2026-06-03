@@ -512,6 +512,7 @@ interface InfiniteCanvasProps {
   generationModel?: string;
   onSetGenerationModel?: (model: string) => void;
   hasAtlasKey?: boolean;
+  onUpdateMultipleElements?: (elements: CanvasElement[]) => void;
 }
 
 // ... (MarqueeRect, CanvasApi, Constants, CameraIcons, SelectionMenuIcons, CAMERA_ANGLES, ASPECT_RATIOS) ...
@@ -678,6 +679,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   generationModel = 'gemini',
   onSetGenerationModel,
   hasAtlasKey = false,
+  onUpdateMultipleElements,
 }, ref) => {
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -702,6 +704,28 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [birefnetOpen, setBirefnetOpen] = useState(false);
   const [ratioOpen, setRatioOpen] = useState(false);
   const ratioRef = useRef<HTMLDivElement>(null);
+
+  // ── 群組等比縮放 ──────────────────────────────────────────────
+  const groupResizeRef = useRef<{
+    handle: 'nw'|'ne'|'sw'|'se'|'n'|'s'|'e'|'w';
+    startBounds: { x: number; y: number; w: number; h: number };
+    startElements: CanvasElement[];
+    startWX: number; startWY: number;
+  } | null>(null);
+
+  // 只在所有選取元素都屬同一個 groupId 時顯示群組邊框
+  const groupBounds = useMemo(() => {
+    if (selectedElementIds.length < 2) return null;
+    const sel = elements.filter(el => selectedElementIds.includes(el.id));
+    const gid = sel[0]?.groupId;
+    if (!gid || !sel.every(el => el.groupId === gid)) return null;
+    const minX = Math.min(...sel.map(el => el.position.x));
+    const minY = Math.min(...sel.map(el => el.position.y));
+    const maxX = Math.max(...sel.map(el => el.position.x + el.width));
+    const maxY = Math.max(...sel.map(el => el.position.y + el.height));
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }, [elements, selectedElementIds]);
+
   const isArtboardSelected = useMemo(() => elements.some(el => selectedElementIds.includes(el.id) && el.type === 'artboard'), [elements, selectedElementIds]);
   const isOnlyArrowSelected = useMemo(() => {
       const selected = elements.filter(el => selectedElementIds.includes(el.id));
@@ -797,6 +821,42 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   }, [isSpacebarPressed, pan, outpaintingState, onSelectElement, screenToWorld, croppingElementId, interactionMode, activeShapeTool]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // ── 群組縮放攔截 ──
+    if (groupResizeRef.current && onUpdateMultipleElements) {
+      const { handle, startBounds: sb, startElements, startWX, startWY } = groupResizeRef.current;
+      const wp = screenToWorld({ x: e.clientX, y: e.clientY });
+      const dx = wp.x - startWX;
+      const dy = wp.y - startWY;
+      const MIN = 20;
+
+      let ox = sb.x, oy = sb.y, nw = sb.w, nh = sb.h;
+      // Corner handles = 等比縮放 (width drives scale)
+      // Edge handles = 單軸縮放
+      switch (handle) {
+        case 'se': nw = Math.max(MIN, sb.w + dx); nh = sb.h * (nw / sb.w); break;
+        case 'sw': nw = Math.max(MIN, sb.w - dx); nh = sb.h * (nw / sb.w); ox = sb.x + sb.w - nw; break;
+        case 'ne': nw = Math.max(MIN, sb.w + dx); nh = sb.h * (nw / sb.w); oy = sb.y + sb.h - nh; break;
+        case 'nw': nw = Math.max(MIN, sb.w - dx); nh = sb.h * (nw / sb.w); ox = sb.x + sb.w - nw; oy = sb.y + sb.h - nh; break;
+        case 'e':  nw = Math.max(MIN, sb.w + dx); break;
+        case 'w':  nw = Math.max(MIN, sb.w - dx); ox = sb.x + sb.w - nw; break;
+        case 's':  nh = Math.max(MIN, sb.h + dy); break;
+        case 'n':  nh = Math.max(MIN, sb.h - dy); oy = sb.y + sb.h - nh; break;
+      }
+      const scaleX = nw / sb.w;
+      const scaleY = nh / sb.h;
+
+      onUpdateMultipleElements(startElements.map(el => ({
+        ...el,
+        position: {
+          x: ox + (el.position.x - sb.x) * scaleX,
+          y: oy + (el.position.y - sb.y) * scaleY,
+        },
+        width:  Math.max(4, el.width  * scaleX),
+        height: Math.max(4, el.height * scaleY),
+      })));
+      return;
+    }
+
     if (isDraggingMenu) {
         e.preventDefault();
         const dx = e.clientX - menuDragStartRef.current.x;
@@ -815,9 +875,10 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
         const point = screenToWorld({ x: e.clientX, y: e.clientY });
         setMarqueeRect(prev => prev ? { ...prev, end: point } : null);
     }
-  }, [isPanning, startPan, marqueeRect, screenToWorld, isDraggingMenu]);
+  }, [isPanning, startPan, marqueeRect, screenToWorld, isDraggingMenu, onUpdateMultipleElements]);
 
   const handleMouseUp = useCallback(() => {
+    groupResizeRef.current = null;  // 結束群組縮放
     setIsPanning(false);
     setIsDraggingMenu(false);
     if (marqueeRect) {
@@ -1050,9 +1111,59 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
             onDragEnd={onDragEnd}
             interactionMode={interactionMode}
             screenToWorld={screenToWorld}
+            disableResizeHandles={!!groupBounds && selectedElementIds.includes(el.id)}
           />
         ))}
-        
+
+        {/* ── 群組等比縮放邊框 ── */}
+        {groupBounds && !croppingElementId && (() => {
+          const { x, y, w, h } = groupBounds;
+          const PAD = 6;
+          const cornerHandles: ['nw'|'ne'|'sw'|'se'|'n'|'s'|'e'|'w', React.CSSProperties, string][] = [
+            ['nw', { top: -5, left:  -5 }, 'cursor-nw-resize'],
+            ['ne', { top: -5, right: -5 }, 'cursor-ne-resize'],
+            ['sw', { bottom: -5, left:  -5 }, 'cursor-sw-resize'],
+            ['se', { bottom: -5, right: -5 }, 'cursor-se-resize'],
+          ];
+          const edgeHandles: ['nw'|'ne'|'sw'|'se'|'n'|'s'|'e'|'w', React.CSSProperties, string][] = [
+            ['n', { top: -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-n-resize'],
+            ['s', { bottom: -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-s-resize'],
+            ['w', { top: '50%', left: -4, transform: 'translateY(-50%)' }, 'cursor-w-resize'],
+            ['e', { top: '50%', right: -4, transform: 'translateY(-50%)' }, 'cursor-e-resize'],
+          ];
+          const startResize = (e: React.MouseEvent, handle: 'nw'|'ne'|'sw'|'se'|'n'|'s'|'e'|'w') => {
+            e.stopPropagation();
+            e.preventDefault();
+            onInteractionStart?.();
+            const wp = screenToWorld({ x: e.clientX, y: e.clientY });
+            groupResizeRef.current = {
+              handle,
+              startBounds: { x, y, w, h },
+              startElements: elements.filter(el => selectedElementIds.includes(el.id)).map(el => ({ ...el })),
+              startWX: wp.x, startWY: wp.y,
+            };
+          };
+          return (
+            <div
+              className="absolute pointer-events-none"
+              style={{ left: x - PAD, top: y - PAD, width: w + PAD * 2, height: h + PAD * 2, border: '1.5px dashed #5856D6', borderRadius: 3 }}
+            >
+              {cornerHandles.map(([handle, pos, cursor]) => (
+                <div key={handle}
+                  className="absolute pointer-events-auto hover:scale-125 transition-transform"
+                  style={{ ...pos, width: 9, height: 9, background: 'white', border: '2px solid #5856D6', borderRadius: 2, cursor }}
+                  onMouseDown={(e) => startResize(e, handle)} />
+              ))}
+              {edgeHandles.map(([handle, pos, cursor]) => (
+                <div key={handle}
+                  className="absolute pointer-events-auto"
+                  style={{ ...pos, width: 7, height: 7, background: 'white', border: '2px solid #5856D6', borderRadius: 1, cursor }}
+                  onMouseDown={(e) => startResize(e, handle)} />
+              ))}
+            </div>
+          );
+        })()}
+
         {/* In-place loading shimmer overlays */}
         {(() => {
           const generatingEls = generatingElementIds
