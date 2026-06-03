@@ -719,10 +719,11 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
     const sel = elements.filter(el => selectedElementIds.includes(el.id));
     const gid = sel[0]?.groupId;
     if (!gid || !sel.every(el => el.groupId === gid)) return null;
-    const minX = Math.min(...sel.map(el => el.position.x));
-    const minY = Math.min(...sel.map(el => el.position.y));
-    const maxX = Math.max(...sel.map(el => el.position.x + el.width));
-    const maxY = Math.max(...sel.map(el => el.position.y + el.height));
+    // position 是中心點，左上角 = position - size/2
+    const minX = Math.min(...sel.map(el => el.position.x - el.width  / 2));
+    const minY = Math.min(...sel.map(el => el.position.y - el.height / 2));
+    const maxX = Math.max(...sel.map(el => el.position.x + el.width  / 2));
+    const maxY = Math.max(...sel.map(el => el.position.y + el.height / 2));
     return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
   }, [elements, selectedElementIds]);
 
