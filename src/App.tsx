@@ -793,6 +793,34 @@ const App: React.FC = () => {
   const lastImagePosition = useRef<Point | null>(null);
   const dragCounter = useRef(0);
 
+  // ── 風格庫面板拖曳 ──────────────────────────────────────────────
+  const [styleLibPos, setStyleLibPos] = useState({ x: 0, y: 0 });
+  const [styleLibDragging, setStyleLibDragging] = useState(false);
+  const styleLibDragOffRef = useRef({ x: 0, y: 0 });
+  const styleLibInitRef = useRef(false);
+
+  useEffect(() => {
+    if (showStyleLibrary && !styleLibInitRef.current) {
+      setStyleLibPos({ x: Math.max(0, window.innerWidth / 2 - 220), y: Math.max(0, window.innerHeight / 2 - 280) });
+      styleLibInitRef.current = true;
+    }
+    if (!showStyleLibrary) styleLibInitRef.current = false;
+  }, [showStyleLibrary]);
+
+  useEffect(() => {
+    if (!styleLibDragging) return;
+    const onMove = (e: MouseEvent) => {
+      setStyleLibPos({
+        x: Math.min(Math.max(0, e.clientX - styleLibDragOffRef.current.x), window.innerWidth - 440),
+        y: Math.min(Math.max(0, e.clientY - styleLibDragOffRef.current.y), window.innerHeight - 60),
+      });
+    };
+    const onUp = () => setStyleLibDragging(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, [styleLibDragging]);
+
   // 新畫布時（只有歡迎便利貼）自動 fit to screen 對齊畫面
   useEffect(() => {
     if (elements.length === 1 && elements[0].id === 'welcome-note') {
@@ -1447,12 +1475,19 @@ const App: React.FC = () => {
         return (
           <div
             className="fixed z-50 bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.12)] border border-white/50 w-[440px] h-[560px] flex flex-col overflow-hidden"
-            style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+            style={{ left: styleLibPos.x, top: styleLibPos.y }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-4 py-3 border-b border-black/5 flex justify-between items-center bg-white/50 flex-shrink-0">
+            <div
+              className={`px-4 py-3 border-b border-black/5 flex justify-between items-center bg-white/50 flex-shrink-0 select-none ${styleLibDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                styleLibDragOffRef.current = { x: e.clientX - styleLibPos.x, y: e.clientY - styleLibPos.y };
+                setStyleLibDragging(true);
+              }}
+            >
               <h3 className="font-bold text-[#1D1D1F]">Magic Style 藝術風格庫 <span className="text-xs font-normal text-[#86868B] ml-1">{STYLE_PRESETS.length} 種</span></h3>
-              <button onClick={() => setShowStyleLibrary(false)} className="text-[#86868B] hover:text-[#1D1D1F] text-lg leading-none">&times;</button>
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setShowStyleLibrary(false)} className="text-[#86868B] hover:text-[#1D1D1F] text-lg leading-none">&times;</button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-5">
               {STYLE_CATEGORIES.map(cat => (
