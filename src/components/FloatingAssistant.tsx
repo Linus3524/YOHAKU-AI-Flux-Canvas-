@@ -497,7 +497,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           { t: '裁剪 & 陰影效果', d: '非破壞性裁剪。投影跟隨像素形狀，下載或合併均保留效果。' },
                         ].map((item, i) => (
                           <div key={i}>
-                            <h4 className="font-bold text-rose-700 text-[12px] mb-0.5">{item.t}</h4>
+                            <h4 className="font-bold text-gray-800 text-[12px] mb-0.5">{item.t}</h4>
                             <p className="text-[11px] text-gray-500 leading-relaxed">{item.d}</p>
                           </div>
                         ))}
