@@ -1432,7 +1432,7 @@ const App: React.FC = () => {
         const STYLE_CATEGORIES = [
           { label: '🖌 繪畫與插畫',       ids: ['Minimalist','Watercolor','Oil Painting','Sketch','Impressionism','Chinese Ink Wash','Concept Watercolor','Transparent Wash','Fine Pencil Tech','Storybook Pencil','Industrial Marker'] },
           { label: '✏️ 動漫與漫畫',       ids: ['Comic Book','Japanese Anime','Manga Ink','Chibi','Webtoon','Mecha','Retro Cel Anime','Radiant Shinkai','Soft KyoAni','City Pop Graphic','Copic Manga'] },
-          { label: '📷 攝影與底片',       ids: ['Vintage 1950s','Polaroid','Noir','Sepia Old','Lomo','Cinematic HDR'] },
+          { label: '📷 攝影與底片',       ids: ['Noir','Sepia Old','Lomo','Cinematic HDR'] },
           { label: '💻 數位與現代藝術',   ids: ['Cyberpunk','Pop Art','Neon','Pixel Art','Glassmorphism','Glitch Effect','Vaporwave','Flat Design'] },
           { label: '🎨 特殊材質與色彩',   ids: ['Matte Pastel','Gothic','Grunge','Japanese Ukiyo-e','Duotone','Paper Cutout','Vivid High','Muted Earth','Blueprint','Risograph'] },
           { label: '🌸 次文化少女暗黑',   ids: ['Coquette','Jelly Candy','Y2K McBling','Decora Pop','Vamp Romantic','Weirdcore','Analog Horror','Pastel Goth','Whimsigothic','Alien Core','Fairy Grunge','Glacier Blue','Naïve Art','Fractured Glass'] },
@@ -1440,6 +1440,8 @@ const App: React.FC = () => {
           { label: '🎉 節慶限定',         ids: ['Lunar New Year','Japanese Matsuri','Sakura Ohanami','Mid-Autumn Moon','Cozy Christmas','Spooky Halloween','Valentine Romance','Japanese Shogatsu','Easter Pastel','Retro Ghost Fest'] },
           { label: '🏛 歷史與宗教',       ids: ['Showa Retro','Byzantine Mosaic','Soviet Constructivism','Taisho Roman','Sacred Stained Glass','Imperial Propaganda'] },
           { label: '🔬 稀有與新趨勢',     ids: ['Glass Block','Brute Force','Bronze Age','Obsidian Black','Prompt Playground','Cyber Hacker','Reality Warp','Trinket Curation','Aerochrome','Modern Kintsugi','Solarpunk','Lunarpunk','Cassette Futurism','Gorpcore Topo','Dark Academia','Rococo Opulence','Explorecore','Subspace Wireframe','Botanical Plate','Acid Fade'] },
+          { label: '📸 經典數位相機與CCD', ids: ['Canon IXUS CCD','Canon A620 CCD','Nikon S200 CCD','Leica CCD','CCD Negative Film','DV Camcorder','Polaroid Instant Film','Fujifilm Superia','Kodak Portra 400','135mm Analog Film'] },
+          { label: '🔭 光學硬體與AI氛圍', ids: ['Fuji Direct Flash','Telephoto Compression','DSLR 50mm','Commercial Portrait','DJI Pocket Vlog','Golden Hour Backlight','Blue Hour Twilight','Japanese Airy High Key','Ocean Cool Tone','German Lens Muted Green','Ricoh GR Street','Ricoh Positive Film','Fujifilm X-T','Hasselblad Medium Format','Olympus Zuiko Blue','Fujifilm FinePix Retro','Canon High End Compact','Apple iPhone XS HDR','Polaroid Digital Print','Olympus XZ1 CCD','Fujifilm Panorama','Olympus Film SLR'] },
         ];
         const styleById = Object.fromEntries(STYLE_PRESETS.map(s => [s.id, s]));
         return (

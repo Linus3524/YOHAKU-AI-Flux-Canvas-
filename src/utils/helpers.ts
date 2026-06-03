@@ -28,7 +28,7 @@ export const STYLE_PRESETS = [
   },
   {
     id: 'Oil Painting', name: '古典油畫質感', label: 'Classical Oil Painting',
-    prompt: 'Transform into classical oil painting: thick impasto brushstrokes with visible texture, rich saturated colors, dramatic chiaroscuro lighting, Renaissance or Baroque influence, painterly edges with soft blending in shadows.'
+    prompt: 'Transform into classical oil painting: thick impasto brushstrokes with visible raised texture, heavy layered oil medium, canvas weave visible in thin areas, rich saturated colors, dramatic chiaroscuro lighting, Renaissance or Baroque influence, painterly edges with soft glazing in shadows.'
   },
   {
     id: 'Sketch', name: '素描線條', label: 'Pencil Sketch Lines',
@@ -36,7 +36,7 @@ export const STYLE_PRESETS = [
   },
   {
     id: 'Impressionism', name: '印象派', label: 'Impressionism',
-    prompt: 'Transform into Impressionist painting: short visible dabs and strokes of pure color, light and atmosphere over precise detail, Monet or Renoir influence, colors placed side by side rather than blended, vibrating optical color mixing effect.'
+    prompt: 'Transform into Impressionist painting: fragmented short dabs and visible brushstrokes of pure unmixed color, atmospheric light over precise detail, Monet or Renoir influence, optical color mixing from adjacent complementary strokes, vibrating surface energy, soft undefined edges.'
   },
   {
     id: 'Chinese Ink Wash', name: '中國水墨', label: 'Chinese Ink Wash (Shan Shui)',
@@ -136,7 +136,7 @@ export const STYLE_PRESETS = [
   },
   {
     id: 'Japanese Ukiyo-e', name: '浮世繪', label: 'Japanese Ukiyo-e',
-    prompt: 'Transform into Japanese Ukiyo-e woodblock print: flat areas of solid color with precise outlines, traditional Japanese color palette (indigo, vermillion, gold), stylized wave and cloud patterns, Hokusai or Hiroshige influence, visible woodgrain texture.'
+    prompt: 'Transform into Japanese Ukiyo-e woodblock print: flat areas of solid color with precise ink outlines, traditional mineral pigments (beni crimson, indigo, gold), stylized wave and cloud patterns, Hokusai or Hiroshige influence, visible woodgrain texture, washi paper surface, hand-carved relief print quality.'
   },
   {
     id: 'Duotone', name: '雙色調', label: 'Duotone Blue & Pink',
@@ -378,7 +378,7 @@ export const STYLE_PRESETS = [
   },
   {
     id: 'Trinket Curation', name: '標本物件陳列', label: 'Trinket Curation',
-    prompt: 'Transform into Trinket Curation flat-lay aesthetic: everyday symbolic small objects (vintage coins, old keys, crystals, stamps) arranged in neat museum-style geometric shadow boxes, clean scrapbook flat-lay composition, soft directional studio lighting on each object.'
+    prompt: 'Transform into Trinket Curation knolling flat-lay: objects arranged at strict 90-degree angles, meticulously spaced small items (vintage coins, old keys, crystals, stamps, dried botanicals), top-down overhead view, clean white or linen background, soft even studio lighting with minimal shadow, museum specimen curation aesthetic.'
   },
   {
     id: 'Aerochrome', name: '紅外線底片', label: 'Aerochrome',
@@ -406,7 +406,7 @@ export const STYLE_PRESETS = [
   },
   {
     id: 'Dark Academia', name: '暗黑學院古典', label: 'Dark Academia',
-    prompt: 'Transform into Dark Academia lifestyle aesthetic: old heavy leather-bound book textures, antique cursive calligraphy ink sketches on yellowed paper, candlelit dark mahogany library tables, moody classical university atmosphere, ivy league collegiate mystery.'
+    prompt: 'Transform into Dark Academia aesthetic: aged leather-bound book covers, iron gall ink calligraphy on yellowed parchment, candlelit dark mahogany library shelves, moody chiaroscuro university atmosphere, cracked oil painting varnish, dusty classical archive ambiance, ivy-covered stone gothic architecture.'
   },
   {
     id: 'Rococo Opulence', name: '洛可可金奢', label: 'Rococo Opulence',
@@ -422,7 +422,7 @@ export const STYLE_PRESETS = [
   },
   {
     id: 'Botanical Plate', name: '19世紀植物圖鑑', label: 'Botanical Plate',
-    prompt: 'Transform into 19th-century scientific botanical illustration plate: hand-colored copperplate engraving with fine line details, aged ivory parchment paper texture, precise botanical specimen study with Latin taxonomy calligraphy labels, natural history museum archive aesthetic.'
+    prompt: 'Transform into 19th-century scientific botanical illustration plate: ultra-precise copperplate engraving ink lines, hand-applied watercolor washes over fine line anatomy, aged ivory parchment paper texture, botanical specimen cross-sections with root and seed detail, Latin taxonomy calligraphy labels, natural history museum archive aesthetic.'
   },
   {
     id: 'Acid Fade', name: '酸性漸層融化', label: 'Acid Fade',
