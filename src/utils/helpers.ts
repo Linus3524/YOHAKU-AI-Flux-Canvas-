@@ -164,7 +164,7 @@ export const STYLE_PRESETS = [
   },
   {
     id: 'Blueprint', name: '藍圖工程', label: 'Blueprint Cyanotype',
-    prompt: 'Transform into architectural blueprint technical drawing: white or cyan linework on deep Prussian blue background, precise technical annotation lines, measurement indicators, engineering drafting aesthetic, isometric or orthographic projection feel.'
+    prompt: 'Transform into architectural blueprint cyanotype drawing: white or cyan linework on deep Prussian blue cyanotype-process background, precise technical annotation lines, measurement indicators, engineering drafting aesthetic, isometric or orthographic projection feel.'
   },
   {
     id: 'Risograph', name: '孔版印刷', label: 'Risograph Print Overlay',
