@@ -389,34 +389,193 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
             {/* GUIDE */}
             {activeSection === 'guide' && (
               <div className="p-8">
-                <h2 className="text-2xl font-bold text-yohaku-text-main mb-2" style={{ fontFamily: "'Noto Serif JP', serif" }}>功能指南</h2>
-                <p className="text-sm text-yohaku-text-muted mb-8">所有功能的完整說明</p>
+                <h2 className="text-2xl font-bold text-yohaku-text-main mb-1" style={{ fontFamily: "'Noto Serif JP', serif" }}>功能指南</h2>
+                <p className="text-sm text-yohaku-text-muted mb-8">系統操作手冊與深度功能解析</p>
                 <div className="space-y-6">
-                  {FEATURE_DOCS.map((section, idx) => (
-                    <div key={idx} className="bg-white/80 rounded-xl p-6 border border-yohaku-border-light shadow-sm">
-                      <h3 className="text-[11px] font-bold text-yohaku-text-muted tracking-widest mb-4 uppercase">{section.category}</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {section.items.map((item, i) => (
-                          <div key={i}>
-                            <h4 className={`font-bold text-sm mb-1 ${section.color}`}>{item.title}</h4>
-                            <p className="text-xs text-gray-600 leading-relaxed">{item.desc}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  {/* Shortcuts */}
-                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-6 shadow-sm">
-                    <h3 className="text-[11px] font-bold text-yohaku-text-muted tracking-widest mb-4 uppercase">{FEATURE_DOCS.length + 1}. 常用快捷鍵 (SHORTCUTS)</h3>
-                    <div className="grid grid-cols-4 gap-3 text-center">
-                      {SHORTCUTS.map((s, i) => (
+
+                  {/* 1. 核心畫布操作 */}
+                  <div className="bg-white/80 rounded-xl p-6 border border-gray-100 shadow-sm">
+                    <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">1. 核心畫布操作 (Core Canvas)</h3>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                      {[
+                        { t: '無限畫布', d: '不被邊界限制的創作空間，自由拖曳 (Pan) 與縮放 (Zoom)。' },
+                        { t: '選取工具', d: '點擊單選，拖曳框選多物件，Shift 加選/減選。' },
+                        { t: '抓手工具', d: '啟用後拖曳平移畫布，不誤觸物件（快捷鍵：按住空白鍵）。' },
+                        { t: '縮放控制', d: '右下角按鈕或滑鼠滾輪縮放，支援「適合畫面」一鍵回正。' },
+                      ].map((item, i) => (
                         <div key={i}>
-                          <div className="bg-white border border-gray-200 rounded py-1.5 font-mono text-[10px] text-yohaku-text-main mb-1">{s.key}</div>
-                          <span className="text-[9px] text-yohaku-text-muted">{s.label}</span>
+                          <h4 className="font-bold text-gray-800 text-[13px] mb-1">{item.t}</h4>
+                          <p className="text-[11px] text-gray-500 leading-relaxed">{item.d}</p>
                         </div>
                       ))}
                     </div>
                   </div>
+
+                  {/* 2. 工作區域 */}
+                  <div className="bg-white/80 rounded-xl p-6 border border-gray-100 shadow-sm">
+                    <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">2. 工作區域 (Artboard)</h3>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-4">
+                      {[
+                        { t: '建立工作區域', d: '建立固定尺寸設計框，適合海報、貼文等有明確邊界的作品。' },
+                        { t: '預設尺寸', d: '內建社群媒體 (IG/FB)、網頁 (1920/手機)、印刷 (A4/名片) 及自訂。' },
+                        { t: '命名與管理', d: '點擊工作區域開啟設定面板，自訂名稱、調整尺寸。' },
+                        { t: '批次匯出 PNG', d: '圖層面板選取 2 個以上工作區域，一鍵批次匯出所有獨立 PNG。' },
+                      ].map((item, i) => (
+                        <div key={i}>
+                          <h4 className="font-bold text-gray-800 text-[13px] mb-1">{item.t}</h4>
+                          <p className="text-[11px] text-gray-500 leading-relaxed">{item.d}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                      <h4 className="font-bold text-gray-800 text-[13px] mb-1">匯出 SVG（向量圖層）</h4>
+                      <p className="text-[11px] text-gray-500 leading-relaxed">選取工作區域後點「匯出工作區域 (SVG)」，每個各自輸出為獨立 <code className="bg-white px-1 py-0.5 rounded border border-gray-200 text-gray-600 font-mono text-[10px]">.svg</code>。圖片、文字、形狀均為獨立物件，Adobe Illustrator 開啟後可個別編輯。</p>
+                    </div>
+                  </div>
+
+                  {/* 3. 創作工具 */}
+                  <div className="bg-white/80 rounded-xl p-6 border border-gray-100 shadow-sm">
+                    <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">3. 創作工具 (Creation Tools)</h3>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                      {[
+                        { t: '便利貼', d: '記錄想法或作為 AI 提示詞。可上傳最多 4 張參考圖，生成時參考風格構圖。' },
+                        { t: '文字工具', d: '橫/直書、曲線文字、字距調整。進階效果含邊框、背景色、陰影、光暈、3x 高清轉換。' },
+                        { t: '手繪工具', d: '自由繪製草圖，筆刷與橡皮擦，支援透明背景繪圖。' },
+                        { t: '線條 / 箭頭', d: '直線、雙向箭頭、圓點端點，可自訂虛線與顏色。' },
+                        { t: '形狀工具', d: '矩形、圓形、多邊形等，支援鎖定長寬比與 3x 高清轉換。' },
+                        { t: '畫框工具', d: '建立特定比例虛線框 (如 16:9)，搭配便利貼直接生成圖片填入。' },
+                      ].map((item, i) => (
+                        <div key={i}>
+                          <h4 className="font-bold text-gray-800 text-[13px] mb-1">{item.t}</h4>
+                          <p className="text-[11px] text-gray-500 leading-relaxed">{item.d}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 4. AI 生成 */}
+                  <div className="bg-white/80 rounded-xl p-6 border border-emerald-100 shadow-sm">
+                    <h3 className="text-[10px] font-bold text-emerald-600 tracking-widest mb-4 uppercase border-b border-emerald-100 pb-2">4. AI 生成 (Generative AI)</h3>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-4">
+                      {[
+                        { t: '一鍵生成圖片', d: '框選圖片、手繪或便利貼，AI 生成高品質圖片。生成中畫布不鎖定。' },
+                        { t: '圖片逆向分析', d: '右鍵「提取提示詞」，AI 生成中英對照的詠唱咒語。' },
+                        { t: '風格複製', d: 'AI 解構色彩、光影、畫風等 10 個維度，紋理/藝術樣式/手動三種貼上方式。' },
+                        { t: '智慧去背', d: '右鍵「快速去背」，優先使用 BiRefNet v2；無 fal.ai Key 時降級為 Gemini 去背。' },
+                        { t: '擴展圖片', d: '拖曳外框定義擴展區域，AI 無縫填補空白（支援自動發想提示詞）。' },
+                        { t: '影像調和', d: '選取多張圖片，AI 調整光影色調融合為自然畫面（支援 2K 高清）。' },
+                        { t: '原圖比例輸出', d: 'Atlas 模式自動偵測最近標準比例 (1:1 / 3:4 / 4:3 / 9:16 / 16:9)，不強制正方形。' },
+                        { t: '視角轉換 & 智能放大', d: '改變拍攝角度。2x/4x 放大，智慧保持透明背景邊緣清晰。' },
+                      ].map((item, i) => (
+                        <div key={i}>
+                          <h4 className="font-bold text-emerald-800 text-[13px] mb-1">{item.t}</h4>
+                          <p className="text-[11px] text-gray-600 leading-relaxed">{item.d}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {/* 魔法分層 */}
+                    <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-purple-900 text-[13px] mb-1">✦ 魔法分層</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 10 個物件層。</p>
+                      <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 需 <code className="font-mono bg-purple-100 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-purple-100 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
+                    </div>
+                    {/* Magic Style */}
+                    <div className="bg-emerald-50/30 border border-emerald-100 rounded-xl p-4">
+                      <h4 className="font-bold text-emerald-800 text-[13px] mb-1">✦ Magic Style 風格庫</h4>
+                      <p className="text-[11px] text-gray-600 leading-relaxed">內建 110+ 種藝術風格，涵蓋 10 大分類：繪畫插畫、動漫漫畫、攝影底片、數位藝術、特殊材質、次文化少女暗黑、新世代潮流、節慶限定、歷史宗教、稀有新趨勢。一鍵套用至選取圖片，生成設定面板也可預設參考風格。</p>
+                    </div>
+                  </div>
+
+                  {/* 5+6 圖片編輯 & 圖層管理 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white/80 rounded-xl p-6 border border-gray-100 shadow-sm">
+                      <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">5. 圖片編輯</h3>
+                      <div className="space-y-4">
+                        {[
+                          { t: '局部重繪 & 基礎調整', d: '筆刷塗抹遮罩換物或移除。亮度、對比、飽和度、色溫調整。' },
+                          { t: '混合模式 & 淡出', d: '色彩增值、濾色等混合模式。方向性淡出 (上下左右/放射) 柔和邊緣。' },
+                          { t: '裁剪 & 陰影效果', d: '非破壞性裁剪。投影跟隨像素形狀，下載或合併均保留效果。' },
+                        ].map((item, i) => (
+                          <div key={i}>
+                            <h4 className="font-bold text-rose-700 text-[12px] mb-0.5">{item.t}</h4>
+                            <p className="text-[11px] text-gray-500 leading-relaxed">{item.d}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-white/80 rounded-xl p-6 border border-gray-100 shadow-sm">
+                      <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">6. 圖層管理</h3>
+                      <div className="space-y-4">
+                        {[
+                          { t: '圖層面板 / 群組', d: '拖曳排序、隱藏/鎖定。Ctrl+G 綁定多物件為群組。' },
+                          { t: '合併圖層', d: '選取多物件壓平為 PNG，自動裁切透明邊界，3x 高清渲染，保留陰影淡出效果。' },
+                          { t: '保留透明背景', d: '風格轉換時先壓平為安全底色，完成後 BiRefNet → Gemini → ChromaKey 依序還原透明通道。' },
+                        ].map((item, i) => (
+                          <div key={i}>
+                            <h4 className="font-bold text-gray-800 text-[12px] mb-0.5">{item.t}</h4>
+                            <p className="text-[11px] text-gray-500 leading-relaxed">{item.d}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 7. 系統功能 */}
+                  <div className="bg-white/80 rounded-xl p-6 border border-blue-100 shadow-sm">
+                    <h3 className="text-[10px] font-bold text-blue-500 tracking-widest mb-4 uppercase border-b border-blue-100 pb-2">7. 系統功能 (System)</h3>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-4">
+                      <div>
+                        <h4 className="font-bold text-gray-800 text-[13px] mb-1">轉換為圖片</h4>
+                        <p className="text-[11px] text-gray-600 leading-relaxed">對文字、形狀、箭頭右鍵轉換，3 倍超取樣確保清晰銳利。</p>
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-800 text-[13px] mb-1">復原 / 重做</h4>
+                        <p className="text-[11px] text-gray-600 leading-relaxed">完整歷史記錄，<kbd className="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded font-mono text-[10px]">Cmd+Z</kbd> 復原、<kbd className="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded font-mono text-[10px]">Cmd+Shift+Z</kbd> 重做。</p>
+                      </div>
+                    </div>
+                    {/* 檔案儲存系統 */}
+                    <div className="bg-blue-50/40 border border-blue-100 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-blue-900 text-[13px] mb-2">💾 檔案儲存系統</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-3">支援真實檔案存取，同時每秒自動存入瀏覽器本地 (LocalStorage)，不怕意外關閉。</p>
+                      <div className="flex gap-2 mb-3">
+                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-blue-100 text-[11px] text-gray-700 flex items-center gap-1.5">
+                          <kbd className="font-mono font-bold text-blue-700 text-[10px]">Cmd+S</kbd> 儲存至同檔
+                        </div>
+                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-blue-100 text-[11px] text-gray-700 flex items-center gap-1.5">
+                          <kbd className="font-mono font-bold text-blue-700 text-[10px]">Cmd+Shift+S</kbd> 另存新檔
+                        </div>
+                      </div>
+                      <div className="bg-white/80 rounded-lg p-3 border border-blue-100/50 text-[11px]">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <span className="font-bold text-gray-700">瀏覽器支援：</span>
+                          <span className="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full text-[10px]">Chrome ✓</span>
+                          <span className="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full text-[10px]">Edge ✓</span>
+                          <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded-full text-[10px]">Firefox / Safari（降級）</span>
+                        </div>
+                        <p className="text-gray-600 leading-relaxed"><strong className="text-orange-600">Brave：</strong>網址列輸入 <code className="bg-orange-50 text-orange-700 px-1 rounded border border-orange-100 font-mono text-[10px]">brave://flags</code>，搜尋「file system」，找到 File System Access API 設為 Enabled，重啟即可。</p>
+                      </div>
+                    </div>
+                    {/* 清除存檔 */}
+                    <div className="bg-red-50/40 border border-red-100 rounded-xl p-4">
+                      <h4 className="font-bold text-red-700 text-[13px] mb-1">🗑 清除存檔</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed">右鍵空白畫布選底部紅色「清除存檔」，清除所有 LocalStorage 資料，釋放空間或解決容量警告。</p>
+                      <p className="text-[11px] text-red-600 font-medium mt-1.5">⚠️ 操作不可復原，請謹慎使用。</p>
+                    </div>
+                  </div>
+
+                  {/* 8. 快捷鍵 */}
+                  <div className="bg-gray-800 rounded-xl p-6 shadow-sm text-white">
+                    <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-5 uppercase border-b border-gray-700 pb-2">8. 常用快捷鍵 (Shortcuts)</h3>
+                    <div className="grid grid-cols-4 gap-3 text-center">
+                      {SHORTCUTS.map((s, i) => (
+                        <div key={i}>
+                          <div className="bg-gray-700/80 rounded py-1.5 font-mono text-[10px] mb-1 shadow-sm">{s.key}</div>
+                          <span className="text-[9px] text-gray-400">{s.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                 </div>
               </div>
             )}
