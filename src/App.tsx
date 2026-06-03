@@ -618,7 +618,7 @@ const App: React.FC = () => {
           // Below English note for Chinese note
           const zhPos = {
               x: enPos.x,
-              y: enPos.y + 240 // 220 height + 20 gap
+              y: enPos.y + 370 // 350 height + 20 gap
           };
 
           const newNotes: CanvasElement[] = [];
@@ -629,8 +629,8 @@ const App: React.FC = () => {
               id: `${Date.now()}-note-en`,
               type: 'note',
               position: enPos,
-              width: 280,
-              height: 220,
+              width: 300,
+              height: 350,
               rotation: 0,
               content: result.en,
               color: 'bg-[#FFFDE7]', // Yellow-ish
@@ -649,8 +649,8 @@ const App: React.FC = () => {
               id: `${Date.now()}-note-zh`,
               type: 'note',
               position: zhPos,
-              width: 280,
-              height: 220,
+              width: 300,
+              height: 350,
               rotation: 0,
               content: result.zh,
               color: 'bg-[#E8F5E9]', // Green-ish
@@ -687,8 +687,8 @@ const App: React.FC = () => {
       addElement({
           type: 'note',
           position: pos,
-          width: 280,
-          height: 220,
+          width: 300,
+          height: 350,
           rotation: 0,
           content: text,
           color: 'bg-[#FFF3E0]', // Light orange/cream for AI suggestions
