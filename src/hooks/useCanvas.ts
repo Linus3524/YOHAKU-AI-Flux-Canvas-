@@ -135,6 +135,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         localStorage.setItem(STORAGE_KEY, '[]'); // Write empty synchronously so it survives fast tab close
         setElements([]);
         setStorageStatus('saved');
+        // Also clear the file handle so the right-click menu no longer points to the old file
+        clearFileHandle();
+        setCurrentFileHandle(null);
+        setCurrentFileName(null);
         showToast('存檔已清除，畫布重置');
     }, [setElements, showToast]);
 
