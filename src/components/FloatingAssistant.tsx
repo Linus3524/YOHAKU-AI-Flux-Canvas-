@@ -45,13 +45,15 @@ const FEATURE_DOCS = [
       { title: "Magic Style 風格庫", desc: "內建 110+ 種藝術風格，涵蓋 10 大分類：繪畫插畫、動漫漫畫、攝影底片、數位藝術、特殊材質、次文化少女暗黑、新世代潮流、節慶限定、歷史宗教、稀有新趨勢。一鍵套用至選取圖片，生成設定面板也可預設參考風格。" },
       { title: "風格複製", desc: "AI 解構色彩、光影、畫風等 10 個維度，提供紋理模式/藝術樣式/手動三種方式貼上。" },
       { title: "擴展圖片", desc: "拖曳外框定義擴展區域，AI 無縫填補空白處（支援自動發想提示詞）。" },
-      { title: "智慧去背", desc: "右鍵選「快速去背」，優先使用 BiRefNet v2（需 fal.ai Key）精確分割主體；無 fal.ai Key 時改由 Gemini AI 分析去背。" },
+      { title: "智慧去背", desc: "右鍵「智慧去背」，由 Gemini AI 分析並去除背景，不需額外 API Key。" },
+      { title: "快速去背（BiRefNet）", desc: "右鍵「快速去背」，需 fal.ai Key，精度優於智慧去背。6 種模式：輕量（Logo / 純色）、重量級（產品 / 漸層）、人像（人物 / 髮型）、髮絲（毛髮 / 婚紗 / 玻璃）、輕量 2K（高解析大圖）、動態（尺寸不固定）。" },
       { title: "魔法分層", desc: "右鍵點擊圖片選「魔法分層」，AI 自動識別圖中人物、產品、文字、裝飾等語意元素，各自去背後以獨立圖層排列於原圖右側，並同步補全背景。最多拆出 10 個物件層。需要 Atlas Key（GPT Image 2 隔離）與 fal.ai Key（BiRefNet 去背）以獲得最佳品質；未設定時自動降級為 Gemini 模式。" },
       { title: "保留透明背景", desc: "開啟後，透明背景圖片進行風格轉換時會先壓平為安全底色再生成，完成後自動透過 BiRefNet→Gemini→ChromaKey 依序還原透明通道，支援所有生成模型。" },
-      { title: "原圖比例輸出", desc: "生成設定選「原圖比例」，Atlas 圖生圖模式會自動偵測參考圖最接近的標準比例（1:1 / 3:4 / 4:3 / 9:16 / 16:9）並維持輸出，不再強制正方形。" },
+      { title: "原圖比例輸出", desc: "生成設定選「原圖比例」，AI 依據參考圖的寬高比輸出，結果更貼合原始構圖。" },
       { title: "影像調和", desc: "選取多張圖片，AI 調整光影與色調，融合為一張自然的圖片（支援 2K 高清）。" },
       { title: "視角轉換", desc: "右鍵點擊圖片選「視角轉換」，AI 根據指定角度（正面、側面、俯視等）重新渲染構圖，保留主體特徵。" },
-      { title: "智能放大", desc: "右鍵點擊圖片選「智能放大」，提供 2x / 4x 超解析度放大，AI 補足細節而非單純插值，透明圖片自動保留透明通道。" }
+      { title: "智能放大", desc: "右鍵點擊圖片選「智能放大」，提供 2x / 4x 超解析度放大，AI 補足細節而非單純插值，透明圖片自動保留透明通道。" },
+      { title: "文字辨識轉換 (OCR)", desc: "右鍵點擊圖片選「文字辨識轉換」，Gemini AI 辨識圖中所有文字並輸出可複製文字，支援中、英、日等多語言混排。" }
     ]
   },
   {
@@ -63,7 +65,8 @@ const FEATURE_DOCS = [
       { title: "圖片裁剪", desc: "非破壞性裁剪，可自由調整裁切範圍與旋轉角度。" },
       { title: "混合模式", desc: "支援正常、色彩增值、濾色、覆蓋、柔光等多種混合模式。" },
       { title: "淡出工具", desc: "為圖片套用方向性淡出（上/下/左/右/放射狀），可調整柔和度。" },
-      { title: "圖片陰影", desc: "為圖片獨立設定投影（顏色/模糊/X·Y 偏移），跟隨圖片像素形狀。" }
+      { title: "圖片陰影", desc: "為圖片獨立設定投影（顏色/模糊/X·Y 偏移），跟隨圖片像素形狀。" },
+      { title: "下載圖片", desc: "右鍵點擊圖片選「下載圖片」，存為 PNG，透明背景完整保留。多選圖片後右鍵可批次下載，自動逐一匯出所有選取圖片。" }
     ]
   },
   {
@@ -461,11 +464,12 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         { t: '一鍵生成圖片', d: '框選圖片、手繪或便利貼，AI 生成高品質圖片。生成中畫布不鎖定。' },
                         { t: '圖片逆向分析', d: '右鍵「提取提示詞」，AI 生成中英對照的詠唱咒語。' },
                         { t: '風格複製', d: 'AI 解構色彩、光影、畫風等 10 個維度，紋理/藝術樣式/手動三種貼上方式。' },
-                        { t: '智慧去背', d: '右鍵「快速去背」，優先使用 BiRefNet v2；無 fal.ai Key 時降級為 Gemini 去背。' },
+                        { t: '智慧去背', d: '右鍵「智慧去背」，由 Gemini AI 分析並去除背景，不需額外 API Key。' },
                         { t: '擴展圖片', d: '拖曳外框定義擴展區域，AI 無縫填補空白（支援自動發想提示詞）。' },
                         { t: '影像調和', d: '選取多張圖片，AI 調整光影色調融合為自然畫面（支援 2K 高清）。' },
-                        { t: '原圖比例輸出', d: 'Atlas 模式自動偵測最近標準比例 (1:1 / 3:4 / 4:3 / 9:16 / 16:9)，不強制正方形。' },
+                        { t: '原圖比例輸出', d: '生成設定選「原圖比例」，AI 依據參考圖的寬高比輸出，結果更貼合原始構圖。' },
                         { t: '視角轉換 & 智能放大', d: '改變拍攝角度。2x/4x 放大，智慧保持透明背景邊緣清晰。' },
+                        { t: '文字辨識轉換 (OCR)', d: '右鍵點擊圖片選「文字辨識轉換」，Gemini AI 辨識圖中所有文字並輸出可複製文字，支援中、英、日等多語言混排。' },
                       ].map((item, i) => (
                         <div key={i}>
                           <h4 className="font-bold text-emerald-800 text-[13px] mb-1">{item.t}</h4>
@@ -478,6 +482,27 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <h4 className="font-bold text-purple-900 text-[13px] mb-1">✦ 魔法分層</h4>
                       <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 10 個物件層。</p>
                       <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 需 <code className="font-mono bg-purple-100 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-purple-100 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
+                    </div>
+                    {/* 快速去背 */}
+                    <div className="bg-orange-50/40 border border-orange-100 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-orange-900 text-[13px] mb-1">✦ 快速去背（BiRefNet）</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵點擊圖片選「快速去背」，精度優於智慧去背。提供 6 種專用模式，依圖片類型選擇最佳結果。</p>
+                      <div className="grid grid-cols-2 gap-1.5 mb-2">
+                        {[
+                          { label: '輕量', desc: 'Logo / 標準字 / 純色背景' },
+                          { label: '重量級', desc: '產品 / 光滑物件 / 漸層背景' },
+                          { label: '人像', desc: '人物 / 臉部 / 髮型優化' },
+                          { label: '髮絲', desc: '毛髮 / 婚紗 / 玻璃透明物' },
+                          { label: '輕量 2K', desc: '高解析度大圖（輕量版）' },
+                          { label: '動態', desc: '自動解析度 / 尺寸不固定' },
+                        ].map((m, i) => (
+                          <div key={i} className="bg-white/80 border border-orange-100 rounded-lg px-2.5 py-1.5">
+                            <span className="font-bold text-orange-700 text-[11px]">{m.label}</span>
+                            <span className="text-gray-500 text-[10px] ml-1">{m.desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-[11px] text-orange-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 需 <code className="font-mono bg-orange-100 px-1 rounded">fal.ai Key</code>；未設定時右鍵選單不顯示此功能。</div>
                     </div>
                     {/* Magic Style */}
                     <div className="bg-emerald-50/30 border border-emerald-100 rounded-xl p-4">
@@ -495,6 +520,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           { t: '局部重繪 & 基礎調整', d: '筆刷塗抹遮罩換物或移除。亮度、對比、飽和度、色溫調整。' },
                           { t: '混合模式 & 淡出', d: '色彩增值、濾色等混合模式。方向性淡出 (上下左右/放射) 柔和邊緣。' },
                           { t: '裁剪 & 陰影效果', d: '非破壞性裁剪。投影跟隨像素形狀，下載或合併均保留效果。' },
+                          { t: '下載圖片', d: '右鍵點擊圖片選「下載圖片」，存為 PNG，透明背景完整保留。多選圖片後右鍵可批次下載，自動逐一匯出所有選取圖片。' },
                         ].map((item, i) => (
                           <div key={i}>
                             <h4 className="font-bold text-gray-800 text-[12px] mb-0.5">{item.t}</h4>
@@ -548,12 +574,12 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <div className="bg-white/80 rounded-lg p-3 border border-blue-100/50 text-[11px]">
                         <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <span className="font-bold text-gray-700">瀏覽器支援：</span>
-                          <span className="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full text-[10px]">Chrome ✓</span>
+                          <span className="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full text-[10px]">Chrome / Brave ✓</span>
                           <span className="bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full text-[10px]">Edge ✓</span>
-                          <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded-full text-[10px]">Firefox / Safari</span>
+                          <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded-full text-[10px]">Firefox / Safari △</span>
                         </div>
                         <p className="text-gray-600 leading-relaxed mb-2"><strong className="text-gray-700">Firefox / Safari 降級模式：</strong>不支援直接寫入檔案，Cmd+S 與右鍵選單改為顯示「匯出畫布」（強制下載新 .json 檔）與「匯入畫布」（選擇舊 .json 開啟）。LocalStorage 自動存檔仍正常運作。</p>
-                        <p className="text-gray-600 leading-relaxed"><strong className="text-orange-600">Brave：</strong>網址列輸入 <code className="bg-orange-50 text-orange-700 px-1 rounded border border-orange-100 font-mono text-[10px]">brave://flags</code>，搜尋「file system」，找到 File System Access API 設為 Enabled，重啟即可。</p>
+                        <p className="text-gray-600 leading-relaxed"><strong className="text-orange-600">Brave 手動開啟模式：</strong>網址列輸入 <code className="bg-orange-50 text-orange-700 px-1 rounded border border-orange-100 font-mono text-[10px]">brave://flags</code>，搜尋「file system」，找到 File System Access API 設為 Enabled，重啟即可使用存檔系統。</p>
                       </div>
                     </div>
                     {/* 清除存檔 */}

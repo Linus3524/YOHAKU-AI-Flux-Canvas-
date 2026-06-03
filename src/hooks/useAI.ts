@@ -87,6 +87,24 @@ function flattenTransparentImage(base64: string, bgColor: string): Promise<strin
 }
 
 /** 根據便利貼 prompt 關鍵字判斷是否需要透明背景（僅 GPT Image 2 支援） */
+// 剝掉風格提示詞的「主動改造」前綴，讓它變成純描述語氣
+// 例："Transform into Cyberpunk aesthetic: neon..." → "Cyberpunk aesthetic: neon..."
+//     "將圖片轉換為1980年代台灣..."           → "1980年代台灣..."
+function stripStyleVerb(prompt: string): string {
+    return prompt
+        .replace(/^Transform\s+(this\s+image\s+)?into\s+/i, '')
+        .replace(/^將圖片轉換為/, '');
+}
+
+// 組合使用者需求 + 參考風格，主次分明
+function buildStyledPrompt(userContent: string, stylePrompt: string, fallbackLabel: string): string {
+    const styleDesc = stripStyleVerb(stylePrompt);
+    if (userContent) {
+        return `Primary request: ${userContent}\nVisual style (secondary, do not override primary subject): ${styleDesc}`;
+    }
+    return styleDesc || `${fallbackLabel} style`;
+}
+
 function detectTransparentBgIntent(prompt: string): boolean {
     const lower = prompt.toLowerCase();
     const keywords = [
@@ -1117,10 +1135,7 @@ CONSTRAINTS:
             let atlasPrompt = noteText;
             if (imageStyle && imageStyle !== 'Default') {
                 const styleObj = STYLE_PRESETS.find(s => s.label === imageStyle || s.name === imageStyle);
-                const styleDesc = styleObj?.prompt
-                    ? `Apply this visual style to the image (keep original subject and composition): ${styleObj.prompt}`
-                    : `${imageStyle} style`;
-                atlasPrompt = atlasPrompt ? `${atlasPrompt}. ${styleDesc}` : styleDesc;
+                atlasPrompt = buildStyledPrompt(atlasPrompt, styleObj?.prompt ?? '', imageStyle);
             }
 
             // 收集便利貼中的參考圖（base64）
@@ -1276,10 +1291,7 @@ CONSTRAINTS:
           let finalInstructions = instructions;
           if (imageStyle && imageStyle !== 'Default') {
               const styleObj = STYLE_PRESETS.find(s => s.label === imageStyle || s.name === imageStyle);
-              const styleDesc = styleObj?.prompt
-                  ? `Apply this visual style to the image (keep original subject and composition): ${styleObj.prompt}`
-                  : `${imageStyle} style`;
-              finalInstructions = instructions ? `${instructions}. ${styleDesc}` : styleDesc;
+              finalInstructions = buildStyledPrompt(instructions, styleObj?.prompt ?? '', imageStyle);
           }
 
           // 收集便利貼的參考圖（最多4張，按編號①②③④）
