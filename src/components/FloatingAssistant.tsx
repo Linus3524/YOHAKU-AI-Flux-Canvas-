@@ -564,13 +564,13 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   </div>
 
                   {/* 8. 快捷鍵 */}
-                  <div className="bg-gray-800 rounded-xl p-6 shadow-sm text-white">
-                    <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-5 uppercase border-b border-gray-700 pb-2">8. 常用快捷鍵 (Shortcuts)</h3>
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-6 shadow-sm">
+                    <h3 className="text-[10px] font-bold text-yohaku-text-muted tracking-widest mb-4 uppercase">8. 常用快捷鍵 (SHORTCUTS)</h3>
                     <div className="grid grid-cols-4 gap-3 text-center">
                       {SHORTCUTS.map((s, i) => (
                         <div key={i}>
-                          <div className="bg-gray-700/80 rounded py-1.5 font-mono text-[10px] mb-1 shadow-sm">{s.key}</div>
-                          <span className="text-[9px] text-gray-400">{s.label}</span>
+                          <div className="bg-white border border-gray-200 rounded py-1.5 font-mono text-[10px] text-yohaku-text-main mb-1">{s.key}</div>
+                          <span className="text-[9px] text-yohaku-text-muted">{s.label}</span>
                         </div>
                       ))}
                     </div>
