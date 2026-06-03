@@ -1779,7 +1779,7 @@ const App: React.FC = () => {
               borderRadius: '24px',
               padding: '2rem',
               width: '100%',
-              maxWidth: generatedImages.length === 1 ? '440px' : '820px',
+              maxWidth: generatedImages.length === 1 ? 'min(80vw, 640px)' : '820px',
               maxHeight: '90vh',
               animation: 'resultModalPop 0.35s cubic-bezier(0.16,1,0.3,1) forwards',
             }}
@@ -1819,21 +1819,21 @@ const App: React.FC = () => {
             </button>
 
             {/* 圖片區域 */}
-            <div className={`overflow-y-auto ${generatedImages.length > 1 ? 'grid grid-cols-2 gap-4' : ''}`}>
+            <div className={`overflow-y-auto ${generatedImages.length > 1 ? 'grid grid-cols-2 gap-4 items-start' : ''}`}>
               {generatedImages.map((imgSrc, index) => (
                 <div
                   key={index}
                   className="result-img-card relative overflow-hidden bg-[#F0F0F0]"
                   style={{
                     boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                    aspectRatio: generatedImages.length === 1 ? 'auto' : '4/5',
+                    borderRadius: '12px',
                   }}
                 >
                   <img
                     src={imgSrc}
                     alt={`Generated ${index + 1}`}
-                    className="w-full h-full"
-                    style={{ objectFit: generatedImages.length === 1 ? 'contain' : 'cover', display: 'block', maxHeight: generatedImages.length === 1 ? '62vh' : undefined }}
+                    className="w-full block"
+                    style={{ height: 'auto', maxHeight: generatedImages.length === 1 ? '62vh' : '45vh', objectFit: 'contain', display: 'block' }}
                     referrerPolicy="no-referrer"
                   />
                   {/* 懸停漸層遮罩 */}
