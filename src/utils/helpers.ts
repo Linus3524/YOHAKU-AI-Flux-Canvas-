@@ -243,7 +243,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Whimsigothic aesthetic: celestial sun, moon and star motifs, dark witchy mystical elements, velvet and brocade fabric textures, deep jewel tones (emerald, sapphire, amethyst), candles and crystals, mystical bohemian vibe.'
   },
   {
-    id: 'Alien Core', name: '仿生異形核心', label: 'Alien Core',
+    id: 'Alien Core', name: '外星生物核心', label: 'Alien Core',
     prompt: 'Transform into Extra Celestial Alien Core aesthetic: opalescent iridescent surface sheen, soft dewy bioluminescent glow, futuristic extraterrestrial organic structures, icy metallic chrome accents, translucent membrane textures, ethereal sci-fi otherworldly mood.'
   },
   {
