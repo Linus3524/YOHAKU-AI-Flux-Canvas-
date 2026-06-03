@@ -227,7 +227,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into 2026 Vamp Romantic aesthetic: deep crimson and crushed black velvet tones, Carmilla gothic influence, dramatic candlelit shadows on stone walls, lace chokers and pearl jewelry, dark romantic elegance with seductive mysterious undertones.'
   },
   {
-    id: 'Weirdcore', name: '怪誕夢境流', label: 'Weirdcore',
+    id: 'Weirdcore', name: '怪誕夢境', label: 'Weirdcore',
     prompt: 'Transform into surreal Weirdcore aesthetic: low-res flash photography textures, liminal empty spaces, uncanny dreamlike juxtapositions, pixelated eyes or floating clouds, nostalgic yet deeply unsettling subculture mood, wrong lighting and odd angles.'
   },
   {
@@ -243,11 +243,11 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Whimsigothic aesthetic: celestial sun, moon and star motifs, dark witchy mystical elements, velvet and brocade fabric textures, deep jewel tones (emerald, sapphire, amethyst), candles and crystals, mystical bohemian vibe.'
   },
   {
-    id: 'Alien Core', name: '外星靈動科幻', label: 'Alien Core',
+    id: 'Alien Core', name: '仿生異形核心', label: 'Alien Core',
     prompt: 'Transform into Extra Celestial Alien Core aesthetic: opalescent iridescent surface sheen, soft dewy bioluminescent glow, futuristic extraterrestrial organic structures, icy metallic chrome accents, translucent membrane textures, ethereal sci-fi otherworldly mood.'
   },
   {
-    id: 'Fairy Grunge', name: '微光廢土仙子', label: 'Fairy Grunge',
+    id: 'Fairy Grunge', name: '廢土精靈', label: 'Fairy Grunge',
     prompt: 'Transform into Fairy Grunge subculture style: earthy muted tones (moss green, muddy brown, slate gray), distressed raw frayed edge textures, ethereal translucent fairy wings layered over heavy grunge grain and paint splatters, contradiction of delicate and dirty.'
   },
   {
@@ -255,7 +255,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Glacier Cool Blue aesthetic: frosted icy surface textures, sharp crystal and ice refraction patterns, strictly monochromatic pale ice blue and absolute white color palette, stark frozen glacier atmosphere, clean metallic shimmer highlights, no warmth at all.'
   },
   {
-    id: 'Naïve Art', name: '原生稚拙藝術', label: 'Naïve Art',
+    id: 'Naïve Art', name: '素人藝術', label: 'Naïve Art',
     prompt: 'Transform into Naïve art painting style: intentional imperfections and wobbly unsteady lines, deceptively simple loose scratchy marks, awkward character proportions with flat perspective, raw childlike authenticity, crayon or tempera paint texture, rejecting digital polish entirely.'
   },
   {
@@ -289,7 +289,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into 70s psychedelic groovy art: melting and swirling organic shapes, warm retro color palette (mustard yellow, burnt orange, avocado green, harvest gold), wavy fluid flowing lines, concentric rainbow halos, hippie counterculture poster aesthetic, peace-era typography feel.'
   },
   {
-    id: 'Spatial UI', name: '空間UI透鏡', label: 'Spatial UI',
+    id: 'Spatial UI', name: '空間介面設計', label: 'Spatial UI Design',
     prompt: 'Transform into Apple Vision Pro spatial UI aesthetic: realistic volumetric frosted glass panels with refraction, dynamic pass-through environment shadows cast on surfaces, subtle outer glow emissions, deep multi-layered interface depth, ultra-clean white and translucent materials, serene futuristic calm.'
   },
   {
@@ -313,11 +313,11 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into die-cut sticker collage: overlapping layers of stickers with thick white outer border around each element, mix of glossy and matte sticker surface textures, soft drop shadows between overlapping layers, playful chaotic arrangement, colorful and energetic scrapbook aesthetic.'
   },
   {
-    id: 'Biophilic', name: '光影侘寂自然', label: 'Biophilic',
+    id: 'Biophilic', name: '侘寂美學', label: 'Wabi-Sabi Biophilic',
     prompt: 'Transform into biophilic minimalism aesthetic: organic leaf and branch shadows projected softly onto raw concrete, linen or rice paper walls, soft diffused natural side-daylight, earthy organic textures, quiet contemplative wabi-sabi atmosphere, muted neutral palette with one organic accent.'
   },
   {
-    id: 'Maximalism', name: '極大主義混亂', label: 'Maximalism',
+    id: 'Maximalism', name: '極繁主義', label: 'Maximalism',
     prompt: 'Transform into maximalist visual overload art: dense collage of overlapping text layers, mixed media patterns clashing, conflicting textures stacked together, kaleidoscopic color combinations, chaotic high-energy composition leaving no empty space, anti-minimalism sensory overload, every surface covered.'
   },
 
@@ -353,7 +353,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Glass Block privacy glass architectural trend: heavy vertical ribbing refractive textures, translucent barrier distortions, imagery refracted and smeared beneath fluted architectural glass panels, multi-layered depth and frosted obscuring effect.'
   },
   {
-    id: 'Brute Force', name: '熟成粗獷主義', label: 'Brute Force',
+    id: 'Brute Force', name: '粗獷建築主義', label: 'Brutalism Architecture',
     prompt: 'Transform into mature Brute Force raw layout style: naked grid structures, deadpan raw composition, heavy stacked black-and-white sans-serif typography, zero decoration or ornamentation, brutally honest anti-aesthetic, pure functional information architecture.'
   },
   {
@@ -369,11 +369,11 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Software Interface Art style: UI elements and application windows embedded as artistic motifs, spreadsheet grid textures, terminal code overlays, dialog boxes and dropdown menus as compositional layers, screen-captured interface fragments collaged into fine art, digital materiality aesthetic.'
   },
   {
-    id: 'Cyber Hacker', name: '電子世界駭客風', label: 'Cyber Hacker',
+    id: 'Cyber Hacker', name: '駭客終端機', label: 'Hacker Terminal',
     prompt: 'Transform into terminal hacker aesthetic: cascading neon green code rain falling vertically, glowing monospace typography, terminal command-line prompt layout, digital glitch scan artifacts, matrix-style grid overlay, deep absolute black cyber void background.'
   },
   {
-    id: 'Reality Warp', name: '現實扭曲流', label: 'Reality Warp',
+    id: 'Reality Warp', name: '現實扭曲', label: 'Reality Warp',
     prompt: 'Transform into 2026 Reality Warp subculture: editorial layouts smashed with surreal digital distortion elements, liminal empty spaces, uncanny reality filters, dreamy psychological juxtapositions, detached cool tone color grading, familiar made deeply strange.'
   },
   {
@@ -389,11 +389,11 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into minimalist Kintsugi art: deep matte charcoal or black backdrop, fractured gold joinery lines running organically and elegantly across broken elements, wabi-sabi philosophy of beautiful imperfection, refined broken geometry repaired with liquid gold.'
   },
   {
-    id: 'Solarpunk', name: '日光永續未來', label: 'Solarpunk',
+    id: 'Solarpunk', name: '太陽龐克', label: 'Solarpunk',
     prompt: 'Transform into Solarpunk eco-optimism aesthetic: organic Art Nouveau architectural curves wrapped around modern solar panels, lush hydroponic vertical garden greenery, warm brass and copper accents, stained glass filtering warm sunlight, hopeful sustainable future utopia.'
   },
   {
-    id: 'Lunarpunk', name: '月光螢光生態', label: 'Lunarpunk',
+    id: 'Lunarpunk', name: '夜光生態幻境', label: 'Lunarpunk',
     prompt: 'Transform into Lunarpunk night ecology aesthetic: deep spiritual indigo and cold silver color scheme, glowing bioluminescent mushrooms and moss, ethereal moonlight rays through forest canopy, mystical organic technology, magic and science coexisting at night.'
   },
   {
@@ -405,7 +405,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Gorpcore technical outdoor topographic style: clean vector topographic elevation contour line maps, alpine GPS coordinate data overlays, tactical military grid lines, earthy neutral trail tones (khaki, sage green, safety orange), functional outdoor gear aesthetic.'
   },
   {
-    id: 'Dark Academia', name: '暗黑學院古典', label: 'Dark Academia',
+    id: 'Dark Academia', name: '暗黑學院', label: 'Dark Academia',
     prompt: 'Transform into Dark Academia aesthetic: aged leather-bound book covers, iron gall ink calligraphy on yellowed parchment, candlelit dark mahogany library shelves, moody chiaroscuro university atmosphere, cracked oil painting varnish, dusty classical archive ambiance, ivy-covered stone gothic architecture.'
   },
   {
@@ -417,7 +417,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Explorecore independent publishing aesthetic: clean Substack or zine-style editorial layout, beautifully simple graphic arrangements, elegant classic serif typography, generous generous whitespace breathing room, slow thoughtful media calm intelligence.'
   },
   {
-    id: 'Subspace Wireframe', name: '次空間向量網格', label: 'Subspace Wireframe',
+    id: 'Subspace Wireframe', name: '復古3D線框', label: 'Retro 3D Wireframe',
     prompt: 'Transform into 90s virtual reality subspace wireframe: glowing neon electric blue or cyan vector wireframe grid lines extending infinitely into absolute pitch-black void, retro CGI cyber void space, Tron or early VR simulation aesthetic.'
   },
   {
@@ -443,11 +443,11 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into 1990s retro anime cel sheet style: sharp physical hand-inked outlines, solid flat cel-shading with exactly one layer of hard shadow, slight dust and acetate sheet reflection artifacts, vintage VHS scan grade color.'
   },
   {
-    id: 'Radiant Shinkai', name: '極致光影動漫', label: 'Radiant Shinkai Lens Flare',
+    id: 'Radiant Shinkai', name: '史詩天光動漫', label: 'Cinematic Sky Anime',
     prompt: 'Transform into radiant cinematic anime: hyper-detailed cumulonimbus clouds, intense golden hour rim lighting, dramatic lens flares, vibrant deep blue and blazing orange color science, Makoto Shinkai Your Name influence.'
   },
   {
-    id: 'Soft KyoAni', name: '輕柔日常動漫', label: 'Soft KyoAni Aesthetic',
+    id: 'Soft KyoAni', name: '溫柔日系日常', label: 'Soft Japanese Daily Life',
     prompt: 'Transform into slice-of-life soft focus moe anime: delicate feather-light line art, soft chromatic aberration glow, highly detailed hair strand highlights, gentle emotional ambient lighting, Kyoto Animation K-On influence.'
   },
   {
