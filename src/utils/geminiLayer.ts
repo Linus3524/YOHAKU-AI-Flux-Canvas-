@@ -134,35 +134,53 @@ async function removeBgBiRefNet(
     falKey: string,
     model: BiRefNetModel = 'Matting',
 ): Promise<string> {
-    // ⚠️ operating_resolution: '2048x2048' 可能讓輸出尺寸與輸入不一致，
-    //    事先記錄輸入尺寸，回傳後強制 resize 回原始比例，防止回貼時變形。
     const inputDims = await getImageDims(cropBase64).catch(() => null);
 
     fal.config({ credentials: falKey });
-    const file = base64ToFile(cropBase64, 'birefnet-input');
-    const imageUrl = await fal.storage.upload(file);
 
-    const result = await fal.subscribe('fal-ai/birefnet/v2', {
-        input: {
-            image_url: imageUrl,
-            model,
-            operating_resolution: '2048x2048',
-            output_format: 'png',
-            refine_foreground: true,
-        },
-    });
+    // Step 1: upload
+    let imageUrl: string;
+    try {
+        const file = base64ToFile(cropBase64, 'birefnet-input');
+        imageUrl = await fal.storage.upload(file);
+        console.log('[BiRefNet] upload ok:', imageUrl);
+    } catch (uploadErr: any) {
+        console.error('[BiRefNet] upload failed:', uploadErr);
+        throw new Error(`上傳失敗：${uploadErr?.message ?? uploadErr}`);
+    }
 
-    // 相容多種回傳格式
+    // Step 2: inference — Light 模式不傳 operating_resolution，避免參數衝突
+    const isLight = model === 'General Use (Light)';
+    let result: any;
+    try {
+        result = await fal.subscribe('fal-ai/birefnet/v2', {
+            input: {
+                image_url: imageUrl,
+                model,
+                ...(isLight ? {} : { operating_resolution: '2048x2048' }),
+                output_format: 'png',
+                refine_foreground: true,
+            },
+        });
+        console.log('[BiRefNet] inference ok, data keys:', Object.keys(result.data ?? {}));
+    } catch (inferErr: any) {
+        console.error('[BiRefNet] inference failed:', inferErr);
+        throw new Error(`推理失敗：${inferErr?.message ?? inferErr}`);
+    }
+
+    // Step 3: parse result URL
     const resultUrl: string | undefined =
         (result.data as any)?.image?.url ??
         (result.data as any)?.images?.[0]?.url ??
         (result.data as any)?.url;
-    if (!resultUrl) throw new Error('BiRefNet 未回傳結果 URL');
+    if (!resultUrl) {
+        console.error('[BiRefNet] no result URL, data:', result.data);
+        throw new Error('BiRefNet 未回傳結果 URL');
+    }
 
     const b64 = await downloadImageAsBase64(resultUrl);
     if (!b64) throw new Error('BiRefNet 圖片下載失敗');
 
-    // 輸出尺寸不符輸入時，resize 回輸入尺寸（保持比例一致，防止 cropRatio 計算出錯）
     if (inputDims) {
         return resizeToMatch(b64, inputDims.w, inputDims.h);
     }
