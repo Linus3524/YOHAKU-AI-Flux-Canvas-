@@ -18,6 +18,7 @@ import { useHistoryState } from './useHistoryState';
 import { trimCanvas, wrapTextCanvas, loadImage, createShapeDataUrl, createArrowDataUrl, COLORS, getRandomPosition } from '../utils/helpers';
 import { drawTextOnCanvas } from '../utils/textCanvas'; // ✅ 修改
 import type { CanvasApi } from '../components/InfiniteCanvas';
+import { saveFileHandle, loadFileHandle, clearFileHandle, verifyHandlePermission } from '../utils/fileHandleStore';
 
 // LocalStorage
 const STORAGE_KEY = 'yohaku_canvas';
@@ -72,6 +73,28 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     const canvasApiRef = useRef<CanvasApi>(null);
     // 拖曳/縮放/旋轉手勢中：true = 下一次 updateElements 是手勢首幀，需新增一筆歷史（保住手勢前狀態）
     const transformPendingRef = useRef(false);
+
+    // --- File System (A) ---
+    const [currentFileHandle, setCurrentFileHandle] = useState<FileSystemFileHandle | null>(null);
+    const [currentFileName, setCurrentFileName] = useState<string | null>(null);
+    const currentFileHandleRef = useRef<FileSystemFileHandle | null>(null);
+    // Keep ref in sync so save callbacks don't capture stale state
+    useEffect(() => { currentFileHandleRef.current = currentFileHandle; }, [currentFileHandle]);
+
+    // On mount: restore persisted file handle and verify permission
+    useEffect(() => {
+        loadFileHandle().then(async (handle) => {
+            if (!handle) return;
+            const ok = await verifyHandlePermission(handle);
+            if (ok) {
+                setCurrentFileHandle(handle);
+                setCurrentFileName(handle.name);
+            } else {
+                // Permission denied — clear stale handle silently
+                await clearFileHandle();
+            }
+        });
+    }, []);
 
     // --- LocalStorage Auto-Save ---
     const [storageStatus, setStorageStatus] = useState<StorageStatus>('saved');
@@ -1404,7 +1427,115 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         setElements(prev => prev.map(el => selectedSet.has(el.id) ? { ...el, zIndex: newZIndex } : el));
     }, [selectedElementIds, elements, setElements]);
 
-    // --- Export Logic ---
+    // --- File System Access API Save/Open ---
+    const isFileSystemSupported = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
+
+    const writeToHandle = useCallback(async (handle: FileSystemFileHandle, data: string) => {
+        // @ts-ignore
+        const writable = await handle.createWritable();
+        await writable.write(data);
+        await writable.close();
+    }, []);
+
+    const handleSaveFile = useCallback(async () => {
+        const dataStr = JSON.stringify(elements, null, 2);
+        const handle = currentFileHandleRef.current;
+        if (handle) {
+            try {
+                await writeToHandle(handle, dataStr);
+                showToast(`已儲存：${handle.name}`);
+                return;
+            } catch (e: any) {
+                if (e?.name === 'NotAllowedError') {
+                    // Permission lost — fall through to Save As
+                } else {
+                    showToast('儲存失敗，請重試');
+                    return;
+                }
+            }
+        }
+        // No handle or permission lost → Save As
+        await handleSaveAsFile();
+    }, [elements, showToast, writeToHandle]); // handleSaveAsFile added below via ref pattern
+
+    const handleSaveAsFile = useCallback(async () => {
+        if (!isFileSystemSupported) {
+            // Fallback: traditional download
+            const dataStr = JSON.stringify(elements, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.download = 'YOHAKU-canvas.json';
+            link.href = url;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            return;
+        }
+        try {
+            // @ts-ignore
+            const handle: FileSystemFileHandle = await window.showSaveFilePicker({
+                suggestedName: currentFileHandleRef.current?.name ?? 'YOHAKU-canvas.json',
+                types: [{ description: 'YOHAKU Canvas', accept: { 'application/json': ['.json'] } }],
+            });
+            const dataStr = JSON.stringify(elements, null, 2);
+            await writeToHandle(handle, dataStr);
+            setCurrentFileHandle(handle);
+            setCurrentFileName(handle.name);
+            await saveFileHandle(handle);
+            showToast(`已另存：${handle.name}`);
+        } catch (e: any) {
+            if (e?.name !== 'AbortError') showToast('另存失敗，請重試');
+        }
+    }, [elements, isFileSystemSupported, showToast, writeToHandle]);
+
+    const handleOpenFile = useCallback(async () => {
+        if (!isFileSystemSupported) {
+            // Fallback: trigger legacy file input (caller handles this)
+            return false;
+        }
+        try {
+            // @ts-ignore
+            const [handle]: FileSystemFileHandle[] = await window.showOpenFilePicker({
+                types: [{ description: 'YOHAKU Canvas', accept: { 'application/json': ['.json'] } }],
+                multiple: false,
+            });
+            const file = await handle.getFile();
+            const text = await file.text();
+            const importedElements = JSON.parse(text) as CanvasElement[];
+            if (!Array.isArray(importedElements) || (importedElements.length > 0 && !importedElements[0].id)) {
+                showToast('檔案格式錯誤');
+                return true;
+            }
+            const normalizedElements = importedElements.map(el => ({
+                ...el,
+                isVisible: el.isVisible ?? true,
+                isLocked: el.isLocked ?? false,
+                name: el.name ?? `${el.type} (Imported)`,
+                groupId: el.groupId ?? null,
+            }));
+            setElements(normalizedElements);
+            const maxZ = Math.max(0, ...normalizedElements.map(el => el.zIndex || 0));
+            zIndexCounter.current = maxZ + 1;
+            setCurrentFileHandle(handle);
+            setCurrentFileName(handle.name);
+            await saveFileHandle(handle);
+            showToast(`已開啟：${handle.name}`);
+            return true;
+        } catch (e: any) {
+            if (e?.name !== 'AbortError') showToast('開啟失敗，請重試');
+            return true;
+        }
+    }, [isFileSystemSupported, setElements, showToast]);
+
+    const handleNewCanvas = useCallback(async () => {
+        setCurrentFileHandle(null);
+        setCurrentFileName(null);
+        await clearFileHandle();
+    }, []);
+
+    // --- Export Logic (legacy download, kept for compatibility) ---
     const handleExportCanvas = useCallback(() => {
         const dataStr = JSON.stringify(elements, null, 2);
         const dataBlob = new Blob([dataStr], { type: 'application/json' });
@@ -1512,6 +1643,12 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         handleRasterizeArrow,
         handleExportCanvas,
         handleImportCanvas,
+        handleSaveFile,
+        handleSaveAsFile,
+        handleOpenFile,
+        handleNewCanvas,
+        currentFileName,
+        isFileSystemSupported,
         storageStatus,
         clearStorage,
     };

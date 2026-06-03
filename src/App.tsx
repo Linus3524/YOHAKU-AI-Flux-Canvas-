@@ -308,6 +308,12 @@ const App: React.FC = () => {
       handleRasterizeArrow,
       handleExportCanvas: originalExportCanvas,
       handleImportCanvas: originalImportCanvas,
+      handleSaveFile,
+      handleSaveAsFile,
+      handleOpenFile,
+      handleNewCanvas,
+      currentFileName,
+      isFileSystemSupported,
       storageStatus,
       clearStorage,
   } = useCanvas(showToast);
@@ -1074,9 +1080,12 @@ const App: React.FC = () => {
 
   const handleExportCanvas = originalExportCanvas;
 
-  const triggerImportCanvas = () => {
-      if (importInputRef.current) {
-          importInputRef.current.value = ''; 
+  const triggerImportCanvas = async () => {
+      // Use File System Access API if available, otherwise fallback to legacy input
+      if (isFileSystemSupported) {
+          await handleOpenFile();
+      } else if (importInputRef.current) {
+          importInputRef.current.value = '';
           importInputRef.current.click();
       }
   };
@@ -1206,12 +1215,19 @@ const App: React.FC = () => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText) { e.preventDefault(); deleteElement(); return; }
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+      if (isCtrlOrCmd) {
+        if (e.key.toLowerCase() === 's') {
+          e.preventDefault();
+          if (e.shiftKey) handleSaveAsFile(); else handleSaveFile();
+          return;
+        }
+      }
       if (isCtrlOrCmd && !isEditingText) {
-        if (e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); } 
-        else if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); } 
+        if (e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+        else if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
         else if (e.key.toLowerCase() === 'c') { e.preventDefault(); copySelection(); }
         else if (e.key.toLowerCase() === 'v') { e.preventDefault(); pasteSelection(); }
-        else if (e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelection(); } 
+        else if (e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelection(); }
         else if (e.key.toLowerCase() === 'g') { e.preventDefault(); if (e.shiftKey) handleUngroup(); else handleGroup(); }
       }
     };
@@ -1219,7 +1235,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [deleteElement, undo, redo, editingDrawing, editingImage, outpaintingState, copySelection, pasteSelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, setElements, handleCancelOutpainting]);
+  }, [deleteElement, undo, redo, editingDrawing, editingImage, outpaintingState, copySelection, pasteSelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, setElements, handleCancelOutpainting, handleSaveFile, handleSaveAsFile]);
   
   useEffect(() => {
     const preventDefaults = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
@@ -1549,6 +1565,11 @@ const App: React.FC = () => {
             onSelectShapeTool={handleSelectShapeTool}
             onExportCanvas={handleExportCanvas}
             onImportCanvas={triggerImportCanvas}
+            onSaveFile={handleSaveFile}
+            onSaveAsFile={handleSaveAsFile}
+            onOpenFile={triggerImportCanvas}
+            currentFileName={currentFileName}
+            isFileSystemSupported={isFileSystemSupported}
             onAddArtboard={(preset) => addArtboard(preset, getCenterOfViewport())}
             generationModel={generationModel}
             onSetGenerationModel={handleSetGenerationModel}

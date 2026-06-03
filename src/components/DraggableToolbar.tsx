@@ -26,6 +26,11 @@ interface DraggableToolbarProps {
   onSelectShapeTool: (shapeType: ShapeType) => void;
   onExportCanvas: () => void;
   onImportCanvas: () => void;
+  onSaveFile?: () => void;
+  onSaveAsFile?: () => void;
+  onOpenFile?: () => void;
+  currentFileName?: string | null;
+  isFileSystemSupported?: boolean;
   onAddArtboard: (preset: ArtboardPreset) => void;
   generationModel?: string;
   onSetGenerationModel?: (model: string) => void;
@@ -199,6 +204,11 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
   onSelectShapeTool,
   onExportCanvas,
   onImportCanvas,
+  onSaveFile,
+  onSaveAsFile,
+  onOpenFile,
+  currentFileName,
+  isFileSystemSupported = false,
   onAddArtboard,
   generationModel = 'gemini',
   onSetGenerationModel,
@@ -512,23 +522,56 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
 
                 <div className="h-px bg-[#f0f0f0] my-3" />
 
-                {/* 匯出匯入 */}
-                <div className="flex gap-2 mt-0">
-                    <button 
-                        onClick={() => { onExportCanvas(); setShowAddMenu(false); }}
-                        className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
-                    >
-                        <Icons.Export />
-                        匯出畫布
-                    </button>
-                    <button 
-                        onClick={() => { onImportCanvas(); setShowAddMenu(false); }}
-                        className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
-                    >
-                        <Icons.Import />
-                        匯入畫布
-                    </button>
-                </div>
+                {/* 儲存 / 開啟 */}
+                {isFileSystemSupported ? (
+                    <>
+                        {currentFileName && (
+                            <div className="text-[10px] text-center text-yohaku-text-sub mb-2 truncate px-1">
+                                📄 {currentFileName}
+                            </div>
+                        )}
+                        <div className="flex gap-2 mt-0">
+                            <button
+                                onClick={() => { onSaveFile?.(); setShowAddMenu(false); }}
+                                className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                            >
+                                <Icons.Export />
+                                {currentFileName ? '儲存' : '儲存檔案'}
+                            </button>
+                            <button
+                                onClick={() => { onOpenFile?.(); setShowAddMenu(false); }}
+                                className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                            >
+                                <Icons.Import />
+                                開啟檔案
+                            </button>
+                        </div>
+                        <button
+                            onClick={() => { onSaveAsFile?.(); setShowAddMenu(false); }}
+                            className="w-full mt-2 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-sub text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                        >
+                            另存新檔
+                        </button>
+                    </>
+                ) : (
+                    /* Fallback for unsupported browsers */
+                    <div className="flex gap-2 mt-0">
+                        <button
+                            onClick={() => { onExportCanvas(); setShowAddMenu(false); }}
+                            className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                        >
+                            <Icons.Export />
+                            匯出畫布
+                        </button>
+                        <button
+                            onClick={() => { onImportCanvas(); setShowAddMenu(false); }}
+                            className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                        >
+                            <Icons.Import />
+                            匯入畫布
+                        </button>
+                    </div>
+                )}
             </div>
             </div>
           )}
