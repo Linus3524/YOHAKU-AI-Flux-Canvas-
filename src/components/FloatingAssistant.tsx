@@ -277,6 +277,9 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
 
       {/* ── Panel ───────────────────────────────────────────────────────────── */}
       {isOpen && (
+        <>
+        {/* Backdrop — click outside to close */}
+        <div className="fixed inset-0 z-[6001]" onClick={() => setIsOpen(false)} />
         <div
           style={{ left: panelLeft, top: panelTop, width: panelW, height: panelH }}
           className="fixed z-[6002] flex bg-white/85 backdrop-blur-xl border border-white/30 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.15)] rounded-2xl overflow-hidden animate-fade-in-up origin-bottom"
@@ -675,7 +678,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                 <div className="space-y-5">
                   <div className="bg-blue-50/80 border border-blue-100 rounded-xl p-6">
                     <h3 className="text-blue-900 font-bold mb-3 flex items-center gap-2 text-sm">🔒 安全性說明</h3>
-                    <ul className="text-sm text-blue-800 space-y-2 opacity-80">
+                    <ul className="text-sm text-blue-800 space-y-2 opacity-80 [&>li]:pl-[1.3em] [&>li]:[text-indent:-1.3em]">
                       <li>・ <span className="font-bold">在地化存儲：</span>API 金鑰僅儲存於個人瀏覽器 LocalStorage，不會傳送至開發者伺服器。</li>
                       <li>・ <span className="font-bold">持久化設定：</span>關閉頁面後設定仍保留（無痕模式除外）。</li>
                       <li>・ <span className="font-bold">用戶責任：</span>請妥善保管 API 金鑰，切勿洩漏給他人。</li>
@@ -690,7 +693,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       </div>
                       <div className="pb-3 border-b border-yohaku-border-light">
                         <span className="text-sm font-medium block mb-1">第三方計費</span>
-                        <ul className="text-xs text-gray-600 space-y-1">
+                        <ul className="text-xs text-gray-600 space-y-1 [&>li]:pl-[1.3em] [&>li]:[text-indent:-1.3em]">
                           <li>・ <span className="font-bold">Gemini API：</span>費用由您的 Google 帳號直接扣款，依 Google 官方政策計費。</li>
                           <li>・ <span className="font-bold">Atlas Cloud API：</span>費用由您的 Atlas Cloud 帳號扣款，依使用模型與次數計費。</li>
                           <li>・ <span className="font-bold">fal.ai API：</span>費用由您的 fal.ai 帳號扣款，依模型推理時間（compute seconds）計費。</li>
@@ -700,7 +703,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {/* Gemini 模型 */}
                       <div className="pb-3 border-b border-yohaku-border-light">
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">🔵 Gemini 生圖模型（需 Gemini API Key）</span>
-                        <ul className="text-xs text-gray-600 space-y-2 leading-relaxed mb-3">
+                        <ul className="text-xs text-gray-600 space-y-2 leading-relaxed mb-3 [&>li]:pl-[1.3em] [&>li]:[text-indent:-1.3em]">
                           <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-lite</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
                           <li>・ <span className="font-bold text-gray-600">生圖模型</span>：可在頂部狀態欄切換 Flash / Pro，依需求選擇。需付費使用。</li>
                         </ul>
@@ -818,8 +821,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   </div>
                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-6">
                     <h3 className="text-yohaku-text-main font-bold mb-3 text-sm">🌐 運作環境</h3>
-                    <ul className="text-sm text-gray-600 space-y-2">
-                      <li>・ <span className="font-bold text-yohaku-text-main">推薦瀏覽器：</span>Chrome、Edge、Safari（請更新至最新版本）。</li>
+                    <ul className="text-sm text-gray-600 space-y-2 [&>li]:pl-[1.3em] [&>li]:[text-indent:-1.3em]">
+                      <li>・ <span className="font-bold text-yohaku-text-main">推薦瀏覽器：</span>Chrome、Edge、Brave、Safari（請更新至最新版本）。</li>
                       <li>・ <span className="font-bold text-yohaku-text-main">支援裝置：</span>最佳體驗建議使用電腦或平板電腦。</li>
                     </ul>
                   </div>
@@ -843,9 +846,10 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   </div>
                   <div>
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-2">3. 數據與隱私保護</h3>
-                    <ul className="space-y-1.5 text-gray-600 text-xs">
+                    <ul className="space-y-1.5 text-gray-600 text-xs [&>li]:pl-[1.3em] [&>li]:[text-indent:-1.3em]">
                       <li>・ <span className="font-bold text-gray-600">Gemini API（Google）：</span>提示詞、上傳影像將傳送至 Google 伺服器處理，遵循 <a href="https://ai.google.dev/terms" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">Google AI Studio 服務條款</a>。</li>
                       <li>・ <span className="font-bold text-gray-600">Atlas Cloud API：</span>提示詞與影像將傳送至 Atlas Cloud 伺服器，並轉發至對應模型供應商（OpenAI / ByteDance / Alibaba）處理，遵循各供應商之使用政策。生成結果以 base64 格式直接回傳至您的裝置，不永久儲存於 Atlas 伺服器（CDN 連結僅保留 1–7 天）。</li>
+                      <li>・ <span className="font-bold text-gray-600">fal.ai API：</span>影像將傳送至 fal.ai 伺服器進行推理（去背、智慧放大、BiRefNet 等功能），遵循 <a href="https://fal.ai/policies/privacy" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">fal.ai 隱私政策</a>。推理結果直接回傳至您的裝置，fal.ai 不永久儲存上傳影像。</li>
                       <li>・ <span className="font-bold text-gray-600">本機儲存：</span>所有畫布資料、API Key、生成圖片均僅儲存於您的裝置本機（localStorage / IndexedDB），本軟體伺服器不收集任何個人資料。</li>
                       <li>・ <span className="font-bold text-gray-600">版權責任：</span>用戶應確保上傳圖片擁有合法使用權，侵權糾紛由用戶自負法律責任。</li>
                       <li>・ <span className="font-bold text-gray-600">機密資訊：</span>請勿上傳含有個人識別資訊、商業機密或敏感資料之影像。</li>
@@ -853,7 +857,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   </div>
                   <div>
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-2">4. 智慧財產權</h3>
-                    <ul className="space-y-1.5 text-gray-600 text-xs">
+                    <ul className="space-y-1.5 text-gray-600 text-xs [&>li]:pl-[1.3em] [&>li]:[text-indent:-1.3em]">
                       <li>・ <span className="font-bold text-gray-600">本軟體主權：</span>YOHAKU 之程式碼邏輯、UI 設計及品牌版權歸開發者 LINUS Nice Day Japan (CHANG CHIN WEI) @linus3524 所有。</li>
                       <li>・ <span className="font-bold text-gray-600">開源致敬：</span>本軟體衍生自 @prompt_case 之 Nano Banana Infinite Canvas，並獲授權重製發佈。</li>
                       <li>・ <span className="font-bold text-gray-600">生成內容：</span>AI 生成內容之權利歸屬依各國法律及各供應商條款（Google、OpenAI、ByteDance、Alibaba）判定，商用前請諮詢法律意見。</li>
@@ -873,6 +877,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
 
           </div>
         </div>
+        </>
       )}
     </>
   );
