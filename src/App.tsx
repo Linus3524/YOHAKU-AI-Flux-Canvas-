@@ -1816,6 +1816,11 @@ const App: React.FC = () => {
                 if (artboard) downloadArtboard(artboard, elements);
             },
             importCanvas: triggerImportCanvas,
+            saveFile: handleSaveFile,
+            saveAsFile: handleSaveAsFile,
+            openFile: triggerImportCanvas,
+            isFileSystemSupported,
+            currentFileName,
             group: handleGroup,
             ungroup: handleUngroup,
             toggleLock: handleToggleLock,

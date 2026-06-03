@@ -38,6 +38,11 @@ interface ContextMenuProps {
     pasteStyle: (elementIds: string[]) => void;
     exportCanvas: () => void;
     importCanvas: () => void;
+    saveFile?: () => void;
+    saveAsFile?: () => void;
+    openFile?: () => void;
+    isFileSystemSupported?: boolean;
+    currentFileName?: string | null;
     // New Actions
     group: () => void;
     ungroup: () => void;
@@ -568,8 +573,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
                     <div className="border-t my-1 border-gray-100/50" />
 
-                    <MenuItem icon={<MenuIcons.Export />} onClick={() => handleAction(actions.exportCanvas)}>匯出畫布</MenuItem>
-                    <MenuItem icon={<MenuIcons.Import />} onClick={() => handleAction(actions.importCanvas)}>匯入畫布</MenuItem>
+                    {actions.isFileSystemSupported ? (<>
+                        <MenuItem icon={<MenuIcons.Export />} onClick={() => handleAction(actions.saveFile!)}>
+                            {actions.currentFileName ? `儲存「${actions.currentFileName}」` : '儲存檔案'}
+                        </MenuItem>
+                        <MenuItem icon={<MenuIcons.Import />} onClick={() => handleAction(actions.openFile!)}>開啟檔案</MenuItem>
+                        <MenuItem icon={<MenuIcons.Export />} onClick={() => handleAction(actions.saveAsFile!)}>另存新檔</MenuItem>
+                    </>) : (<>
+                        <MenuItem icon={<MenuIcons.Export />} onClick={() => handleAction(actions.exportCanvas)}>匯出畫布</MenuItem>
+                        <MenuItem icon={<MenuIcons.Import />} onClick={() => handleAction(actions.importCanvas)}>匯入畫布</MenuItem>
+                    </>)}
                     <div className="border-t my-1 border-gray-100/50" />
                     <MenuItem icon={<MenuIcons.Trash />} onClick={() => handleAction(actions.clearStorage)} destructive>清除存檔</MenuItem>
                 </>
