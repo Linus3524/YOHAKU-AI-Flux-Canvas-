@@ -821,6 +821,23 @@ const App: React.FC = () => {
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, [styleLibDragging]);
 
+  // ── 生成意圖 Modal ────────────────────────────────────────────
+  const [intentModal, setIntentModal] = useState<{ elements: CanvasElement[]; count: 1|2|3|4 } | null>(null);
+  const [intentText, setIntentText] = useState('');
+
+  const handleGenerateWithIntent = useCallback((selectedElements: CanvasElement[], count: 1|2|3|4 = 2) => {
+    const hasNotes = selectedElements.some(el => el.type === 'note' || el.type === 'text');
+    const hasImages = selectedElements.some(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
+    const hasStyle = imageStyle && imageStyle !== 'Default';
+    // 只有圖片、沒有便利貼、沒有風格 → 詢問意圖
+    if (hasImages && !hasNotes && !hasStyle) {
+      setIntentText('');
+      setIntentModal({ elements: selectedElements, count });
+      return;
+    }
+    handleGenerate(selectedElements, count);
+  }, [handleGenerate, imageStyle]);
+
   // 新畫布時（只有歡迎便利貼）自動 fit to screen 對齊畫面
   useEffect(() => {
     if (elements.length === 1 && elements[0].id === 'welcome-note') {
@@ -1229,6 +1246,10 @@ const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.type === 'keyup') return; // Only trigger on keydown
       if (editingDrawing || editingImage) return;
+      if (intentModal) {
+        if (e.key === 'Escape') setIntentModal(null);
+        return;
+      }
       if (outpaintingState) {
           if (e.key === 'Escape') handleCancelOutpainting();
           return;
@@ -1456,6 +1477,57 @@ const App: React.FC = () => {
       </div>
       </div>
 
+      {/* ── 生成意圖 Modal ── */}
+      {intentModal && (
+        <div className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setIntentModal(null)}>
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/50 w-[400px] p-6" onClick={e => e.stopPropagation()}>
+            <div className="mb-4">
+              <h3 className="font-bold text-[#1D1D1F] text-[15px] mb-1">想讓 AI 做什麼？</h3>
+              <p className="text-[11px] text-[#86868B] leading-relaxed">圖片已選取，但尚未設定提示詞或風格。<br/>告訴 AI 你的意圖，結果會更精準。</p>
+            </div>
+            <textarea
+              autoFocus
+              value={intentText}
+              onChange={e => setIntentText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  const { elements: els, count } = intentModal;
+                  setIntentModal(null);
+                  handleGenerate(els, count, intentText.trim() || undefined);
+                }
+              }}
+              placeholder="例如：轉成油畫風格、把背景換成日落、加強細節品質..."
+              className="w-full bg-[#f8fafc] border border-gray-200 rounded-xl px-4 py-3 text-[13px] text-gray-700 focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100 resize-none transition-colors"
+              rows={3}
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => {
+                  const { elements: els, count } = intentModal;
+                  setIntentModal(null);
+                  handleGenerate(els, count, undefined);
+                }}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                跳過直接生成
+              </button>
+              <button
+                onClick={() => {
+                  const { elements: els, count } = intentModal;
+                  setIntentModal(null);
+                  handleGenerate(els, count, intentText.trim() || undefined);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-[13px] font-medium hover:bg-gray-700 transition-colors"
+              >
+                確認生成
+              </button>
+            </div>
+            <p className="text-center text-[10px] text-[#86868B] mt-2">按 Enter 快速確認 · Esc 或點空白處取消</p>
+          </div>
+        </div>
+      )}
+
       {showStyleLibrary && (() => {
         const STYLE_CATEGORIES = [
           { label: '🖌 繪畫與插畫',       ids: ['Minimalist','Watercolor','Oil Painting','Sketch','Impressionism','Chinese Ink Wash','Concept Watercolor','Transparent Wash','Fine Pencil Tech','Storybook Pencil','Industrial Marker'] },
@@ -1535,7 +1607,7 @@ const App: React.FC = () => {
         onInteractionStart={beginTransform}
         onInteractionEnd={handleInteractionEnd}
         setResetViewCallback={getResetViewCallback} 
-        onGenerate={handleGenerate}
+        onGenerate={handleGenerateWithIntent}
         onContextMenu={handleContextMenu}
         onEditDrawing={handleEditDrawing}
         onCopySelection={copySelection}

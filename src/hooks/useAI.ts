@@ -1107,7 +1107,7 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, preserveTransparency, prepareForGeneration, restoreTransparencyFn]);
 
-    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2) => {
+    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string) => {
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
         const noteElements = selectedElements.filter(el => el.type === 'note' || el.type === 'text') as (NoteElement | TextElement)[];
         const frameElements = selectedElements.filter(el => el.type === 'frame') as FrameElement[];
@@ -1131,7 +1131,7 @@ CONSTRAINTS:
             const hasImages = imageElements.length > 0;
 
             // 組合 prompt：便利貼內容 + 參考風格（兩者皆選填）
-            const noteText = noteElements.map(n => n.type === 'note' ? n.content : (n as TextElement).text).join(' ').trim();
+            const noteText = intentOverride || noteElements.map(n => n.type === 'note' ? n.content : (n as TextElement).text).join(' ').trim();
             let atlasPrompt = noteText;
             if (imageStyle && imageStyle !== 'Default') {
                 const styleObj = STYLE_PRESETS.find(s => s.label === imageStyle || s.name === imageStyle);
@@ -1287,7 +1287,7 @@ CONSTRAINTS:
         
         try {
           const genAI = createAiClient();
-          const instructions = noteElements.map(note => note.type === 'note' ? note.content : note.text).join(' \n');
+          const instructions = intentOverride || noteElements.map(note => note.type === 'note' ? note.content : note.text).join(' \n');
           let finalInstructions = instructions;
           if (imageStyle && imageStyle !== 'Default') {
               const styleObj = STYLE_PRESETS.find(s => s.label === imageStyle || s.name === imageStyle);
