@@ -393,7 +393,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Solarpunk eco-optimism aesthetic: organic Art Nouveau architectural curves wrapped around modern solar panels, lush hydroponic vertical garden greenery, warm brass and copper accents, stained glass filtering warm sunlight, hopeful sustainable future utopia.'
   },
   {
-    id: 'Lunarpunk', name: '夜光生態幻境', label: 'Lunarpunk',
+    id: 'Lunarpunk', name: '月光龐克', label: 'Lunarpunk',
     prompt: 'Transform into Lunarpunk night ecology aesthetic: deep spiritual indigo and cold silver color scheme, glowing bioluminescent mushrooms and moss, ethereal moonlight rays through forest canopy, mystical organic technology, magic and science coexisting at night.'
   },
   {
