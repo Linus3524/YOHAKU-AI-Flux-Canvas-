@@ -713,6 +713,22 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
     startWX: number; startWY: number;
   } | null>(null);
 
+  // ── 群組旋轉 ──────────────────────────────────────────────────
+  const groupRotateRef = useRef<{
+    centerX: number; centerY: number;
+    startAngle: number;
+    startDeg: number;   // 本次拖曳開始時的已累積角度
+    startElements: CanvasElement[];
+    initBounds: { x: number; y: number; w: number; h: number };
+    gid: string;
+  } | null>(null);
+  // 旋轉後保持群組框角度（gid 用來自動忽略舊群組的殘留值，不依賴 useEffect 清除）
+  const [groupRotDisplay, setGroupRotDisplay] = useState<{
+    gid: string;
+    initBounds: { x: number; y: number; w: number; h: number };
+    deg: number;
+  } | null>(null);
+
   // 只在所有選取元素都屬同一個 groupId 時顯示群組邊框
   const groupBounds = useMemo(() => {
     if (selectedElementIds.length < 2) return null;
@@ -724,7 +740,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
     const minY = Math.min(...sel.map(el => el.position.y - el.height / 2));
     const maxX = Math.max(...sel.map(el => el.position.x + el.width  / 2));
     const maxY = Math.max(...sel.map(el => el.position.y + el.height / 2));
-    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, gid };
   }, [elements, selectedElementIds]);
 
   const isArtboardSelected = useMemo(() => elements.some(el => selectedElementIds.includes(el.id) && el.type === 'artboard'), [elements, selectedElementIds]);
@@ -822,6 +838,29 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   }, [isSpacebarPressed, pan, outpaintingState, onSelectElement, screenToWorld, croppingElementId, interactionMode, activeShapeTool]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // ── 群組旋轉攔截 ──
+    if (groupRotateRef.current && onUpdateMultipleElements) {
+      const { centerX, centerY, startAngle, startDeg, startElements, initBounds, gid } = groupRotateRef.current;
+      const wp = screenToWorld({ x: e.clientX, y: e.clientY });
+      const deltaRad = Math.atan2(wp.y - centerY, wp.x - centerX) - startAngle;
+      const deltaDeg = deltaRad * (180 / Math.PI);
+      const totalDeg = startDeg + deltaDeg;   // 累積角度
+      const cos = Math.cos(deltaRad);
+      const sin = Math.sin(deltaRad);
+      // 用累積角度更新群組框（含 gid，避免 useEffect 競爭）
+      setGroupRotDisplay({ gid, initBounds, deg: totalDeg });
+      onUpdateMultipleElements(startElements.map(el => {
+        const dx = el.position.x - centerX;
+        const dy = el.position.y - centerY;
+        return {
+          ...el,
+          position: { x: centerX + dx * cos - dy * sin, y: centerY + dx * sin + dy * cos },
+          rotation: ((el.rotation + deltaDeg) % 360 + 360) % 360,
+        };
+      }));
+      return;
+    }
+
     // ── 群組縮放攔截 ──
     if (groupResizeRef.current && onUpdateMultipleElements) {
       const { handle, startBounds: sb, startElements, startWX, startWY } = groupResizeRef.current;
@@ -896,7 +935,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   }, [isPanning, startPan, marqueeRect, screenToWorld, isDraggingMenu, onUpdateMultipleElements]);
 
   const handleMouseUp = useCallback(() => {
-    groupResizeRef.current = null;  // 結束群組縮放
+    groupResizeRef.current = null;     // 結束群組縮放
+    groupRotateRef.current = null;     // 結束群組旋轉（groupRotDisplay 保持，讓框維持旋轉角度）
     setIsPanning(false);
     setIsDraggingMenu(false);
     if (marqueeRect) {
@@ -1115,7 +1155,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
           <TransformableElement
             key={el.id}
             element={el}
-            isSelected={selectedElementIds.includes(el.id) && croppingElementId !== el.id}
+            isSelected={selectedElementIds.includes(el.id) && croppingElementId !== el.id && !groupBounds}
             isOutpainting={!!outpaintingState && outpaintingState.element.id === el.id}
             zoom={zoom}
             onSelect={onSelectElement}
@@ -1129,29 +1169,44 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
             onDragEnd={onDragEnd}
             interactionMode={interactionMode}
             screenToWorld={screenToWorld}
-            disableResizeHandles={!!groupBounds && selectedElementIds.includes(el.id)}
+            disableResizeHandles={false}
           />
         ))}
 
-        {/* ── 群組等比縮放邊框 ── */}
+        {/* ── 群組邊框（含旋轉鈕 + zoom 補償 handle）── */}
         {groupBounds && !croppingElementId && (() => {
-          const { x, y, w, h } = groupBounds;
-          const PAD = 0;
-          const cornerHandles: ['nw'|'ne'|'sw'|'se'|'n'|'s'|'e'|'w', React.CSSProperties, string][] = [
-            ['nw', { top: -5, left:  -5 }, 'cursor-nw-resize'],
-            ['ne', { top: -5, right: -5 }, 'cursor-ne-resize'],
-            ['sw', { bottom: -5, left:  -5 }, 'cursor-sw-resize'],
-            ['se', { bottom: -5, right: -5 }, 'cursor-se-resize'],
+          const { x, y, w, h, gid } = groupBounds;
+          const cx = x + w / 2;
+          const cy = y + h / 2;
+          const GRP_COLOR = '#5856D6';
+
+          // zoom 補償（與 TransformableElement 一致）
+          const hScale  = Math.min(1 / zoom, 5.5);
+          const HS      = Math.round(7  * hScale);
+          const HO      = -Math.ceil(HS / 2);
+          const HBWcap  = zoom < 0.3 ? 10 : 3;
+          const HBW     = `${Math.min(HBWcap, 1.5 * hScale).toFixed(1)}px`;
+          const RS      = Math.round(14 * hScale);
+          const RTop    = -Math.round(24 * hScale);
+          const CTop    = -Math.round(12 * hScale);
+          const CLen    = Math.round(12 * hScale);
+          const RDot    = Math.round(4  * hScale);
+
+          const cornerHandles: ['nw'|'ne'|'sw'|'se', React.CSSProperties, string][] = [
+            ['nw', { top: HO, left:  HO }, 'cursor-nw-resize'],
+            ['ne', { top: HO, right: HO }, 'cursor-ne-resize'],
+            ['sw', { bottom: HO, left:  HO }, 'cursor-sw-resize'],
+            ['se', { bottom: HO, right: HO }, 'cursor-se-resize'],
           ];
-          const edgeHandles: ['nw'|'ne'|'sw'|'se'|'n'|'s'|'e'|'w', React.CSSProperties, string][] = [
-            ['n', { top: -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-n-resize'],
-            ['s', { bottom: -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-s-resize'],
-            ['w', { top: '50%', left: -4, transform: 'translateY(-50%)' }, 'cursor-w-resize'],
-            ['e', { top: '50%', right: -4, transform: 'translateY(-50%)' }, 'cursor-e-resize'],
+          const edgeHandles: ['n'|'s'|'e'|'w', React.CSSProperties, string][] = [
+            ['n', { top: HO, left: '50%', transform: 'translateX(-50%)' }, 'cursor-n-resize'],
+            ['s', { bottom: HO, left: '50%', transform: 'translateX(-50%)' }, 'cursor-s-resize'],
+            ['w', { top: '50%', left: HO, transform: 'translateY(-50%)' }, 'cursor-w-resize'],
+            ['e', { top: '50%', right: HO, transform: 'translateY(-50%)' }, 'cursor-e-resize'],
           ];
+
           const startResize = (e: React.MouseEvent, handle: 'nw'|'ne'|'sw'|'se'|'n'|'s'|'e'|'w') => {
-            e.stopPropagation();
-            e.preventDefault();
+            e.stopPropagation(); e.preventDefault();
             onInteractionStart?.();
             const wp = screenToWorld({ x: e.clientX, y: e.clientY });
             groupResizeRef.current = {
@@ -1161,22 +1216,70 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
               startWX: wp.x, startWY: wp.y,
             };
           };
+
+          const startRotate = (e: React.MouseEvent) => {
+            e.stopPropagation(); e.preventDefault();
+            onInteractionStart?.();
+            const wp = screenToWorld({ x: e.clientX, y: e.clientY });
+            // 繼承同一群組的 initBounds 與累積角度（gid 相符才繼承，換群組自動重置）
+            const sameGroup  = groupRotDisplay?.gid === gid;
+            const prevInitBounds = sameGroup ? groupRotDisplay!.initBounds : { x, y, w, h };
+            const prevDeg        = sameGroup ? groupRotDisplay!.deg : 0;
+            groupRotateRef.current = {
+              centerX: cx, centerY: cy,
+              startAngle: Math.atan2(wp.y - cy, wp.x - cx),
+              startDeg: prevDeg,
+              startElements: elements.filter(el => selectedElementIds.includes(el.id)).map(el => ({ ...el })),
+              initBounds: prevInitBounds,
+              gid,
+            };
+            setGroupRotDisplay({ gid, initBounds: prevInitBounds, deg: prevDeg });
+          };
+
+          // 旋轉後維持群組框角度：gid 相符時用凍結初始框 + 累積旋轉，否則用 AABB
+          const rotState   = (groupRotDisplay?.gid === gid) ? groupRotDisplay : null;
+          const dispBounds = rotState ? rotState.initBounds : { x, y, w, h };
+          const dispRot    = rotState ? rotState.deg : 0;
+
           return (
             <div
               className="absolute pointer-events-none"
-              style={{ left: x - PAD, top: y - PAD, width: w + PAD * 2, height: h + PAD * 2, border: '1.5px dashed #5856D6', borderRadius: 3 }}
+              style={{ left: dispBounds.x, top: dispBounds.y,
+                       width: dispBounds.w, height: dispBounds.h,
+                       border: `1.5px solid ${GRP_COLOR}`, borderRadius: 3,
+                       zIndex: 999999,
+                       transform: dispRot !== 0 ? `rotate(${dispRot}deg)` : undefined,
+                       transformOrigin: 'center center' }}
             >
+              {/* 旋轉鈕 */}
+              <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center cursor-alias pointer-events-auto hover:scale-110 transition-transform"
+                   style={{ top: RTop, width: RS, height: RS,
+                            backgroundColor: 'white', border: `${HBW} solid ${GRP_COLOR}`, borderRadius: '50%' }}
+                   onMouseDown={startRotate}>
+                <div style={{ width: RDot, height: RDot, borderRadius: '50%', backgroundColor: GRP_COLOR }} />
+              </div>
+              {/* 連接線 */}
+              <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+                   style={{ top: CTop, height: CLen, width: 1,
+                            backgroundColor: GRP_COLOR, opacity: 0.5 }} />
+
+              {/* Corner handles */}
               {cornerHandles.map(([handle, pos, cursor]) => (
                 <div key={handle}
-                  className="absolute pointer-events-auto hover:scale-125 transition-transform"
-                  style={{ ...pos, width: 9, height: 9, background: 'white', border: '2px solid #5856D6', borderRadius: 2, cursor }}
-                  onMouseDown={(e) => startResize(e, handle)} />
+                     className="absolute pointer-events-auto hover:scale-125 transition-transform"
+                     style={{ ...pos, width: HS, height: HS,
+                              background: 'white', border: `${HBW} solid ${GRP_COLOR}`,
+                              borderRadius: 2, cursor }}
+                     onMouseDown={(e) => startResize(e, handle)} />
               ))}
+              {/* Edge handles */}
               {edgeHandles.map(([handle, pos, cursor]) => (
                 <div key={handle}
-                  className="absolute pointer-events-auto"
-                  style={{ ...pos, width: 7, height: 7, background: 'white', border: '2px solid #5856D6', borderRadius: 1, cursor }}
-                  onMouseDown={(e) => startResize(e, handle)} />
+                     className="absolute pointer-events-auto"
+                     style={{ ...pos, width: HS, height: HS,
+                              background: 'white', border: `${HBW} solid ${GRP_COLOR}`,
+                              borderRadius: 1, cursor }}
+                     onMouseDown={(e) => startResize(e, handle)} />
               ))}
             </div>
           );

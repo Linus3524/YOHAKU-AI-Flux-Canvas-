@@ -49,9 +49,174 @@ type Interaction = {
   resizeHandle?: ResizeHandle;
 } | null;
 
+// ─── Fan-out positions per image count ───────────────────────────────────────
+const NOTE_FAN: Record<1|2|3|4, Array<{tx:number;ty:number;rot:number}>> = {
+    1: [{ tx:-220, ty:-220, rot:-5 }],
+    2: [{ tx:-270, ty:-90, rot:-10 }, { tx:-90, ty:-270, rot:10 }],
+    3: [{ tx:-295, ty:-40, rot:-15 }, { tx:-212, ty:-212, rot:0 }, { tx:-40, ty:-295, rot:15 }],
+    4: [{ tx:-305, ty:0, rot:-15 }, { tx:-264, ty:-154, rot:-5 }, { tx:-154, ty:-264, rot:5 }, { tx:0, ty:-305, rot:15 }],
+};
+const NOTE_STACK = [
+    'rotate(-6deg) translate(-2px, 2px)',
+    'rotate(-2deg) translate(2px, -1px)',
+    'rotate(4deg) translate(-1px, 3px)',
+    'rotate(8deg) translate(3px, 0)',
+];
+
+interface NoteGalleryProps {
+    refImgs: (string|null)[];
+    zoom: number;
+    onUpload: (idx: number, file: File) => void;
+    onRemove: (idx: number) => void;
+    onHoverChange: (hovered: boolean) => void;
+}
+
+const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, onUpload, onRemove, onHoverChange }) => {
+    const [hovered, setHovered] = useState(false);
+
+    // 縮放補償：縮小畫布時卡片保持最小螢幕尺寸約 60px
+    const BASE_GS = 144;
+    const GS = Math.min(340, Math.max(BASE_GS, Math.round(60 / zoom)));
+    const gsScale = GS / BASE_GS;
+    const MARGIN = Math.round(20 * gsScale);
+    // 刪除鈕尺寸（1.5× 基準值，隨 gsScale 縮放）
+    const DS   = Math.round(36 * gsScale);   // button diameter
+    const DO   = -Math.round(DS / 2);        // offset to top-left corner
+    const DICO = Math.round(15 * gsScale);   // icon size inside button
+
+    // Build ordered list of filled slots
+    const filled = (refImgs as (string|null)[]).reduce(
+        (acc: {src:string;origIdx:number;filledIdx:number}[], img, origIdx) => { if (img) acc.push({src:img,origIdx,filledIdx:acc.length}); return acc; }, [] as {src:string;origIdx:number;filledIdx:number}[]
+    );
+    const count = filled.length as 0|1|2|3|4;
+
+    const setH = (v: boolean) => { setHovered(v); onHoverChange(v); };
+
+    const triggerUpload = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const emptyIdx = refImgs.findIndex(img => !img);
+        if (emptyIdx === -1) return;
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = 'image/*';
+        input.onchange = (ev) => {
+            const file = (ev.target as HTMLInputElement).files?.[0];
+            if (file) onUpload(emptyIdx, file);
+        };
+        input.click();
+    };
+
+    return (
+        <div
+            style={{ position:'absolute', bottom:MARGIN, right:MARGIN, width:GS, height:GS,
+                zIndex: hovered ? 9999 : 10, overflow:'visible' }}
+            onMouseEnter={() => setH(true)}
+            onMouseLeave={() => setH(false)}
+            onMouseDown={e => e.stopPropagation()}
+        >
+            {/* Invisible shield: keeps hover alive as mouse moves toward fanned photos */}
+            {hovered && (
+                <div style={{ position:'absolute',
+                    top: -Math.round(360 * gsScale), left: -Math.round(360 * gsScale),
+                    right:-20, bottom:-20, zIndex:-1, pointerEvents:'auto' }} />
+            )}
+
+            {/* Photo cards */}
+            {filled.map(({ src, origIdx, filledIdx }) => {
+                const fanBase = hovered && count > 0
+                    ? (NOTE_FAN[count as 1|2|3|4] ?? [])[filledIdx] : null;
+                const fanPos = fanBase
+                    ? { tx: fanBase.tx * gsScale, ty: fanBase.ty * gsScale, rot: fanBase.rot } : null;
+                const transform = fanPos
+                    ? `translate(${fanPos.tx}px,${fanPos.ty}px) rotate(${fanPos.rot}deg) scale(1.1)`
+                    : NOTE_STACK[filledIdx] ?? NOTE_STACK[0];
+                return (
+                    // Outer wrapper: handles transform, overflow:visible so delete btn is never clipped
+                    <div key={origIdx} style={{
+                        position:'absolute', bottom:0, right:0, width:GS, height:GS,
+                        transform, transformOrigin:'center center',
+                        transition:'all 0.4s cubic-bezier(0.34,1.56,0.64,1)',
+                        zIndex: hovered ? 5 + filledIdx : 1 + filledIdx,
+                        overflow:'visible',
+                    }}>
+                        {/* Inner: clips image to rounded rect */}
+                        <div style={{
+                            position:'absolute', inset:0,
+                            borderRadius:6, background:'#fff',
+                            border:'2px solid rgba(255,255,255,0.9)',
+                            boxShadow: hovered ? '0 8px 20px rgba(0,0,0,0.12)' : '0 2px 6px rgba(0,0,0,0.08)',
+                            overflow:'hidden',
+                        }}>
+                            <img src={src} style={{width:'100%',height:'100%',objectFit:'cover'}} draggable={false} />
+                        </div>
+                        {/* Delete button — outside inner clip so it's never hidden */}
+                        <div
+                            onClick={e => { e.stopPropagation(); onRemove(origIdx); }}
+                            style={{
+                                position:'absolute', top:DO, left:DO, width:DS, height:DS,
+                                borderRadius:'50%', background:'rgba(0,0,0,0.8)', color:'white',
+                                display:'flex', alignItems:'center', justifyContent:'center',
+                                opacity: hovered ? 1 : 0,
+                                transform: hovered ? 'scale(1)' : 'scale(0.5)',
+                                cursor:'pointer', zIndex:20,
+                                transition:'all 0.3s cubic-bezier(0.4,0,0.2,1)',
+                                transitionDelay: hovered ? '0.1s' : '0s',
+                                border:`${Math.max(1.5, 1.5 * gsScale)}px solid rgba(255,255,255,0.9)`,
+                                boxShadow:'0 2px 8px rgba(0,0,0,0.35)',
+                            }}
+                        >
+                            <svg width={DICO} height={DICO} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </div>
+                    </div>
+                );
+            })}
+
+            {/* Add (+) button — always on top when not hovered, sinks behind when fanning */}
+            {count < 4 && (
+                <button
+                    onClick={triggerUpload}
+                    onMouseDown={e => e.stopPropagation()}
+                    title={`上傳參考圖 (${count}/4)`}
+                    style={{
+                        position:'absolute', inset:0, width:'100%', height:'100%',
+                        borderRadius:6, border:'none',
+                        background: hovered ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.4)',
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        color:'rgba(0,0,0,0.45)', cursor:'pointer',
+                        backdropFilter:'blur(4px)',
+                        transition:'all 0.4s cubic-bezier(0.34,1.56,0.64,1)',
+                        transform: hovered && count > 0 ? 'scale(0.95)' : 'scale(1)',
+                        zIndex: hovered && count > 0 ? 0 : 10,
+                        boxShadow: hovered ? '0 4px 12px rgba(0,0,0,0.1)' : 'none',
+                    }}
+                >
+                    {/* SVG dashed border：viewBox 百分比座標，控制 dash 間距 */}
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none"
+                         style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none' }}>
+                        <rect x="1.5" y="1.5" width="97" height="97" rx="5"
+                              fill="none"
+                              stroke={hovered ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.22)'}
+                              strokeWidth="3"
+                              strokeDasharray="14 8"
+                              strokeLinecap="round"
+                              vectorEffect="non-scaling-stroke"/>
+                    </svg>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </button>
+            )}
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const TransformableElement: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld, disableResizeHandles }) => {
   const [interaction, setInteraction] = useState<Interaction>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [galleryHovered, setGalleryHovered] = useState(false);
   const elementRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasMovedRef = useRef(false);
@@ -558,7 +723,8 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                 height: element.height,
                 transform: `translate(-50%, -50%) rotate(${element.rotation}deg)`,
                 cursor: isOutpainting ? 'move' : 'move',
-                zIndex: element.zIndex,
+                zIndex: galleryHovered ? 99999 : element.zIndex,
+                overflow: element.type === 'note' ? 'visible' : undefined,
                 pointerEvents: 'auto',
                 opacity: element.opacity ?? 1,
                 mixBlendMode: element.type === 'note' ? 'normal' : (element.blendMode || 'normal'), // ✅ 新增
@@ -582,8 +748,6 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                 switch (el.type) {
                     case 'note': {
                         const refImgs = el.referenceImages ?? [null, null, null, null];
-                        const hasAnyRef = refImgs.some(Boolean);
-                        const circledNums = ['①','②','③','④'];
 
                         const handleRefUpload = (idx: number, file: File) => {
                             const reader = new FileReader();
@@ -596,168 +760,72 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             reader.readAsDataURL(file);
                         };
 
-                        const handleRefRemove = (e: React.MouseEvent, idx: number) => {
-                            e.stopPropagation();
+                        const handleRefRemoveIdx = (idx: number) => {
                             const newRefs = [...refImgs];
                             newRefs[idx] = null;
                             onUpdate({ ...el, referenceImages: newRefs });
                         };
 
-                        // 自適應顯示模式（依元素寬度）
-                        const refMode: 'hidden' | 'compact' | 'full' =
-                            el.width < 130 ? 'hidden' :
-                            el.width < 210 ? 'compact' : 'full';
+                        // 顯示畫廊的最小寬度
+                        const showGallery = el.width >= 240;
 
-                        // 字體/圖示大小隨元素寬度線性縮放，並加入反向縮放補償
-                        // 公式：css_size = max(base * scaleFactor, minScreen / zoom)
-                        // → 螢幕實際大小 = max(base * scaleFactor * zoom, minScreen)
-                        const scaleFactor = Math.min(1, Math.max(0.7, (el.width - 130) / 200));
-                        const MIN_REF = 9;   // 螢幕最小可讀大小 (px)
-                        const numFontSize  = Math.max(Math.round(12 * scaleFactor), MIN_REF / zoom);
-                        const iconSize     = Math.max(Math.round(14 * scaleFactor), MIN_REF / zoom);
-                        const labelFontSize = Math.round(9 * scaleFactor);  // "上傳參考圖"
+                        // 螢幕目標字級隨 zoom 階段切換
+                        const targetScreen = zoom > 1.0 ? 32
+                                           : zoom >= 0.5 ? 24
+                                           : zoom >= 0.3 ? 15
+                                           : 12;
+                        const noteFontSize = Math.round(targetScreen / zoom);
+                        const notePadH = Math.round(Math.max(12, 24 / zoom));
+                        const notePadV = Math.round(Math.max(10, 16 / zoom));
+                        // 底部留空給右下角畫廊（動態，隨 zoom 補償後的 GS 計算）
+                        // NoteReferenceGallery 內的 GS/MARGIN 計算與此一致
+                        const galleryGS = Math.min(340, Math.max(144, Math.round(60 / zoom)));
+                        const galleryMargin = Math.round(20 * (galleryGS / 144));
+                        const notePadB = showGallery
+                            ? Math.round(Math.max(notePadV, galleryGS + galleryMargin + 16))
+                            : notePadV;
 
                         return (
-                            <div style={style} className={`rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] text-[#1D1D1F] font-medium flex flex-col ${el.color} transition-shadow hover:shadow-[0_12px_40px_rgba(0,0,0,0.18)] overflow-hidden`}>
-                                {/* 參考圖區塊 */}
-                                {refMode !== 'hidden' && (isSelected || hasAnyRef) && (
-                                    <div
-                                        className="px-3 pt-3 pb-2 flex-shrink-0"
-                                        onMouseDown={e => e.stopPropagation()}
-                                    >
-                                        <div className="grid grid-cols-4 gap-2">
-                                            {[0,1,2,3].map(idx => {
-                                                const src = refImgs[idx];
-                                                return (
-                                                    <div key={idx} className="relative aspect-square">
-                                                        {src ? (
-                                                            /* ── 已有圖片：白底實線框 + 縮圖 ── */
-                                                            <div
-                                                                className="relative w-full h-full rounded-lg overflow-hidden"
-                                                                style={{
-                                                                    background: '#ffffff',
-                                                                    border: '1px solid rgba(0,0,0,0.10)',
-                                                                    padding: 2,
-                                                                }}
-                                                            >
-                                                                <img src={src} className="w-full h-full object-cover rounded-md" draggable={false} />
-                                                                {/* 數字標示 */}
-                                                                <div
-                                                                    className="absolute top-1 left-1.5 text-white font-bold drop-shadow-md select-none"
-                                                                    style={{ fontSize: numFontSize }}
-                                                                >
-                                                                    {idx + 1}
-                                                                </div>
-                                                                {/* 刪除按鈕 */}
-                                                                <button
-                                                                    onClick={e => handleRefRemove(e, idx)}
-                                                                    className="absolute top-0.5 right-0.5 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white leading-none transition-colors"
-                                                                    style={{ width: Math.max(12, iconSize), height: Math.max(12, iconSize), fontSize: Math.max(7, labelFontSize - 1) }}
-                                                                >✕</button>
-                                                            </div>
-                                                        ) : (
-                                                            /* ── 空槽：半透明白底虛線框 ── */
-                                                            <label
-                                                                className={`flex flex-col items-center justify-center w-full h-full rounded-lg cursor-pointer transition-all select-none
-                                                                    ${refMode === 'full' ? 'gap-0.5' : 'gap-0'}`}
-                                                                style={{
-                                                                    background: 'rgba(255,255,255,0.40)',
-                                                                    border: '1px dashed rgba(0,0,0,0.15)',
-                                                                    color: 'rgba(0,0,0,0.40)',
-                                                                }}
-                                                                onMouseEnter={e => {
-                                                                    const el = e.currentTarget as HTMLLabelElement;
-                                                                    el.style.background = 'rgba(255,255,255,0.80)';
-                                                                    el.style.borderColor = 'rgba(0,0,0,0.30)';
-                                                                    el.style.color = 'rgba(0,0,0,0.60)';
-                                                                    el.style.transform = 'translateY(-2px)';
-                                                                    el.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.06)';
-                                                                }}
-                                                                onMouseLeave={e => {
-                                                                    const el = e.currentTarget as HTMLLabelElement;
-                                                                    el.style.background = 'rgba(255,255,255,0.40)';
-                                                                    el.style.borderColor = 'rgba(0,0,0,0.15)';
-                                                                    el.style.color = 'rgba(0,0,0,0.40)';
-                                                                    el.style.transform = '';
-                                                                    el.style.boxShadow = '';
-                                                                }}
-                                                            >
-                                                                <input
-                                                                    type="file"
-                                                                    accept="image/*"
-                                                                    className="hidden"
-                                                                    onChange={e => {
-                                                                        const file = e.target.files?.[0];
-                                                                        if (file) handleRefUpload(idx, file);
-                                                                        e.target.value = '';
-                                                                    }}
-                                                                    onMouseDown={e => e.stopPropagation()}
-                                                                />
-                                                                {/* 數字 */}
-                                                                <span
-                                                                    className="font-bold select-none"
-                                                                    style={{ fontSize: numFontSize, opacity: 0.5, marginBottom: 1 }}
-                                                                >
-                                                                    {idx + 1}
-                                                                </span>
-                                                                {/* 上傳圖示（full 模式才顯示） */}
-                                                                {refMode === 'full' && (
-                                                                    <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                                                        <polyline points="17 8 12 3 7 8"/>
-                                                                        <line x1="12" y1="3" x2="12" y2="15"/>
-                                                                    </svg>
-                                                                )}
-                                                            </label>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                        {/* 分隔線：rgba 透明，自適應任何便利貼底色 */}
-                                        <div className="mt-2.5 border-t" style={{ borderColor: 'rgba(0,0,0,0.05)' }} />
-                                    </div>
-                                )}
+                            // 外層 overflow:visible 讓畫廊照片可展開到元素外
+                            <div style={{ ...style, position:'relative', overflow:'visible' }}>
+                                {/* 便利貼本體：圓角 + overflow:hidden 限制文字 */}
+                                <div className={`absolute inset-0 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] text-[#1D1D1F] font-medium flex flex-col ${el.color} transition-shadow hover:shadow-[0_12px_40px_rgba(0,0,0,0.18)] overflow-hidden`}>
+                                    <textarea
+                                        ref={textareaRef}
+                                        value={el.content}
+                                        readOnly={!isEditing || el.isLocked || interactionMode === 'hand'}
+                                        onChange={(e) => onUpdate({ ...el, content: e.target.value })}
+                                        onBlur={() => setIsEditing(false)}
+                                        onMouseDown={(e) => {
+                                            if (e.button !== 0 || el.isLocked || interactionMode === 'hand') return;
+                                            onSelect(element.id, e.shiftKey);
+                                            if (isEditing) e.stopPropagation();
+                                        }}
+                                        className={`flex-1 min-h-0 bg-transparent text-[#1D1D1F] resize-none border-none focus:outline-none placeholder-[#1D1D1F]/40 ${isEditing ? 'cursor-text' : (el.isLocked ? 'cursor-not-allowed' : 'cursor-move')} ${el.textAlign === 'center' ? 'text-center' : 'text-left'}`}
+                                        style={{
+                                            fontFamily: 'inherit',
+                                            fontSize: noteFontSize,
+                                            lineHeight: '1.6',
+                                            fontWeight: 300,
+                                            paddingLeft: notePadH,
+                                            paddingRight: notePadH,
+                                            paddingTop: notePadV,
+                                            paddingBottom: notePadB,
+                                        }}
+                                        placeholder={el.isLocked ? "" : "請輸入內容..."}
+                                    />
+                                </div>
 
-                                {/* 文字區
-                                    字體大小反向補償縮放：確保螢幕上永遠 ≥ 13px 可讀
-                                    公式：css_size = max(base, minScreen / zoom)
-                                    → 螢幕實際大小 = css_size * zoom = max(base*zoom, minScreen)
-                                */}
-                                {(() => {
-                                    const BASE_FONT  = 15;   // 正常縮放下的字體大小 (px)
-                                    const MIN_SCREEN = 12;   // 螢幕最小可讀大小 (px)
-                                    const noteFontSize = Math.max(BASE_FONT, MIN_SCREEN / zoom);
-                                    // padding 同步縮小，避免低縮放時 padding 過大
-                                    const notePadH = Math.round(Math.max(12, 24 / zoom));
-                                    const notePadV = Math.round(Math.max(10, 16 / zoom));
-                                    return (
-                                        <textarea
-                                            ref={textareaRef}
-                                            value={el.content}
-                                            readOnly={!isEditing || el.isLocked || interactionMode === 'hand'}
-                                            onChange={(e) => onUpdate({ ...el, content: e.target.value })}
-                                            onBlur={() => setIsEditing(false)}
-                                            onMouseDown={(e) => {
-                                                if (e.button !== 0 || el.isLocked || interactionMode === 'hand') return;
-                                                onSelect(element.id, e.shiftKey);
-                                                if (isEditing) e.stopPropagation();
-                                            }}
-                                            className={`flex-1 min-h-0 bg-transparent text-[#1D1D1F] resize-none border-none focus:outline-none placeholder-[#1D1D1F]/40 ${isEditing ? 'cursor-text' : (el.isLocked ? 'cursor-not-allowed' : 'cursor-move')} ${el.textAlign === 'center' ? 'text-center' : 'text-left'}`}
-                                            style={{
-                                                fontFamily: 'inherit',
-                                                fontSize: noteFontSize,
-                                                lineHeight: '1.6',
-                                                fontWeight: 300,
-                                                paddingLeft: notePadH,
-                                                paddingRight: notePadH,
-                                                paddingTop: notePadV,
-                                                paddingBottom: notePadV,
-                                            }}
-                                            placeholder={el.isLocked ? "" : "請輸入內容..."}
-                                        />
-                                    );
-                                })()}
+                                {/* 右下角參考圖畫廊 */}
+                                {showGallery && (
+                                    <NoteReferenceGallery
+                                        refImgs={refImgs}
+                                        zoom={zoom}
+                                        onUpload={handleRefUpload}
+                                        onRemove={handleRefRemoveIdx}
+                                        onHoverChange={setGalleryHovered}
+                                    />
+                                )}
                             </div>
                         );
                     }
@@ -1281,61 +1349,76 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                     {/* 選取框：1px 貼齊 element 邊緣 */}
                     <div className={`absolute inset-0 border pointer-events-none ${borderRadiusClass}`} style={{ borderColor: getLayerColor(element.type) }} />
 
-                    {element.type === 'arrow' ? (
-                        <>
-                            <div className="absolute top-1/2 -translate-y-1/2 cursor-grab transform-handle"
-                                style={{ left: -5, width: 10, height: 10, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 2 }}
-                                onMouseDown={(e) => handleInteractionStart(e, 'resize-arrow-start')} />
-                            <div className="absolute top-1/2 -translate-y-1/2 cursor-grab transform-handle"
-                                style={{ right: -5, width: 10, height: 10, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 2 }}
-                                onMouseDown={(e) => handleInteractionStart(e, 'resize-arrow-end')} />
-                        </>
-                    ) : (
-                        <>
-                            {/* 旋轉鈕：貼齊選取框上方 */}
-                            <div className="absolute left-1/2 -translate-x-1/2 cursor-alias transform-handle flex items-center justify-center hover:scale-110 transition-transform"
-                                style={{ top: -24, width: 14, height: 14, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: '50%' }}
-                                onMouseDown={(e) => handleInteractionStart(e, 'rotate')}>
-                                <div style={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: getLayerColor(element.type) }} />
-                            </div>
-                            <div className="absolute left-1/2 -translate-x-1/2 w-px pointer-events-none opacity-40"
-                                style={{ top: -12, height: 12, backgroundColor: getLayerColor(element.type) }} />
+                    {(() => {
+                        // zoom 補償：縮小畫布時把 handle 放大，上限 5.5×（zoom≈18% 時觸頂）
+                        const hScale  = Math.min(1 / zoom, 5.5);
+                        const HS  = Math.round(7  * hScale);   // handle square size
+                        const HO  = -Math.ceil(HS / 2);         // corner/edge offset
+                        // 30% 以下允許邊框再加粗，讓方框/圓鈕輪廓更清楚
+                        const HBWcap = zoom < 0.3 ? 10 : 3;
+                        const HBW = `${Math.min(HBWcap, 1.5 * hScale).toFixed(1)}px`;
+                        const RS  = Math.round(14 * hScale);   // rotate circle
+                        const RTop = -Math.round(24 * hScale); // rotate button top
+                        const CTop = -Math.round(12 * hScale); // connector line top
+                        const CLen = Math.round(12 * hScale);  // connector line height
+                        const RDot = Math.round(4  * hScale);  // inner dot
+                        const layerColor = getLayerColor(element.type);
+                        return element.type === 'arrow' ? (
+                            <>
+                                <div className="absolute top-1/2 -translate-y-1/2 cursor-grab transform-handle"
+                                    style={{ left: HO, width: HS, height: HS, backgroundColor: 'white', border: `${HBW} solid ${layerColor}`, borderRadius: 2 }}
+                                    onMouseDown={(e) => handleInteractionStart(e, 'resize-arrow-start')} />
+                                <div className="absolute top-1/2 -translate-y-1/2 cursor-grab transform-handle"
+                                    style={{ right: HO, width: HS, height: HS, backgroundColor: 'white', border: `${HBW} solid ${layerColor}`, borderRadius: 2 }}
+                                    onMouseDown={(e) => handleInteractionStart(e, 'resize-arrow-end')} />
+                            </>
+                        ) : (
+                            <>
+                                {/* 旋轉鈕：貼齊選取框上方 */}
+                                <div className="absolute left-1/2 -translate-x-1/2 cursor-alias transform-handle flex items-center justify-center hover:scale-110 transition-transform"
+                                    style={{ top: RTop, width: RS, height: RS, backgroundColor: 'white', border: `${HBW} solid ${layerColor}`, borderRadius: '50%' }}
+                                    onMouseDown={(e) => handleInteractionStart(e, 'rotate')}>
+                                    <div style={{ width: RDot, height: RDot, borderRadius: '50%', backgroundColor: layerColor }} />
+                                </div>
+                                <div className="absolute left-1/2 -translate-x-1/2 w-px pointer-events-none opacity-40"
+                                    style={{ top: CTop, height: CLen, backgroundColor: layerColor }} />
 
-                            {/* Curved text or group mode: suppress individual resize handles */}
-                            {(() => {
-                                const isCurvedText = element.type === 'text' && Math.abs((element as any).curveStrength || 0) > 0.1;
-                                if (isCurvedText || disableResizeHandles) return null;
-                                return (
-                                    <>
-                                        {/* Corner handles：中心精確對齊選取框角落（7px 正方形，偏移 -3px = 半寬） */}
-                                        {([
-                                            ['nw', { top: -4, left:  -4 }, 'cursor-nw-resize'],
-                                            ['ne', { top: -4, right: -4 }, 'cursor-ne-resize'],
-                                            ['sw', { bottom: -4, left:  -4 }, 'cursor-sw-resize'],
-                                            ['se', { bottom: -4, right: -4 }, 'cursor-se-resize'],
-                                        ] as [ResizeHandle, React.CSSProperties, string][]).map(([dir, pos, cur]) => (
-                                            <div key={dir}
-                                                className={`absolute transform-handle hover:scale-125 transition-transform ${cur}`}
-                                                style={{ ...pos, width: 7, height: 7, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 1 }}
-                                                onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
-                                        ))}
-                                        {/* Edge handles：中心精確對齊選取框邊中點（7px 正方形，偏移 -3px） */}
-                                        {([
-                                            ['e', { top: '50%', right: -4, transform: 'translateY(-50%)' }, 'cursor-e-resize',  true],
-                                            ['w', { top: '50%', left:  -4, transform: 'translateY(-50%)' }, 'cursor-w-resize',  true],
-                                            ['s', { bottom: -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-s-resize', element.type !== 'text'],
-                                            ['n', { top:    -4, left: '50%', transform: 'translateX(-50%)' }, 'cursor-n-resize', element.type !== 'text'],
-                                        ] as [ResizeHandle, React.CSSProperties, string, boolean][]).filter(([,,,show]) => show).map(([dir, pos, cur]) => (
-                                            <div key={dir}
-                                                className={`absolute transform-handle hover:scale-125 transition-transform ${cur}`}
-                                                style={{ ...pos, width: 7, height: 7, backgroundColor: 'white', border: `1.5px solid ${getLayerColor(element.type)}`, borderRadius: 1 }}
-                                                onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
-                                        ))}
-                                    </>
-                                );
-                            })()}
-                        </>
-                    )}
+                                {/* Curved text or group mode: suppress individual resize handles */}
+                                {(() => {
+                                    const isCurvedText = element.type === 'text' && Math.abs((element as any).curveStrength || 0) > 0.1;
+                                    if (isCurvedText || disableResizeHandles) return null;
+                                    return (
+                                        <>
+                                            {/* Corner handles */}
+                                            {([
+                                                ['nw', { top: HO, left:  HO }, 'cursor-nw-resize'],
+                                                ['ne', { top: HO, right: HO }, 'cursor-ne-resize'],
+                                                ['sw', { bottom: HO, left:  HO }, 'cursor-sw-resize'],
+                                                ['se', { bottom: HO, right: HO }, 'cursor-se-resize'],
+                                            ] as [ResizeHandle, React.CSSProperties, string][]).map(([dir, pos, cur]) => (
+                                                <div key={dir}
+                                                    className={`absolute transform-handle hover:scale-125 transition-transform ${cur}`}
+                                                    style={{ ...pos, width: HS, height: HS, backgroundColor: 'white', border: `${HBW} solid ${layerColor}`, borderRadius: 1 }}
+                                                    onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
+                                            ))}
+                                            {/* Edge handles */}
+                                            {([
+                                                ['e', { top: '50%', right: HO, transform: 'translateY(-50%)' }, 'cursor-e-resize',  true],
+                                                ['w', { top: '50%', left:  HO, transform: 'translateY(-50%)' }, 'cursor-w-resize',  true],
+                                                ['s', { bottom: HO, left: '50%', transform: 'translateX(-50%)' }, 'cursor-s-resize', element.type !== 'text'],
+                                                ['n', { top:    HO, left: '50%', transform: 'translateX(-50%)' }, 'cursor-n-resize', element.type !== 'text'],
+                                            ] as [ResizeHandle, React.CSSProperties, string, boolean][]).filter(([,,,show]) => show).map(([dir, pos, cur]) => (
+                                                <div key={dir}
+                                                    className={`absolute transform-handle hover:scale-125 transition-transform ${cur}`}
+                                                    style={{ ...pos, width: HS, height: HS, backgroundColor: 'white', border: `${HBW} solid ${layerColor}`, borderRadius: 1 }}
+                                                    onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
+                                            ))}
+                                        </>
+                                    );
+                                })()}
+                            </>
+                        );
+                    })()}
                 </>
             )}
         </div>
