@@ -27,9 +27,9 @@ const MAX_STORAGE_BYTES = 5 * 1024 * 1024; // 5MB
 const DEFAULT_WELCOME_NOTE: CanvasElement = {
     id: 'welcome-note',
     type: 'note',
-    position: { x: -200, y: -150 },
-    width: 400,
-    height: 300,
+    position: { x: -250, y: -190 },
+    width: 500,
+    height: 380,
     rotation: 0,
     content: '輸入想法，框選後生成圖片 ✦\n圖片可直接拖曳進畫布編輯',
     color: 'bg-[#FEFCE8]',

@@ -66,17 +66,23 @@ const NOTE_STACK = [
 interface NoteGalleryProps {
     refImgs: (string|null)[];
     zoom: number;
+    noteWidth: number;   // 便利貼世界寬度，用來限制卡片上限
     onUpload: (idx: number, file: File) => void;
     onRemove: (idx: number) => void;
     onHoverChange: (hovered: boolean) => void;
 }
 
-const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, onUpload, onRemove, onHoverChange }) => {
+const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, noteWidth, onUpload, onRemove, onHoverChange }) => {
     const [hovered, setHovered] = useState(false);
 
-    // 縮放補償：縮小畫布時卡片保持最小螢幕尺寸約 60px
-    const BASE_GS = 144;
-    const GS = Math.min(340, Math.max(BASE_GS, Math.round(60 / zoom)));
+    // 縮放補償：zoom>100% 鎖住螢幕 92px；zoom 30-100% 固定 92 world-px；zoom<30% 停止膨脹
+    const BASE_GS = 92;
+    const maxGS   = Math.round(Math.min(noteWidth * 0.45, 200));
+    const GS = zoom > 1
+        ? Math.round(BASE_GS / zoom)                                 // 螢幕固定 92px
+        : zoom >= 0.3
+            ? BASE_GS
+            : Math.min(maxGS, Math.max(80, Math.round(48 / zoom)));
     const gsScale = GS / BASE_GS;
     const MARGIN = Math.round(20 * gsScale);
     // 刪除鈕尺寸（1.5× 基準值，隨 gsScale 縮放）
@@ -191,20 +197,40 @@ const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, onUpl
                         boxShadow: hovered ? '0 4px 12px rgba(0,0,0,0.1)' : 'none',
                     }}
                 >
-                    {/* SVG dashed border：viewBox 百分比座標，控制 dash 間距 */}
-                    <svg viewBox="0 0 100 100" preserveAspectRatio="none"
-                         style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none' }}>
-                        <rect x="1.5" y="1.5" width="97" height="97" rx="5"
-                              fill="none"
-                              stroke={hovered ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.22)'}
-                              strokeWidth="3"
-                              strokeDasharray="14 8"
-                              strokeLinecap="round"
-                              vectorEffect="non-scaling-stroke"/>
-                    </svg>
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                    </svg>
+                    {/* SVG 圓形點虛線邊框：pathLength 均勻分布，避免角落擠點 */}
+                    {(() => {
+                        const gsScreen = GS * zoom;
+                        const vu       = gsScreen / 100;           // 1 viewBox unit = vu screen px
+                        const dotStroke = Math.max(1, 2 * (GS / 92));  // 隨 GS 縮放，zoom大時變細
+                        const rx = 5;
+                        const perimVU = 4 * (97 - 2 * rx) + 2 * Math.PI * rx; // ≈379 VU
+                        const perimScreen = perimVU * vu;
+                        const numDots = Math.max(4, Math.round(perimScreen / (dotStroke + 3)));
+                        return (
+                            <svg viewBox="0 0 100 100" preserveAspectRatio="none"
+                                 style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none' }}>
+                                <rect x="1.5" y="1.5" width="97" height="97" rx={rx}
+                                      fill="none"
+                                      stroke={hovered ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.22)'}
+                                      strokeWidth={dotStroke}
+                                      pathLength={numDots}
+                                      strokeDasharray="0.001 1"
+                                      strokeLinecap="round"
+                                      vectorEffect="non-scaling-stroke"/>
+                            </svg>
+                        );
+                    })()}
+                    {/* + 圖示：與 GS 等比縮放，高 zoom 不會太粗 */}
+                    {(() => {
+                        const iconSize = Math.round(GS * 22 / 92);
+                        const iconStroke = Math.max(1, (GS / 92) * 2.5);
+                        return (
+                            <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" strokeWidth={iconStroke.toFixed(2)} strokeLinecap="round">
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                        );
+                    })()}
                 </button>
             )}
         </div>
@@ -766,21 +792,27 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             onUpdate({ ...el, referenceImages: newRefs });
                         };
 
-                        // 顯示畫廊的最小寬度
-                        const showGallery = el.width >= 240;
+                        // 與 NoteReferenceGallery 完全相同的 GS 計算（保持同步）
+                        const _maxGS   = Math.round(Math.min(el.width * 0.45, 200));
+                        const galleryGS = zoom > 1
+                            ? Math.round(92 / zoom)
+                            : zoom >= 0.3
+                                ? 92
+                                : Math.min(_maxGS, Math.max(80, Math.round(48 / zoom)));
+                        const galleryMargin = Math.round(20 * (galleryGS / 144));
+
+                        // 便利貼夠寬 AND 便利貼世界尺寸 > 卡片 × 1.3（避免卡片蓋過便利貼）
+                        const showGallery = el.width >= 240 && el.width > galleryGS * 1.3;
 
                         // 螢幕目標字級隨 zoom 階段切換
-                        const targetScreen = zoom > 1.0 ? 32
-                                           : zoom >= 0.5 ? 24
+                        const targetScreen = zoom > 1.0 ? 18
+                                           : zoom >= 0.5 ? 18
                                            : zoom >= 0.3 ? 15
                                            : 12;
                         const noteFontSize = Math.round(targetScreen / zoom);
                         const notePadH = Math.round(Math.max(12, 24 / zoom));
                         const notePadV = Math.round(Math.max(10, 16 / zoom));
-                        // 底部留空給右下角畫廊（動態，隨 zoom 補償後的 GS 計算）
-                        // NoteReferenceGallery 內的 GS/MARGIN 計算與此一致
-                        const galleryGS = Math.min(340, Math.max(144, Math.round(60 / zoom)));
-                        const galleryMargin = Math.round(20 * (galleryGS / 144));
+                        // 底部留空給右下角畫廊（與上方 galleryGS 同步）
                         const notePadB = showGallery
                             ? Math.round(Math.max(notePadV, galleryGS + galleryMargin + 16))
                             : notePadV;
@@ -821,6 +853,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                     <NoteReferenceGallery
                                         refImgs={refImgs}
                                         zoom={zoom}
+                                        noteWidth={el.width}
                                         onUpload={handleRefUpload}
                                         onRemove={handleRefRemoveIdx}
                                         onHoverChange={setGalleryHovered}
