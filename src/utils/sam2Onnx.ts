@@ -166,3 +166,43 @@ export async function runSAM2Decoder(
     }
     return canvas.toDataURL('image/png');
 }
+
+/**
+ * 完整的單次 ONNX SAM2 推論：
+ * 需要已有 embedding（用 computeSAM2Embedding 預算）
+ * 支援 clickPoint / bbox / points 三種輸入
+ */
+export async function runOnnxSAM2(
+    decoderSession: ort.InferenceSession,
+    embedding: SAM2Embedding,
+    options: {
+        clickPoint?: { x: number; y: number };
+        bbox?: { x: number; y: number; w: number; h: number };  // 0~1 比例
+        points?: { x: number; y: number; label: 0 | 1 }[];      // 像素座標
+    },
+    originalImageBase64: string,
+): Promise<string> {
+    const { origW, origH } = embedding;
+
+    if (options.bbox) {
+        // 比例座標 → 像素座標
+        const px = options.bbox.x * origW;
+        const py = options.bbox.y * origH;
+        const pw = options.bbox.w * origW;
+        const ph = options.bbox.h * origH;
+        return runSAM2Decoder(decoderSession, embedding,
+            { bbox: { x: px, y: py, w: pw, h: ph } },
+            originalImageBase64);
+    }
+    if (options.points) {
+        return runSAM2Decoder(decoderSession, embedding,
+            { points: options.points },
+            originalImageBase64);
+    }
+    if (options.clickPoint) {
+        return runSAM2Decoder(decoderSession, embedding,
+            { clickPoint: options.clickPoint },
+            originalImageBase64);
+    }
+    throw new Error('runOnnxSAM2: 需要提供 clickPoint、bbox 或 points');
+}

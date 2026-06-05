@@ -12,9 +12,9 @@ import type {
     EditorVersion,
 } from '../../types';
 import {
-    segmentSemanticLayers, compositeSmartLayers, regenerateLayer,
+    segmentSemanticLayers, segmentSemanticLayersOnnx, compositeSmartLayers, regenerateLayer,
     addLayerByClick, addLayerByBox, addLayerByPoints,
-    describeLayerWithGemini,
+    describeLayerWithGemini, buildSmartLayerFromMask,
     type SAM2Point,
 } from './semanticLayerUtils';
 
@@ -34,6 +34,9 @@ export interface SemanticEditorOptions {
     geminiApiKey?: string;
     atlasApiKey?: string;
     falApiKey?: string;
+    /** ONNX 本機 SAM2 sessions（有的話自動分析時優先使用）*/
+    onnxEncoderSession?: any | null;  // ort.InferenceSession
+    onnxDecoderSession?: any | null;
     /** 上次退出時保留的狀態（重新開啟時恢復） */
     initialState?: {
         compositeBase64: string;
@@ -47,6 +50,8 @@ export function useSemanticEditor({
     geminiApiKey,
     atlasApiKey,
     falApiKey,
+    onnxEncoderSession,
+    onnxDecoderSession,
     initialState,
 }: SemanticEditorOptions) {
 
@@ -98,18 +103,28 @@ export function useSemanticEditor({
     const analyzeImage = useCallback(async () => {
         if (analyzingRef.current) return;
         if (!geminiApiKey) throw new Error('需要設定 Gemini API Key');
-        if (!falApiKey)    throw new Error('SAM2 分割需要 fal.ai API Key');
+        // ONNX 模式不需要 falApiKey；fal.ai 模式才需要
+        const useOnnx = !!(onnxEncoderSession && onnxDecoderSession);
+        if (!useOnnx && !falApiKey) throw new Error('SAM2 分割需要 fal.ai API Key（或先下載本機 SAM2 模型）');
 
         analyzingRef.current = true;
-        setStatus('analyzing', 'Gemini 分析圖片中...');
+        setStatus('analyzing', `Gemini 分析圖片中（${useOnnx ? '本機 SAM2' : 'fal.ai SAM2'}）...`);
 
         try {
-            const layers = await segmentSemanticLayers({
-                imageBase64: originalBase64,
-                geminiApiKey,
-                falApiKey,
-                onProgress: msg => setStatus('segmenting', msg),
-            });
+            const layers = useOnnx
+                ? await segmentSemanticLayersOnnx({
+                    imageBase64: originalBase64,
+                    geminiApiKey,
+                    encoderSession: onnxEncoderSession!,
+                    decoderSession: onnxDecoderSession!,
+                    onProgress: msg => setStatus('segmenting', msg),
+                })
+                : await segmentSemanticLayers({
+                    imageBase64: originalBase64,
+                    geminiApiKey,
+                    falApiKey: falApiKey!,
+                    onProgress: msg => setStatus('segmenting', msg),
+                });
 
             setStatus('compositing', '合成預覽...');
             const composite = await compositeSmartLayers(originalBase64, layers);

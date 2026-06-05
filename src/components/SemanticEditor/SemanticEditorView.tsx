@@ -9,8 +9,7 @@ import { useSemanticEditor, CATEGORY_META } from './useSemanticEditor';
 import type { SmartLayer, SmartLayerCategory } from '../../types';
 import { loadModel, getModelStatus } from '../../utils/onnxModelCache';
 import { computeSAM2Embedding, runSAM2Decoder, type SAM2Embedding } from '../../utils/sam2Onnx';
-import { buildSmartLayerFromMask } from './semanticLayerUtils';
-import type * as OrtType from 'onnxruntime-web';
+import { buildSmartLayerFromMask, describeLayerWithGemini } from './semanticLayerUtils';
 
 // ─── SVG 圖示 ──────────────────────────────────────────────────────────────────
 const Ic = {
@@ -21,6 +20,7 @@ const Ic = {
     Unlock: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
     Download: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
     Refresh: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21"/></svg>,
+    Scan: () => <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12" strokeWidth="2.5"/></svg>,
     Crop: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"/><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"/></svg>,
     Brush: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>,
     Eraser: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 20H7L3 16C2.5 15.5 2.5 14.5 3 14L13 4C13.5 3.5 14.5 3.5 15 4L20 9C20.5 9.5 20.5 10.5 20 11L11 20"/><path d="M16 16L20 20"/></svg>,
@@ -352,8 +352,8 @@ function RightPanel({
                         const isDirty   = layer.prompt.trim() !== layer.appliedPrompt.trim();
                         const isChecked = checkedLayerIds.includes(layer.id);
                         return (
+                        <React.Fragment key={layer.id}>
                         <LayerRow
-                            key={layer.id}
                             label={layer.name}
                             isSelected={layer.id === selectedLayerId}
                             isVisible={layer.isVisible}
@@ -375,6 +375,7 @@ function RightPanel({
                                 />
                             }
                         />
+                        </React.Fragment>
                         );
                     })}
                 </div>
@@ -652,17 +653,10 @@ function PillToolbar({
         </svg>
     );
 
-    // 矩形框選圖示：紫色四角框（大縫隙）
+    // 矩形框選圖示：紫色虛線方框（dash 間距適中）
     const RectIcon = () => (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.8" strokeLinecap="round">
-            {/* 左上 */}
-            <path d="M4 9V4h5"/>
-            {/* 右上 */}
-            <path d="M15 4h5v5"/>
-            {/* 右下 */}
-            <path d="M20 15v5h-5"/>
-            {/* 左下 */}
-            <path d="M9 20H4v-5"/>
+            <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="5 3"/>
         </svg>
     );
     // 多點圖示
@@ -675,7 +669,7 @@ function PillToolbar({
     );
 
     const tools = [
-        { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Ic.Refresh />, label: '重新分析 (Reset)', onClick: onReanalyze },
+        { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Ic.Scan />, label: '全圖分析 (Analyze)', onClick: onReanalyze },
         { id: 'sam2',    icon: <Sam2Icon />,   label: '智能點選 (Auto Segment)', onClick: () => onTool('sam2') },
         { id: 'rect',    icon: <RectIcon />,   label: '矩形框選 (Bounding Box)', onClick: () => onTool('rect') },
         { id: 'points',  icon: <PointsIcon />, label: '多點精確選取 (Multi-points)', onClick: () => onTool('points') },
@@ -817,18 +811,21 @@ export function SemanticEditorView({
         renameVersion,
         dirtyCount,
         applyAllDirtyLayers,
-    } = useSemanticEditor({ originalBase64, geminiApiKey, atlasApiKey, falApiKey, initialState });
+    } = useSemanticEditor({
+        originalBase64, geminiApiKey, atlasApiKey, falApiKey, initialState,
+        // ONNX sessions 透過 handleReanalyze 直接傳入，不透過 hook 初始化
+    });
 
     // 工具模式：'select' | 'sam2' | 'rect' | 'points'
     const [activeTool, setActiveTool] = useState('select');
     const [sam2Mode, setSam2Mode] = useState(false);
     const imgRef = useRef<HTMLImageElement>(null);
 
-    // ── ONNX SAM2 ──────────────────────────────────────────────────────────────
+    // ── ONNX SAM2 ────────────────────────────────────────────────────────────────
     const [useOnnxSAM2, setUseOnnxSAM2] = useState(false);
     const [onnxSAM2Ready, setOnnxSAM2Ready] = useState(false);
-    const onnxEncoderRef = useRef<OrtType.InferenceSession | null>(null);
-    const onnxDecoderRef = useRef<OrtType.InferenceSession | null>(null);
+    const onnxEncoderRef = useRef<any>(null);
+    const onnxDecoderRef = useRef<any>(null);
     const onnxEmbeddingRef = useRef<SAM2Embedding | null>(null);
     const [onnxEmbeddingLoading, setOnnxEmbeddingLoading] = useState(false);
     const isComputingEmbeddingRef = useRef(false); // 防止並發 Embedding 計算
@@ -1001,21 +998,13 @@ export function SemanticEditorView({
         setTimeout(() => setToastMsg(null), duration);
     }, []);
 
-    // 開啟時自動分析（有 initialState 則跳過，直接恢復上次紀錄）
+    // 開啟時：有紀錄就恢復提示，沒有就靜默等待使用者操作
     useEffect(() => {
         if (initialState) {
             showToast('✅ 已恢復上次編輯紀錄');
-            return;
         }
-        if (!geminiApiKey) {
-            showToast('⚠️ 請先設定 Gemini API Key 才能分析圖片');
-            return;
-        }
-        analyzeImage().catch(e => {
-            showToast(`❌ 分析失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
-        });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);   // 只在 mount 時執行一次
+    }, []);
 
     const isRegenerating = state.status === 'regenerating';
 
@@ -1039,10 +1028,18 @@ export function SemanticEditorView({
     // 重新分析
     const handleReanalyze = useCallback(() => {
         if (!geminiApiKey) { showToast('⚠️ 請先設定 Gemini API Key'); return; }
+        // 自動分析永遠用 fal.ai（ONNX Encoder 太重，不適合全圖分析）
+        if (useOnnxSAM2 && !falApiKey) {
+            showToast('⚠️ 自動分析需要 fal.ai Key。本機 ONNX 限用手動工具：點選 / 框選 / 多點');
+            return;
+        }
+        if (useOnnxSAM2) {
+            showToast('提示：自動分析用 fal.ai SAM2，手動工具才用本機 ONNX');
+        }
         analyzeImage().catch(e => {
             showToast(`❌ 分析失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
         });
-    }, [geminiApiKey, analyzeImage, showToast]);
+    }, [geminiApiKey, falApiKey, analyzeImage, showToast, useOnnxSAM2]);
 
     // 匯出
     const handleExport = useCallback(() => {
@@ -1157,13 +1154,49 @@ export function SemanticEditorView({
         }]);
     }, [activeTool, isLoading, getImgCoords]);
 
-    const handlePointsConfirm = useCallback(() => {
+    // 共用：ONNX 推論 → addLayerFromMaskBase64
+    const runOnnxAndAddLayer = useCallback(async (
+        options: Parameters<typeof import('../../utils/sam2Onnx').runOnnxSAM2>[2]
+    ) => {
+        if (!onnxDecoderRef.current || !onnxEmbeddingRef.current) {
+            showToast('SAM2 ONNX 尚未就緒');
+            return false;
+        }
+        try {
+            setStatus('segmenting', 'ONNX SAM2 推論中...');
+            const { runOnnxSAM2 } = await import('../../utils/sam2Onnx');
+            const maskBase64 = await runOnnxSAM2(
+                onnxDecoderRef.current, onnxEmbeddingRef.current,
+                options, state.compositeBase64,
+            );
+            const newLayer = await buildSmartLayerFromMask(maskBase64);
+            if (geminiApiKey) {
+                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
+                    if (desc) updatePrompt(newLayer.id, desc);
+                });
+            }
+            await addLayerFromMaskBase64(newLayer);
+            return true;
+        } catch (err: any) {
+            console.error('[ONNX] 推論失敗', err);
+            setStatus('idle', '');
+            showToast(`❌ ONNX 失敗：${err?.message?.slice(0, 60) || ''}`);
+            return false;
+        }
+    }, [state.compositeBase64, geminiApiKey, addLayerFromMaskBase64, setStatus, showToast]);
+
+    const handlePointsConfirm = useCallback(async () => {
         if (multiPoints.length === 0) return;
-        addPointsLayer(multiPoints.map(p => ({ x: p.x, y: p.y, label: p.label }))).catch(err =>
-            showToast(`❌ 多點分割失敗：${err?.message?.slice(0, 60) || ''}`)
-        );
+        const pts = multiPoints.map(p => ({ x: p.x, y: p.y, label: p.label as 0 | 1 }));
         setMultiPoints([]);
-    }, [multiPoints, addPointsLayer, showToast]);
+        if (useOnnxSAM2 && onnxEmbeddingRef.current) {
+            await runOnnxAndAddLayer({ points: pts });
+        } else {
+            addPointsLayer(pts).catch(err =>
+                showToast(`❌ 多點分割失敗：${err?.message?.slice(0, 60) || ''}`)
+            );
+        }
+    }, [multiPoints, useOnnxSAM2, addPointsLayer, runOnnxAndAddLayer, showToast]);
 
     // 工具切換
     const handleToolChange = useCallback((tool: string) => {
@@ -1601,12 +1634,16 @@ export function SemanticEditorView({
                                     gap: 6,
                                 }}>
                                     <button
-                                        onClick={() => {
-                                            const r = pendingRect;
+                                        onClick={async () => {
+                                            const r = pendingRect!;
                                             setPendingRect(null);
-                                            addBoxLayer(r).catch(err =>
-                                                showToast(`❌ 框選失敗：${err?.message?.slice(0, 60) || ''}`)
-                                            );
+                                            if (useOnnxSAM2 && onnxEmbeddingRef.current) {
+                                                await runOnnxAndAddLayer({ bbox: r });
+                                            } else {
+                                                addBoxLayer(r).catch(err =>
+                                                    showToast(`❌ 框選失敗：${err?.message?.slice(0, 60) || ''}`)
+                                                );
+                                            }
                                         }}
                                         style={{
                                             padding: '5px 12px',
@@ -1721,7 +1758,7 @@ export function SemanticEditorView({
 
                         {/* 未選取：所有圖層的 hover 可點擊區域 */}
                         {!selectedLayer && state.layers.filter(l => l.isVisible).map(l => (
-                            <HoverHitArea key={l.id} layer={l} onSelect={() => selectLayer(l.id)} />
+                            <React.Fragment key={l.id}><HoverHitArea layer={l} onSelect={() => selectLayer(l.id)} /></React.Fragment>
                         ))}
 
                         {/* BBox 選取框 */}
@@ -1820,14 +1857,13 @@ export function SemanticEditorView({
 
                     {/* 每個 Apply 的版本 */}
                     {state.versions.map((ver, i) => (
-                        <VersionThumb
-                            key={ver.id}
+                        <React.Fragment key={ver.id}><VersionThumb
                             label={`v${i + 1} · ${ver.changedLayerName}`}
                             thumbnailBase64={ver.compositeBase64}
                             isActive={state.activeVersionIndex === i}
                             onClick={() => switchVersion(i)}
                             onRename={(n) => renameVersion(i, n)}
-                        />
+                        /></React.Fragment>
                     ))}
 
                     {/* hover 縮圖即可匯入，不需要額外按鈕 */}

@@ -416,6 +416,77 @@ export async function segmentSemanticLayers({
     return layers;
 }
 
+// ─── ONNX 自動分析：Gemini 偵測 + ONNX SAM2 分割（取代 fal.ai）──────────────────
+
+export async function segmentSemanticLayersOnnx({
+    imageBase64,
+    geminiApiKey,
+    encoderSession,
+    decoderSession,
+    onProgress,
+}: {
+    imageBase64: string;
+    geminiApiKey: string;
+    encoderSession: any;   // ort.InferenceSession
+    decoderSession: any;   // ort.InferenceSession
+    onProgress?: (msg: string) => void;
+}): Promise<SmartLayer[]> {
+    onProgress?.('Gemini 分析圖片結構...');
+    const objects = await detectObjectsForSegmentation(imageBase64, geminiApiKey);
+    onProgress?.(`偵測到 ${objects.length} 個物件，ONNX SAM2 分割中...`);
+
+    const dims = await getImageDims(imageBase64);
+
+    // 先算 embedding（只算一次，所有物件共用）
+    onProgress?.('ONNX Encoder 計算中...');
+    const { computeSAM2Embedding, runSAM2Decoder } = await import('../../utils/sam2Onnx');
+    const embedding = await computeSAM2Embedding(encoderSession, imageBase64);
+
+    // 逐一用 bbox 驅動 decoder
+    const results = await Promise.all(
+        objects.map(async (obj, i) => {
+            try {
+                onProgress?.(`ONNX SAM2 分割 ${i + 1}/${objects.length}：${obj.label}`);
+                const px = obj.bbox.x * dims.w;
+                const py = obj.bbox.y * dims.h;
+                const pw = obj.bbox.w * dims.w;
+                const ph = obj.bbox.h * dims.h;
+                const transparentPng = await runSAM2Decoder(
+                    decoderSession, embedding,
+                    { bbox: { x: px, y: py, w: pw, h: ph } },
+                    imageBase64,
+                );
+                const trimmed = await trimTransparentPixels(transparentPng);
+                const cropRatio = { x: trimmed.cropRatioX, y: trimmed.cropRatioY, w: trimmed.cropRatioW, h: trimmed.cropRatioH };
+                return {
+                    id:             `sl_onnx_${Date.now()}_${i}`,
+                    name:           obj.label,
+                    category:       obj.category,
+                    base64:         trimmed.base64,
+                    originalBase64: trimmed.base64,
+                    prompt:         obj.description ?? obj.label,
+                    appliedPrompt:  obj.description ?? obj.label,
+                    bbox:           cropRatio,
+                    cropRatio,
+                    pixelWidth:     trimmed.pixelWidth,
+                    pixelHeight:    trimmed.pixelHeight,
+                    history:        [],
+                    isVisible:      true,
+                    isLocked:       false,
+                    zIndex:         objects.length - i,
+                } as SmartLayer;
+            } catch (e) {
+                console.warn(`[ONNX] Skip "${obj.label}":`, e);
+                return null;
+            }
+        })
+    );
+
+    const layers = results.filter((l): l is SmartLayer => l !== null);
+    if (layers.length === 0) throw new Error('所有物件 ONNX 分割均失敗');
+    return layers;
+}
+
 // ─── 共用：透明 PNG → SmartLayer（ONNX 和 fal.ai 共用後半段）──────────────────
 
 export async function buildSmartLayerFromMask(
