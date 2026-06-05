@@ -1527,54 +1527,19 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {/* Storage Status */}
-          {storageStatus === 'full' || storageStatus === 'critical' ? (
-              <div className="relative">
-                  <button
-                      onClick={() => setShowStoragePopover(v => !v)}
-                      className={`flex items-center gap-2 px-4 py-1.5 backdrop-blur-sm rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.05)] border transition-all duration-300
-                          ${storageStatus === 'full'
-                              ? 'bg-red-50 border-red-200 hover:bg-red-100'
-                              : 'bg-orange-50 border-orange-200 hover:bg-orange-100'}`}
-                  >
-                      <div className={`w-2 h-2 rounded-full ${storageStatus === 'full' ? 'bg-red-500 animate-pulse' : 'bg-orange-400'}`}></div>
-                      <span className={`text-[10px] font-bold tracking-wide ${storageStatus === 'full' ? 'text-red-500' : 'text-orange-500'}`}>
-                          {storageStatus === 'full' ? '存檔已滿' : '容量警告'}
-                      </span>
-                  </button>
-                  {/* Popover */}
-                  {showStoragePopover && (
-                      <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-68 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 p-4 z-[6001]" style={{width: '272px'}}>
-                          <div className="flex justify-between items-start mb-2">
-                              <p className="text-xs font-bold text-[#1D1D1F]">
-                                  {storageStatus === 'full' ? '存檔已滿' : '儲存空間不足'}
-                              </p>
-                              <button onClick={() => setShowStoragePopover(false)} className="text-gray-300 hover:text-gray-500 text-sm leading-none ml-2">✕</button>
-                          </div>
-                          <p className="text-xs text-gray-500 mb-3 leading-relaxed">
-                              {storageStatus === 'full'
-                                  ? '瀏覽器儲存空間已滿（上限 5MB），最新變更未能自動存檔。'
-                                  : '儲存空間即將用盡（上限 5MB，目前使用超過 90%），建議立即備份。'}
-                          </p>
-                          <div className="flex gap-2">
-                              <button
-                                  onClick={originalExportCanvas}
-                                  className="flex-1 py-1.5 text-[11px] font-bold bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
-                              >匯出 JSON 備份</button>
-                              <button
-                                  onClick={() => { setShowStoragePopover(false); setShowClearConfirm(true); }}
-                                  className="flex-1 py-1.5 text-[11px] font-bold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                              >清除存檔</button>
-                          </div>
-                      </div>
-                  )}
+          {/* Auto-Save Status（IndexedDB，無容量上限）*/}
+          {storageStatus === 'saving' && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-black/5 border border-black/8 rounded-full">
+                  <svg className="animate-spin w-2.5 h-2.5 text-gray-400" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                  <span className="text-[10px] font-medium text-gray-400">存檔中</span>
               </div>
-          ) : storageStatus === 'warning' ? (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-full" title="儲存空間使用超過 70%，建議匯出 JSON 備份">
-                  <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
-                  <span className="text-[10px] font-bold text-yellow-600">容量偏高</span>
+          )}
+          {storageStatus === 'error' && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-full" title="自動存檔失敗，請手動 Ctrl+S 儲存">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                  <span className="text-[10px] font-bold text-red-500">存檔失敗</span>
               </div>
-          ) : null}
+          )}
       </div>
       </div>
 

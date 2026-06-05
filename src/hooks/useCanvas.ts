@@ -41,6 +41,7 @@ const DEFAULT_WELCOME_NOTE: CanvasElement = {
 };
 
 const loadInitialElements = (): CanvasElement[] => {
+    // 優先嘗試 localStorage（舊版資料遷移用，之後由 IndexedDB 接管）
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
@@ -51,7 +52,20 @@ const loadInitialElements = (): CanvasElement[] => {
     return [DEFAULT_WELCOME_NOTE];
 };
 
-export type StorageStatus = 'saved' | 'warning' | 'critical' | 'full';
+// IndexedDB 非同步讀取，會在 mount 後觸發 setElements 更新
+const loadFromIndexedDB = async (): Promise<CanvasElement[] | null> => {
+    try {
+        const { get } = await import('idb-keyval');
+        const saved = await get<string>(STORAGE_KEY + '_idb');
+        if (saved) {
+            const parsed = JSON.parse(saved) as CanvasElement[];
+            if (parsed.length > 0) return parsed;
+        }
+    } catch {}
+    return null;
+};
+
+export type StorageStatus = 'saved' | 'saving' | 'error';
 
 export const useCanvas = (showToast: (msg: string) => void) => {
     const {
@@ -113,28 +127,37 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         });
     }, []);
 
-    // --- LocalStorage Auto-Save ---
+    // --- IndexedDB Auto-Save（取代 localStorage，無容量上限）---
     const [storageStatus, setStorageStatus] = useState<StorageStatus>('saved');
     const hasMountedRef = useRef(false);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    // Mount 時嘗試從 IndexedDB 讀取（優先於 localStorage）
     useEffect(() => {
-        // Skip first render (initial load from localStorage)
+        loadFromIndexedDB().then(parsed => {
+            if (parsed) setElements(parsed);
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        // Skip first render（初始載入）
         if (!hasMountedRef.current) {
             hasMountedRef.current = true;
             return;
         }
-        saveTimerRef.current = setTimeout(() => {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        setStorageStatus('saving');
+        saveTimerRef.current = setTimeout(async () => {
             try {
                 const json = JSON.stringify(elements);
-                const bytes = new Blob([json]).size;
-                const ratio = bytes / MAX_STORAGE_BYTES;
-                localStorage.setItem(STORAGE_KEY, json);
-                if (ratio > 0.9) setStorageStatus('critical');
-                else if (ratio > 0.7) setStorageStatus('warning');
-                else setStorageStatus('saved');
+                const { set } = await import('idb-keyval');
+                await set(STORAGE_KEY + '_idb', json);
+                setStorageStatus('saved');
+                // 同步更新 localStorage 以防 IndexedDB 不可用（降級）
+                try { localStorage.setItem(STORAGE_KEY, json); } catch {}
             } catch {
-                setStorageStatus('full');
+                setStorageStatus('error');
             }
         }, 1000);
         return () => {
@@ -143,16 +166,15 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     }, [elements]);
 
     const clearStorage = useCallback(() => {
-        // Cancel any pending debounced auto-save immediately (prevents race condition
-        // where old data could be written to localStorage after removeItem)
         if (saveTimerRef.current) {
             clearTimeout(saveTimerRef.current);
             saveTimerRef.current = null;
         }
-        localStorage.setItem(STORAGE_KEY, '[]'); // Write empty synchronously so it survives fast tab close
+        // 清除 localStorage 和 IndexedDB
+        localStorage.setItem(STORAGE_KEY, '[]');
+        import('idb-keyval').then(({ del }) => del(STORAGE_KEY + '_idb'));
         setElements([]);
         setStorageStatus('saved');
-        // Also clear the file handle so the right-click menu no longer points to the old file
         clearFileHandle();
         setCurrentFileHandle(null);
         setCurrentFileName(null);
