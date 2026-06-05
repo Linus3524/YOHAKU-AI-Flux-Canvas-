@@ -784,7 +784,8 @@ export interface RegenerateLayerOptions {
     originalBase64: string;
     newPrompt: string;
     atlasApiKey: string;
-    falApiKey?: string;           // SAM2 重新切割結果圖層（可選）
+    falApiKey?: string;
+    signal?: AbortSignal;         // ← 傳入後可中止 Atlas 輪詢
     onProgress?: (msg: string) => void;
 }
 
@@ -806,6 +807,7 @@ export async function regenerateLayer({
     newPrompt,
     atlasApiKey,
     falApiKey,
+    signal,
     onProgress,
 }: RegenerateLayerOptions): Promise<{
     newLayerBase64: string;
@@ -845,6 +847,9 @@ export async function regenerateLayer({
         compOrig,
         compMask,
         atlasApiKey,
+        undefined,   // referenceImages
+        undefined,   // surroundingContext
+        signal,      // AbortSignal → 取消後立即停止輪詢
     );
 
     // ── Step 3：SAM2 從 inpainted 結果重新切出物件（更新 SmartLayer）────────

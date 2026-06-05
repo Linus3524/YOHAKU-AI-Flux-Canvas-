@@ -188,14 +188,24 @@ export async function downloadImageAsBase64(url: string): Promise<string> {
     return url;
 }
 
-async function pollPrediction(predictionId: string, atlasKey: string): Promise<string[]> {
+async function pollPrediction(
+    predictionId: string,
+    atlasKey: string,
+    signal?: AbortSignal,
+): Promise<string[]> {
     const startTime = Date.now();
 
     while (Date.now() - startTime < MAX_WAIT_MS) {
+        // AbortSignal 已觸發 → 立即中止輪詢
+        if (signal?.aborted) throw new Error('使用者取消操作');
+
         await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+
+        if (signal?.aborted) throw new Error('使用者取消操作');
 
         const res = await fetch(`${ATLAS_BASE_URL}/model/result/${predictionId}`, {
             headers: { Authorization: `Bearer ${atlasKey}` },
+            signal,   // fetch 本身也帶 signal，abort 後 fetch 立即拋錯
         });
 
         if (!res.ok) throw new Error(`Atlas poll error: ${res.status}`);
@@ -510,8 +520,9 @@ export async function callAtlasInpaint(
     imageBase64: string,
     maskBase64: string,
     atlasKey: string,
-    referenceImages?: string[], // Optional: up to 3 reference images (base64 data URLs)
-    surroundingContext?: string, // Optional: Gemini pre-analysis of surrounding environment
+    referenceImages?: string[],
+    surroundingContext?: string,
+    signal?: AbortSignal,    // ← 傳入後可中止輪詢
 ): Promise<string> {
     // 透明遮罩圖：讓 GPT Image 2 Edit 知道哪裡需要重新生成
     const transparentImage = await createTransparentMaskedImage(imageBase64, maskBase64);
@@ -543,7 +554,7 @@ export async function callAtlasInpaint(
         output_format: 'png',
     };
     const predId = await postGeneration(body, atlasKey);
-    const results = await pollPrediction(predId, atlasKey);
+    const results = await pollPrediction(predId, atlasKey, signal);
     if (!results[0]) throw new Error('Atlas GPT Image 2 Inpaint 未回傳圖片');
     return results[0];
 }

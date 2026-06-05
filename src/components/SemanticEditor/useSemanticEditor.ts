@@ -61,7 +61,9 @@ export function useSemanticEditor({
     }));
 
     const analyzingRef  = useRef(false);
-    const cancelledRef  = useRef(false);   // 使用者按取消時設為 true，忽略後續結果
+    const cancelledRef  = useRef(false);
+    /** 目前 Apply 操作的 AbortController，取消時 abort() 真正中止 Atlas 輪詢 */
+    const abortCtrlRef  = useRef<AbortController | null>(null);
 
     const setStatus = useCallback((
         status: SemanticEditorState['status'],
@@ -70,9 +72,16 @@ export function useSemanticEditor({
         setState(s => ({ ...s, status, statusMessage: message }));
     }, []);
 
-    /** 強制取消目前的 AI 操作（UI 回到 idle，後台請求自行超時） */
+    /**
+     * 取消目前的 AI 操作：
+     * - abort() 中止 Atlas fetch 輪詢（立即停止等待）
+     * - UI 回到 idle
+     * - Server 端繼續跑（Atlas 無取消 API），但前端不再等待
+     */
     const cancelOperation = useCallback(() => {
         cancelledRef.current = true;
+        abortCtrlRef.current?.abort();
+        abortCtrlRef.current = null;
         setStatus('idle', '');
         setTimeout(() => { cancelledRef.current = false; }, 250);
     }, [setStatus]);
@@ -131,27 +140,26 @@ export function useSemanticEditor({
         if (!atlasApiKey) throw new Error('Apply 需要 Atlas（GPT Image 2）API Key');
 
         cancelledRef.current = false;
+        // 建立新的 AbortController，取消按鈕會呼叫 abort()
+        const ctrl = new AbortController();
+        abortCtrlRef.current = ctrl;
         setStatus('regenerating', `🎨 重新生成「${layer.name}」...`);
 
-        // 3 分鐘超時保護（Atlas 正常 20-45 秒，超過代表卡住了）
-        const TIMEOUT_MS = 3 * 60 * 1000;
-        const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('重繪超時（3 分鐘），請重試')), TIMEOUT_MS)
-        );
+        // 5 分鐘超時保護
+        const TIMEOUT_MS = 5 * 60 * 1000;
+        const timeoutId = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
 
         try {
-            // Step 1：Atlas Inpaint（帶 timeout）
-            const result = await Promise.race([
-                regenerateLayer({
-                    layer,
-                    originalBase64: state.compositeBase64,
-                    newPrompt: layer.prompt,
-                    atlasApiKey,
-                    falApiKey: falApiKey || undefined,
-                    onProgress: msg => { if (!cancelledRef.current) setStatus('regenerating', msg); },
-                }),
-                timeoutPromise,
-            ]);
+            const result = await regenerateLayer({
+                layer,
+                originalBase64: state.compositeBase64,
+                newPrompt: layer.prompt,
+                atlasApiKey,
+                falApiKey: falApiKey || undefined,
+                signal:    ctrl.signal,
+                onProgress: msg => { if (!cancelledRef.current) setStatus('regenerating', msg); },
+            });
+            clearTimeout(timeoutId);
 
             // 使用者已按取消，忽略結果
             if (cancelledRef.current) return;
@@ -217,7 +225,13 @@ export function useSemanticEditor({
                 statusMessage:      '',
             }));
 
-        } catch (e) {
+        } catch (e: any) {
+            clearTimeout(timeoutId);
+            abortCtrlRef.current = null;
+            if (e?.name === 'AbortError' || e?.message === '使用者取消操作' || cancelledRef.current) {
+                setStatus('idle', '');
+                return;
+            }
             setStatus('idle', '');
             throw e;
         }
