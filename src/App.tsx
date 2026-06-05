@@ -1851,7 +1851,7 @@ const App: React.FC = () => {
           />
       )}
 
-      {!isFocusMode && artboardForPanel && (
+      {!isFocusMode && !semanticEditorTarget && artboardForPanel && (
           <ArtboardPanel
               element={artboardForPanel}
               onUpdate={(updates) => setElements(prev => prev.map(el =>

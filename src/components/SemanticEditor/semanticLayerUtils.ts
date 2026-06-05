@@ -269,6 +269,40 @@ Return ONLY valid JSON array:
     }));
 }
 
+// ─── Gemini 圖層描述（手動新增時使用）─────────────────────────────────────────
+/**
+ * 對已去背的圖層呼叫 Gemini，生成 15-35 字的英文描述作為 prompt
+ * 失敗時靜默回傳空字串（不影響圖層建立）
+ */
+export async function describeLayerWithGemini(
+    base64: string,
+    geminiApiKey: string,
+): Promise<string> {
+    try {
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+        const clean = base64.split(',')[1] || base64;
+        const mime  = base64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                parts: [
+                    { inlineData: { mimeType: mime, data: clean } },
+                    { text: `Describe this image object in 15-35 words for an image generation prompt.
+Be specific: include subject type, appearance, colors, pose/state, notable details.
+Output ONLY the description text, no quotes, no explanation.
+Example: "A vibrant orange goldfish with flowing white fins, swimming horizontally in clear water."` },
+                ],
+            },
+        });
+
+        const text = (response.text ?? '').trim().replace(/^["']|["']$/g, '');
+        return text || '';
+    } catch {
+        return '';
+    }
+}
+
 // ─── SmartLayer 工廠 ──────────────────────────────────────────────────────────
 
 async function buildSmartLayer(
@@ -322,9 +356,9 @@ export async function segmentSemanticLayers({
     onProgress,
 }: SegmentOptions): Promise<SmartLayer[]> {
 
-    onProgress?.('🔍 Gemini 分析圖片結構...');
+    onProgress?.('Gemini 分析圖片結構...');
     const objects = await detectObjectsForSegmentation(imageBase64, geminiApiKey);
-    onProgress?.(`✨ 偵測到 ${objects.length} 個物件，SAM2 精準分割中...`);
+    onProgress?.(`偵測到 ${objects.length} 個物件，SAM2 分割中...`);
 
     const dims = await getImageDims(imageBase64);
 
@@ -332,7 +366,7 @@ export async function segmentSemanticLayers({
     const results = await Promise.all(
         objects.map(async (obj, i) => {
             try {
-                onProgress?.(`🎯 SAM2 分割 ${i + 1}/${objects.length}：${obj.label}`);
+                onProgress?.(`SAM2 分割 ${i + 1}/${objects.length}：${obj.label}`);
 
                 // 全圖 + Gemini bbox_prompt：SAM2 設計用途就是這樣
                 // 給一個框 → SAM2 在框內找最顯著前景 → 穩定有效
@@ -394,7 +428,7 @@ export async function addLayerByClick({
     layerName,
     onProgress,
 }: AddLayerByClickOptions): Promise<SmartLayer> {
-    onProgress?.('🎯 SAM2 分割點選物件...');
+    onProgress?.('SAM2 點選分割...');
     const dims = await getImageDims(imageBase64);
 
     const transparentPng = await sam2Segment(
@@ -453,7 +487,7 @@ export async function addLayerByBox({
     boxRatio,
     onProgress,
 }: AddLayerByBoxOptions): Promise<SmartLayer> {
-    onProgress?.('🎯 SAM2 框選物件...');
+    onProgress?.('SAM2 框選物件...');
     const dims = await getImageDims(imageBase64);
 
     const transparentPng = await sam2Segment(
@@ -507,7 +541,7 @@ export async function addLayerByPoints({
     points,
     onProgress,
 }: AddLayerByPointsOptions): Promise<SmartLayer> {
-    onProgress?.('🎯 SAM2 多點分割...');
+    onProgress?.('SAM2 多點分割...');
     const dims = await getImageDims(imageBase64);
 
     const transparentPng = await sam2Segment(
@@ -827,7 +861,7 @@ export async function regenerateLayer({
     // dilate 已在 transparentPngToInpaintMask 裡做了 3px，這裡不再額外處理
 
     // ── Step 2：Atlas Inpaint（全圖，GPT 自己處理邊緣）────────────────────
-    onProgress?.(`🎨 GPT Image 2 重新生成「${layer.name}」（全圖 inpaint）...`);
+    onProgress?.(`GPT Image 2 重新生成「${layer.name}」...`);
 
     const inpaintPrompt = [
         newPrompt,

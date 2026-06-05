@@ -101,13 +101,13 @@ function FloatingPromptBox({
                 background: 'white',
                 borderRadius: 16,
                 boxShadow: '0 10px 25px -5px rgba(0,0,0,0.10), 0 0 1px rgba(0,0,0,0.10)',
-                padding: '12px 16px',
+                padding: '16px 16px 14px',
                 width: 240,
                 zIndex: 20,
             }}
             onClick={e => e.stopPropagation()}
         >
-            <p style={{ fontSize: 10, color: '#6b7280', marginBottom: 4, fontWeight: 500 }}>
+            <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 10px 0', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                 Prompt
             </p>
             <textarea
@@ -122,9 +122,9 @@ function FloatingPromptBox({
                     outline: 'none',
                     resize: 'none',
                     background: '#eff6ff',
-                    padding: '4px 6px',
-                    borderRadius: 4,
-                    lineHeight: 1.5,
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    lineHeight: 1.6,
                     fontFamily: 'inherit',
                     boxSizing: 'border-box',
                 }}
@@ -135,9 +135,9 @@ function FloatingPromptBox({
                 onClick={() => onApply(layer)}
                 disabled={isRegenerating}
                 style={{
-                    marginTop: 8,
+                    marginTop: 12,
                     width: '100%',
-                    height: 32,
+                    height: 36,
                     borderRadius: 10,
                     fontSize: 12,
                     fontWeight: 600,
@@ -590,19 +590,29 @@ function PillToolbar({
     onReanalyze: () => void;
     isAnalyzing: boolean;
 }) {
-    // SAM2 點選圖示
+    // SAM2 點選圖示：藍色游標 + 右上大閃光
     const Sam2Icon = () => (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-            <path d="M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+            {/* 游標箭頭（藍色） */}
+            <path d="M4 4l14 9-7.5 1.5-3 6.5z"
+                fill="#3b82f6" fillOpacity="0.18" stroke="#3b82f6" strokeWidth="1.7"/>
+            {/* 閃光（右上角） */}
+            <path d="M19.5 1l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2z"
+                fill="#3b82f6" stroke="none"/>
         </svg>
     );
 
-    // 矩形框選圖示
+    // 矩形框選圖示：紫色四角框（大縫隙）
     const RectIcon = () => (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="4 2"/>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.8" strokeLinecap="round">
+            {/* 左上 */}
+            <path d="M4 9V4h5"/>
+            {/* 右上 */}
+            <path d="M15 4h5v5"/>
+            {/* 右下 */}
+            <path d="M20 15v5h-5"/>
+            {/* 左下 */}
+            <path d="M9 20H4v-5"/>
         </svg>
     );
     // 多點圖示
@@ -615,10 +625,10 @@ function PillToolbar({
     );
 
     const tools = [
-        { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Ic.Refresh />, label: '重新分析', onClick: onReanalyze },
-        { id: 'sam2',    icon: <Sam2Icon />,   label: '點選新增圖層', onClick: () => onTool('sam2') },
-        { id: 'rect',    icon: <RectIcon />,   label: '矩形框選（A）', onClick: () => onTool('rect') },
-        { id: 'points',  icon: <PointsIcon />, label: '多點選取（B）左鍵前景 右鍵背景', onClick: () => onTool('points') },
+        { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Ic.Refresh />, label: '重新分析 (Reset)', onClick: onReanalyze },
+        { id: 'sam2',    icon: <Sam2Icon />,   label: '智能點選 (Auto Segment)', onClick: () => onTool('sam2') },
+        { id: 'rect',    icon: <RectIcon />,   label: '矩形框選 (Bounding Box)', onClick: () => onTool('rect') },
+        { id: 'points',  icon: <PointsIcon />, label: '多點精確選取 (Multi-points)', onClick: () => onTool('points') },
     ];
 
     const btnBase: React.CSSProperties = {
@@ -645,9 +655,17 @@ function PillToolbar({
             gap: 4,
         }}>
             {tools.map(t => (
+                <div key={t.id} style={{ position: 'relative' }}
+                    onMouseEnter={e => {
+                        const tip = e.currentTarget.querySelector('.tool-tip') as HTMLElement;
+                        if (tip) tip.style.opacity = '1';
+                    }}
+                    onMouseLeave={e => {
+                        const tip = e.currentTarget.querySelector('.tool-tip') as HTMLElement;
+                        if (tip) tip.style.opacity = '0';
+                    }}
+                >
                 <button
-                    key={t.id}
-                    title={t.label}
                     onClick={t.onClick ?? (() => onTool(t.id))}
                     style={{
                         ...btnBase,
@@ -669,6 +687,22 @@ function PillToolbar({
                 >
                     {t.icon}
                 </button>
+                {/* 自訂 tooltip */}
+                <div className="tool-tip" style={{
+                    position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'rgba(15,15,20,0.85)',
+                    backdropFilter: 'blur(8px)',
+                    color: '#fff', fontSize: 11, fontWeight: 500,
+                    padding: '4px 9px', borderRadius: 6,
+                    whiteSpace: 'nowrap', pointerEvents: 'none',
+                    opacity: 0, transition: 'opacity 0.15s',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    zIndex: 50,
+                }}>
+                    {t.label}
+                </div>
+                </div>
             ))}
         </div>
     );
@@ -767,11 +801,46 @@ export function SemanticEditorView({
         curX: number; curY: number;
         active: boolean;
     } | null>(null);
+    // 框選完成但尚未送出分析（等待使用者確認）
+    const [pendingRect, setPendingRect] = useState<{
+        x: number; y: number; w: number; h: number;
+    } | null>(null);
 
     // B：多點模式狀態
     const [multiPoints, setMultiPoints] = useState<
         { x: number; y: number; label: 1 | 0; dispX: number; dispY: number }[]
     >([]);   // dispX/Y 是相對圖片容器的 % 位置（顯示用）
+
+    // HUD 拖曳狀態
+    const [hudPos, setHudPos] = useState<{ x: number; y: number } | null>(null);
+    const hudDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+    const hudRef = useRef<HTMLDivElement>(null);
+
+    const handleHudMouseDown = useCallback((e: React.MouseEvent) => {
+        if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+        e.preventDefault();
+        const rect = hudRef.current?.getBoundingClientRect();
+        hudDragRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            origX: hudPos?.x ?? (rect ? rect.left + rect.width / 2 : window.innerWidth / 2),
+            origY: hudPos?.y ?? (rect ? rect.top : 60),
+        };
+        const onMove = (ev: MouseEvent) => {
+            if (!hudDragRef.current) return;
+            setHudPos({
+                x: hudDragRef.current.origX + (ev.clientX - hudDragRef.current.startX),
+                y: hudDragRef.current.origY + (ev.clientY - hudDragRef.current.startY),
+            });
+        };
+        const onUp = () => {
+            hudDragRef.current = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, [hudPos]);
 
     const showToast = useCallback((msg: string, duration = 3500) => {
         setToastMsg(msg);
@@ -877,10 +946,9 @@ export function SemanticEditorView({
         const h = Math.abs(c.relY - rectDrag.startY);
         setRectDrag(null);
         if (w < 0.02 || h < 0.02) return; // 太小忽略
-        addBoxLayer({ x, y, w, h }).catch(err =>
-            showToast(`❌ 框選失敗：${err?.message?.slice(0, 60) || ''}`)
-        );
-    }, [rectDrag, isLoading, addBoxLayer, showToast, getImgCoords]);
+        // 框選完成 → 存入 pendingRect，等待使用者確認才送出分析
+        setPendingRect({ x, y, w, h });
+    }, [rectDrag, isLoading, getImgCoords]);
 
     // B：多點模式
     const handlePointsClick = useCallback((e: React.MouseEvent) => {
@@ -1025,47 +1093,68 @@ export function SemanticEditorView({
                         display: 'flex',
                         alignItems: 'center',
                         gap: 8,
-                        background: 'rgba(255,255,255,0.92)',
-                        backdropFilter: 'blur(8px)',
-                        padding: '6px 12px 6px 16px',
+                        overflow: 'hidden',
                         borderRadius: 9999,
-                        boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-                        fontSize: 12,
-                        fontWeight: 500,
-                        color: '#374151',
-                        border: '1px solid rgba(0,0,0,0.06)',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                     }}>
-                        <Ic.Spinner />
-                        <span>{state.statusMessage}</span>
-                        {/* 取消按鈕 */}
-                        <button
-                            onClick={cancelOperation}
-                            title="取消目前操作"
-                            style={{
-                                marginLeft: 4,
-                                padding: '3px 10px',
-                                borderRadius: 9999,
-                                border: '1px solid #e5e7eb',
-                                background: '#fff',
-                                color: '#6b7280',
-                                fontSize: 11,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                transition: 'all 0.15s',
-                            }}
-                            onMouseEnter={e => {
-                                e.currentTarget.style.background = '#fee2e2';
-                                e.currentTarget.style.color = '#ef4444';
-                                e.currentTarget.style.borderColor = '#fca5a5';
-                            }}
-                            onMouseLeave={e => {
-                                e.currentTarget.style.background = '#fff';
-                                e.currentTarget.style.color = '#6b7280';
-                                e.currentTarget.style.borderColor = '#e5e7eb';
-                            }}
-                        >
-                            取消
-                        </button>
+                        {/* Shimmer 背景（與畫布 animate-shimmer 一致） */}
+                        <div style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'rgba(0,0,0,0.25)',
+                            borderRadius: 9999,
+                        }} />
+                        <div className="animate-shimmer" style={{
+                            position: 'absolute',
+                            inset: 0,
+                            borderRadius: 9999,
+                        }} />
+                        {/* 前景內容 */}
+                        <div style={{
+                            position: 'relative',
+                            zIndex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            background: 'rgba(255,255,255,0.88)',
+                            backdropFilter: 'blur(8px)',
+                            padding: '6px 12px 6px 16px',
+                            borderRadius: 9999,
+                            fontSize: 12,
+                            fontWeight: 500,
+                            color: '#374151',
+                        }}>
+                            <Ic.Spinner />
+                            <span>{state.statusMessage}</span>
+                            <button
+                                onClick={cancelOperation}
+                                title="取消目前操作"
+                                style={{
+                                    marginLeft: 4,
+                                    padding: '3px 10px',
+                                    borderRadius: 9999,
+                                    border: '1px solid #e5e7eb',
+                                    background: '#fff',
+                                    color: '#6b7280',
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s',
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.background = '#fee2e2';
+                                    e.currentTarget.style.color = '#ef4444';
+                                    e.currentTarget.style.borderColor = '#fca5a5';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.background = '#fff';
+                                    e.currentTarget.style.color = '#6b7280';
+                                    e.currentTarget.style.borderColor = '#e5e7eb';
+                                }}
+                            >
+                                取消
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -1104,24 +1193,145 @@ export function SemanticEditorView({
                         onMouseUp={activeTool === 'rect'   ? handleRectMouseUp   : undefined}
                         onContextMenu={activeTool === 'points' ? (e => { e.preventDefault(); handlePointsClick(e); }) : undefined}
                     >
-                        {/* 模式提示條 */}
-                        {(activeTool === 'sam2' || activeTool === 'rect' || activeTool === 'points') && !isLoading && (
+                        {/* sam2 / rect 模式提示條 */}
+                        {(activeTool === 'sam2' || activeTool === 'rect') && !isLoading && (
                             <div style={{
-                                position: 'absolute', top: 8, left: '50%',
+                                position: 'absolute', top: 12, left: '50%',
                                 transform: 'translateX(-50%)',
                                 zIndex: 20,
-                                background: activeTool === 'points' ? 'rgba(16,185,129,0.90)' : 'rgba(124,58,237,0.90)',
-                                color: '#fff', fontSize: 11, fontWeight: 600,
-                                padding: '5px 14px', borderRadius: 9999,
+                                background: 'rgba(15,15,20,0.72)',
+                                backdropFilter: 'blur(10px)',
+                                color: '#fff', fontSize: 11, fontWeight: 500,
+                                letterSpacing: '0.02em',
+                                padding: '5px 16px', borderRadius: 9999,
+                                lineHeight: '1',
                                 pointerEvents: 'none', whiteSpace: 'nowrap',
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
                             }}>
-                                {activeTool === 'sam2'   && '✛ 點擊任意物件新增圖層'}
-                                {activeTool === 'rect'   && '□ 拖拉畫框選取物件範圍'}
-                                {activeTool === 'points' && '● 左鍵=前景（綠）右鍵=背景（紅）雙擊確認'}
+                                {activeTool === 'sam2' && '點擊任意物件新增圖層'}
+                                {activeTool === 'rect' && '拖曳畫框選取物件範圍'}
                             </div>
                         )}
 
-                        {/* A：矩形框選預覽 */}
+                        {/* points 模式：整合式 HUD（可拖曳） */}
+                        {activeTool === 'points' && !isLoading && (
+                            <div
+                                ref={hudRef}
+                                onMouseDown={handleHudMouseDown}
+                                style={{
+                                position: 'absolute',
+                                ...(hudPos
+                                    ? { left: hudPos.x, top: hudPos.y, transform: 'translate(-50%, 0)' }
+                                    : { top: 12, left: '50%', transform: 'translateX(-50%)' }),
+                                zIndex: 20,
+                                cursor: 'grab',
+                                background: 'rgba(18,20,28,0.92)',
+                                backdropFilter: 'blur(12px)',
+                                borderRadius: 9999,
+                                padding: '6px 6px 6px 16px',
+                                display: 'flex', alignItems: 'center', gap: 16,
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                                whiteSpace: 'nowrap',
+                            }}>
+                                {/* 左鍵前景 */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                    <span style={{
+                                        width: 10, height: 10, borderRadius: '50%',
+                                        background: '#10b981',
+                                        boxShadow: '0 0 8px rgba(16,185,129,0.7)',
+                                        flexShrink: 0,
+                                    }} />
+                                    <span style={{ color: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.01em' }}>
+                                        左鍵標記前景
+                                    </span>
+                                </div>
+                                <span style={{ color: 'rgba(255,255,255,0.18)', fontSize: 14 }}>|</span>
+                                {/* 右鍵背景 */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                    <span style={{
+                                        width: 10, height: 10, borderRadius: '50%',
+                                        background: '#ef4444',
+                                        boxShadow: '0 0 8px rgba(239,68,68,0.7)',
+                                        flexShrink: 0,
+                                    }} />
+                                    <span style={{ color: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.01em' }}>
+                                        右鍵標記背景
+                                    </span>
+                                </div>
+                                {/* 計數器 */}
+                                {multiPoints.length > 0 && (
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', gap: 4,
+                                        background: 'rgba(0,0,0,0.4)',
+                                        borderRadius: 9999, padding: '4px 10px',
+                                        border: '1px solid rgba(255,255,255,0.06)',
+                                        fontFamily: 'monospace', fontSize: 12,
+                                    }}>
+                                        <span style={{ color: '#34d399', fontWeight: 700 }}>
+                                            {multiPoints.filter(p => p.label === 1).length}
+                                        </span>
+                                        <span style={{ color: '#6b7280' }}>/</span>
+                                        <span style={{ color: '#f87171', fontWeight: 700 }}>
+                                            {multiPoints.filter(p => p.label === 0).length}
+                                        </span>
+                                    </div>
+                                )}
+                                {/* 清除所有點 */}
+                                {multiPoints.length > 0 && (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setMultiPoints([]); }}
+                                        style={{
+                                            background: 'rgba(255,255,255,0.08)',
+                                            color: 'rgba(255,255,255,0.65)', border: '1px solid rgba(255,255,255,0.12)',
+                                            borderRadius: 9999, padding: '5px 10px',
+                                            fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                                            flexShrink: 0, whiteSpace: 'nowrap',
+                                            lineHeight: '1',
+                                        }}
+                                    >
+                                        清除
+                                    </button>
+                                )}
+                                {/* 取消模式 */}
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setMultiPoints([]); handleToolChange('select'); setHudPos(null); }}
+                                    style={{
+                                        background: 'rgba(255,255,255,0.08)',
+                                        color: 'rgba(255,255,255,0.65)', border: '1px solid rgba(255,255,255,0.12)',
+                                        borderRadius: 9999, padding: '5px 10px',
+                                        fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                                        flexShrink: 0, whiteSpace: 'nowrap',
+                                        lineHeight: '1',
+                                    }}
+                                >
+                                    取消
+                                </button>
+                                {/* 確認按鈕 */}
+                                {multiPoints.length > 0 && (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handlePointsConfirm(e as any); }}
+                                        style={{
+                                            background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                                            color: '#fff', border: 'none',
+                                            borderRadius: 9999, padding: '7px 18px',
+                                            fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                                            display: 'flex', alignItems: 'center', gap: 6,
+                                            boxShadow: '0 4px 12px rgba(124,58,237,0.35)',
+                                            transition: 'all 0.15s',
+                                        }}
+                                    >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            <polyline points="20 6 9 17 4 12"/>
+                                        </svg>
+                                        確認分割
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
+                        {/* A：拖曳中的矩形預覽 */}
                         {rectDrag && activeTool === 'rect' && (() => {
                             const x = Math.min(rectDrag.startX, rectDrag.curX) * 100;
                             const y = Math.min(rectDrag.startY, rectDrag.curY) * 100;
@@ -1141,6 +1351,76 @@ export function SemanticEditorView({
                             );
                         })()}
 
+                        {/* A：框選完成待確認 */}
+                        {pendingRect && activeTool === 'rect' && (
+                            <>
+                                {/* 框線 */}
+                                <div style={{
+                                    position: 'absolute',
+                                    left: `${pendingRect.x * 100}%`,
+                                    top: `${pendingRect.y * 100}%`,
+                                    width: `${pendingRect.w * 100}%`,
+                                    height: `${pendingRect.h * 100}%`,
+                                    border: '2px solid #7c3aed',
+                                    background: 'rgba(124,58,237,0.06)',
+                                    pointerEvents: 'none',
+                                    zIndex: 15,
+                                    boxSizing: 'border-box',
+                                    borderRadius: 4,
+                                }} />
+                                {/* 確認/取消按鈕 */}
+                                <div style={{
+                                    position: 'absolute',
+                                    left: `${(pendingRect.x + pendingRect.w) * 100}%`,
+                                    top: `${(pendingRect.y + pendingRect.h) * 100}%`,
+                                    transform: 'translate(-100%, 6px)',
+                                    zIndex: 20,
+                                    display: 'flex',
+                                    gap: 6,
+                                }}>
+                                    <button
+                                        onClick={() => {
+                                            const r = pendingRect;
+                                            setPendingRect(null);
+                                            addBoxLayer(r).catch(err =>
+                                                showToast(`❌ 框選失敗：${err?.message?.slice(0, 60) || ''}`)
+                                            );
+                                        }}
+                                        style={{
+                                            padding: '5px 12px',
+                                            borderRadius: 9999,
+                                            background: '#7c3aed',
+                                            color: '#fff',
+                                            border: 'none',
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            lineHeight: '1',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 2px 8px rgba(124,58,237,0.4)',
+                                        }}
+                                    >
+                                        開始分析
+                                    </button>
+                                    <button
+                                        onClick={() => setPendingRect(null)}
+                                        style={{
+                                            padding: '5px 10px',
+                                            borderRadius: 9999,
+                                            background: '#fff',
+                                            color: '#6b7280',
+                                            border: '1px solid #e5e7eb',
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            lineHeight: '1',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        取消
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
                         {/* B：多點標記 */}
                         {activeTool === 'points' && multiPoints.map((pt, i) => (
                             <div key={i} style={{
@@ -1157,38 +1437,26 @@ export function SemanticEditorView({
                             }} />
                         ))}
 
-                        {/* B：多點確認按鈕 */}
-                        {activeTool === 'points' && multiPoints.length > 0 && (
-                            <button
-                                onDoubleClick={handlePointsConfirm}
-                                onClick={handlePointsConfirm}
-                                style={{
-                                    position: 'absolute', bottom: 12, left: '50%',
-                                    transform: 'translateX(-50%)',
-                                    zIndex: 20,
-                                    background: '#22c55e', color: '#fff',
-                                    border: 'none', borderRadius: 8,
-                                    fontSize: 12, fontWeight: 700,
-                                    padding: '7px 16px', cursor: 'pointer',
-                                }}
-                            >
-                                ✓ 確認分割（{multiPoints.filter(p => p.label === 1).length} 前景 / {multiPoints.filter(p => p.label === 0).length} 背景）
-                            </button>
-                        )}
-                        {/* 分析中 overlay */}
+                        {/* 分析中 overlay — 與畫布 shimmer 一致 */}
                         {isLoading && (
-                            <div style={{
-                                position: 'absolute', inset: 0, zIndex: 15,
-                                background: 'rgba(255,255,255,0.75)',
-                                backdropFilter: 'blur(4px)',
-                                display: 'flex', flexDirection: 'column',
-                                alignItems: 'center', justifyContent: 'center',
-                                gap: 10,
-                            }}>
-                                <Ic.Spinner />
-                                <span style={{ fontSize: 12, fontWeight: 500, color: '#6b7280' }}>
-                                    {state.statusMessage || 'AI 分析中...'}
-                                </span>
+                            <div style={{ position: 'absolute', inset: 0, zIndex: 15, overflow: 'hidden' }}
+                                 className="pointer-events-none">
+                                {/* 暗色底層 */}
+                                <div className="absolute inset-0 bg-black/25" />
+                                {/* Shimmer 掃光 */}
+                                <div className="absolute inset-0 animate-shimmer" />
+                                {/* 中央 badge */}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="bg-white/90 backdrop-blur-md rounded-full px-2.5 py-1 flex items-center gap-1.5 shadow-lg">
+                                        <svg className="animate-spin h-3 w-3 text-gray-800 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                                        </svg>
+                                        <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">
+                                            AI 運算中
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -1197,15 +1465,18 @@ export function SemanticEditorView({
                             ref={imgRef}
                             src={state.compositeBase64}
                             alt="原圖"
+                            draggable={false}
+                            onDragStart={e => e.preventDefault()}
                             style={{
                                 display: 'block',
                                 maxWidth: '100%',
                                 maxHeight: 'calc(100vh - 180px)',
                                 objectFit: 'contain',
                                 userSelect: 'none',
+                                WebkitUserDrag: 'none',
                                 opacity: selectedLayer ? 0.5 : 1,
                                 transition: 'opacity 0.2s',
-                            }}
+                            } as React.CSSProperties}
                         />
 
                         {/* 選中層高亮（疊在暗化的原圖上） */}
@@ -1440,23 +1711,38 @@ function HoverHitArea({ layer, onSelect }: { layer: SmartLayer; onSelect: () => 
                 boxSizing: 'border-box',
             }}
         >
-            {h && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: -22,
-                    left: 0,
-                    background: '#3b82f6',
-                    color: '#fff',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    padding: '2px 6px',
-                    borderRadius: 4,
-                    whiteSpace: 'nowrap',
-                    pointerEvents: 'none',
-                }}>
-                    {CATEGORY_META[layer.category].label} · {layer.name}
-                </div>
-            )}
+            {h && (() => {
+                // 彈性定位：靠近底部邊緣時往上顯示，靠近右邊緣時靠右對齊
+                const nearBottom = layer.cropRatio.y + layer.cropRatio.h > 0.88;
+                const nearRight  = layer.cropRatio.x + layer.cropRatio.w > 0.75;
+                const posStyle: React.CSSProperties = nearBottom
+                    ? { top: -28 }
+                    : { bottom: -28 };
+                const alignStyle: React.CSSProperties = nearRight
+                    ? { right: 0 }
+                    : { left: 0 };
+                return (
+                    <div style={{
+                        position: 'absolute',
+                        ...posStyle,
+                        ...alignStyle,
+                        background: '#3b82f6',
+                        color: '#fff',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        padding: '3px 9px',
+                        borderRadius: 9999,
+                        whiteSpace: 'nowrap',
+                        pointerEvents: 'none',
+                        boxShadow: '0 1px 6px rgba(59,130,246,0.45)',
+                        letterSpacing: '0.02em',
+                        zIndex: 30,
+                        lineHeight: '1.5',
+                    }}>
+                        {CATEGORY_META[layer.category].label} · {layer.name}
+                    </div>
+                );
+            })()}
         </div>
     );
 }

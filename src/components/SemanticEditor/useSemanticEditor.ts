@@ -14,6 +14,7 @@ import type {
 import {
     segmentSemanticLayers, compositeSmartLayers, regenerateLayer,
     addLayerByClick, addLayerByBox, addLayerByPoints,
+    describeLayerWithGemini,
     type SAM2Point,
 } from './semanticLayerUtils';
 
@@ -93,7 +94,7 @@ export function useSemanticEditor({
         if (!falApiKey)    throw new Error('SAM2 分割需要 fal.ai API Key');
 
         analyzingRef.current = true;
-        setStatus('analyzing', '🔍 Gemini 分析圖片中...');
+        setStatus('analyzing', 'Gemini 分析圖片中...');
 
         try {
             const layers = await segmentSemanticLayers({
@@ -103,7 +104,7 @@ export function useSemanticEditor({
                 onProgress: msg => setStatus('segmenting', msg),
             });
 
-            setStatus('compositing', '🖼 合成預覽...');
+            setStatus('compositing', '合成預覽...');
             const composite = await compositeSmartLayers(originalBase64, layers);
 
             setState(s => ({
@@ -143,7 +144,7 @@ export function useSemanticEditor({
         // 建立新的 AbortController，使用者按取消時呼叫 abort()
         const ctrl = new AbortController();
         abortCtrlRef.current = ctrl;
-        setStatus('regenerating', `🎨 重新生成「${layer.name}」...`);
+        setStatus('regenerating', `重新生成「${layer.name}」...`);
 
         try {
             const result = await regenerateLayer({
@@ -162,7 +163,7 @@ export function useSemanticEditor({
             // Step 2：全部重新切割（Gemini + SAM2 從新合成圖重新分層）
             let freshLayers: SmartLayer[] = [];
             if (geminiApiKey && falApiKey) {
-                setStatus('segmenting', '✨ 重新分析新圖層...');
+                setStatus('segmenting', '重新分析圖層...');
                 try {
                     freshLayers = await segmentSemanticLayers({
                         imageBase64: result.newCompositeBase64,
@@ -241,7 +242,7 @@ export function useSemanticEditor({
         );
         if (dirtyLayers.length === 0) return;
 
-        setStatus('regenerating', `🎨 批次重繪 ${dirtyLayers.length} 個圖層...`);
+        setStatus('regenerating', `批次重繪 ${dirtyLayers.length} 個圖層...`);
 
         // 依序處理，每次 inpaint 的結果作為下一次的 base（視覺一致）
         let currentComposite = state.compositeBase64;
@@ -254,7 +255,7 @@ export function useSemanticEditor({
                 const latestLayer = currentLayers.find(l => l.id === layer.id) ?? layer;
 
                 setStatus('regenerating',
-                    `🎨 重繪 ${i + 1}/${dirtyLayers.length}：${latestLayer.name}...`
+                    `重繪 ${i + 1}/${dirtyLayers.length}：${latestLayer.name}...`
                 );
 
                 const result = await regenerateLayer({
@@ -292,7 +293,7 @@ export function useSemanticEditor({
             // 所有 inpaint 完成，重新切割全部圖層
             let finalLayers = currentLayers;
             if (geminiApiKey && falApiKey) {
-                setStatus('segmenting', '✨ 重新分析新圖層...');
+                setStatus('segmenting', '重新分析圖層...');
                 try {
                     finalLayers = await segmentSemanticLayers({
                         imageBase64: currentComposite,
@@ -361,7 +362,7 @@ export function useSemanticEditor({
     const addClickLayer = useCallback(async (clickPixel: { x: number; y: number }) => {
         if (!falApiKey) throw new Error('SAM2 需要 fal.ai API Key');
 
-        setStatus('segmenting', '🎯 SAM2 分割點選物件...');
+        setStatus('segmenting', 'SAM2 點選分割...');
         try {
             const newLayer = await addLayerByClick({
                 imageBase64: originalBase64,
@@ -370,6 +371,16 @@ export function useSemanticEditor({
                 onProgress: msg => setStatus('segmenting', msg),
             });
 
+            // Gemini 非同步生成描述（不阻塞圖層顯示）
+            if (geminiApiKey) {
+                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
+                    if (desc) setState(s => ({
+                        ...s,
+                        layers: s.layers.map(l => l.id === newLayer.id
+                            ? { ...l, prompt: desc, appliedPrompt: desc } : l),
+                    }));
+                });
+            }
             setState(s => {
                 const updated = [...s.layers, newLayer];
                 compositeSmartLayers(s.originalBase64, updated).then(composite => {
@@ -392,7 +403,7 @@ export function useSemanticEditor({
     // ── A：矩形框選新增圖層 ──────────────────────────────────────────────────
     const addBoxLayer = useCallback(async (boxRatio: { x: number; y: number; w: number; h: number }) => {
         if (!falApiKey) throw new Error('SAM2 需要 fal.ai API Key');
-        setStatus('segmenting', '🎯 SAM2 框選分割...');
+        setStatus('segmenting', 'SAM2 框選分割...');
         try {
             const newLayer = await addLayerByBox({
                 imageBase64: originalBase64,
@@ -400,6 +411,15 @@ export function useSemanticEditor({
                 boxRatio,
                 onProgress: msg => setStatus('segmenting', msg),
             });
+            if (geminiApiKey) {
+                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
+                    if (desc) setState(s => ({
+                        ...s,
+                        layers: s.layers.map(l => l.id === newLayer.id
+                            ? { ...l, prompt: desc, appliedPrompt: desc } : l),
+                    }));
+                });
+            }
             setState(s => {
                 const updated = [...s.layers, newLayer];
                 compositeSmartLayers(s.originalBase64, updated).then(c =>
@@ -408,12 +428,12 @@ export function useSemanticEditor({
                 return { ...s, layers: updated, selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
             });
         } catch (e) { setStatus('idle', ''); throw e; }
-    }, [originalBase64, falApiKey, setStatus]);
+    }, [originalBase64, falApiKey, geminiApiKey, setStatus]);
 
     // ── B：多點模式新增圖層 ──────────────────────────────────────────────────
     const addPointsLayer = useCallback(async (points: SAM2Point[]) => {
         if (!falApiKey) throw new Error('SAM2 需要 fal.ai API Key');
-        setStatus('segmenting', '🎯 SAM2 多點分割...');
+        setStatus('segmenting', 'SAM2 多點分割...');
         try {
             const newLayer = await addLayerByPoints({
                 imageBase64: originalBase64,
@@ -421,6 +441,15 @@ export function useSemanticEditor({
                 points,
                 onProgress: msg => setStatus('segmenting', msg),
             });
+            if (geminiApiKey) {
+                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
+                    if (desc) setState(s => ({
+                        ...s,
+                        layers: s.layers.map(l => l.id === newLayer.id
+                            ? { ...l, prompt: desc, appliedPrompt: desc } : l),
+                    }));
+                });
+            }
             setState(s => {
                 const updated = [...s.layers, newLayer];
                 compositeSmartLayers(s.originalBase64, updated).then(c =>
@@ -429,7 +458,7 @@ export function useSemanticEditor({
                 return { ...s, layers: updated, selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
             });
         } catch (e) { setStatus('idle', ''); throw e; }
-    }, [originalBase64, falApiKey, setStatus]);
+    }, [originalBase64, falApiKey, geminiApiKey, setStatus]);
 
     // ── 切換可見性 ───────────────────────────────────────────────────────────
     const toggleVisibility = useCallback((layerId: string) => {
