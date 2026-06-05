@@ -162,6 +162,14 @@ export function useSemanticEditor({
         }));
     }, []);
 
+    // ── 更新參考圖 ────────────────────────────────────────────────────────────
+    const updateReferenceImage = useCallback((layerId: string, referenceImage: string | undefined) => {
+        setState(s => ({
+            ...s,
+            layers: s.layers.map(l => l.id === layerId ? { ...l, referenceImage } : l),
+        }));
+    }, []);
+
     // ── 單層 Apply（inpaint → 全部重新切割）────────────────────────────────
     const applyLayerRegen = useCallback(async (layer: SmartLayer) => {
         if (!atlasApiKey) throw new Error('Apply 需要 Atlas（GPT Image 2）API Key');
@@ -181,6 +189,7 @@ export function useSemanticEditor({
                 falApiKey: falApiKey || undefined,
                 signal:    ctrl.signal,
                 onProgress: msg => { if (!cancelledRef.current) setStatus('regenerating', msg); },
+                referenceImage: layer.referenceImage,
             });
 
             // 使用者已按取消，忽略結果
@@ -610,6 +619,7 @@ export function useSemanticEditor({
         analyzeImage,
         selectLayer,
         updatePrompt,
+        updateReferenceImage,
         applyLayerRegen,
         applyAllDirtyLayers,
         switchVersion,

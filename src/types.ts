@@ -206,6 +206,8 @@ export interface SmartLayer {
   pixelWidth?: number;
   pixelHeight?: number;
 
+  /** 使用者上傳的參考圖（壓縮後 base64，傳給 Atlas inpaint） */
+  referenceImage?: string;
   /** 歷次重生成的快照（最新在最後） */
   history: SmartLayerVersion[];
   isVisible: boolean;

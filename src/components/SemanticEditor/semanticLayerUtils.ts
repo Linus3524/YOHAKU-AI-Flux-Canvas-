@@ -901,6 +901,8 @@ export interface RegenerateLayerOptions {
     falApiKey?: string;
     signal?: AbortSignal;         // ← 傳入後可中止 Atlas 輪詢
     onProgress?: (msg: string) => void;
+    /** 使用者上傳的參考圖（已壓縮 base64） */
+    referenceImage?: string;
 }
 
 /**
@@ -923,6 +925,7 @@ export async function regenerateLayer({
     falApiKey,
     signal,
     onProgress,
+    referenceImage,
 }: RegenerateLayerOptions): Promise<{
     newLayerBase64: string;
     newCropRatio: SmartLayer['cropRatio'];
@@ -961,7 +964,7 @@ export async function regenerateLayer({
         compOrig,
         compMask,
         atlasApiKey,
-        undefined,   // referenceImages
+        referenceImage ? [referenceImage] : undefined,
         undefined,   // surroundingContext
         signal,      // AbortSignal → 取消後立即停止輪詢
     );
