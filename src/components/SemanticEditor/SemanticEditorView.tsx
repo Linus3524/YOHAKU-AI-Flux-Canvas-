@@ -861,6 +861,34 @@ export function SemanticEditorView({
 
     // HUD 拖曳狀態
     const [hudPos, setHudPos] = useState<{ x: number; y: number } | null>(null);
+    const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number } | null>(null);
+    const toolbarDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+    const toolbarRef = useRef<HTMLDivElement>(null);
+
+    const handleToolbarMouseDown = useCallback((e: React.MouseEvent) => {
+        if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+        e.preventDefault();
+        const rect = toolbarRef.current?.getBoundingClientRect();
+        toolbarDragRef.current = {
+            startX: e.clientX, startY: e.clientY,
+            origX: toolbarPos?.x ?? (rect ? rect.left + rect.width / 2 : window.innerWidth / 2),
+            origY: toolbarPos?.y ?? (rect ? rect.top + rect.height / 2 : window.innerHeight - 60),
+        };
+        const onMove = (ev: MouseEvent) => {
+            if (!toolbarDragRef.current) return;
+            setToolbarPos({
+                x: toolbarDragRef.current.origX + (ev.clientX - toolbarDragRef.current.startX),
+                y: toolbarDragRef.current.origY + (ev.clientY - toolbarDragRef.current.startY),
+            });
+        };
+        const onUp = () => {
+            toolbarDragRef.current = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, [toolbarPos]);
     const hudDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
     const hudRef = useRef<HTMLDivElement>(null);
 
@@ -1565,14 +1593,24 @@ export function SemanticEditorView({
                     </div>
                 </div>
 
-                {/* 底部工具列（有版本列時上移讓出空間） */}
-                <div style={{
-                    position: 'absolute',
-                    bottom: state.versions.length > 0 ? 104 : 32,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    zIndex: 20,
-                }}>
+                {/* 工具列（可拖曳懸浮） */}
+                <div
+                    ref={toolbarRef}
+                    onMouseDown={handleToolbarMouseDown}
+                    style={toolbarPos ? {
+                        // 拖曳後：fixed 定位（相對視窗，可懸停任意位置）
+                        position: 'fixed',
+                        left: toolbarPos.x, top: toolbarPos.y,
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 20, cursor: 'grab', userSelect: 'none',
+                    } : {
+                        // 初始：absolute 定位（相對畫布容器，維持在圖片下方置中）
+                        position: 'absolute',
+                        bottom: state.versions.length > 0 ? 104 : 32,
+                        left: '50%', transform: 'translateX(-50%)',
+                        zIndex: 20, cursor: 'grab', userSelect: 'none',
+                    }}
+                >
                     <PillToolbar
                         activeTool={activeTool}
                         onTool={handleToolChange}

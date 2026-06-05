@@ -207,7 +207,7 @@ const App: React.FC = () => {
 
 
   // --- Semantic Editor state (handler defined later, after elements) ---
-  const [semanticEditorTarget, setSemanticEditorTarget] = useState<{ src: string; name: string } | null>(null);
+  const [semanticEditorTarget, setSemanticEditorTarget] = useState<{ src: string; name: string; elementId?: string } | null>(null);
 
   /**
    * 保留每張圖片的語意編輯器狀態，key = element.src（base64 前 100 字元作為識別）
@@ -340,11 +340,34 @@ const App: React.FC = () => {
   const handleOpenSemanticEditor = useCallback((elementId: string) => {
     const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
     if (!el) return;
-    setSemanticEditorTarget({ src: el.src, name: el.name || '圖片' });
-  }, [elements]);
+    // 優先從 ImageElement.semanticState 讀取（跨電腦/檔案）
+    if (el.semanticState && !savedSemanticStates[el.src.slice(0, 80)]) {
+      setSavedSemanticStates(prev => ({ ...prev, [el.src.slice(0, 80)]: el.semanticState! }));
+    }
+    setSemanticEditorTarget({ src: el.src, name: el.name || '圖片', elementId });
+  }, [elements, savedSemanticStates]);
 
   /** key 用 src 前 80 字元（避免太長） */
   const semanticStateKey = (src: string) => src.slice(0, 80);
+
+  /** 把語意狀態同步寫回 ImageElement（方向 C：跟著圖片走，JSON/檔案都能帶走） */
+  const syncSemanticStateToElement = useCallback((
+    elementId: string | undefined,
+    state: { compositeBase64: string; backgroundBase64?: string; layers: import('./types').SmartLayer[]; originalLayers?: import('./types').SmartLayer[]; versions: import('./types').EditorVersion[] }
+  ) => {
+    if (!elementId) return;
+    setElements(prev => prev.map(el =>
+      el.id === elementId && el.type === 'image'
+        ? { ...el, semanticState: {
+            compositeBase64: state.compositeBase64,
+            backgroundBase64: state.backgroundBase64 ?? state.compositeBase64,
+            layers: state.layers,
+            originalLayers: state.originalLayers ?? state.layers,
+            versions: state.versions,
+          } } as ImageElement
+        : el
+    ));
+  }, [setElements]);
 
   /** 退出語意編輯器：save=true 保留紀錄，save=false 清除 */
   const handleCloseSemanticEditor = useCallback((
@@ -354,17 +377,20 @@ const App: React.FC = () => {
     if (save && savedState && semanticEditorTarget) {
       const key = semanticStateKey(semanticEditorTarget.src);
       setSavedSemanticStates(prev => ({ ...prev, [key]: savedState }));
+      // 同時寫回 ImageElement（持久化）
+      syncSemanticStateToElement(semanticEditorTarget.elementId, savedState);
     } else if (!save && semanticEditorTarget) {
-      // 清除這張圖的紀錄
       const key = semanticStateKey(semanticEditorTarget.src);
       setSavedSemanticStates(prev => {
         const next = { ...prev };
         delete next[key];
         return next;
       });
+      // 清除 ImageElement 上的語意狀態
+      syncSemanticStateToElement(semanticEditorTarget.elementId, { compositeBase64: semanticEditorTarget.src, layers: [], versions: [] });
     }
     setSemanticEditorTarget(null);
-  }, [semanticEditorTarget]);
+  }, [semanticEditorTarget, syncSemanticStateToElement]);
 
   // ── 存檔確認 Modal ──────────────────────────────────────────
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
@@ -2142,10 +2168,11 @@ const App: React.FC = () => {
           setElements(prev => [...prev, newEl]);
           cacheImage(newId, compositeBase64);
 
-          // 儲存當前編輯狀態（不關閉，讓使用者繼續作業）
+          // 儲存當前編輯狀態（記憶體 + ImageElement 持久化）
           if (currentState && semanticEditorTarget) {
             const key = semanticStateKey(semanticEditorTarget.src);
             setSavedSemanticStates(prev => ({ ...prev, [key]: currentState }));
+            syncSemanticStateToElement(semanticEditorTarget.elementId, currentState);
           }
 
           // 只顯示 toast，不關閉編輯器
