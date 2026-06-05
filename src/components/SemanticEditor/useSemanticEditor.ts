@@ -140,14 +140,10 @@ export function useSemanticEditor({
         if (!atlasApiKey) throw new Error('Apply 需要 Atlas（GPT Image 2）API Key');
 
         cancelledRef.current = false;
-        // 建立新的 AbortController，取消按鈕會呼叫 abort()
+        // 建立新的 AbortController，使用者按取消時呼叫 abort()
         const ctrl = new AbortController();
         abortCtrlRef.current = ctrl;
         setStatus('regenerating', `🎨 重新生成「${layer.name}」...`);
-
-        // 5 分鐘超時保護
-        const TIMEOUT_MS = 5 * 60 * 1000;
-        const timeoutId = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
 
         try {
             const result = await regenerateLayer({
@@ -159,7 +155,6 @@ export function useSemanticEditor({
                 signal:    ctrl.signal,
                 onProgress: msg => { if (!cancelledRef.current) setStatus('regenerating', msg); },
             });
-            clearTimeout(timeoutId);
 
             // 使用者已按取消，忽略結果
             if (cancelledRef.current) return;
@@ -226,7 +221,6 @@ export function useSemanticEditor({
             }));
 
         } catch (e: any) {
-            clearTimeout(timeoutId);
             abortCtrlRef.current = null;
             if (e?.name === 'AbortError' || e?.message === '使用者取消操作' || cancelledRef.current) {
                 setStatus('idle', '');
