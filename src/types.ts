@@ -148,3 +148,97 @@ export type BlendMode =
   | 'screen' | 'color-dodge'
   | 'overlay' | 'soft-light' | 'hard-light'
   | 'difference' | 'hue' | 'luminosity';
+
+// ── Semantic Editor（語意分層編輯器）──────────────────────────────────────────
+
+export type SmartLayerCategory = 'SUBJECT' | 'PRODUCT' | 'TEXT' | 'OBJECTS' | 'DECOR' | 'BACKGROUND';
+
+export interface SmartLayerBBox {
+  /** 0–1，相對於原圖寬高 */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface SmartLayerVersion {
+  id: string;
+  timestamp: number;
+  prompt: string;
+  base64: string;
+}
+
+export interface SmartLayer {
+  id: string;
+  name: string;
+  category: SmartLayerCategory;
+  /** 目前顯示的透明 PNG base64（trimTransparentPixels 後，已去透明邊） */
+  base64: string;
+  /** 第一次提取的原始版本（復原用） */
+  originalBase64: string;
+  /** 使用者可編輯的描述（Gemini 自動產生，也可手動改） */
+  prompt: string;
+  /** 上次 Apply 後的 prompt（用來判斷是否有未套用的修改） */
+  appliedPrompt: string;
+
+  /**
+   * Gemini 偵測框（0–1，相對原圖）—— UI 用途：BBox 選取框、hover 區域、Prompt 框定位
+   * 注意：這是 AI 估計值，邊界偏大，不能用於合成定位
+   */
+  bbox: SmartLayerBBox;
+
+  /**
+   * trimTransparentPixels 後的精確像素位置（0–1，相對原圖）—— 合成定位唯一依據
+   * 對應 LayerResult.cropRatioX/Y/W/H
+   * background 層：{ x:0, y:0, w:1, h:1 }
+   */
+  cropRatio: SmartLayerBBox;
+
+  /** trimmed PNG 的真實像素尺寸（用於計算正確縮放比例，避免變形） */
+  pixelWidth?: number;
+  pixelHeight?: number;
+
+  /** 歷次重生成的快照（最新在最後） */
+  history: SmartLayerVersion[];
+  isVisible: boolean;
+  isLocked: boolean;
+  /** 圖層排序（數字越大越上層） */
+  zIndex: number;
+}
+
+export type SemanticEditorStatus =
+  | 'idle'
+  | 'analyzing'    // Gemini 分析中
+  | 'segmenting'   // SAM2 去背中
+  | 'regenerating' // 單層重繪中
+  | 'compositing'  // 重新合成中
+  | 'exporting';
+
+/** 一個編輯版本（每次 Apply 產生新版本） */
+export interface EditorVersion {
+  id: string;
+  timestamp: number;
+  /** 這個版本修改了哪個圖層（顯示用） */
+  changedLayerName: string;
+  /** 使用的 prompt */
+  prompt: string;
+  /** 這個版本的完整合成圖 */
+  compositeBase64: string;
+  /** 這個版本的所有圖層 */
+  layers: SmartLayer[];
+}
+
+export interface SemanticEditorState {
+  /** 最原始上傳的圖片（不可修改，用於 baseline） */
+  originalBase64: string;
+  /** 目前顯示的合成圖 */
+  compositeBase64: string;
+  layers: SmartLayer[];
+  selectedLayerId: string | null;
+  status: SemanticEditorStatus;
+  statusMessage: string;
+  /** 版本歷史（v0 = 原始，最後一個 = 最新） */
+  versions: EditorVersion[];
+  /** 目前顯示的版本 index（-1 = 最新） */
+  activeVersionIndex: number;
+}

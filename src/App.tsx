@@ -34,7 +34,8 @@ import { birefnetRemoveBg } from './utils/geminiLayer';
 import { gptLayerSegment } from './utils/gptLayerSplit';
 import { detectTextBlocks } from './utils/ocrService';
 import { SVGExportModal } from './components/SVGExportModal';
-import type { 
+import { SemanticEditorView } from './components/SemanticEditor';
+import type {
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
@@ -205,6 +206,19 @@ const App: React.FC = () => {
 
 
 
+  // --- Semantic Editor state (handler defined later, after elements) ---
+  const [semanticEditorTarget, setSemanticEditorTarget] = useState<{ src: string; name: string } | null>(null);
+
+  /**
+   * 保留每張圖片的語意編輯器狀態，key = element.src（base64 前 100 字元作為識別）
+   * 退出時 save=true 就保留，下次開同一張圖可以繼續
+   */
+  const [savedSemanticStates, setSavedSemanticStates] = useState<Record<string, {
+    compositeBase64: string;
+    layers: import('./types').SmartLayer[];
+    versions: import('./types').EditorVersion[];
+  }>>({});
+
   // --- Generation Model (Gemini / GPT Image 2 / Seedream) ---
   const [generationModel, setGenerationModel] = useState<string>(
     () => localStorage.getItem('yohaku_gen_model') || 'gemini'
@@ -321,6 +335,36 @@ const App: React.FC = () => {
       storageStatus,
       clearStorage,
   } = useCanvas(showToast);
+
+  // --- Semantic Editor handler (needs elements) ---
+  const handleOpenSemanticEditor = useCallback((elementId: string) => {
+    const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
+    if (!el) return;
+    setSemanticEditorTarget({ src: el.src, name: el.name || '圖片' });
+  }, [elements]);
+
+  /** key 用 src 前 80 字元（避免太長） */
+  const semanticStateKey = (src: string) => src.slice(0, 80);
+
+  /** 退出語意編輯器：save=true 保留紀錄，save=false 清除 */
+  const handleCloseSemanticEditor = useCallback((
+    save: boolean,
+    savedState?: { compositeBase64: string; layers: import('./types').SmartLayer[]; versions: import('./types').EditorVersion[] }
+  ) => {
+    if (save && savedState && semanticEditorTarget) {
+      const key = semanticStateKey(semanticEditorTarget.src);
+      setSavedSemanticStates(prev => ({ ...prev, [key]: savedState }));
+    } else if (!save && semanticEditorTarget) {
+      // 清除這張圖的紀錄
+      const key = semanticStateKey(semanticEditorTarget.src);
+      setSavedSemanticStates(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+    setSemanticEditorTarget(null);
+  }, [semanticEditorTarget]);
 
   // ── 存檔確認 Modal ──────────────────────────────────────────
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
@@ -1342,10 +1386,11 @@ const App: React.FC = () => {
   }, [addImagesToCanvas]);
 
   return (
-    <main 
-        className={`relative w-screen h-screen bg-[#F5F5F7] font-sans text-[#1D1D1F] ${activeShapeTool ? 'cursor-crosshair' : ''}`} 
+    <>
+    <main
+        className={`relative w-screen h-screen bg-[#F5F5F7] font-sans text-[#1D1D1F] ${activeShapeTool ? 'cursor-crosshair' : ''}`}
         onClick={() => { setContextMenu(null); setShowStyleLibrary(false); }}
-        onMouseDown={handleCanvasMouseDown} 
+        onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleCanvasMouseMove}
         onMouseUp={handleCanvasMouseUp}
     >
@@ -1366,7 +1411,10 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <FloatingAssistant onCreateSticky={handleAiCreateSticky} onAskAI={handleAskAI} isHidden={isFocusMode} />
+      {/* 語意編輯器開啟時隱藏功能助手 */}
+      {!semanticEditorTarget && (
+        <FloatingAssistant onCreateSticky={handleAiCreateSticky} onAskAI={handleAskAI} isHidden={isFocusMode} />
+      )}
 
       {showKeyModal && (
           <ApiKeyModal
@@ -1707,7 +1755,7 @@ const App: React.FC = () => {
         onDragEnd={() => setIsDraggingOnCanvas(false)}
       />
 
-      {!isFocusMode && (
+      {!isFocusMode && !semanticEditorTarget && (
         <DraggableToolbar
             selectedElement={elements.find(e => e.id === selectedElementIds[0])}
             onAddNote={() => addNote()}
@@ -1743,8 +1791,8 @@ const App: React.FC = () => {
         />
       )}
       
-      {!isFocusMode && (
-        <LayerPanel 
+      {!isFocusMode && !semanticEditorTarget && (
+        <LayerPanel
             elements={elements}
             selectedElementIds={selectedElementIds}
             onSelect={(id, shiftKey) => {
@@ -2002,6 +2050,7 @@ const App: React.FC = () => {
             mergeLayers: handleMergeLayersOverride,
             extractPrompt: handleExtractPrompt,
             magicLayer: handleMagicLayer,
+            semanticEditor: handleOpenSemanticEditor,
             ocrConvert: handleOCRConvert,
             clearStorage: () => setShowClearConfirm(true),
           }}
@@ -2058,6 +2107,89 @@ const App: React.FC = () => {
         </div>
       )}
     </main>
+
+    {/* ── Semantic Editor（全螢幕 overlay）── */}
+    {semanticEditorTarget && (
+      <SemanticEditorView
+        originalBase64={semanticEditorTarget.src}
+        imageName={semanticEditorTarget.name}
+        onClose={handleCloseSemanticEditor}
+        initialState={savedSemanticStates[semanticStateKey(semanticEditorTarget.src)]}
+        onImportToCanvas={(compositeBase64: string) => {
+          // 以原圖的位置和大小，新增一個圖片元素到畫布
+          const origEl = elements.find(
+            e => e.type === 'image' && (e as ImageElement).src === semanticEditorTarget!.src
+          ) as ImageElement | undefined;
+
+          const newId = `semantic_result_${Date.now()}`;
+          const newEl: ImageElement = {
+            id:       newId,
+            type:     'image',
+            src:      compositeBase64,
+            name:     `${semanticEditorTarget!.name} (編輯版)`,
+            position: origEl
+              ? { x: origEl.position.x + (origEl.width ?? 400) + 40, y: origEl.position.y }
+              : { x: 200, y: 200 },
+            width:    origEl?.width  ?? 400,
+            height:   origEl?.height ?? 400,
+            rotation: 0,
+            zIndex:   elements.length + 1,
+            isVisible: true,
+            isLocked:  false,
+            groupId:   null,
+            opacity:   1,
+          };
+          setElements(prev => [...prev, newEl]);
+          cacheImage(newId, compositeBase64);
+          // 關閉編輯器並保留紀錄
+          handleCloseSemanticEditor(true, undefined);
+        }}
+        onImportLayersToCanvas={(smartLayers) => {
+          // 找到原圖在畫布上的 ImageElement（用來計算原位座標）
+          const origEl = elements.find(
+            e => e.type === 'image' && (e as ImageElement).src === semanticEditorTarget!.src
+          ) as ImageElement | undefined;
+          if (!origEl) return;
+
+          const origLeft = origEl.position.x - origEl.width  / 2;
+          const origTop  = origEl.position.y - origEl.height / 2;
+
+          const newEls: ImageElement[] = smartLayers.map((layer, i) => {
+            // cropRatio 是 0–1，相對原圖尺寸
+            const layerW = Math.round(layer.cropRatio.w * origEl.width);
+            const layerH = (layer.pixelWidth && layer.pixelHeight && layerW > 0)
+              ? Math.round(layerW * layer.pixelHeight / layer.pixelWidth)
+              : Math.round(layer.cropRatio.h * origEl.height);
+            // 在畫布上的中心點
+            const cx = origLeft + layer.cropRatio.x * origEl.width + layerW / 2;
+            const cy = origTop  + layer.cropRatio.y * origEl.height + layerH / 2;
+            const id  = `sem_layer_${Date.now()}_${i}`;
+            return {
+              id,
+              type: 'image',
+              src:  layer.base64,
+              name: layer.name,
+              position: { x: cx, y: cy },
+              width:    layerW,
+              height:   layerH,
+              rotation: 0,
+              zIndex:   origEl.zIndex + i + 1,
+              isVisible: true,
+              isLocked:  false,
+              groupId:   null,
+              opacity:   1,
+            } as ImageElement;
+          });
+
+          setElements(prev => [...prev, ...newEls]);
+          newEls.forEach(el => { if (el.src.startsWith('data:')) cacheImage(el.id, el.src); });
+        }}
+        geminiApiKey={effectiveApiKey || undefined}
+        atlasApiKey={atlasApiKey || undefined}
+        falApiKey={falApiKey || undefined}
+      />
+    )}
+    </>
   );
 };
 

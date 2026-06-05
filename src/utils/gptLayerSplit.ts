@@ -43,6 +43,8 @@ interface DetectedObject {
     edgeComplexity: 'simple' | 'complex';
     /** 在原圖中的相對位置（0~1 比例），用於回貼定位 */
     bbox: { x: number; y: number; w: number; h: number };
+    /** Gemini 自動描述（語意編輯器 Prompt 用） */
+    description?: string;
 }
 
 // ── withTimeout 包裹 ─────────────────────────────────────────────────────────
@@ -137,8 +139,14 @@ Pick the color that contrasts MOST with the element's dominant visible color:
 - "complex": fine/irregular edges needing AI matting (hair, fur, feathers, transparent glass, smoke, intricate cutouts)
 Note: objects with complex edges should prefer GRAY bgColor to signal AI-based removal.
 
+━━━ DESCRIPTION FIELD ━━━
+Also add a "description" field: a concise English visual description of the element (15-40 words).
+Describe: what it is, appearance, color, pose/state, any notable visual details.
+This will be used as an image generation prompt — be specific and visual.
+Example: "A young East Asian woman in her 20s wearing a white collared shirt, smiling, looking at camera, with long straight dark hair."
+
 Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
-[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85}}]`
+[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman wearing a white shirt, smiling at camera."}]`
                 }
             ]
         },
@@ -557,8 +565,12 @@ async function extractOneLayer(
             cropRatioH:  trimmed.cropRatioH,
             pixelWidth:  trimmed.pixelWidth,
             pixelHeight: trimmed.pixelHeight,
+            bboxW:       obj.bbox.w,
+            bboxH:       obj.bbox.h,
             name:        obj.label,
             category:    obj.category,
+            prompt:      obj.description,
+            bbox:        obj.bbox,
         };
     } catch (e) {
         console.warn(`[magicLayer] Skip "${obj.label}":`, e);

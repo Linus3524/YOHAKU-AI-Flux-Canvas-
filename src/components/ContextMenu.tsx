@@ -56,6 +56,7 @@ interface ContextMenuProps {
     mergeLayers: () => void; 
     extractPrompt: (elementId: string) => void;
     magicLayer: (elementId: string) => void;
+    semanticEditor: (elementId: string) => void;
     ocrConvert: (elementId: string) => void;
     clearStorage: () => void;
   };
@@ -386,6 +387,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                 <div className="border-t my-0.5 border-gray-100/50" />
                                 <MenuItem icon={<MenuIcons.Wand />} onClick={() => handleAction(() => actions.magicLayer(menuData.elementId!))}>
                                     魔法分層
+                                </MenuItem>
+                                <MenuItem
+                                    icon={<svg width={S.w} height={S.h} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={S.sw} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>}
+                                    onClick={() => handleAction(() => actions.semanticEditor(menuData.elementId!))}
+                                >
+                                    語意編輯器
                                 </MenuItem>
                                 <MenuItem icon={<MenuIcons.OCR />} onClick={() => handleAction(() => actions.ocrConvert(menuData.elementId!))}>
                                     文字辨識轉換

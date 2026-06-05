@@ -82,6 +82,10 @@ export interface LayerResult {
     name?: string;
     /** 設計分類標籤 */
     category?: string;
+    /** Gemini 生成的物件描述（供語意編輯器的 Prompt 欄位使用） */
+    prompt?: string;
+    /** Gemini 偵測的原始 bbox（0~1，相對整張原圖；語意編輯器定位用） */
+    bbox?: { x: number; y: number; w: number; h: number };
 }
 
 /**
