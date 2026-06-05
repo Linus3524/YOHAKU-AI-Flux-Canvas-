@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => {
         strictPort: true,
         host: '0.0.0.0',
       },
+      optimizeDeps: {
+        exclude: ['onnxruntime-web'],
+      },
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),

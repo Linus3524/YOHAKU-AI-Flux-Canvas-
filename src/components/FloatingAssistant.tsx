@@ -1,5 +1,9 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+    MODEL_CONFIGS, OnnxModelKey,
+    ModelStatus, getAllModelStatuses, downloadModel, deleteModel,
+} from '../utils/onnxModelCache';
 
 // ─── Feature Guide Data ───────────────────────────────────────────────────────
 const FEATURE_DOCS = [
@@ -103,7 +107,7 @@ const SHORTCUTS = [
 ];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Section = 'about' | 'features' | 'guide' | 'consultant' | 'security' | 'legal';
+type Section = 'about' | 'features' | 'guide' | 'consultant' | 'security' | 'legal' | 'local_models';
 
 interface ChatMessage {
   id: string;
@@ -150,6 +154,11 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; purple?: b
     label: '服務條款',
     icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
   },
+  {
+    id: 'local_models',
+    label: '本機 AI 模型',
+    icon: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+  },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -161,6 +170,40 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
   const hasMovedRef = useRef(false);
   const offsetRef = useRef({ x: 0, y: 0 });
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // 本機模型狀態
+  const [modelStatuses, setModelStatuses] = useState<Record<OnnxModelKey, ModelStatus>>({
+      lama: 'not_downloaded', sam2_encoder: 'not_downloaded', sam2_decoder: 'not_downloaded',
+  });
+  const [modelProgress, setModelProgress] = useState<Record<OnnxModelKey, number>>({
+      lama: 0, sam2_encoder: 0, sam2_decoder: 0,
+  });
+
+  // 開啟本機模型分頁時初始化狀態
+  useEffect(() => {
+      if (activeSection === 'local_models') {
+          getAllModelStatuses().then(setModelStatuses);
+      }
+  }, [activeSection]);
+
+  const handleDownload = useCallback(async (key: OnnxModelKey) => {
+      setModelStatuses(s => ({ ...s, [key]: 'downloading' }));
+      setModelProgress(p => ({ ...p, [key]: 0 }));
+      try {
+          await downloadModel(key, (pct) => {
+              setModelProgress(p => ({ ...p, [key]: pct }));
+          });
+          setModelStatuses(s => ({ ...s, [key]: 'ready' }));
+      } catch (e) {
+          setModelStatuses(s => ({ ...s, [key]: 'error' }));
+      }
+  }, []);
+
+  const handleDelete = useCallback(async (key: OnnxModelKey) => {
+      await deleteModel(key);
+      setModelStatuses(s => ({ ...s, [key]: 'not_downloaded' }));
+      setModelProgress(p => ({ ...p, [key]: 0 }));
+  }, []);
 
   // Chat State
   const [inputValue, setInputValue] = useState('');
@@ -872,6 +915,129 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     <p className="leading-relaxed text-gray-600 text-xs">本條款之解釋與適用，以日本國法律為準。因本服務產生之爭議，雙方合意以東京地方裁判所為第一審專屬合意管轄法院。</p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* ── 本機 AI 模型 ── */}
+            {activeSection === 'local_models' && (
+              <div className="p-6 space-y-4">
+                <h2 className="text-xl font-bold text-yohaku-text-main" style={{ fontFamily: "'Noto Serif JP', serif" }}>
+                  本機 AI 模型
+                </h2>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  下載後儲存在瀏覽器（IndexedDB），之後離線也可使用。無需 API Key，推論完全在您的裝置上執行。
+                </p>
+
+                {/* SAM 2（兩個模型合在一起顯示） */}
+                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[13px] font-bold text-gray-900">SAM 2 Tiny（點選物件分割）</span>
+                        {modelStatuses.sam2_encoder === 'ready' && modelStatuses.sam2_decoder === 'ready' && (
+                          <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">已安裝</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-500">替代 fal.ai SAM2，點選圖片任意物件即時分割。共 ~40MB（Encoder 30MB + Decoder 10MB）。</p>
+                    </div>
+                  </div>
+
+                  {(['sam2_encoder', 'sam2_decoder'] as OnnxModelKey[]).map(key => {
+                    const cfg = MODEL_CONFIGS[key];
+                    const status = modelStatuses[key];
+                    const progress = modelProgress[key];
+                    return (
+                      <div key={key} className="flex items-center gap-3 pl-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between text-[11px] mb-1">
+                            <span className="text-gray-600 font-medium">{cfg.name}</span>
+                            <span className="text-gray-400">{cfg.sizeMB}MB</span>
+                          </div>
+                          {status === 'downloading' && (
+                            <div className="w-full bg-gray-100 rounded-full h-1.5">
+                              <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                            </div>
+                          )}
+                        </div>
+                        {status === 'not_downloaded' && (
+                          <button onClick={() => handleDownload(key)}
+                            className="text-[11px] font-semibold px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors flex-shrink-0">
+                            下載
+                          </button>
+                        )}
+                        {status === 'downloading' && (
+                          <span className="text-[11px] text-blue-500 font-medium flex-shrink-0">{progress}%</span>
+                        )}
+                        {status === 'ready' && (
+                          <button onClick={() => handleDelete(key)}
+                            className="text-[11px] text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
+                            刪除
+                          </button>
+                        )}
+                        {status === 'error' && (
+                          <button onClick={() => handleDownload(key)}
+                            className="text-[11px] text-red-500 font-medium flex-shrink-0">
+                            重試
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* LaMa */}
+                {(['lama'] as OnnxModelKey[]).map(key => {
+                  const cfg = MODEL_CONFIGS[key];
+                  const status = modelStatuses[key];
+                  const progress = modelProgress[key];
+                  return (
+                    <div key={key} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-[13px] font-bold text-gray-900">{cfg.name}</span>
+                            {status === 'ready' && (
+                              <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">已安裝</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-gray-500 mb-2">{cfg.description}（~{cfg.sizeMB}MB）</p>
+                          {status === 'downloading' && (
+                            <div className="w-full bg-gray-100 rounded-full h-1.5">
+                              <div className="bg-purple-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-shrink-0">
+                          {status === 'not_downloaded' && (
+                            <button onClick={() => handleDownload(key)}
+                              className="text-[11px] font-semibold px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors">
+                              下載
+                            </button>
+                          )}
+                          {status === 'downloading' && (
+                            <span className="text-[11px] text-purple-500 font-medium">{progress}%</span>
+                          )}
+                          {status === 'ready' && (
+                            <button onClick={() => handleDelete(key)}
+                              className="text-[11px] text-gray-400 hover:text-red-500 transition-colors">
+                              刪除
+                            </button>
+                          )}
+                          {status === 'error' && (
+                            <button onClick={() => handleDownload(key)}
+                              className="text-[11px] text-red-500 font-medium">
+                              重試
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <p className="text-[10px] text-gray-400 text-center pt-2">
+                  模型儲存於瀏覽器 IndexedDB，清除瀏覽器資料時會一併移除
+                </p>
               </div>
             )}
 

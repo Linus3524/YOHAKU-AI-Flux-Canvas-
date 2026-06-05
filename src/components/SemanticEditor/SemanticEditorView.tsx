@@ -7,6 +7,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useSemanticEditor, CATEGORY_META } from './useSemanticEditor';
 import type { SmartLayer, SmartLayerCategory } from '../../types';
+import { loadModel, getModelStatus } from '../../utils/onnxModelCache';
+import { computeSAM2Embedding, runSAM2Decoder, type SAM2Embedding } from '../../utils/sam2Onnx';
+import type * as OrtType from 'onnxruntime-web';
 
 // ─── SVG 圖示 ──────────────────────────────────────────────────────────────────
 const Ic = {
@@ -817,6 +820,68 @@ export function SemanticEditorView({
     const [activeTool, setActiveTool] = useState('select');
     const [sam2Mode, setSam2Mode] = useState(false);
     const imgRef = useRef<HTMLImageElement>(null);
+
+    // ── ONNX SAM2 ──────────────────────────────────────────────────────────────
+    const [useOnnxSAM2, setUseOnnxSAM2] = useState(false);
+    const [onnxSAM2Ready, setOnnxSAM2Ready] = useState(false);
+    const onnxEncoderRef = useRef<OrtType.InferenceSession | null>(null);
+    const onnxDecoderRef = useRef<OrtType.InferenceSession | null>(null);
+    const onnxEmbeddingRef = useRef<SAM2Embedding | null>(null);
+    const [onnxEmbeddingLoading, setOnnxEmbeddingLoading] = useState(false);
+
+    // 開啟時檢查 ONNX 模型是否已下載
+    useEffect(() => {
+        Promise.all([getModelStatus('sam2_encoder'), getModelStatus('sam2_decoder')])
+            .then(([enc, dec]) => setOnnxSAM2Ready(enc === 'ready' && dec === 'ready'));
+    }, []);
+
+    // 載入 ONNX sessions（切換到 ONNX 模式時）
+    const loadOnnxSessions = useCallback(async () => {
+        if (onnxEncoderRef.current && onnxDecoderRef.current) return; // 已載入
+        try {
+            showToast('載入 SAM2 ONNX 模型...');
+            const [enc, dec] = await Promise.all([
+                loadModel('sam2_encoder'),
+                loadModel('sam2_decoder'),
+            ]);
+            onnxEncoderRef.current = enc;
+            onnxDecoderRef.current = dec;
+            showToast('SAM2 本機模型已就緒 ✅');
+        } catch (e) {
+            showToast('❌ SAM2 ONNX 載入失敗，請先在浮動助手下載模型');
+            setUseOnnxSAM2(false);
+        }
+    }, []);
+
+    // 圖片載入後計算 embedding（ONNX 模式）
+    const computeOnnxEmbedding = useCallback(async () => {
+        if (!useOnnxSAM2 || !onnxEncoderRef.current || !state.compositeBase64) return;
+        setOnnxEmbeddingLoading(true);
+        try {
+            onnxEmbeddingRef.current = await computeSAM2Embedding(
+                onnxEncoderRef.current, state.compositeBase64
+            );
+        } catch (e) {
+            console.warn('[ONNX SAM2] Embedding 計算失敗', e);
+        } finally {
+            setOnnxEmbeddingLoading(false);
+        }
+    }, [useOnnxSAM2, state.compositeBase64]);
+
+    // 切換到 ONNX 模式時：載入模型 + 計算 embedding
+    useEffect(() => {
+        if (useOnnxSAM2) {
+            loadOnnxSessions().then(() => computeOnnxEmbedding());
+        }
+    }, [useOnnxSAM2]);
+
+    // compositeBase64 改變時重新計算 embedding
+    useEffect(() => {
+        if (useOnnxSAM2 && onnxEncoderRef.current) {
+            onnxEmbeddingRef.current = null; // 先清掉舊的
+            computeOnnxEmbedding();
+        }
+    }, [state.compositeBase64, useOnnxSAM2]);
     const [toastMsg, setToastMsg] = useState<string | null>(null);
 
     // 圖層多選
@@ -987,14 +1052,35 @@ export function SemanticEditorView({
     }, []);
 
     // SAM2 單點模式：click
-    const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const handleCanvasClick = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
         if (activeTool !== 'sam2' || isLoading) return;
         const c = getImgCoords(e);
         if (!c) return;
-        addClickLayer({ x: c.pixX, y: c.pixY }).catch(err =>
-            showToast(`❌ SAM2 點選失敗：${err?.message?.slice(0, 60) || ''}`)
-        );
-    }, [activeTool, isLoading, addClickLayer, showToast, getImgCoords]);
+
+        if (useOnnxSAM2) {
+            // ── ONNX 本機路徑 ──────────────────────────────────────────────
+            if (!onnxDecoderRef.current || !onnxEmbeddingRef.current) {
+                showToast('SAM2 ONNX 尚未就緒，請稍候...');
+                return;
+            }
+            try {
+                const maskBase64 = await runSAM2Decoder(onnxDecoderRef.current, onnxEmbeddingRef.current, {
+                    clickPoint: { x: c.pixX, y: c.pixY },
+                });
+                // 把 ONNX mask 轉成 fal.ai 相容的格式，走 addClickLayer 的後續流程
+                // 直接用 addLayerFromMask（需要新增，或者直接呼叫 semanticLayerUtils）
+                showToast('⚠️ ONNX SAM2 mask 取得成功，圖層整合開發中...');
+                console.log('[ONNX SAM2] mask 取得成功，base64 長度:', maskBase64.length);
+            } catch (err: any) {
+                showToast(`❌ ONNX SAM2 失敗：${err?.message?.slice(0, 60) || ''}`);
+            }
+        } else {
+            // ── fal.ai 路徑（原本） ────────────────────────────────────────
+            addClickLayer({ x: c.pixX, y: c.pixY }).catch(err =>
+                showToast(`❌ SAM2 點選失敗：${err?.message?.slice(0, 60) || ''}`)
+            );
+        }
+    }, [activeTool, isLoading, useOnnxSAM2, addClickLayer, showToast, getImgCoords]);
 
     // A：矩形框選
     const handleRectMouseDown = useCallback((e: React.MouseEvent) => {
@@ -1152,6 +1238,34 @@ export function SemanticEditorView({
                             <NavBtn title="匯入目前版本到畫布" onClick={() => onImportToCanvas(state.compositeBase64, { compositeBase64: state.compositeBase64, layers: state.layers, versions: state.versions })}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                             </NavBtn>
+                        )}
+                        {/* SAM2 模式切換（有 ONNX 模型才顯示） */}
+                        {onnxSAM2Ready && (
+                            <button
+                                onClick={async () => {
+                                    const next = !useOnnxSAM2;
+                                    setUseOnnxSAM2(next);
+                                    showToast(next ? '切換至本機 SAM2 (ONNX)' : '切換至 fal.ai SAM2');
+                                }}
+                                title={useOnnxSAM2 ? '目前：本機 ONNX（免費）— 點選切換至 fal.ai' : '目前：fal.ai SAM2（付費）— 點選切換至本機 ONNX'}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 5,
+                                    padding: '4px 10px', borderRadius: 9999,
+                                    border: `1px solid ${useOnnxSAM2 ? '#10b981' : '#d1d5db'}`,
+                                    background: useOnnxSAM2 ? '#ecfdf5' : '#f9fafb',
+                                    color: useOnnxSAM2 ? '#059669' : '#6b7280',
+                                    fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                    transition: 'all 0.15s',
+                                }}
+                            >
+                                <span style={{
+                                    width: 6, height: 6, borderRadius: '50%',
+                                    background: useOnnxSAM2 ? '#10b981' : '#9ca3af',
+                                    flexShrink: 0,
+                                }} />
+                                {useOnnxSAM2 ? '本機 SAM2' : 'fal.ai SAM2'}
+                                {onnxEmbeddingLoading && <span style={{ opacity: 0.6 }}>計算中...</span>}
+                            </button>
                         )}
                         <NavBtn title="匯出 PNG" onClick={handleExport}><Ic.Download /></NavBtn>
                         <NavBtn title="清除所有編輯紀錄並退出" onClick={handleDelete}><Ic.Trash /></NavBtn>
