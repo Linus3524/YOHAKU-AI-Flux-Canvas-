@@ -9,6 +9,7 @@ import { useSemanticEditor, CATEGORY_META } from './useSemanticEditor';
 import type { SmartLayer, SmartLayerCategory } from '../../types';
 import { loadModel, getModelStatus } from '../../utils/onnxModelCache';
 import { computeSAM2Embedding, runSAM2Decoder, type SAM2Embedding } from '../../utils/sam2Onnx';
+import { buildSmartLayerFromMask } from './semanticLayerUtils';
 import type * as OrtType from 'onnxruntime-web';
 
 // ─── SVG 圖示 ──────────────────────────────────────────────────────────────────
@@ -806,6 +807,8 @@ export function SemanticEditorView({
         addClickLayer,
         addBoxLayer,
         addPointsLayer,
+        addLayerFromMaskBase64,
+        setStatus,
         toggleVisibility,
         toggleLock,
         deleteLayer,
@@ -1063,15 +1066,22 @@ export function SemanticEditorView({
                 showToast('SAM2 ONNX 尚未就緒，請稍候...');
                 return;
             }
+            if (onnxEmbeddingLoading) {
+                showToast('SAM2 ONNX 計算 Embedding 中，請稍候...');
+                return;
+            }
             try {
-                const maskBase64 = await runSAM2Decoder(onnxDecoderRef.current, onnxEmbeddingRef.current, {
-                    clickPoint: { x: c.pixX, y: c.pixY },
-                });
-                // 把 ONNX mask 轉成 fal.ai 相容的格式，走 addClickLayer 的後續流程
-                // 直接用 addLayerFromMask（需要新增，或者直接呼叫 semanticLayerUtils）
-                showToast('⚠️ ONNX SAM2 mask 取得成功，圖層整合開發中...');
-                console.log('[ONNX SAM2] mask 取得成功，base64 長度:', maskBase64.length);
+                setStatus('segmenting', 'SAM2 本機推論中...');
+                const maskBase64 = await runSAM2Decoder(
+                    onnxDecoderRef.current,
+                    onnxEmbeddingRef.current,
+                    { clickPoint: { x: c.pixX, y: c.pixY } },
+                );
+                const newLayer = await buildSmartLayerFromMask(maskBase64);
+                // addLayerFromMaskBase64 是 hook 裡的通用接口
+                await addLayerFromMaskBase64(newLayer);
             } catch (err: any) {
+                setStatus('idle', '');
                 showToast(`❌ ONNX SAM2 失敗：${err?.message?.slice(0, 60) || ''}`);
             }
         } else {
@@ -1276,7 +1286,7 @@ export function SemanticEditorView({
                 {state.statusMessage && (
                     <div style={{
                         position: 'absolute',
-                        top: 64,
+                        top: 72,
                         left: '50%',
                         transform: 'translateX(-50%)',
                         zIndex: 40,
@@ -1806,7 +1816,7 @@ export function SemanticEditorView({
             {toastMsg && (
                 <div style={{
                     position: 'fixed',
-                    bottom: 32,
+                    top: 68,
                     left: '50%',
                     transform: 'translateX(-50%)',
                     zIndex: 100,

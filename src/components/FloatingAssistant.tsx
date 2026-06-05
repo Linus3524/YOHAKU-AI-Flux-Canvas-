@@ -938,7 +938,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">已安裝</span>
                         )}
                       </div>
-                      <p className="text-[11px] text-gray-500">替代 fal.ai SAM2，點選圖片任意物件即時分割。共 ~40MB（Encoder 30MB + Decoder 10MB）。</p>
+                      <p className="text-[11px] text-gray-500">替代 fal.ai SAM2，點選圖片任意物件即時分割。共 ~163MB（Encoder 148MB + Decoder 15MB）。支援 WebGPU 加速。</p>
                     </div>
                   </div>
 

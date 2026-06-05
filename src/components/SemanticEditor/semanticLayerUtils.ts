@@ -416,6 +416,39 @@ export async function segmentSemanticLayers({
     return layers;
 }
 
+// ─── 共用：透明 PNG → SmartLayer（ONNX 和 fal.ai 共用後半段）──────────────────
+
+export async function buildSmartLayerFromMask(
+    transparentPng: string,
+    layerName?: string,
+    category: SmartLayerCategory = 'OBJECTS',
+): Promise<SmartLayer> {
+    const trimmed = await trimTransparentPixels(transparentPng);
+    const cropRatio = {
+        x: trimmed.cropRatioX,
+        y: trimmed.cropRatioY,
+        w: trimmed.cropRatioW,
+        h: trimmed.cropRatioH,
+    };
+    return {
+        id:             `sl_mask_${Date.now()}`,
+        name:           layerName ?? `物件 ${new Date().toLocaleTimeString()}`,
+        category,
+        base64:         trimmed.base64,
+        originalBase64: trimmed.base64,
+        prompt:         layerName ?? '點選物件',
+        appliedPrompt:  layerName ?? '點選物件',
+        bbox:           cropRatio,
+        cropRatio,
+        pixelWidth:     trimmed.pixelWidth,
+        pixelHeight:    trimmed.pixelHeight,
+        history:        [],
+        isVisible:      true,
+        isLocked:       false,
+        zIndex:         99,
+    };
+}
+
 // ─── 手動點選新增圖層（使用者點圖片）────────────────────────────────────────
 
 export interface AddLayerByClickOptions {
@@ -444,37 +477,7 @@ export async function addLayerByClick({
         { clickPt: clickPixel },
     );
 
-    // 從 trimmed 的 cropRatio 推算 bbox（用 cropRatio 近似）
-    const trimmed = await trimTransparentPixels(transparentPng);
-    const approxBbox = {
-        x: trimmed.cropRatioX,
-        y: trimmed.cropRatioY,
-        w: trimmed.cropRatioW,
-        h: trimmed.cropRatioH,
-    };
-
-    return {
-        id:             `sl_click_${Date.now()}`,
-        name:           layerName ?? `物件 ${new Date().toLocaleTimeString()}`,
-        category:       'OBJECTS',
-        base64:         trimmed.base64,
-        originalBase64: trimmed.base64,
-        prompt:         layerName ?? '點選物件',
-        appliedPrompt:  layerName ?? '點選物件',
-        bbox:           approxBbox,
-        cropRatio: {
-            x: trimmed.cropRatioX,
-            y: trimmed.cropRatioY,
-            w: trimmed.cropRatioW,
-            h: trimmed.cropRatioH,
-        },
-        pixelWidth:  trimmed.pixelWidth,
-        pixelHeight: trimmed.pixelHeight,
-        history:     [],
-        isVisible:   true,
-        isLocked:    false,
-        zIndex:      99,   // 新點選的層放在最前
-    };
+    return buildSmartLayerFromMask(transparentPng, layerName);
 }
 
 // ─── A：矩形框選新增圖層 ────────────────────────────────────────────────────

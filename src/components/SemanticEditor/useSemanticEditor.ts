@@ -486,6 +486,35 @@ export function useSemanticEditor({
         } catch (e) { setStatus('idle', ''); throw e; }
     }, [state.compositeBase64, falApiKey, geminiApiKey, setStatus]);
 
+    // ── 通用：從已建好的 SmartLayer 加入（ONNX 路徑用）─────────────────────────
+    const addLayerFromMaskBase64 = useCallback(async (newLayer: SmartLayer) => {
+        // Gemini 非同步生成 prompt
+        if (geminiApiKey) {
+            describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
+                if (desc) setState(s => ({
+                    ...s,
+                    layers: s.layers.map(l => l.id === newLayer.id
+                        ? { ...l, prompt: desc, appliedPrompt: desc } : l),
+                }));
+            });
+        }
+        setState(s => {
+            const updated = [...s.layers, newLayer];
+            const onOriginal = s.activeVersionIndex === -1;
+            compositeSmartLayers(s.backgroundBase64, updated).then(c =>
+                setState(ss => ({ ...ss, compositeBase64: c }))
+            );
+            return {
+                ...s,
+                layers: updated,
+                originalLayers: onOriginal ? updated : s.originalLayers,
+                selectedLayerId: newLayer.id,
+                status: 'idle',
+                statusMessage: '',
+            };
+        });
+    }, [geminiApiKey, setStatus]);
+
     // ── 切換可見性 ───────────────────────────────────────────────────────────
     const toggleVisibility = useCallback((layerId: string) => {
         setState(s => {
@@ -574,6 +603,7 @@ export function useSemanticEditor({
         addClickLayer,
         addBoxLayer,
         addPointsLayer,
+        addLayerFromMaskBase64,
         toggleVisibility,
         toggleLock,
         deleteLayer,

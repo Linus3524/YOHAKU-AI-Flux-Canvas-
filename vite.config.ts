@@ -10,9 +10,8 @@ export default defineConfig(({ mode }) => {
         strictPort: true,
         host: '0.0.0.0',
       },
-      optimizeDeps: {
-        exclude: ['onnxruntime-web'],
-      },
+      // onnxruntime-web 讓 Vite 正常打包（不 exclude）
+      // WASM 檔案放 public/，JS glue 由 Vite bundle
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),

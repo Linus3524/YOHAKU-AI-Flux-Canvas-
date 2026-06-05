@@ -3,11 +3,13 @@
  * 首次下載後存入 IndexedDB，之後直接從快取載入（無需重新下載）
  */
 import { get, set, del } from 'idb-keyval';
-import * as ort from 'onnxruntime-web';
+import * as ort from 'onnxruntime-web/all';  // 需要 all bundle 含 WebGPU + WASM
 
-// 使用 single-thread WASM，不需要 COEP/COOP header
+// 從 CDN 載入 WASM + JS glue（解決 Vite 無法 bundle 動態 import 的問題）
+// 模型本體仍從 IndexedDB 載入，只有 ONNX Runtime 本身從 CDN 拿
 ort.env.wasm.numThreads = 1;
-ort.env.wasm.wasmPaths = '/';
+(ort.env.wasm as any).wasmPaths =
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/';
 
 export type OnnxModelKey = 'lama' | 'sam2_encoder' | 'sam2_decoder';
 
@@ -32,18 +34,18 @@ export const MODEL_CONFIGS: Record<OnnxModelKey, ModelConfig> = {
     sam2_encoder: {
         key: 'sam2_encoder',
         name: 'SAM 2 Encoder',
-        description: 'Segment Anything Model 2 — 圖片特徵提取',
-        url: 'https://huggingface.co/vietanhdev/segment-anything-2-onnx-models/resolve/main/sam2_hiera_tiny.encoder.onnx',
-        cacheKey: 'onnx_sam2_encoder_tiny_v1',
-        sizeMB: 30,
+        description: 'Segment Anything Model 2 — 圖片特徵提取（ORT 格式，已針對瀏覽器優化）',
+        url: 'https://huggingface.co/g-ronimo/sam2-tiny/resolve/main/sam2_hiera_tiny_encoder.with_runtime_opt.ort',
+        cacheKey: 'onnx_sam2_encoder_tiny_ort_v1',  // 新 key，觸發重新下載
+        sizeMB: 148,
     },
     sam2_decoder: {
         key: 'sam2_decoder',
         name: 'SAM 2 Decoder',
         description: 'Segment Anything Model 2 — 點選分割輸出',
-        url: 'https://huggingface.co/vietanhdev/segment-anything-2-onnx-models/resolve/main/sam2_hiera_tiny.decoder.onnx',
-        cacheKey: 'onnx_sam2_decoder_tiny_v1',
-        sizeMB: 10,
+        url: 'https://huggingface.co/g-ronimo/sam2-tiny/resolve/main/sam2_hiera_tiny_decoder.onnx',
+        cacheKey: 'onnx_sam2_decoder_tiny_ort_v1',  // 新 key，觸發重新下載
+        sizeMB: 15,
     },
 };
 
@@ -102,13 +104,17 @@ export async function downloadModel(
 export async function loadModel(key: OnnxModelKey): Promise<ort.InferenceSession> {
     const config = MODEL_CONFIGS[key];
     const cached = await get<ArrayBuffer>(config.cacheKey);
-    if (!cached) throw new Error(`模型 ${config.name} 尚未下載，請先下載`);
+    if (!cached) throw new Error(`模型 ${config.name} 尚未下載，請先在「本機 AI 模型」下載`);
 
-    return ort.InferenceSession.create(cached, {
-        executionProviders: ['wasm'],
-        // single-thread，不需要 COEP/COOP header
-        graphOptimizationLevel: 'basic',
-    });
+    try {
+        // 先試 WebGPU（快），不支援則 fallback WASM
+        return await ort.InferenceSession.create(cached, {
+            executionProviders: ['webgpu', 'wasm'],
+        });
+    } catch (e) {
+        console.error(`[ONNX] 載入 ${config.name} 失敗:`, e);
+        throw new Error(`ONNX 模型初始化失敗：${(e as Error).message?.slice(0, 80) || '未知錯誤'}`);
+    }
 }
 
 /** 刪除快取（釋放 IndexedDB 空間） */
