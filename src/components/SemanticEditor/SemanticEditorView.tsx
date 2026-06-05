@@ -229,11 +229,13 @@ function LayerThumb({
 function RightPanel({
     layers,
     originalBase64,
+    compositeBase64,
     selectedLayerId,
     onSelect,
     onToggleVisibility,
     onToggleLock,
     onDeleteLayer,
+    onRenameLayer,
     imageName,
     dirtyCount,
     onApplyAll,
@@ -246,11 +248,13 @@ function RightPanel({
 }: {
     layers: SmartLayer[];
     originalBase64: string;
+    compositeBase64: string;   // 目前版本的合成圖（頂部主圖縮圖用）
     selectedLayerId: string | null;
     onSelect: (id: string | null) => void;
     onToggleVisibility: (id: string) => void;
     onToggleLock: (id: string) => void;
     onDeleteLayer: (id: string) => void;
+    onRenameLayer?: (id: string, name: string) => void;
     imageName: string;
     dirtyCount: number;
     onApplyAll: () => void;
@@ -323,7 +327,7 @@ function RightPanel({
             {/* 圖層列表 */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px', scrollbarWidth: 'none' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {/* 原圖行（永遠在頂部） */}
+                    {/* 主圖行（目前版本的合成圖，頂部顯示） */}
                     <LayerRow
                         label={imageName}
                         isSelected={selectedLayerId === null}
@@ -332,7 +336,7 @@ function RightPanel({
                         onToggleVisibility={() => {}}
                         thumb={
                             <img
-                                src={originalBase64}
+                                src={compositeBase64}
                                 alt=""
                                 style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
                             />
@@ -358,6 +362,7 @@ function RightPanel({
                             onDelete={() => onDeleteLayer(layer.id)}
                             onToggleCheck={() => onToggleCheck(layer.id)}
                             onDownload={() => onDownloadLayer(layer)}
+                            onRename={onRenameLayer ? (n) => onRenameLayer(layer.id, n) : undefined}
                             thumb={
                                 <LayerThumb
                                     layer={layer}
@@ -435,6 +440,7 @@ function LayerRow({
     onDelete,
     onToggleCheck,
     onDownload,
+    onRename,
     thumb,
 }: {
     label: string;
@@ -449,9 +455,26 @@ function LayerRow({
     onDelete?: () => void;
     onToggleCheck?: () => void;
     onDownload?: () => void;
+    onRename?: (newName: string) => void;
     thumb: React.ReactNode;
 }) {
     const [hovered, setHovered] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [editVal, setEditVal] = useState(label);
+    const inputRef = React.useRef<HTMLInputElement>(null);
+
+    const startEdit = (e: React.MouseEvent) => {
+        if (!onRename) return;
+        e.stopPropagation();
+        setEditVal(label);
+        setEditing(true);
+        setTimeout(() => { inputRef.current?.select(); }, 30);
+    };
+    const commitEdit = () => {
+        setEditing(false);
+        const trimmed = editVal.trim();
+        if (trimmed && trimmed !== label) onRename?.(trimmed);
+    };
     const iconBtn: React.CSSProperties = {
         color: '#9ca3af', border: 'none', background: 'none',
         cursor: 'pointer', padding: 2, display: 'flex', flexShrink: 0,
@@ -501,17 +524,40 @@ function LayerRow({
 
             {/* 名稱 + dirty 橘點 */}
             <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{
-                    fontSize: 13,
-                    fontWeight: isSelected ? 700 : 500,
-                    color: isSelected ? '#111827' : '#374151',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    minWidth: 0,
-                }}>
-                    {label}
-                </span>
+                {editing ? (
+                    <input
+                        ref={inputRef}
+                        value={editVal}
+                        onChange={e => setEditVal(e.target.value)}
+                        onBlur={commitEdit}
+                        onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(false); }}
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            fontSize: 13, fontWeight: 700, color: '#111827',
+                            border: '1.5px solid #7c3aed', borderRadius: 6,
+                            padding: '1px 6px', outline: 'none', width: '100%',
+                            background: '#fff',
+                        }}
+                        autoFocus
+                    />
+                ) : (
+                    <span
+                        style={{
+                            fontSize: 13,
+                            fontWeight: isSelected ? 700 : 500,
+                            color: isSelected ? '#111827' : '#374151',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            minWidth: 0,
+                            cursor: onRename ? 'text' : undefined,
+                        }}
+                        onDoubleClick={startEdit}
+                        title={onRename ? '雙擊改名' : undefined}
+                    >
+                        {label}
+                    </span>
+                )}
                 {isDirty && (
                     <span
                         title="提示詞已修改，尚未套用"
@@ -723,8 +769,8 @@ interface SemanticEditorViewProps {
         layers: import('../../types').SmartLayer[];
         versions: import('../../types').EditorVersion[];
     };
-    /** 匯入合成結果到畫布 */
-    onImportToCanvas?: (compositeBase64: string) => void;
+    /** 匯入合成結果到畫布（同時傳當前 state 供外部儲存） */
+    onImportToCanvas?: (compositeBase64: string, currentState: { compositeBase64: string; layers: import('../../types').SmartLayer[]; versions: import('../../types').EditorVersion[] }) => void;
     /** 匯入選取的個別圖層到畫布（原位放置） */
     onImportLayersToCanvas?: (layers: import('../../types').SmartLayer[]) => void;
     geminiApiKey?: string;
@@ -761,6 +807,8 @@ export function SemanticEditorView({
         toggleLock,
         deleteLayer,
         resetLayer,
+        renameLayer,
+        renameVersion,
         dirtyCount,
         applyAllDirtyLayers,
     } = useSemanticEditor({ originalBase64, geminiApiKey, atlasApiKey, falApiKey, initialState });
@@ -1073,7 +1121,7 @@ export function SemanticEditorView({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16, color: '#9ca3af' }}>
                         {/* 匯入畫布 icon（有版本才顯示，和其他 NavBtn 統一風格） */}
                         {onImportToCanvas && state.versions.length > 0 && (
-                            <NavBtn title="匯入目前版本到畫布" onClick={() => onImportToCanvas(state.compositeBase64)}>
+                            <NavBtn title="匯入目前版本到畫布" onClick={() => onImportToCanvas(state.compositeBase64, { compositeBase64: state.compositeBase64, layers: state.layers, versions: state.versions })}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                             </NavBtn>
                         )}
@@ -1539,11 +1587,13 @@ export function SemanticEditorView({
             <RightPanel
                 layers={state.layers}
                 originalBase64={originalBase64}
+                compositeBase64={state.compositeBase64}
                 selectedLayerId={state.selectedLayerId}
                 onSelect={selectLayer}
                 onToggleVisibility={toggleVisibility}
                 onToggleLock={toggleLock}
                 onDeleteLayer={deleteLayer}
+                onRenameLayer={renameLayer}
                 imageName={imageName}
                 dirtyCount={dirtyCount}
                 onApplyAll={handleApplyAll}
@@ -1592,9 +1642,7 @@ export function SemanticEditorView({
                             thumbnailBase64={ver.compositeBase64}
                             isActive={state.activeVersionIndex === i}
                             onClick={() => switchVersion(i)}
-                            onImport={onImportToCanvas
-                                ? () => onImportToCanvas(ver.compositeBase64)
-                                : undefined}
+                            onRename={(n) => renameVersion(i, n)}
                         />
                     ))}
 
@@ -1629,9 +1677,26 @@ export function SemanticEditorView({
 
 // ─── 版本縮圖 ─────────────────────────────────────────────────────────────────
 function VersionThumb({
-    label, thumbnailBase64, isActive, onClick, onImport,
-}: { label: string; thumbnailBase64: string; isActive: boolean; onClick: () => void; onImport?: () => void }) {
+    label, thumbnailBase64, isActive, onClick, onRename,
+}: { label: string; thumbnailBase64: string; isActive: boolean; onClick: () => void; onImport?: () => void; onRename?: (n: string) => void }) {
     const [hovered, setHovered] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [editVal, setEditVal] = useState(label);
+    const inputRef = React.useRef<HTMLInputElement>(null);
+
+    const startEdit = (e: React.MouseEvent) => {
+        if (!onRename) return;
+        e.stopPropagation();
+        setEditVal(label);
+        setEditing(true);
+        setTimeout(() => inputRef.current?.select(), 30);
+    };
+    const commitEdit = () => {
+        setEditing(false);
+        const t = editVal.trim();
+        if (t && t !== label) onRename?.(t);
+    };
+
     return (
         <div
             onMouseEnter={() => setHovered(true)}
@@ -1644,33 +1709,41 @@ function VersionThumb({
                     width: 56, height: 56, borderRadius: 8, overflow: 'hidden',
                     border: isActive ? '2.5px solid #7c3aed' : hovered ? '2px solid #c4b5fd' : '2px solid #e5e7eb',
                     boxShadow: isActive ? '0 0 0 3px rgba(124,58,237,0.15)' : 'none',
-                    transition: 'all 0.15s', position: 'relative',
+                    transition: 'all 0.15s',
                 }}
             >
                 <img src={thumbnailBase64} alt={label}
                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                {/* hover 時顯示匯入圖示 */}
-                {hovered && onImport && (
-                    <div
-                        onClick={e => { e.stopPropagation(); onImport(); }}
-                        title="匯入此版本到畫布"
-                        style={{
-                            position: 'absolute', inset: 0,
-                            background: 'rgba(17,24,39,0.6)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}
-                    >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-                    </div>
-                )}
             </div>
-            <span style={{
-                fontSize: 10, fontWeight: isActive ? 700 : 500,
-                color: isActive ? '#7c3aed' : '#6b7280',
-                maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center',
-            }}>
-                {label}
-            </span>
+            {editing ? (
+                <input
+                    ref={inputRef}
+                    value={editVal}
+                    onChange={e => setEditVal(e.target.value)}
+                    onBlur={commitEdit}
+                    onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(false); }}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                        fontSize: 10, fontWeight: 700, color: '#7c3aed',
+                        border: '1px solid #7c3aed', borderRadius: 4,
+                        padding: '1px 4px', outline: 'none', width: 64,
+                        textAlign: 'center', background: '#fff',
+                    }}
+                    autoFocus
+                />
+            ) : (
+                <span
+                    style={{
+                        fontSize: 10, fontWeight: isActive ? 700 : 500,
+                        color: isActive ? '#7c3aed' : '#6b7280',
+                        maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center',
+                    }}
+                    onDoubleClick={startEdit}
+                    title={onRename ? '雙擊改名' : undefined}
+                >
+                    {label}
+                </span>
+            )}
         </div>
     );
 }

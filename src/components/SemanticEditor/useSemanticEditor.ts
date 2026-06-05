@@ -50,14 +50,21 @@ export function useSemanticEditor({
     initialState,
 }: SemanticEditorOptions) {
 
+    // 初始時從 initialState 恢復，backgroundBase64 預設用 originalBase64
+    const initBackground = initialState?.versions?.length
+        ? (initialState.versions[initialState.versions.length - 1].backgroundBase64 ?? originalBase64)
+        : originalBase64;
+
     const [state, setState] = useState<SemanticEditorState>(() => ({
         originalBase64,
-        compositeBase64: initialState?.compositeBase64 ?? originalBase64,
-        layers:          initialState?.layers          ?? [],
-        selectedLayerId: null,
-        status:          'idle',
-        statusMessage:   '',
-        versions:        initialState?.versions        ?? [],
+        compositeBase64:    initialState?.compositeBase64 ?? originalBase64,
+        backgroundBase64:   initBackground,
+        layers:             initialState?.layers          ?? [],
+        originalLayers:     initialState?.layers          ?? [],
+        selectedLayerId:    null,
+        status:             'idle',
+        statusMessage:      '',
+        versions:           initialState?.versions        ?? [],
         activeVersionIndex: initialState ? (initialState.versions.length - 1) : -1,
     }));
 
@@ -110,10 +117,14 @@ export function useSemanticEditor({
             setState(s => ({
                 ...s,
                 layers,
+                originalLayers:  layers,
                 compositeBase64: composite,
+                backgroundBase64: s.originalBase64,   // 分析後底圖 = 原始圖
                 selectedLayerId: null,
                 status: 'idle',
                 statusMessage: '',
+                versions: [],
+                activeVersionIndex: -1,
             }));
         } catch (e) {
             analyzingRef.current = false;
@@ -202,18 +213,21 @@ export function useSemanticEditor({
             }
 
             // Step 3：建立新版本
+            // backgroundBase64 = GPT inpaint 的輸出（新的底圖，物件已被重繪進背景）
             const newVersion: EditorVersion = {
                 id:               `ev_${Date.now()}`,
                 timestamp:        Date.now(),
                 changedLayerName: layer.name,
                 prompt:           layer.prompt,
                 compositeBase64:  result.newCompositeBase64,
+                backgroundBase64: result.newCompositeBase64,
                 layers:           freshLayers,
             };
 
             setState(s => ({
                 ...s,
                 compositeBase64:    result.newCompositeBase64,
+                backgroundBase64:   result.newCompositeBase64,   // 新底圖
                 layers:             freshLayers,
                 versions:           [...s.versions, newVersion],
                 activeVersionIndex: s.versions.length,
@@ -314,6 +328,7 @@ export function useSemanticEditor({
                 changedLayerName: changedNames,
                 prompt:           `批次修改：${changedNames}`,
                 compositeBase64:  currentComposite,
+                backgroundBase64: currentComposite,
                 layers:           finalLayers,
             };
 
@@ -341,6 +356,7 @@ export function useSemanticEditor({
             return {
                 ...s,
                 compositeBase64:    ver.compositeBase64,
+                backgroundBase64:   ver.backgroundBase64 ?? s.originalBase64,
                 layers:             ver.layers,
                 selectedLayerId:    null,
                 activeVersionIndex: index,
@@ -348,11 +364,12 @@ export function useSemanticEditor({
         });
     }, []);
 
-    // ── 切換回原始（v0）───────────────────────────────────────────────────────
     const switchToOriginal = useCallback(() => {
         setState(s => ({
             ...s,
             compositeBase64:    s.originalBase64,
+            backgroundBase64:   s.originalBase64,
+            layers:             s.originalLayers,
             selectedLayerId:    null,
             activeVersionIndex: -1,
         }));
@@ -363,9 +380,11 @@ export function useSemanticEditor({
         if (!falApiKey) throw new Error('SAM2 需要 fal.ai API Key');
 
         setStatus('segmenting', 'SAM2 點選分割...');
+        // 用目前版本的合成圖（非原始版本時應在新版圖上框選）
+        const workingImage = state.compositeBase64;
         try {
             const newLayer = await addLayerByClick({
-                imageBase64: originalBase64,
+                imageBase64: workingImage,
                 falApiKey,
                 clickPixel,
                 onProgress: msg => setStatus('segmenting', msg),
@@ -383,12 +402,15 @@ export function useSemanticEditor({
             }
             setState(s => {
                 const updated = [...s.layers, newLayer];
-                compositeSmartLayers(s.originalBase64, updated).then(composite => {
+                compositeSmartLayers(s.backgroundBase64, updated).then(composite => {
                     setState(ss => ({ ...ss, compositeBase64: composite }));
                 });
+                // 在原始版本時，同步更新 originalLayers 快照
+                const onOriginal = s.activeVersionIndex === -1;
                 return {
                     ...s,
                     layers: updated,
+                    originalLayers: onOriginal ? updated : s.originalLayers,
                     selectedLayerId: newLayer.id,
                     status: 'idle',
                     statusMessage: '',
@@ -398,15 +420,16 @@ export function useSemanticEditor({
             setStatus('idle', '');
             throw e;
         }
-    }, [originalBase64, falApiKey, setStatus]);
+    }, [state.compositeBase64, falApiKey, geminiApiKey, setStatus]);
 
     // ── A：矩形框選新增圖層 ──────────────────────────────────────────────────
     const addBoxLayer = useCallback(async (boxRatio: { x: number; y: number; w: number; h: number }) => {
         if (!falApiKey) throw new Error('SAM2 需要 fal.ai API Key');
         setStatus('segmenting', 'SAM2 框選分割...');
+        const workingImage = state.compositeBase64;
         try {
             const newLayer = await addLayerByBox({
-                imageBase64: originalBase64,
+                imageBase64: workingImage,
                 falApiKey,
                 boxRatio,
                 onProgress: msg => setStatus('segmenting', msg),
@@ -422,21 +445,23 @@ export function useSemanticEditor({
             }
             setState(s => {
                 const updated = [...s.layers, newLayer];
-                compositeSmartLayers(s.originalBase64, updated).then(c =>
+                const onOriginal = s.activeVersionIndex === -1;
+                compositeSmartLayers(s.backgroundBase64, updated).then(c =>
                     setState(ss => ({ ...ss, compositeBase64: c }))
                 );
-                return { ...s, layers: updated, selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
+                return { ...s, layers: updated, originalLayers: onOriginal ? updated : s.originalLayers, selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
             });
         } catch (e) { setStatus('idle', ''); throw e; }
-    }, [originalBase64, falApiKey, geminiApiKey, setStatus]);
+    }, [state.compositeBase64, falApiKey, geminiApiKey, setStatus]);
 
     // ── B：多點模式新增圖層 ──────────────────────────────────────────────────
     const addPointsLayer = useCallback(async (points: SAM2Point[]) => {
         if (!falApiKey) throw new Error('SAM2 需要 fal.ai API Key');
         setStatus('segmenting', 'SAM2 多點分割...');
+        const workingImage = state.compositeBase64;
         try {
             const newLayer = await addLayerByPoints({
-                imageBase64: originalBase64,
+                imageBase64: workingImage,
                 falApiKey,
                 points,
                 onProgress: msg => setStatus('segmenting', msg),
@@ -452,13 +477,14 @@ export function useSemanticEditor({
             }
             setState(s => {
                 const updated = [...s.layers, newLayer];
-                compositeSmartLayers(s.originalBase64, updated).then(c =>
+                const onOriginal = s.activeVersionIndex === -1;
+                compositeSmartLayers(s.backgroundBase64, updated).then(c =>
                     setState(ss => ({ ...ss, compositeBase64: c }))
                 );
-                return { ...s, layers: updated, selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
+                return { ...s, layers: updated, originalLayers: onOriginal ? updated : s.originalLayers, selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
             });
         } catch (e) { setStatus('idle', ''); throw e; }
-    }, [originalBase64, falApiKey, geminiApiKey, setStatus]);
+    }, [state.compositeBase64, falApiKey, geminiApiKey, setStatus]);
 
     // ── 切換可見性 ───────────────────────────────────────────────────────────
     const toggleVisibility = useCallback((layerId: string) => {
@@ -466,7 +492,7 @@ export function useSemanticEditor({
             const updated = s.layers.map(l =>
                 l.id === layerId ? { ...l, isVisible: !l.isVisible } : l
             );
-            compositeSmartLayers(s.originalBase64, updated).then(composite => {
+            compositeSmartLayers(s.backgroundBase64, updated).then(composite => {
                 setState(ss => ({ ...ss, compositeBase64: composite }));
             });
             return { ...s, layers: updated };
@@ -487,12 +513,14 @@ export function useSemanticEditor({
     const deleteLayer = useCallback((layerId: string) => {
         setState(s => {
             const updated = s.layers.filter(l => l.id !== layerId);
-            compositeSmartLayers(s.originalBase64, updated).then(composite => {
+            compositeSmartLayers(s.backgroundBase64, updated).then(composite => {
                 setState(ss => ({ ...ss, compositeBase64: composite }));
             });
+            const onOriginal = s.activeVersionIndex === -1;
             return {
                 ...s,
                 layers: updated,
+                originalLayers: onOriginal ? updated : s.originalLayers,
                 selectedLayerId: s.selectedLayerId === layerId ? null : s.selectedLayerId,
             };
         });
@@ -504,7 +532,7 @@ export function useSemanticEditor({
             const updated = s.layers.map(l =>
                 l.id === layerId ? { ...l, base64: l.originalBase64, history: [] } : l
             );
-            compositeSmartLayers(s.originalBase64, updated).then(composite => {
+            compositeSmartLayers(s.backgroundBase64, updated).then(composite => {
                 setState(ss => ({ ...ss, compositeBase64: composite }));
             });
             return { ...s, layers: updated };
@@ -513,6 +541,17 @@ export function useSemanticEditor({
 
     const selectedLayer = state.layers.find(l => l.id === state.selectedLayerId) ?? null;
     const isLoading     = state.status !== 'idle';
+
+    const renameLayer = useCallback((layerId: string, newName: string) => {
+        setState(s => ({ ...s, layers: s.layers.map(l => l.id === layerId ? { ...l, name: newName } : l) }));
+    }, []);
+
+    const renameVersion = useCallback((versionIndex: number, newLabel: string) => {
+        setState(s => ({
+            ...s,
+            versions: s.versions.map((v, i) => i === versionIndex ? { ...v, changedLayerName: newLabel } : v),
+        }));
+    }, []);
 
     // 有 prompt 已改但未套用的圖層
     const dirtyCount = state.layers.filter(
@@ -539,6 +578,8 @@ export function useSemanticEditor({
         toggleLock,
         deleteLayer,
         resetLayer,
+        renameLayer,
+        renameVersion,
         setStatus,
     };
 }

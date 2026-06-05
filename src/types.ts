@@ -224,6 +224,8 @@ export interface EditorVersion {
   prompt: string;
   /** 這個版本的完整合成圖 */
   compositeBase64: string;
+  /** 這個版本的底圖（去掉物件後的背景，用於圖層疊加） */
+  backgroundBase64: string;
   /** 這個版本的所有圖層 */
   layers: SmartLayer[];
 }
@@ -233,12 +235,16 @@ export interface SemanticEditorState {
   originalBase64: string;
   /** 目前顯示的合成圖 */
   compositeBase64: string;
+  /** 目前版本的底圖（圖層疊加用的背景） */
+  backgroundBase64: string;
   layers: SmartLayer[];
+  /** 「原始版本」的圖層快照 — 切回原始分頁時還原用（含手動新增的圖層） */
+  originalLayers: SmartLayer[];
   selectedLayerId: string | null;
   status: SemanticEditorStatus;
   statusMessage: string;
   /** 版本歷史（v0 = 原始，最後一個 = 最新） */
   versions: EditorVersion[];
-  /** 目前顯示的版本 index（-1 = 最新） */
+  /** 目前顯示的版本 index（-1 = 原始） */
   activeVersionIndex: number;
 }

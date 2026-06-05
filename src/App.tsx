@@ -2115,8 +2115,8 @@ const App: React.FC = () => {
         imageName={semanticEditorTarget.name}
         onClose={handleCloseSemanticEditor}
         initialState={savedSemanticStates[semanticStateKey(semanticEditorTarget.src)]}
-        onImportToCanvas={(compositeBase64: string) => {
-          // 以原圖的位置和大小，新增一個圖片元素到畫布
+        onImportToCanvas={(compositeBase64, currentState) => {
+          // 新增到畫布（原圖右側）
           const origEl = elements.find(
             e => e.type === 'image' && (e as ImageElement).src === semanticEditorTarget!.src
           ) as ImageElement | undefined;
@@ -2141,8 +2141,15 @@ const App: React.FC = () => {
           };
           setElements(prev => [...prev, newEl]);
           cacheImage(newId, compositeBase64);
-          // 關閉編輯器並保留紀錄
-          handleCloseSemanticEditor(true, undefined);
+
+          // 儲存當前編輯狀態（不關閉，讓使用者繼續作業）
+          if (currentState && semanticEditorTarget) {
+            const key = semanticStateKey(semanticEditorTarget.src);
+            setSavedSemanticStates(prev => ({ ...prev, [key]: currentState }));
+          }
+
+          // 只顯示 toast，不關閉編輯器
+          showToast('✅ 已匯入畫布！可繼續在此編輯');
         }}
         onImportLayersToCanvas={(smartLayers) => {
           // 找到原圖在畫布上的 ImageElement（用來計算原位座標）

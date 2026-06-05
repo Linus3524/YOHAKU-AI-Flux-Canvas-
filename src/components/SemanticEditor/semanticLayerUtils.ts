@@ -220,6 +220,12 @@ Tightest rectangle. x,y = top-left corner (0.0–1.0 fraction of image). w,h = s
 ━━━ DESCRIPTION ━━━
 15-35 word English visual description for image generation prompt.
 
+━━━ LANGUAGE RULES (CRITICAL) ━━━
+The "label" field MUST use Traditional Chinese (繁體中文), English, or Japanese ONLY.
+NEVER use Simplified Chinese characters (简体字).
+Examples of correct Traditional Chinese: 人物, 罐頭, 魚, 背景, 產品
+Examples of FORBIDDEN Simplified Chinese: 人物→OK, 罐头→WRONG(use 罐頭), 鱼→WRONG(use 魚)
+
 Return ONLY valid JSON array:
 [{"label":"人物","labelEn":"person","category":"SUBJECT","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman in white shirt, smiling at camera, with long dark hair"}]`,
                 },
