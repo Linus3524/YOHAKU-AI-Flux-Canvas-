@@ -831,6 +831,7 @@ export function SemanticEditorView({
     const onnxDecoderRef = useRef<OrtType.InferenceSession | null>(null);
     const onnxEmbeddingRef = useRef<SAM2Embedding | null>(null);
     const [onnxEmbeddingLoading, setOnnxEmbeddingLoading] = useState(false);
+    const isComputingEmbeddingRef = useRef(false); // 防止並發 Embedding 計算
 
     // 開啟時檢查 ONNX 模型是否已下載
     useEffect(() => {
@@ -859,15 +860,24 @@ export function SemanticEditorView({
     // 圖片載入後計算 embedding（ONNX 模式）
     const computeOnnxEmbedding = useCallback(async () => {
         if (!useOnnxSAM2 || !onnxEncoderRef.current || !state.compositeBase64) return;
+        if (isComputingEmbeddingRef.current) {
+            console.log('[ONNX SAM2] Embedding 已在計算中，跳過');
+            return;
+        }
+        isComputingEmbeddingRef.current = true;
+        console.log('[ONNX SAM2] 開始計算 Embedding...');
         setOnnxEmbeddingLoading(true);
         try {
             onnxEmbeddingRef.current = await computeSAM2Embedding(
                 onnxEncoderRef.current, state.compositeBase64
             );
+            console.log('[ONNX SAM2] Embedding 完成', Object.keys(onnxEmbeddingRef.current.features));
         } catch (e) {
-            console.warn('[ONNX SAM2] Embedding 計算失敗', e);
+            console.error('[ONNX SAM2] Embedding 計算失敗', e);
+            showToast(`❌ SAM2 Embedding 失敗：${(e as Error).message?.slice(0, 60)}`);
         } finally {
             setOnnxEmbeddingLoading(false);
+            isComputingEmbeddingRef.current = false;
         }
     }, [useOnnxSAM2, state.compositeBase64]);
 
@@ -1062,8 +1072,15 @@ export function SemanticEditorView({
 
         if (useOnnxSAM2) {
             // ── ONNX 本機路徑 ──────────────────────────────────────────────
+            console.log('[ONNX SAM2] click', {
+                hasEncoder: !!onnxEncoderRef.current,
+                hasDecoder: !!onnxDecoderRef.current,
+                hasEmbedding: !!onnxEmbeddingRef.current,
+                embeddingLoading: onnxEmbeddingLoading,
+                pixX: c.pixX, pixY: c.pixY,
+            });
             if (!onnxDecoderRef.current || !onnxEmbeddingRef.current) {
-                showToast('SAM2 ONNX 尚未就緒，請稍候...');
+                showToast(`SAM2 ONNX 尚未就緒 (decoder:${!!onnxDecoderRef.current} embed:${!!onnxEmbeddingRef.current})`);
                 return;
             }
             if (onnxEmbeddingLoading) {
@@ -1072,17 +1089,22 @@ export function SemanticEditorView({
             }
             try {
                 setStatus('segmenting', 'SAM2 本機推論中...');
+                console.log('[ONNX SAM2] 開始 runSAM2Decoder...');
                 const maskBase64 = await runSAM2Decoder(
                     onnxDecoderRef.current,
                     onnxEmbeddingRef.current,
                     { clickPoint: { x: c.pixX, y: c.pixY } },
+                    state.compositeBase64,  // 傳入原圖，讓 mask 套上真實像素
                 );
+                console.log('[ONNX SAM2] Decoder 完成，mask 長度:', maskBase64.length);
                 const newLayer = await buildSmartLayerFromMask(maskBase64);
-                // addLayerFromMaskBase64 是 hook 裡的通用接口
+                console.log('[ONNX SAM2] SmartLayer 建立完成:', newLayer.name, 'cropRatio:', newLayer.cropRatio);
                 await addLayerFromMaskBase64(newLayer);
+                console.log('[ONNX SAM2] 圖層已加入');
             } catch (err: any) {
+                console.error('[ONNX SAM2] 失敗', err);
                 setStatus('idle', '');
-                showToast(`❌ ONNX SAM2 失敗：${err?.message?.slice(0, 60) || ''}`);
+                showToast(`❌ ONNX SAM2 失敗：${err?.message?.slice(0, 80) || '未知錯誤'}`);
             }
         } else {
             // ── fal.ai 路徑（原本） ────────────────────────────────────────

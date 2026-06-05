@@ -66,13 +66,12 @@ export async function runSAM2Decoder(
     decoderSession: ort.InferenceSession,
     embedding: SAM2Embedding,
     options: {
-        /** 點擊座標（像素，原圖座標系） */
         clickPoint?: { x: number; y: number };
-        /** 多點（像素，label 1=前景 0=背景） */
         points?: { x: number; y: number; label: 0 | 1 }[];
-        /** 框選（像素，原圖座標系） */
         bbox?: { x: number; y: number; w: number; h: number };
     },
+    /** 原圖 base64，用於把 mask 貼回真實像素（若不傳則輸出黑色 mask）*/
+    originalImageBase64?: string,
 ): Promise<string> {
     const { origW, origH, features } = embedding;
 
@@ -102,11 +101,11 @@ export async function runSAM2Decoder(
     }
 
     const numPoints = coords.length / 2;
-    const pointCoords  = new ort.Tensor('float32', new Float32Array(coords), [1, numPoints, 2]);
-    const pointLabels  = new ort.Tensor('float32', new Float32Array(labels), [1, numPoints]);
+    const pointCoords  = new ort.Tensor('float32', new Float32Array(coords),  [1, numPoints, 2]);
+    const pointLabels  = new ort.Tensor('float32', new Float32Array(labels),  [1, numPoints]);
     const maskInput    = new ort.Tensor('float32', new Float32Array(256 * 256), [1, 1, 256, 256]);
-    const hasMaskInput = new ort.Tensor('float32', new Float32Array([0]), [1]);
-    const origImSize   = new ort.Tensor('float32', new Float32Array([origH, origW]), [2]);
+    const hasMaskInput = new ort.Tensor('float32', new Float32Array([0]),      [1]);
+    const origImSize   = new ort.Tensor('int32', new Int32Array([origH, origW]), [2]);
 
     // 組合 Decoder 輸入（feature keys 來自 Encoder 輸出）
     const inputs: Record<string, ort.Tensor> = {
@@ -130,19 +129,40 @@ export async function runSAM2Decoder(
     const pixelCount = origW * origH;
     const offset     = bestIdx * pixelCount;
 
-    // 轉成透明 PNG（物件區域不透明，背景透明）
+    // 轉成透明 PNG：用原圖像素 + mask alpha
     const canvas = document.createElement('canvas');
     canvas.width = origW; canvas.height = origH;
     const ctx = canvas.getContext('2d')!;
-    const imgData = ctx.createImageData(origW, origH);
 
-    for (let i = 0; i < pixelCount; i++) {
-        const isObject = maskData[offset + i] > 0;
-        imgData.data[i * 4]     = 0;
-        imgData.data[i * 4 + 1] = 0;
-        imgData.data[i * 4 + 2] = 0;
-        imgData.data[i * 4 + 3] = isObject ? 255 : 0;
+    if (originalImageBase64) {
+        // 把原圖畫上去，再用 destination-in 套 mask
+        await new Promise<void>((res, rej) => {
+            const img = new Image();
+            img.onload = () => { ctx.drawImage(img, 0, 0, origW, origH); res(); };
+            img.onerror = rej;
+            img.src = originalImageBase64;
+        });
+        // 建立 mask canvas
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = origW; maskCanvas.height = origH;
+        const mCtx = maskCanvas.getContext('2d')!;
+        const mData = mCtx.createImageData(origW, origH);
+        for (let i = 0; i < pixelCount; i++) {
+            const v = maskData[offset + i] > 0 ? 255 : 0;
+            mData.data[i * 4] = mData.data[i * 4 + 1] = mData.data[i * 4 + 2] = v;
+            mData.data[i * 4 + 3] = v;
+        }
+        mCtx.putImageData(mData, 0, 0);
+        // destination-in：原圖只保留 mask 白色的部分
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.drawImage(maskCanvas, 0, 0);
+    } else {
+        // fallback：黑色 mask
+        const imgData = ctx.createImageData(origW, origH);
+        for (let i = 0; i < pixelCount; i++) {
+            imgData.data[i * 4 + 3] = maskData[offset + i] > 0 ? 255 : 0;
+        }
+        ctx.putImageData(imgData, 0, 0);
     }
-    ctx.putImageData(imgData, 0, 0);
     return canvas.toDataURL('image/png');
 }
