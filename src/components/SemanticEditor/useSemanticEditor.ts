@@ -100,23 +100,31 @@ export function useSemanticEditor({
     }, [setStatus]);
 
     // ── 分析圖片 ─────────────────────────────────────────────────────────────
-    const analyzeImage = useCallback(async () => {
+    /**
+     * @param overrideEncoderSession ONNX Encoder session（由 SemanticEditorView 傳入）
+     * @param overrideDecoderSession ONNX Decoder session（由 SemanticEditorView 傳入）
+     */
+    const analyzeImage = useCallback(async (
+        overrideEncoderSession?: any,
+        overrideDecoderSession?: any,
+    ) => {
         if (analyzingRef.current) return;
         if (!geminiApiKey) throw new Error('需要設定 Gemini API Key');
-        // ONNX 模式不需要 falApiKey；fal.ai 模式才需要
-        const useOnnx = !!(onnxEncoderSession && onnxDecoderSession);
+        const encSess = overrideEncoderSession ?? onnxEncoderSession;
+        const decSess = overrideDecoderSession ?? onnxDecoderSession;
+        const useOnnx = !!(encSess && decSess);
         if (!useOnnx && !falApiKey) throw new Error('SAM2 分割需要 fal.ai API Key（或先下載本機 SAM2 模型）');
 
         analyzingRef.current = true;
         setStatus('analyzing', `Gemini 分析圖片中（${useOnnx ? '本機 SAM2' : 'fal.ai SAM2'}）...`);
 
         try {
-            const layers = useOnnx
+            const fgLayers = useOnnx
                 ? await segmentSemanticLayersOnnx({
                     imageBase64: originalBase64,
                     geminiApiKey,
-                    encoderSession: onnxEncoderSession!,
-                    decoderSession: onnxDecoderSession!,
+                    encoderSession: encSess!,
+                    decoderSession: decSess!,
                     onProgress: msg => setStatus('segmenting', msg),
                 })
                 : await segmentSemanticLayers({
@@ -126,19 +134,59 @@ export function useSemanticEditor({
                     onProgress: msg => setStatus('segmenting', msg),
                 });
 
+            // ── LaMa 背景圖層生成 ──────────────────────────────────────────────
+            let lamaBackground: string | undefined;
+            let allLayers: SmartLayer[] = fgLayers;
+            try {
+                const { getModelStatus, loadModel } = await import('../../utils/onnxModelCache');
+                if (await getModelStatus('lama') === 'ready') {
+                    setStatus('compositing', 'LaMa 生成純背景圖層...');
+                    const { buildCombinedMaskFromLayers, runLama } = await import('../../utils/lamaOnnx');
+                    const { getImageDims } = await import('./semanticLayerUtils');
+                    const { w: fullW, h: fullH } = await getImageDims(originalBase64);
+                    const combinedMask = await buildCombinedMaskFromLayers(fgLayers, fullW, fullH);
+                    const lamaSession = await loadModel('lama');
+                    lamaBackground = await runLama(lamaSession, originalBase64, combinedMask);
+
+                    const bgLayer: SmartLayer = {
+                        id: `bg_lama_${Date.now()}`,
+                        name: '背景',
+                        category: 'BACKGROUND',
+                        base64: lamaBackground,
+                        originalBase64: lamaBackground,
+                        prompt: '原始背景',
+                        appliedPrompt: '原始背景',
+                        bbox:      { x: 0, y: 0, w: 1, h: 1 },
+                        cropRatio: { x: 0, y: 0, w: 1, h: 1 },
+                        pixelWidth: fullW,
+                        pixelHeight: fullH,
+                        history: [],
+                        isVisible: true,
+                        isLocked: true,
+                        zIndex: -1,
+                    };
+                    allLayers = [...fgLayers, bgLayer];
+                }
+            } catch (lamaErr) {
+                console.warn('[analyzeImage] LaMa 背景生成失敗（跳過）:', lamaErr);
+            }
+
             setStatus('compositing', '合成預覽...');
-            const composite = await compositeSmartLayers(originalBase64, layers);
+            const bgBase64 = lamaBackground ?? originalBase64;
+            // 合成時只傳前景層，背景由 backgroundBase64 控制
+            const composite = await compositeSmartLayers(bgBase64, fgLayers);
 
             setState(s => ({
                 ...s,
-                layers,
-                originalLayers:  layers,
-                compositeBase64: composite,
-                backgroundBase64: s.originalBase64,   // 分析後底圖 = 原始圖
-                selectedLayerId: null,
-                status: 'idle',
-                statusMessage: '',
-                versions: [],
+                layers:             allLayers,
+                originalLayers:     allLayers,
+                compositeBase64:    composite,
+                backgroundBase64:   bgBase64,
+                lamaBackgroundBase64: lamaBackground,
+                selectedLayerId:    null,
+                status:             'idle',
+                statusMessage:      '',
+                versions:           [],
                 activeVersionIndex: -1,
             }));
         } catch (e) {
@@ -147,7 +195,7 @@ export function useSemanticEditor({
             throw e;
         }
         analyzingRef.current = false;
-    }, [originalBase64, geminiApiKey, falApiKey, setStatus]);
+    }, [originalBase64, geminiApiKey, falApiKey, onnxEncoderSession, onnxDecoderSession, setStatus]);
 
     // ── 選取圖層 ─────────────────────────────────────────────────────────────
     const selectLayer = useCallback((id: string | null) => {
@@ -426,7 +474,8 @@ export function useSemanticEditor({
             }
             setState(s => {
                 const updated = [...s.layers, newLayer];
-                compositeSmartLayers(s.backgroundBase64, updated).then(composite => {
+                const fgLayers = updated.filter(l => l.category !== 'BACKGROUND');
+                compositeSmartLayers(s.backgroundBase64, fgLayers).then(composite => {
                     setState(ss => ({ ...ss, compositeBase64: composite }));
                 });
                 // 在原始版本時，同步更新 originalLayers 快照
@@ -470,7 +519,8 @@ export function useSemanticEditor({
             setState(s => {
                 const updated = [...s.layers, newLayer];
                 const onOriginal = s.activeVersionIndex === -1;
-                compositeSmartLayers(s.backgroundBase64, updated).then(c =>
+                const fgLayers = updated.filter(l => l.category !== 'BACKGROUND');
+                compositeSmartLayers(s.backgroundBase64, fgLayers).then(c =>
                     setState(ss => ({ ...ss, compositeBase64: c }))
                 );
                 return { ...s, layers: updated, originalLayers: onOriginal ? updated : s.originalLayers, selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
@@ -502,7 +552,8 @@ export function useSemanticEditor({
             setState(s => {
                 const updated = [...s.layers, newLayer];
                 const onOriginal = s.activeVersionIndex === -1;
-                compositeSmartLayers(s.backgroundBase64, updated).then(c =>
+                const fgLayers = updated.filter(l => l.category !== 'BACKGROUND');
+                compositeSmartLayers(s.backgroundBase64, fgLayers).then(c =>
                     setState(ss => ({ ...ss, compositeBase64: c }))
                 );
                 return { ...s, layers: updated, originalLayers: onOriginal ? updated : s.originalLayers, selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
@@ -525,7 +576,8 @@ export function useSemanticEditor({
         setState(s => {
             const updated = [...s.layers, newLayer];
             const onOriginal = s.activeVersionIndex === -1;
-            compositeSmartLayers(s.backgroundBase64, updated).then(c =>
+            const fgLayers = updated.filter(l => l.category !== 'BACKGROUND');
+            compositeSmartLayers(s.backgroundBase64, fgLayers).then(c =>
                 setState(ss => ({ ...ss, compositeBase64: c }))
             );
             return {
@@ -542,13 +594,25 @@ export function useSemanticEditor({
     // ── 切換可見性 ───────────────────────────────────────────────────────────
     const toggleVisibility = useCallback((layerId: string) => {
         setState(s => {
+            const layer = s.layers.find(l => l.id === layerId);
             const updated = s.layers.map(l =>
                 l.id === layerId ? { ...l, isVisible: !l.isVisible } : l
             );
-            compositeSmartLayers(s.backgroundBase64, updated).then(composite => {
+
+            // BACKGROUND 圖層眼睛：切換底圖在 LaMa 背景 ↔ 原始圖之間
+            let newBg = s.backgroundBase64;
+            if (layer?.category === 'BACKGROUND') {
+                newBg = layer.isVisible
+                    ? s.originalBase64                              // 隱藏 → 原始圖
+                    : (s.lamaBackgroundBase64 ?? s.originalBase64); // 顯示 → LaMa 背景
+            }
+
+            // 合成時只用前景層，背景由 backgroundBase64 決定
+            const fgLayers = updated.filter(l => l.category !== 'BACKGROUND');
+            compositeSmartLayers(newBg, fgLayers).then(composite => {
                 setState(ss => ({ ...ss, compositeBase64: composite }));
             });
-            return { ...s, layers: updated };
+            return { ...s, layers: updated, backgroundBase64: newBg };
         });
     }, []);
 
@@ -566,7 +630,8 @@ export function useSemanticEditor({
     const deleteLayer = useCallback((layerId: string) => {
         setState(s => {
             const updated = s.layers.filter(l => l.id !== layerId);
-            compositeSmartLayers(s.backgroundBase64, updated).then(composite => {
+            const fgLayers = updated.filter(l => l.category !== 'BACKGROUND');
+            compositeSmartLayers(s.backgroundBase64, fgLayers).then(composite => {
                 setState(ss => ({ ...ss, compositeBase64: composite }));
             });
             const onOriginal = s.activeVersionIndex === -1;
@@ -585,7 +650,8 @@ export function useSemanticEditor({
             const updated = s.layers.map(l =>
                 l.id === layerId ? { ...l, base64: l.originalBase64, history: [] } : l
             );
-            compositeSmartLayers(s.backgroundBase64, updated).then(composite => {
+            const fgLayers = updated.filter(l => l.category !== 'BACKGROUND');
+            compositeSmartLayers(s.backgroundBase64, fgLayers).then(composite => {
                 setState(ss => ({ ...ss, compositeBase64: composite }));
             });
             return { ...s, layers: updated };

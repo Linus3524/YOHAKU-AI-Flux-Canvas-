@@ -247,6 +247,8 @@ export interface SemanticEditorState {
   compositeBase64: string;
   /** 目前版本的底圖（圖層疊加用的背景） */
   backgroundBase64: string;
+  /** LaMa 生成的純背景（移除所有前景物件後），undefined = LaMa 尚未執行 */
+  lamaBackgroundBase64?: string;
   layers: SmartLayer[];
   /** 「原始版本」的圖層快照 — 切回原始分頁時還原用（含手動新增的圖層） */
   originalLayers: SmartLayer[];

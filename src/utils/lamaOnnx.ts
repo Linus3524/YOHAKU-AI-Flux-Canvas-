@@ -43,10 +43,13 @@ function prepareInputs(
             const maskTensor  = new Float32Array(1 * LAMA_SIZE * LAMA_SIZE);
 
             for (let i = 0; i < LAMA_SIZE * LAMA_SIZE; i++) {
-                imageTensor[i]                          = imgD[i * 4]     / 255;  // R
-                imageTensor[LAMA_SIZE ** 2 + i]         = imgD[i * 4 + 1] / 255;  // G
-                imageTensor[LAMA_SIZE ** 2 * 2 + i]     = imgD[i * 4 + 2] / 255;  // B
                 maskTensor[i] = mskD[i * 4] > 127 ? 1 : 0;   // 白=填補
+                // 遮罩區域必須歸零：讓 LaMa 從周圍像素補圖而非保留原值
+                // 若不清零，模型會看到原圖像素（如白色光球）並直接輸出白色
+                const masked = maskTensor[i] > 0;
+                imageTensor[i]                          = masked ? 0 : imgD[i * 4]     / 255;  // R
+                imageTensor[LAMA_SIZE ** 2 + i]         = masked ? 0 : imgD[i * 4 + 1] / 255;  // G
+                imageTensor[LAMA_SIZE ** 2 * 2 + i]     = masked ? 0 : imgD[i * 4 + 2] / 255;  // B
             }
 
             resolve({ imageTensor, maskTensor });
@@ -58,14 +61,20 @@ function prepareInputs(
 
 function outputToBase64(outputData: Float32Array, targetW: number, targetH: number): string {
     // 512×512 輸出 → canvas → 縮放回原始尺寸
+    // 自動偵測輸出值域：有些模型輸出 [0,1]，有些輸出 [0,255]
+    let maxRaw = 0;
+    for (let k = 0; k < outputData.length; k++) if (outputData[k] > maxRaw) maxRaw = outputData[k];
+    const scale = maxRaw > 1.5 ? 1 : 255; // >1.5 → 模型輸出 [0,255] 直接用；否則 ×255
+
     const tmpC = document.createElement('canvas');
     tmpC.width = tmpC.height = LAMA_SIZE;
     const tmpCtx = tmpC.getContext('2d')!;
     const id = tmpCtx.createImageData(LAMA_SIZE, LAMA_SIZE);
-    for (let i = 0; i < LAMA_SIZE * LAMA_SIZE; i++) {
-        id.data[i * 4]     = Math.round(Math.max(0, Math.min(1, outputData[i])) * 255);
-        id.data[i * 4 + 1] = Math.round(Math.max(0, Math.min(1, outputData[LAMA_SIZE ** 2 + i])) * 255);
-        id.data[i * 4 + 2] = Math.round(Math.max(0, Math.min(1, outputData[LAMA_SIZE ** 2 * 2 + i])) * 255);
+    const N = LAMA_SIZE * LAMA_SIZE;
+    for (let i = 0; i < N; i++) {
+        id.data[i * 4]     = Math.round(Math.max(0, Math.min(255, outputData[i]         * scale)));
+        id.data[i * 4 + 1] = Math.round(Math.max(0, Math.min(255, outputData[N + i]     * scale)));
+        id.data[i * 4 + 2] = Math.round(Math.max(0, Math.min(255, outputData[N * 2 + i] * scale)));
         id.data[i * 4 + 3] = 255;
     }
     tmpCtx.putImageData(id, 0, 0);
@@ -96,17 +105,115 @@ export async function runLama(
     const imageInput = new ort.Tensor('float32', imageTensor, [1, 3, LAMA_SIZE, LAMA_SIZE]);
     const maskInput  = new ort.Tensor('float32', maskTensor,  [1, 1, LAMA_SIZE, LAMA_SIZE]);
 
-    // LaMa 的輸入名稱：先查 session.inputNames 確認
+    // 按名稱指定輸入，避免順序假設錯誤
     const inputNames = session.inputNames;
+    const imgName = inputNames.find(n => !n.toLowerCase().includes('mask')) ?? inputNames[0];
+    const mskName = inputNames.find(n =>  n.toLowerCase().includes('mask')) ?? inputNames[1];
     const inputs: Record<string, ort.Tensor> = {};
-    inputs[inputNames[0]] = imageInput;
-    inputs[inputNames[1]] = maskInput;
+    inputs[imgName] = imageInput;
+    inputs[mskName] = maskInput;
 
     const outputs = await session.run(inputs);
     const outputName = session.outputNames[0];
     const outputData = outputs[outputName].data as Float32Array;
 
+    // Debug: log output tensor range so we can detect normalization issues
+    let minV = Infinity, maxV = -Infinity;
+    for (let k = 0; k < Math.min(outputData.length, 10000); k++) {
+        if (outputData[k] < minV) minV = outputData[k];
+        if (outputData[k] > maxV) maxV = outputData[k];
+    }
+    console.log(`[LaMa] inputNames:${session.inputNames} outputName:${outputName} outputShape:${outputs[outputName].dims} valueRange:[${minV.toFixed(3)}, ${maxV.toFixed(3)}]`);
+
     return outputToBase64(outputData, origW, origH);
+}
+
+/**
+ * 把多個 SmartLayer 的透明 PNG 合成一張全尺寸黑白 mask
+ * 白色 = 需要 LaMa 填補的前景物件區域
+ * 用於語意分析完成後，自動生成乾淨背景圖層
+ */
+export async function buildCombinedMaskFromLayers(
+    layers: Array<{
+        base64: string;
+        cropRatio: { x: number; y: number; w: number; h: number };
+        pixelWidth?: number;
+        pixelHeight?: number;
+        category?: string;
+    }>,
+    fullW: number,
+    fullH: number,
+    dilateRadius = 4,
+): Promise<string> {
+    const canvas = document.createElement('canvas');
+    canvas.width = fullW;
+    canvas.height = fullH;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, fullW, fullH);
+
+    for (const layer of layers) {
+        if (layer.category === 'BACKGROUND') continue;
+        await new Promise<void>(res => {
+            const img = new Image();
+            img.onload = () => {
+                const x = layer.cropRatio.x * fullW;
+                const y = layer.cropRatio.y * fullH;
+                const drawW = layer.cropRatio.w * fullW;
+                const drawH = (layer.pixelWidth && layer.pixelHeight && drawW > 0)
+                    ? drawW * (layer.pixelHeight / layer.pixelWidth)
+                    : layer.cropRatio.h * fullH;
+                if (drawW <= 0 || drawH <= 0) { res(); return; }
+
+                const tmpC = document.createElement('canvas');
+                tmpC.width = Math.ceil(drawW);
+                tmpC.height = Math.ceil(drawH);
+                const tmpCtx = tmpC.getContext('2d')!;
+                tmpCtx.drawImage(img, 0, 0, tmpC.width, tmpC.height);
+                const data = tmpCtx.getImageData(0, 0, tmpC.width, tmpC.height);
+                const white = tmpCtx.createImageData(tmpC.width, tmpC.height);
+                for (let i = 0; i < data.data.length; i += 4) {
+                    const v = data.data[i + 3] > 10 ? 255 : 0;
+                    white.data[i] = white.data[i + 1] = white.data[i + 2] = v;
+                    white.data[i + 3] = 255;
+                }
+                tmpCtx.putImageData(white, 0, 0);
+                ctx.globalCompositeOperation = 'lighten';
+                ctx.drawImage(tmpC, x, y, drawW, drawH);
+                ctx.globalCompositeOperation = 'source-over';
+                res();
+            };
+            img.onerror = () => res();
+            img.src = layer.base64;
+        });
+    }
+
+    if (dilateRadius > 0) {
+        const id = ctx.getImageData(0, 0, fullW, fullH);
+        const src = new Uint8Array(fullW * fullH);
+        for (let i = 0; i < src.length; i++) src[i] = id.data[i * 4] > 127 ? 1 : 0;
+        const dilated = new Uint8Array(src);
+        for (let y = 0; y < fullH; y++) {
+            for (let x = 0; x < fullW; x++) {
+                if (!src[y * fullW + x]) continue;
+                for (let dy = -dilateRadius; dy <= dilateRadius; dy++) {
+                    for (let dx = -dilateRadius; dx <= dilateRadius; dx++) {
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < fullW && ny >= 0 && ny < fullH)
+                            dilated[ny * fullW + nx] = 1;
+                    }
+                }
+            }
+        }
+        const out = ctx.createImageData(fullW, fullH);
+        for (let i = 0; i < fullW * fullH; i++) {
+            const v = dilated[i] ? 255 : 0;
+            out.data[i * 4] = out.data[i * 4 + 1] = out.data[i * 4 + 2] = v;
+            out.data[i * 4 + 3] = 255;
+        }
+        ctx.putImageData(out, 0, 0);
+    }
+    return canvas.toDataURL('image/png');
 }
 
 /**

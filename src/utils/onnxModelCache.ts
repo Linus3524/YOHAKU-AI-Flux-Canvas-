@@ -106,10 +106,13 @@ export async function loadModel(key: OnnxModelKey): Promise<ort.InferenceSession
     const cached = await get<ArrayBuffer>(config.cacheKey);
     if (!cached) throw new Error(`模型 ${config.name} 尚未下載，請先在「本機 AI 模型」下載`);
 
+    // LaMa 的 FFC（Fast Fourier Convolution）包含 WebGPU 不支援的算子，強制 WASM
+    // SAM2 正常走 WebGPU → WASM fallback
+    const providers: string[] = key === 'lama' ? ['wasm'] : ['webgpu', 'wasm'];
+
     try {
-        // 先試 WebGPU（快），不支援則 fallback WASM
         return await ort.InferenceSession.create(cached, {
-            executionProviders: ['webgpu', 'wasm'],
+            executionProviders: providers,
         });
     } catch (e) {
         console.error(`[ONNX] 載入 ${config.name} 失敗:`, e);

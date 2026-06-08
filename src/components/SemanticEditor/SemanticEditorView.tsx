@@ -1158,13 +1158,20 @@ export function SemanticEditorView({
     // 重新分析
     const handleReanalyze = useCallback(() => {
         if (!geminiApiKey) { showToast('⚠️ 請先設定 Gemini API Key'); return; }
-        // 自動分析永遠用 fal.ai（ONNX Encoder 太重，不適合全圖分析）
-        if (useOnnxSAM2 && !falApiKey) {
-            showToast('⚠️ 自動分析需要 fal.ai Key。本機 ONNX 限用手動工具：點選 / 框選 / 多點');
+
+        // ONNX 模式：Encoder + Decoder 已就緒時用本機 SAM2 做全圖分析
+        if (useOnnxSAM2 && onnxEncoderRef.current && onnxDecoderRef.current) {
+            showToast('本機 SAM2 + LaMa 全圖分析中...');
+            analyzeImage(onnxEncoderRef.current, onnxDecoderRef.current).catch(e => {
+                showToast(`❌ 分析失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
+            });
             return;
         }
-        if (useOnnxSAM2) {
-            showToast('提示：自動分析用 fal.ai SAM2，手動工具才用本機 ONNX');
+
+        // fal.ai 模式
+        if (!falApiKey) {
+            showToast('⚠️ 需要 fal.ai API Key 或先載入本機 SAM2 模型');
+            return;
         }
         analyzeImage().catch(e => {
             showToast(`❌ 分析失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
