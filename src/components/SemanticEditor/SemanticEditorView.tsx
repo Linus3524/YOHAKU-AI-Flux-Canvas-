@@ -776,56 +776,49 @@ function PillToolbar({
     hasLayers: boolean;
     lamaReady: boolean;
 }) {
-    // 手指選取圖示
-    const CursorIcon = () => {
-        const c = activeTool === 'select' ? '#7c3aed' : '#6b7280';
-        return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                {/* 食指 */}
-                <path d="M9 11V5a2 2 0 0 1 4 0v6"/>
-                {/* 手掌 */}
-                <path d="M13 11a2 2 0 0 1 4 0v3"/>
-                <path d="M17 14a2 2 0 0 1 4 0v1a6 6 0 0 1-6 6H9a6 6 0 0 1-5.83-4.49l-1.1-4.4A2 2 0 0 1 4 10a2 2 0 0 1 2 2v3"/>
-                <path d="M9 11a2 2 0 0 0-2 2v2"/>
-            </svg>
-        );
-    };
-
-    // SAM2 點選圖示：藍色游標 + 右上大閃光
-    const Sam2Icon = () => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
-            {/* 游標箭頭（藍色） */}
-            <path d="M4 4l14 9-7.5 1.5-3 6.5z"
-                fill="#3b82f6" fillOpacity="0.18" stroke="#3b82f6" strokeWidth="1.7"/>
-            {/* 閃光（右上角） */}
-            <path d="M19.5 1l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2z"
-                fill="#3b82f6" stroke="none"/>
+    // 選取圖示（與外部畫布工具列一致）
+    const CursorIcon = () => (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="#e5e7eb"/>
+            <path d="M13 13l6 6"/>
         </svg>
     );
 
-    // 矩形框選圖示：紫色虛線方框（dash 間距適中）
+    // SAM2 點選圖示：魔術棒（Ic.Wand 水平鏡像，縮小）+ 一顆四角星（放大）
+    const Sam2Icon = () => (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <g transform="translate(12,12) scale(-0.95,0.95) translate(-12,-12)">
+                <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72" fill="#bfdbfe"/>
+                <path d="m14 7 3 3"/>
+            </g>
+            {/* 四角星（右上，大） */}
+            <path d="M18.5 0.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="#3b82f6" stroke="none"/>
+        </svg>
+    );
+
+    // 矩形框選圖示：紫色虛線方框 + 淺紫填色
     const RectIcon = () => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.8" strokeLinecap="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="5 3"/>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.8" strokeLinecap="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" fill="#ede9fe" strokeDasharray="5 3"/>
         </svg>
     );
     // 多點圖示
     const PointsIcon = () => (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round">
-            <circle cx="7"  cy="12" r="2.5" fill="#22c55e" stroke="#22c55e"/>
-            <circle cx="17" cy="8"  r="2.5" fill="#22c55e" stroke="#22c55e"/>
-            <circle cx="12" cy="17" r="2.5" fill="#ef4444" stroke="#ef4444"/>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round">
+            <circle cx="6"  cy="13" r="2.5" fill="#22c55e" stroke="#22c55e"/>
+            <circle cx="17" cy="7"  r="2.5" fill="#22c55e" stroke="#22c55e"/>
+            <circle cx="13" cy="18" r="2.5" fill="#ef4444" stroke="#ef4444"/>
         </svg>
     );
 
     // LaMa 背景圖示：魔法棒 + 層次感
     // 生成純背景：圓角方框 + 左上四角星（縱向拉長）+ 下方地平線弧
     const LamaIcon = () => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
             {/* 圓角方框 */}
-            <rect x="1.5" y="1.5" width="21" height="21" rx="3.5"/>
+            <rect x="1.5" y="1.5" width="21" height="21" rx="3.5" fill="#f0f9ff"/>
             {/* 四角星（縱向拉長，左上角，加粗） */}
-            <path d="M8.75 4.25 L9.95 7.75 L13.25 8.75 L9.95 9.75 L8.75 13.25 L7.55 9.75 L4.25 8.75 L7.55 7.75 Z" fill="currentColor" stroke="none"/>
+            <path d="M8.75 4.25 L9.95 7.75 L13.25 8.75 L9.95 9.75 L8.75 13.25 L7.55 9.75 L4.25 8.75 L7.55 7.75 Z" fill="#38bdf8" stroke="none"/>
             {/* 地平線弧（平緩，上移） */}
             <path d="M4 17 Q12 12.5 20 17" fill="none" strokeWidth="1.9"/>
         </svg>
@@ -833,7 +826,7 @@ function PillToolbar({
 
     // 筆塗選取：使用者提供的手繪波浪筆觸 SVG
     const BrushIcon = () => (
-        <svg width="22" height="22" viewBox="-8 -8 152 130" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="21" height="21" viewBox="-8 -8 152 130" fill="none" strokeLinecap="round" strokeLinejoin="round">
             <path
                 d="M5.5,59.34c11.99-10.48,23.65-21.15,35.41-31.77,9.39-8.1,19.18-17.3,31.16-21.07,13.01-4,21.73,4.48,17.38,17.42-5.91,20.33-46.61,44.14-46.36,64.03.79,4.74,8.58,3.02,12.7,1.13,5.93-2.42,12.59-7.01,18.48-11.78,7.83-6.16,14.8-13.48,23.55-17.06,6.95-2.98,15.19-1.4,14.76,7.39-.35,8.99-7.93,18.89-8.96,28.29-.98,6.2,2.75,12.02,9.42,11.99,6.02.15,12.05-3.07,17.63-5.97"
                 stroke="#f97316" strokeWidth="15" fill="none"
@@ -1311,7 +1304,7 @@ export function SemanticEditorView({
         const { relX, relY } = c;
         // 找所有可見圖層中包含該點的，取 zIndex 最高的
         const hit = [...state.layers]
-            .filter(l => l.isVisible && l.category !== 'BACKGROUND')
+            .filter(l => l.isVisible)
             .filter(l => relX >= l.cropRatio.x && relX <= l.cropRatio.x + l.cropRatio.w
                       && relY >= l.cropRatio.y && relY <= l.cropRatio.y + l.cropRatio.h)
             .sort((a, b) => b.zIndex - a.zIndex)[0];

@@ -5,7 +5,8 @@ import type { ImageElement, Point } from '../types';
 import { callGeminiWithRetry, analyzeDominantColor } from '../utils/helpers';
 import { rgbToHsl, hslToRgb, compositeImagesPixelPerfect, createPrefilledImage } from '../utils/imageProcessing';
 import { callAtlasInpaint } from '../utils/atlasImage';
-import { getModelStatus, loadModel } from '../utils/onnxModelCache';
+import { getModelStatus } from '../utils/onnxModelCache';
+import { runLamaInWorker } from '../utils/lamaWorkerClient';
 
 // Helper: Simple debounce hook
 const useDebounce = (callback: (...args: any[]) => void, delay: number) => {
@@ -724,12 +725,10 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
     try {
       const bwMaskBase64Url = await createBlackAndWhiteMask(context.baseImageSrc, context.maskDataUrl);
 
-      // ══ 路線 0：本機 LaMa ONNX（純消除，無需 API Key）══════
+      // ══ 路線 0：本機 LaMa ONNX（Web Worker，不阻塞 UI）══════
       if (inpaintEngine === 'lama') {
-        const { runLama } = await import('../utils/lamaOnnx');
-        const lamaSession = await loadModel('lama');
-        // LaMa 輸出已是完整修補圖，直接顯示（不再疊加 compositeImagesPixelPerfect）
-        const result = await runLama(lamaSession, context.baseImageSrc, bwMaskBase64Url);
+        // Worker 內自行載入 session，主執行緒不凍結
+        const result = await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
         setPreviewImageSrc(result);
         return;
       }
