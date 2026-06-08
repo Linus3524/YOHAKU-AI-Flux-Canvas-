@@ -804,22 +804,25 @@ function PillToolbar({
     );
 
     // LaMa 背景圖示：魔法棒 + 層次感
+    // 生成純背景：圓角方框 + 左上四角星（縱向拉長）+ 下方地平線弧
     const LamaIcon = () => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="14" width="20" height="8" rx="2" fill="#6b7280" fillOpacity="0.15" stroke="#6b7280" strokeWidth="1.5"/>
-            <path d="M6 14V8" stroke="#6b7280" strokeWidth="1.5"/>
-            <path d="M12 14V6" stroke="#6b7280" strokeWidth="1.5"/>
-            <path d="M18 14V10" stroke="#6b7280" strokeWidth="1.5"/>
-            <path d="M17 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" fill="#a855f7" stroke="#a855f7" strokeWidth="0.5"/>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            {/* 圓角方框 */}
+            <rect x="1.5" y="1.5" width="21" height="21" rx="3.5"/>
+            {/* 四角星（縱向拉長，左上角，加粗） */}
+            <path d="M8.75 4.25 L9.95 7.75 L13.25 8.75 L9.95 9.75 L8.75 13.25 L7.55 9.75 L4.25 8.75 L7.55 7.75 Z" fill="currentColor" stroke="none"/>
+            {/* 地平線弧（平緩，上移） */}
+            <path d="M4 17 Q12 12.5 20 17" fill="none" strokeWidth="1.9"/>
         </svg>
     );
 
-    // 筆塗圖示
+    // 筆塗選取：使用者提供的手繪波浪筆觸 SVG
     const BrushIcon = () => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08" stroke="#7c3aed" strokeWidth="1.8"/>
-            <path d="M7.07 14.94C5.79 16.22 3 17 3 17c.78-2.79 1.56-4.78 2.93-5.94" stroke="#7c3aed" strokeWidth="1.8"/>
-            <circle cx="5.5" cy="18.5" r="2.5" fill="#7c3aed" fillOpacity="0.2" stroke="#7c3aed" strokeWidth="1.5"/>
+        <svg width="22" height="22" viewBox="-8 -8 152 130" fill="none" strokeLinecap="round" strokeLinejoin="round">
+            <path
+                d="M5.5,59.34c11.99-10.48,23.65-21.15,35.41-31.77,9.39-8.1,19.18-17.3,31.16-21.07,13.01-4,21.73,4.48,17.38,17.42-5.91,20.33-46.61,44.14-46.36,64.03.79,4.74,8.58,3.02,12.7,1.13,5.93-2.42,12.59-7.01,18.48-11.78,7.83-6.16,14.8-13.48,23.55-17.06,6.95-2.98,15.19-1.4,14.76,7.39-.35,8.99-7.93,18.89-8.96,28.29-.98,6.2,2.75,12.02,9.42,11.99,6.02.15,12.05-3.07,17.63-5.97"
+                stroke="#f97316" strokeWidth="15" fill="none"
+            />
         </svg>
     );
 
@@ -828,7 +831,7 @@ function PillToolbar({
         { id: 'sam2',    icon: <Sam2Icon />,  label: '智能點選 (Auto Segment)',      onClick: () => onTool('sam2'),   disabled: false },
         { id: 'rect',    icon: <RectIcon />,  label: '矩形框選 (Bounding Box)',       onClick: () => onTool('rect'),   disabled: false },
         { id: 'points',  icon: <PointsIcon />,label: '多點精確選取 (Multi-points)',   onClick: () => onTool('points'), disabled: false },
-        { id: 'brush',   icon: <BrushIcon />, label: '筆塗 → SAM2 精確抓取',         onClick: () => onTool('brush'),  disabled: false },
+        { id: 'brush',   icon: <BrushIcon />, label: '筆塗選取 (Brush Select)',         onClick: () => onTool('brush'),  disabled: false },
         {
             id: 'lama',
             icon: <LamaIcon />,
@@ -1130,6 +1133,9 @@ export function SemanticEditorView({
 
     // HUD 拖曳狀態
     const [hudPos, setHudPos] = useState<{ x: number; y: number } | null>(null);
+    const [brushHudPos, setBrushHudPos] = useState<{ x: number; y: number } | null>(null);
+    const brushHudRef = useRef<HTMLDivElement>(null);
+    const brushHudDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
     const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number } | null>(null);
     const toolbarDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
     const toolbarRef = useRef<HTMLDivElement>(null);
@@ -1164,12 +1170,18 @@ export function SemanticEditorView({
     const handleHudMouseDown = useCallback((e: React.MouseEvent) => {
         if ((e.target as HTMLElement).tagName === 'BUTTON') return;
         e.preventDefault();
-        const rect = hudRef.current?.getBoundingClientRect();
+        const rect       = hudRef.current?.getBoundingClientRect();
+        const parentRect = hudRef.current?.parentElement?.getBoundingClientRect();
         hudDragRef.current = {
             startX: e.clientX,
             startY: e.clientY,
-            origX: hudPos?.x ?? (rect ? rect.left + rect.width / 2 : window.innerWidth / 2),
-            origY: hudPos?.y ?? (rect ? rect.top : 60),
+            // 減去 parent offset，轉成容器相對座標
+            origX: hudPos?.x ?? (rect && parentRect
+                ? rect.left - parentRect.left + rect.width / 2
+                : window.innerWidth / 2),
+            origY: hudPos?.y ?? (rect && parentRect
+                ? rect.top - parentRect.top
+                : 60),
         };
         const onMove = (ev: MouseEvent) => {
             if (!hudDragRef.current) return;
@@ -1186,6 +1198,36 @@ export function SemanticEditorView({
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
     }, [hudPos]);
+
+    const handleBrushHudMouseDown = useCallback((e: React.MouseEvent) => {
+        if ((e.target as HTMLElement).closest('button, input')) return;
+        e.preventDefault();
+        const rect       = brushHudRef.current?.getBoundingClientRect();
+        const parentRect = brushHudRef.current?.parentElement?.getBoundingClientRect();
+        brushHudDragRef.current = {
+            startX: e.clientX, startY: e.clientY,
+            origX: brushHudPos?.x ?? (rect && parentRect
+                ? rect.left - parentRect.left + rect.width / 2
+                : window.innerWidth / 2),
+            origY: brushHudPos?.y ?? (rect && parentRect
+                ? rect.top - parentRect.top
+                : 12),
+        };
+        const onMove = (ev: MouseEvent) => {
+            if (!brushHudDragRef.current) return;
+            setBrushHudPos({
+                x: brushHudDragRef.current.origX + (ev.clientX - brushHudDragRef.current.startX),
+                y: brushHudDragRef.current.origY + (ev.clientY - brushHudDragRef.current.startY),
+            });
+        };
+        const onUp = () => {
+            brushHudDragRef.current = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, [brushHudPos]);
 
     const showToast = useCallback((msg: string, duration = 3500) => {
         setToastMsg(msg);
@@ -1434,6 +1476,7 @@ export function SemanticEditorView({
         setMultiPoints([]);
         setBrushEraser(false);
         setBrushHasStroke(false);
+        setBrushHudPos(null);
         brushHasStrokeRef.current = false;
         brushSnapshot.current = null;
         brushStrokePoints.current = [];
@@ -1477,7 +1520,7 @@ export function SemanticEditorView({
             ctx.strokeStyle = 'rgba(0,0,0,1)';
         } else {
             ctx.globalCompositeOperation = 'source-over';
-            ctx.strokeStyle = 'rgba(255,59,48,0.5)';   // ImageEditModal 同款
+            ctx.strokeStyle = 'rgba(249,115,22,0.55)';  // 橘色
         }
 
         ctx.beginPath();
@@ -2140,14 +2183,18 @@ export function SemanticEditorView({
                                         cursor: brushEraser ? 'cell' : 'crosshair',
                                     }}
                                 />
-                                {/* 筆塗 HUD — 與多點模式 bar 同規格 */}
+                                {/* 筆塗 HUD — 可拖曳，與多點模式 bar 同規格 */}
                                 {!isLoading && (
-                                    <div style={{
+                                    <div
+                                        ref={brushHudRef}
+                                        onMouseDown={handleBrushHudMouseDown}
+                                        style={{
                                         position: 'absolute',
-                                        top: 12, left: '50%',
-                                        transform: 'translateX(-50%)',
+                                        ...(brushHudPos
+                                            ? { left: brushHudPos.x, top: brushHudPos.y, transform: 'translate(-50%, 0)' }
+                                            : { top: 12, left: '50%', transform: 'translateX(-50%)' }),
                                         zIndex: 22,
-                                        cursor: 'default',
+                                        cursor: 'grab',
                                         background: 'rgba(18,20,28,0.92)',
                                         backdropFilter: 'blur(12px)',
                                         borderRadius: 9999,
@@ -2244,7 +2291,7 @@ export function SemanticEditorView({
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                                     <polyline points="20 6 9 17 4 12"/>
                                                 </svg>
-                                                SAM2 分割
+                                                確認分割
                                             </button>
                                         )}
                                     </div>
