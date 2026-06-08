@@ -34,9 +34,8 @@ export interface SemanticEditorOptions {
     geminiApiKey?: string;
     atlasApiKey?: string;
     falApiKey?: string;
-    /** ONNX 本機 SAM2 sessions（有的話自動分析時優先使用）*/
-    onnxEncoderSession?: any | null;  // ort.InferenceSession
-    onnxDecoderSession?: any | null;
+    /** 是否使用本機 SAM2 Worker（替代 fal.ai） */
+    useLocalSAM2?: boolean;
     /** 上次退出時保留的狀態（重新開啟時恢復） */
     initialState?: {
         compositeBase64: string;
@@ -50,8 +49,7 @@ export function useSemanticEditor({
     geminiApiKey,
     atlasApiKey,
     falApiKey,
-    onnxEncoderSession,
-    onnxDecoderSession,
+    useLocalSAM2 = false,
     initialState,
 }: SemanticEditorOptions) {
 
@@ -100,31 +98,19 @@ export function useSemanticEditor({
     }, [setStatus]);
 
     // ── 分析圖片 ─────────────────────────────────────────────────────────────
-    /**
-     * @param overrideEncoderSession ONNX Encoder session（由 SemanticEditorView 傳入）
-     * @param overrideDecoderSession ONNX Decoder session（由 SemanticEditorView 傳入）
-     */
-    const analyzeImage = useCallback(async (
-        overrideEncoderSession?: any,
-        overrideDecoderSession?: any,
-    ) => {
+    const analyzeImage = useCallback(async () => {
         if (analyzingRef.current) return;
         if (!geminiApiKey) throw new Error('需要設定 Gemini API Key');
-        const encSess = overrideEncoderSession ?? onnxEncoderSession;
-        const decSess = overrideDecoderSession ?? onnxDecoderSession;
-        const useOnnx = !!(encSess && decSess);
-        if (!useOnnx && !falApiKey) throw new Error('SAM2 分割需要 fal.ai API Key（或先下載本機 SAM2 模型）');
+        if (!useLocalSAM2 && !falApiKey) throw new Error('SAM2 分割需要 fal.ai API Key（或先下載本機 SAM2 模型）');
 
         analyzingRef.current = true;
-        setStatus('analyzing', `Gemini 分析圖片中（${useOnnx ? '本機 SAM2' : 'fal.ai SAM2'}）...`);
+        setStatus('analyzing', `Gemini 分析圖片中（${useLocalSAM2 ? '本機 SAM2' : 'fal.ai SAM2'}）...`);
 
         try {
-            const fgLayers = useOnnx
+            const fgLayers = useLocalSAM2
                 ? await segmentSemanticLayersOnnx({
                     imageBase64: originalBase64,
                     geminiApiKey,
-                    encoderSession: encSess!,
-                    decoderSession: decSess!,
                     onProgress: msg => setStatus('segmenting', msg),
                 })
                 : await segmentSemanticLayers({
@@ -156,7 +142,7 @@ export function useSemanticEditor({
             throw e;
         }
         analyzingRef.current = false;
-    }, [originalBase64, geminiApiKey, falApiKey, onnxEncoderSession, onnxDecoderSession, setStatus]);
+    }, [originalBase64, geminiApiKey, falApiKey, useLocalSAM2, setStatus]);
 
     // ── LaMa 純背景圖層生成（手動觸發，與 SAM2 分析分開）────────────────────────
     const generateLamaBackground = useCallback(async () => {
@@ -165,16 +151,17 @@ export function useSemanticEditor({
 
         setStatus('compositing', 'LaMa 移除前景、生成純背景...');
         try {
-            const { getModelStatus, loadModel } = await import('../../utils/onnxModelCache');
+            const { getModelStatus } = await import('../../utils/onnxModelCache');
             if (await getModelStatus('lama') !== 'ready')
                 throw new Error('LaMa 模型尚未下載，請先在「本機 AI 模型」下載');
 
-            const { buildCombinedMaskFromLayers, runLama } = await import('../../utils/lamaOnnx');
+            const { buildCombinedMaskFromLayers } = await import('../../utils/lamaOnnx');
+            const { runLamaInWorker } = await import('../../utils/lamaWorkerClient');
             const { getImageDims } = await import('./semanticLayerUtils');
             const { w: fullW, h: fullH } = await getImageDims(originalBase64);
             const combinedMask = await buildCombinedMaskFromLayers(fgLayers, fullW, fullH);
-            const lamaSession  = await loadModel('lama');
-            const lamaBackground = await runLama(lamaSession, originalBase64, combinedMask);
+            // Worker 推論：不阻塞主執行緒，轉圈動畫保持運作
+            const lamaBackground = await runLamaInWorker(originalBase64, combinedMask);
 
             const bgLayer: SmartLayer = {
                 id:             `bg_lama_${Date.now()}`,

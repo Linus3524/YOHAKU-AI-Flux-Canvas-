@@ -21,6 +21,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { SmartLayer, SmartLayerCategory } from '../../types';
 import { trimTransparentPixels } from '../../utils/falImage';
 import { compressForAtlas, detectClosestRatio, downloadImageAsBase64 } from '../../utils/atlasImage';
+import { sam2EncodeInWorker, sam2DecodeInWorker } from '../../utils/sam2WorkerClient';
 
 // ─── 型別 ────────────────────────────────────────────────────────────────────
 
@@ -416,74 +417,68 @@ export async function segmentSemanticLayers({
     return layers;
 }
 
-// ─── ONNX 自動分析：Gemini 偵測 + ONNX SAM2 分割（取代 fal.ai）──────────────────
+// ─── ONNX 自動分析：Gemini 偵測 + SAM2 Worker 分割（取代 fal.ai）──────────────────
 
 export async function segmentSemanticLayersOnnx({
     imageBase64,
     geminiApiKey,
-    encoderSession,
-    decoderSession,
     onProgress,
 }: {
     imageBase64: string;
     geminiApiKey: string;
-    encoderSession: any;   // ort.InferenceSession
-    decoderSession: any;   // ort.InferenceSession
     onProgress?: (msg: string) => void;
 }): Promise<SmartLayer[]> {
     onProgress?.('Gemini 分析圖片結構...');
     const objects = await detectObjectsForSegmentation(imageBase64, geminiApiKey);
-    onProgress?.(`偵測到 ${objects.length} 個物件，ONNX SAM2 分割中...`);
+    onProgress?.(`偵測到 ${objects.length} 個物件，本機 SAM2 分割中...`);
 
     const dims = await getImageDims(imageBase64);
 
-    // 先算 embedding（只算一次，所有物件共用）
-    onProgress?.('ONNX Encoder 計算中...');
-    const { computeSAM2Embedding, runSAM2Decoder } = await import('../../utils/sam2Onnx');
-    const embedding = await computeSAM2Embedding(encoderSession, imageBase64);
+    // 先算 embedding（Worker 內只算一次，所有物件共用）
+    onProgress?.('SAM2 Encoder 計算中（背景執行，UI 不凍結）...');
+    await sam2EncodeInWorker(imageBase64);
 
-    // 逐一用 bbox 驅動 decoder
-    const results = await Promise.all(
-        objects.map(async (obj, i) => {
-            try {
-                onProgress?.(`ONNX SAM2 分割 ${i + 1}/${objects.length}：${obj.label}`);
-                const px = obj.bbox.x * dims.w;
-                const py = obj.bbox.y * dims.h;
-                const pw = obj.bbox.w * dims.w;
-                const ph = obj.bbox.h * dims.h;
-                const transparentPng = await runSAM2Decoder(
-                    decoderSession, embedding,
-                    { bbox: { x: px, y: py, w: pw, h: ph } },
-                    imageBase64,
-                );
-                const trimmed = await trimTransparentPixels(transparentPng);
-                const cropRatio = { x: trimmed.cropRatioX, y: trimmed.cropRatioY, w: trimmed.cropRatioW, h: trimmed.cropRatioH };
-                return {
-                    id:             `sl_onnx_${Date.now()}_${i}`,
-                    name:           obj.label,
-                    category:       obj.category,
-                    base64:         trimmed.base64,
-                    originalBase64: trimmed.base64,
-                    prompt:         obj.description ?? obj.label,
-                    appliedPrompt:  obj.description ?? obj.label,
-                    bbox:           cropRatio,
-                    cropRatio,
-                    pixelWidth:     trimmed.pixelWidth,
-                    pixelHeight:    trimmed.pixelHeight,
-                    history:        [],
-                    isVisible:      true,
-                    isLocked:       false,
-                    zIndex:         objects.length - i,
-                } as SmartLayer;
-            } catch (e) {
-                console.warn(`[ONNX] Skip "${obj.label}":`, e);
-                return null;
-            }
-        })
-    );
+    // 逐一用 bbox 驅動 decoder（串行，避免並發搶 Worker）
+    const results: (SmartLayer | null)[] = [];
+    for (let i = 0; i < objects.length; i++) {
+        const obj = objects[i];
+        try {
+            onProgress?.(`SAM2 分割 ${i + 1}/${objects.length}：${obj.label}`);
+            const px = obj.bbox.x * dims.w;
+            const py = obj.bbox.y * dims.h;
+            const pw = obj.bbox.w * dims.w;
+            const ph = obj.bbox.h * dims.h;
+            const transparentPng = await sam2DecodeInWorker(
+                { bbox: { x: px, y: py, w: pw, h: ph } },
+                imageBase64,
+            );
+            const trimmed = await trimTransparentPixels(transparentPng);
+            const cropRatio = { x: trimmed.cropRatioX, y: trimmed.cropRatioY, w: trimmed.cropRatioW, h: trimmed.cropRatioH };
+            results.push({
+                id:             `sl_onnx_${Date.now()}_${i}`,
+                name:           obj.label,
+                category:       obj.category,
+                base64:         trimmed.base64,
+                originalBase64: trimmed.base64,
+                prompt:         obj.description ?? obj.label,
+                appliedPrompt:  obj.description ?? obj.label,
+                bbox:           cropRatio,
+                cropRatio,
+                pixelWidth:     trimmed.pixelWidth,
+                pixelHeight:    trimmed.pixelHeight,
+                history:        [],
+                isVisible:      true,
+                isLocked:       false,
+                zIndex:         objects.length - i,
+            } as SmartLayer);
+        } catch (e) {
+            console.warn(`[SAM2 Worker] Skip "${obj.label}":`, e);
+            results.push(null);
+        }
+    }
 
     const layers = results.filter((l): l is SmartLayer => l !== null);
-    if (layers.length === 0) throw new Error('所有物件 ONNX 分割均失敗');
+    if (layers.length === 0) throw new Error('所有物件本機 SAM2 分割均失敗');
     return layers;
 }
 
