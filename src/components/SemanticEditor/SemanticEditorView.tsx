@@ -1304,7 +1304,7 @@ export function SemanticEditorView({
         const { relX, relY } = c;
         // 找所有可見圖層中包含該點的，取 zIndex 最高的
         const hit = [...state.layers]
-            .filter(l => l.isVisible)
+            .filter(l => l.isVisible && !l.isLocked)
             .filter(l => relX >= l.cropRatio.x && relX <= l.cropRatio.x + l.cropRatio.w
                       && relY >= l.cropRatio.y && relY <= l.cropRatio.y + l.cropRatio.h)
             .sort((a, b) => b.zIndex - a.zIndex)[0];
@@ -2055,7 +2055,12 @@ export function SemanticEditorView({
                                                 const r = pendingRect!;
                                                 setPendingRect(null);
                                                 if (useOnnxSAM2 && onnxEmbeddingReady) {
-                                                    await runOnnxAndAddLayer({ bbox: r });
+                                                    const iW = imgRef.current?.naturalWidth  ?? 1;
+                                                    const iH = imgRef.current?.naturalHeight ?? 1;
+                                                    await runOnnxAndAddLayer({ bbox: {
+                                                        x: r.x * iW, y: r.y * iH,
+                                                        w: r.w * iW, h: r.h * iH,
+                                                    }});
                                                 } else {
                                                     addBoxLayer(r).catch(err =>
                                                         showToast(`❌ 框選失敗：${err?.message?.slice(0, 60) || ''}`)
@@ -2308,7 +2313,7 @@ export function SemanticEditorView({
                         )}
 
                         {/* 未選取：所有圖層的 hover 可點擊區域 */}
-                        {!selectedLayer && state.layers.filter(l => l.isVisible).map(l => (
+                        {!selectedLayer && state.layers.filter(l => l.isVisible && !l.isLocked).map(l => (
                             <React.Fragment key={l.id}><HoverHitArea layer={l} onSelect={() => selectLayer(l.id)} /></React.Fragment>
                         ))}
 
