@@ -69,6 +69,8 @@ export async function runSAM2Decoder(
         clickPoint?: { x: number; y: number };
         points?: { x: number; y: number; label: 0 | 1 }[];
         bbox?: { x: number; y: number; w: number; h: number };
+        /** 使用者粗筆塗的 B&W mask base64（白=要選區域），縮至 256×256 後作為 mask_input 指引 SAM2 */
+        roughMask?: string;
     },
     /** 原圖 base64，用於把 mask 貼回真實像素（若不傳則輸出黑色 mask）*/
     originalImageBase64?: string,
@@ -84,27 +86,61 @@ export async function runSAM2Decoder(
 
     if (options.bbox) {
         const { x, y, w, h } = options.bbox;
-        // 框選用兩個點（左上 + 右下），label 都是 2（box token）
         coords = [x * scaleX, y * scaleY, (x + w) * scaleX, (y + h) * scaleY];
         labels = [2, 3];
     } else if (options.points && options.points.length > 0) {
         coords = options.points.flatMap(p => [p.x * scaleX, p.y * scaleY]);
         labels = options.points.map(p => p.label);
-        // SAM2 需要補一個 padding 點
         coords.push(0, 0);
         labels.push(-1);
     } else if (options.clickPoint) {
         coords = [options.clickPoint.x * scaleX, options.clickPoint.y * scaleY, 0, 0];
         labels = [1, -1];
+    } else if (options.roughMask) {
+        // roughMask 模式：自動從筆塗區域算重心作為 click prompt
+        coords = [0, 0, 0, 0];
+        labels = [1, -1];
+        // 重心計算在 roughMask tensor 建立後更新 coords
     } else {
-        throw new Error('SAM2 Decoder: 需要提供 clickPoint、points 或 bbox');
+        throw new Error('SAM2 Decoder: 需要提供 clickPoint、points、bbox 或 roughMask');
+    }
+
+    // ── roughMask → 256×256 mask_input tensor ──────────────────────────────
+    let maskData = new Float32Array(256 * 256);
+    let hasMask  = 0;
+    if (options.roughMask) {
+        await new Promise<void>(resolve => {
+            const img = new Image();
+            img.onload = () => {
+                const c = document.createElement('canvas');
+                c.width = c.height = 256;
+                c.getContext('2d')!.drawImage(img, 0, 0, 256, 256);
+                const px = c.getContext('2d')!.getImageData(0, 0, 256, 256).data;
+                let sumX = 0, sumY = 0, count = 0;
+                for (let i = 0; i < 256 * 256; i++) {
+                    const v = px[i * 4] / 255;  // 白=1 → 要選，黑=0
+                    maskData[i] = v > 0.5 ? 20 : -20;  // SAM2 logit 慣例：強正/負
+                    if (v > 0.5) { sumX += i % 256; sumY += Math.floor(i / 256); count++; }
+                }
+                if (count > 0) {
+                    // 重心換算回原圖像素座標，再換算到 SAM 1024 空間
+                    const cx = (sumX / count / 256) * origW * scaleX;
+                    const cy = (sumY / count / 256) * origH * scaleY;
+                    coords = [cx, cy, 0, 0];
+                }
+                hasMask = 1;
+                resolve();
+            };
+            img.onerror = () => resolve();
+            img.src = options.roughMask!;
+        });
     }
 
     const numPoints = coords.length / 2;
     const pointCoords  = new ort.Tensor('float32', new Float32Array(coords),  [1, numPoints, 2]);
     const pointLabels  = new ort.Tensor('float32', new Float32Array(labels),  [1, numPoints]);
-    const maskInput    = new ort.Tensor('float32', new Float32Array(256 * 256), [1, 1, 256, 256]);
-    const hasMaskInput = new ort.Tensor('float32', new Float32Array([0]),      [1]);
+    const maskInput    = new ort.Tensor('float32', maskData,                  [1, 1, 256, 256]);
+    const hasMaskInput = new ort.Tensor('float32', new Float32Array([hasMask]), [1]);
     const origImSize   = new ort.Tensor('int32', new Int32Array([origH, origW]), [2]);
 
     // 組合 Decoder 輸入（feature keys 來自 Encoder 輸出）
@@ -125,7 +161,7 @@ export async function runSAM2Decoder(
     const iouData   = iouScores.data as Float32Array;
     const bestIdx   = Array.from(iouData).indexOf(Math.max(...Array.from(iouData)));
 
-    const maskData  = masks.data as Float32Array;
+    const outputMaskData = masks.data as Float32Array;
     const pixelCount = origW * origH;
     const offset     = bestIdx * pixelCount;
 
@@ -148,7 +184,7 @@ export async function runSAM2Decoder(
         const mCtx = maskCanvas.getContext('2d')!;
         const mData = mCtx.createImageData(origW, origH);
         for (let i = 0; i < pixelCount; i++) {
-            const v = maskData[offset + i] > 0 ? 255 : 0;
+            const v = outputMaskData[offset + i] > 0 ? 255 : 0;
             mData.data[i * 4] = mData.data[i * 4 + 1] = mData.data[i * 4 + 2] = v;
             mData.data[i * 4 + 3] = v;
         }
@@ -160,7 +196,7 @@ export async function runSAM2Decoder(
         // fallback：黑色 mask
         const imgData = ctx.createImageData(origW, origH);
         for (let i = 0; i < pixelCount; i++) {
-            imgData.data[i * 4 + 3] = maskData[offset + i] > 0 ? 255 : 0;
+            imgData.data[i * 4 + 3] = outputMaskData[offset + i] > 0 ? 255 : 0;
         }
         ctx.putImageData(imgData, 0, 0);
     }
@@ -179,13 +215,13 @@ export async function runOnnxSAM2(
         clickPoint?: { x: number; y: number };
         bbox?: { x: number; y: number; w: number; h: number };  // 0~1 比例
         points?: { x: number; y: number; label: 0 | 1 }[];      // 像素座標
+        roughMask?: string;                                       // B&W mask base64
     },
     originalImageBase64: string,
 ): Promise<string> {
     const { origW, origH } = embedding;
 
     if (options.bbox) {
-        // 比例座標 → 像素座標
         const px = options.bbox.x * origW;
         const py = options.bbox.y * origH;
         const pw = options.bbox.w * origW;
@@ -204,5 +240,10 @@ export async function runOnnxSAM2(
             { clickPoint: options.clickPoint },
             originalImageBase64);
     }
-    throw new Error('runOnnxSAM2: 需要提供 clickPoint、bbox 或 points');
+    if (options.roughMask) {
+        return runSAM2Decoder(decoderSession, embedding,
+            { roughMask: options.roughMask },
+            originalImageBase64);
+    }
+    throw new Error('runOnnxSAM2: 需要提供 clickPoint、bbox、points 或 roughMask');
 }

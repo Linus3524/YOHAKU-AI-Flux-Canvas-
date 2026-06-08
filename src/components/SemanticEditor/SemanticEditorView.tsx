@@ -814,11 +814,21 @@ function PillToolbar({
         </svg>
     );
 
+    // 筆塗圖示
+    const BrushIcon = () => (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08" stroke="#7c3aed" strokeWidth="1.8"/>
+            <path d="M7.07 14.94C5.79 16.22 3 17 3 17c.78-2.79 1.56-4.78 2.93-5.94" stroke="#7c3aed" strokeWidth="1.8"/>
+            <circle cx="5.5" cy="18.5" r="2.5" fill="#7c3aed" fillOpacity="0.2" stroke="#7c3aed" strokeWidth="1.5"/>
+        </svg>
+    );
+
     const tools = [
         { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Ic.Scan />, label: '全圖分析 (Analyze)', onClick: onReanalyze, disabled: false },
         { id: 'sam2',    icon: <Sam2Icon />,  label: '智能點選 (Auto Segment)',      onClick: () => onTool('sam2'),   disabled: false },
         { id: 'rect',    icon: <RectIcon />,  label: '矩形框選 (Bounding Box)',       onClick: () => onTool('rect'),   disabled: false },
         { id: 'points',  icon: <PointsIcon />,label: '多點精確選取 (Multi-points)',   onClick: () => onTool('points'), disabled: false },
+        { id: 'brush',   icon: <BrushIcon />, label: '筆塗 → SAM2 精確抓取',         onClick: () => onTool('brush'),  disabled: false },
         {
             id: 'lama',
             icon: <LamaIcon />,
@@ -1097,7 +1107,26 @@ export function SemanticEditorView({
     // B：多點模式狀態
     const [multiPoints, setMultiPoints] = useState<
         { x: number; y: number; label: 1 | 0; dispX: number; dispY: number }[]
-    >([]);   // dispX/Y 是相對圖片容器的 % 位置（顯示用）
+    >([]);
+
+    // C：筆塗模式狀態（ImageEditModal 同款邏輯）
+    const brushCanvasRef    = useRef<HTMLCanvasElement>(null);
+    const brushPainting     = useRef(false);
+    const brushHasStrokeRef = useRef(false);
+    const brushSnapshot     = useRef<ImageData | null>(null);  // 每筆起始的 canvas 快照
+    const brushStrokePoints = useRef<{ x: number; y: number }[]>([]);
+    const [brushSize, setBrushSize] = useState(24);
+    const [brushEraser, setBrushEraser] = useState(false);
+    const [brushHasStroke, setBrushHasStroke] = useState(false);
+
+    // stable ref callback — 只在 mount 時設尺寸，不因 re-render 重複執行清 canvas
+    const brushCanvasRefCb = useCallback((el: HTMLCanvasElement | null) => {
+        brushCanvasRef.current = el;
+        if (el && imgRef.current) {
+            el.width  = imgRef.current.offsetWidth;
+            el.height = imgRef.current.offsetHeight;
+        }
+    }, []);
 
     // HUD 拖曳狀態
     const [hudPos, setHudPos] = useState<{ x: number; y: number } | null>(null);
@@ -1290,35 +1319,55 @@ export function SemanticEditorView({
         }
     }, [activeTool, isLoading, useOnnxSAM2, addClickLayer, showToast, getImgCoords]);
 
-    // A：矩形框選
+    // A：矩形框選 — 全部用 window 層級監聽，游標離圖片也能更新，座標 clamp 到 [0,1]
+    const getRectCoords = useCallback((clientX: number, clientY: number) => {
+        if (!imgRef.current) return null;
+        const rect = imgRef.current.getBoundingClientRect();
+        return {
+            relX: Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)),
+            relY: Math.max(0, Math.min(1, (clientY - rect.top)  / rect.height)),
+        };
+    }, []);
+
     const handleRectMouseDown = useCallback((e: React.MouseEvent) => {
         if (activeTool !== 'rect' || isLoading) return;
+        // 避免點確認/取消按鈕時觸發新的框選
+        if ((e.target as HTMLElement).closest('button')) return;
         e.stopPropagation();
-        const c = getImgCoords(e);
+        const c = getRectCoords(e.clientX, e.clientY);
         if (!c) return;
+        setPendingRect(null);
         setRectDrag({ startX: c.relX, startY: c.relY, curX: c.relX, curY: c.relY, active: true });
-    }, [activeTool, isLoading, getImgCoords]);
 
-    const handleRectMouseMove = useCallback((e: React.MouseEvent) => {
-        if (!rectDrag?.active) return;
-        const c = getImgCoords(e);
-        if (!c) return;
-        setRectDrag(d => d ? { ...d, curX: c.relX, curY: c.relY } : null);
-    }, [rectDrag, getImgCoords]);
+        // Window 層級，游標移到圖片外也能持續追蹤
+        const onMove = (ev: MouseEvent) => {
+            const cc = getRectCoords(ev.clientX, ev.clientY);
+            if (!cc) return;
+            setRectDrag(d => d ? { ...d, curX: cc.relX, curY: cc.relY } : null);
+        };
+        const onUp = (ev: MouseEvent) => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            const cc = getRectCoords(ev.clientX, ev.clientY);
+            setRectDrag(prev => {
+                if (!prev) return null;
+                const ex = cc?.relX ?? prev.curX;
+                const ey = cc?.relY ?? prev.curY;
+                const x = Math.max(0, Math.min(1, Math.min(prev.startX, ex)));
+                const y = Math.max(0, Math.min(1, Math.min(prev.startY, ey)));
+                const w = Math.max(0, Math.min(1 - x, Math.abs(ex - prev.startX)));
+                const h = Math.max(0, Math.min(1 - y, Math.abs(ey - prev.startY)));
+                if (w >= 0.02 && h >= 0.02) setPendingRect({ x, y, w, h });
+                return null;
+            });
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, [activeTool, isLoading, getRectCoords]);
 
-    const handleRectMouseUp = useCallback((e: React.MouseEvent) => {
-        if (!rectDrag?.active || isLoading) return;
-        const c = getImgCoords(e);
-        if (!c) return;
-        const x = Math.min(rectDrag.startX, c.relX);
-        const y = Math.min(rectDrag.startY, c.relY);
-        const w = Math.abs(c.relX - rectDrag.startX);
-        const h = Math.abs(c.relY - rectDrag.startY);
-        setRectDrag(null);
-        if (w < 0.02 || h < 0.02) return; // 太小忽略
-        // 框選完成 → 存入 pendingRect，等待使用者確認才送出分析
-        setPendingRect({ x, y, w, h });
-    }, [rectDrag, isLoading, getImgCoords]);
+    // Move/Up 保留空 handler 避免 JSX 報錯，實際已由 window 接管
+    const handleRectMouseMove = useCallback((_e: React.MouseEvent) => {}, []);
+    const handleRectMouseUp   = useCallback((_e: React.MouseEvent) => {}, []);
 
     // B：多點模式
     const handlePointsClick = useCallback((e: React.MouseEvent) => {
@@ -1383,8 +1432,145 @@ export function SemanticEditorView({
         setSam2Mode(tool === 'sam2');
         setRectDrag(null);
         setMultiPoints([]);
-        if (!['sam2', 'rect', 'points'].includes(tool)) selectLayer(null);
+        setBrushEraser(false);
+        setBrushHasStroke(false);
+        brushHasStrokeRef.current = false;
+        brushSnapshot.current = null;
+        brushStrokePoints.current = [];
+        // 切換工具時清空筆塗 canvas
+        if (brushCanvasRef.current) {
+            const ctx = brushCanvasRef.current.getContext('2d');
+            ctx?.clearRect(0, 0, brushCanvasRef.current.width, brushCanvasRef.current.height);
+        }
+        if (!['sam2', 'rect', 'points', 'brush'].includes(tool)) selectLayer(null);
     }, [selectLayer]);
+
+    // C：筆塗 handlers
+    const getBrushPos = useCallback((e: React.MouseEvent | MouseEvent) => {
+        if (!imgRef.current) return null;
+        const rect = imgRef.current.getBoundingClientRect();
+        return {
+            x: Math.max(0, Math.min(rect.width,  e.clientX - rect.left)),
+            y: Math.max(0, Math.min(rect.height, e.clientY - rect.top)),
+        };
+    }, []);
+
+    // 每次 mousemove 清掉「本筆畫的起始快照」再重繪整條路徑
+    // 同 ImageEditModal 做法：整筆一次 stroke，不會有半透明重疊接頭
+    const redrawCurrentStroke = useCallback(() => {
+        const canvas = brushCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d')!;
+        const pts = brushStrokePoints.current;
+        if (pts.length === 0) return;
+
+        // 還原到本筆畫開始前的狀態
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (brushSnapshot.current) ctx.putImageData(brushSnapshot.current, 0, 0);
+
+        ctx.lineCap  = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = brushSize;
+
+        if (brushEraser) {
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.strokeStyle = 'rgba(0,0,0,1)';
+        } else {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = 'rgba(255,59,48,0.5)';   // ImageEditModal 同款
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+    }, [brushSize, brushEraser]);
+
+    const handleBrushMouseDown = useCallback((e: React.MouseEvent) => {
+        if (activeTool !== 'brush' || isLoading) return;
+        if ((e.target as HTMLElement).closest('button')) return;
+        e.stopPropagation();
+
+        // 快照目前 canvas 狀態（之前的筆畫已烙進去）
+        const canvas = brushCanvasRef.current;
+        if (canvas) {
+            brushSnapshot.current = canvas.getContext('2d')!
+                .getImageData(0, 0, canvas.width, canvas.height);
+        }
+        brushStrokePoints.current = [];
+        brushPainting.current = true;
+
+        const addPoint = (ev: MouseEvent | React.MouseEvent) => {
+            const p = getBrushPos(ev as MouseEvent);
+            if (!p) return;
+            brushStrokePoints.current.push(p);
+            redrawCurrentStroke();
+        };
+
+        addPoint(e as unknown as MouseEvent);
+
+        const onMove = (ev: MouseEvent) => { if (brushPainting.current) addPoint(ev); };
+        const onUp   = () => {
+            brushPainting.current = false;
+            if (!brushEraser && brushStrokePoints.current.length > 0) {
+                brushHasStrokeRef.current = true;
+                setBrushHasStroke(true);
+            }
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, [activeTool, isLoading, getBrushPos, redrawCurrentStroke, brushEraser]);
+
+    // 筆塗確認：canvas → B&W mask → SAM2（含 roughMask）
+    const handleBrushConfirm = useCallback(async () => {
+        const canvas = brushCanvasRef.current;
+        if (!canvas || !brushHasStroke) return;
+
+        // 讀取筆塗像素，轉成 B&W mask（有筆跡=白，空白=黑）
+        const ctx = canvas.getContext('2d')!;
+        const { width: W, height: H } = canvas;
+        const px = ctx.getImageData(0, 0, W, H).data;
+        const bwC = document.createElement('canvas');
+        bwC.width = W; bwC.height = H;
+        const bwCtx = bwC.getContext('2d')!;
+        bwCtx.fillStyle = '#000';
+        bwCtx.fillRect(0, 0, W, H);
+        const bwData = bwCtx.createImageData(W, H);
+        for (let i = 0; i < W * H; i++) {
+            const v = px[i * 4 + 3] > 30 ? 255 : 0;
+            bwData.data[i * 4] = bwData.data[i * 4 + 1] = bwData.data[i * 4 + 2] = v;
+            bwData.data[i * 4 + 3] = 255;
+        }
+        bwCtx.putImageData(bwData, 0, 0);
+        const roughMask = bwC.toDataURL('image/png');
+
+        // 清空筆塗
+        ctx.clearRect(0, 0, W, H);
+        brushHasStrokeRef.current = false;
+        setBrushHasStroke(false);
+
+        if (useOnnxSAM2 && onnxEmbeddingRef.current) {
+            await runOnnxAndAddLayer({ roughMask });
+        } else if (falApiKey) {
+            // fal.ai fallback：從筆塗重心算出 click point
+            let sumX = 0, sumY = 0, count = 0;
+            for (let i = 0; i < W * H; i++) {
+                if (bwData.data[i * 4] > 127) {
+                    sumX += i % W; sumY += Math.floor(i / W); count++;
+                }
+            }
+            if (count === 0) return;
+            const clickPixel = { x: Math.round(sumX / count), y: Math.round(sumY / count) };
+            addClickLayer(clickPixel).catch(err =>
+                showToast(`❌ 分割失敗：${err?.message?.slice(0, 60) || ''}`)
+            );
+        } else {
+            showToast('⚠️ 筆塗模式需要本機 SAM2 ONNX 或 fal.ai API Key');
+        }
+    }, [brushHasStroke, useOnnxSAM2, falApiKey, runOnnxAndAddLayer, addClickLayer, showToast]);
 
     // 返回畫布（保留狀態）
     const handleBack = useCallback(() => {
@@ -1622,9 +1808,10 @@ export function SemanticEditorView({
                         onClick={activeTool === 'sam2'    ? handleCanvasClick
                                : activeTool === 'points'  ? handlePointsClick
                                : (e => e.stopPropagation())}
-                        onMouseDown={activeTool === 'rect' ? handleRectMouseDown : undefined}
-                        onMouseMove={activeTool === 'rect' ? handleRectMouseMove : undefined}
-                        onMouseUp={activeTool === 'rect'   ? handleRectMouseUp   : undefined}
+                        onMouseDown={activeTool === 'rect'  ? handleRectMouseDown
+                                   : activeTool === 'brush' ? handleBrushMouseDown : undefined}
+                        onMouseMove={activeTool === 'rect'  ? handleRectMouseMove : undefined}
+                        onMouseUp={activeTool === 'rect'    ? handleRectMouseUp   : undefined}
                         onContextMenu={activeTool === 'points' ? (e => { e.preventDefault(); handlePointsClick(e); }) : undefined}
                     >
                         {/* sam2 / rect 模式提示條 */}
@@ -1786,78 +1973,99 @@ export function SemanticEditorView({
                         })()}
 
                         {/* A：框選完成待確認 */}
-                        {pendingRect && activeTool === 'rect' && (
-                            <>
-                                {/* 框線 */}
-                                <div style={{
-                                    position: 'absolute',
-                                    left: `${pendingRect.x * 100}%`,
-                                    top: `${pendingRect.y * 100}%`,
-                                    width: `${pendingRect.w * 100}%`,
-                                    height: `${pendingRect.h * 100}%`,
-                                    border: '2px solid #7c3aed',
-                                    background: 'rgba(124,58,237,0.06)',
-                                    pointerEvents: 'none',
-                                    zIndex: 15,
-                                    boxSizing: 'border-box',
-                                    borderRadius: 4,
-                                }} />
-                                {/* 確認/取消按鈕 */}
-                                <div style={{
-                                    position: 'absolute',
-                                    left: `${(pendingRect.x + pendingRect.w) * 100}%`,
-                                    top: `${(pendingRect.y + pendingRect.h) * 100}%`,
-                                    transform: 'translate(-100%, 6px)',
-                                    zIndex: 20,
-                                    display: 'flex',
-                                    gap: 6,
-                                }}>
-                                    <button
-                                        onClick={async () => {
-                                            const r = pendingRect!;
-                                            setPendingRect(null);
-                                            if (useOnnxSAM2 && onnxEmbeddingRef.current) {
-                                                await runOnnxAndAddLayer({ bbox: r });
-                                            } else {
-                                                addBoxLayer(r).catch(err =>
-                                                    showToast(`❌ 框選失敗：${err?.message?.slice(0, 60) || ''}`)
-                                                );
-                                            }
-                                        }}
-                                        style={{
-                                            padding: '5px 12px',
-                                            borderRadius: 9999,
-                                            background: '#7c3aed',
-                                            color: '#fff',
-                                            border: 'none',
-                                            fontSize: 12,
-                                            fontWeight: 700,
-                                            lineHeight: '1',
-                                            cursor: 'pointer',
-                                            boxShadow: '0 2px 8px rgba(124,58,237,0.4)',
-                                        }}
-                                    >
-                                        開始分析
-                                    </button>
-                                    <button
-                                        onClick={() => setPendingRect(null)}
-                                        style={{
-                                            padding: '5px 10px',
-                                            borderRadius: 9999,
-                                            background: '#fff',
-                                            color: '#6b7280',
-                                            border: '1px solid #e5e7eb',
-                                            fontSize: 12,
-                                            fontWeight: 600,
-                                            lineHeight: '1',
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        取消
-                                    </button>
-                                </div>
-                            </>
-                        )}
+                        {pendingRect && activeTool === 'rect' && (() => {
+                            // 依框選位置決定按鈕在上/下、靠左/右
+                            const EDGE = 0.15; // 距圖片邊界 15% 以內算「靠邊」
+                            const showAbove = (pendingRect.y + pendingRect.h) > (1 - EDGE);
+                            const anchorRight = (pendingRect.x + pendingRect.w) > (1 - EDGE);
+
+                            const btnLeft  = anchorRight
+                                ? `${pendingRect.x * 100}%`               // 靠右時：按鈕左對齊選框左緣
+                                : `${(pendingRect.x + pendingRect.w) * 100}%`; // 正常：右緣
+                            const btnTop   = showAbove
+                                ? `${pendingRect.y * 100}%`                // 靠下時：按鈕貼選框上緣
+                                : `${(pendingRect.y + pendingRect.h) * 100}%`; // 正常：下緣
+                            const btnTransform = [
+                                anchorRight ? 'translateX(0)'   : 'translateX(-100%)',
+                                showAbove   ? 'translateY(calc(-100% - 6px))' : 'translateY(6px)',
+                            ].join(' ');
+
+                            return (
+                                <>
+                                    {/* 框線 */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: `${pendingRect.x * 100}%`,
+                                        top: `${pendingRect.y * 100}%`,
+                                        width: `${pendingRect.w * 100}%`,
+                                        height: `${pendingRect.h * 100}%`,
+                                        border: '2px solid #7c3aed',
+                                        background: 'rgba(124,58,237,0.06)',
+                                        pointerEvents: 'none',
+                                        zIndex: 15,
+                                        boxSizing: 'border-box',
+                                        borderRadius: 4,
+                                    }} />
+                                    {/* 確認/取消按鈕 — 自動避開邊界 */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: btnLeft,
+                                        top: btnTop,
+                                        transform: btnTransform,
+                                        zIndex: 20,
+                                        display: 'flex',
+                                        gap: 6,
+                                        pointerEvents: 'all',
+                                    }}>
+                                        <button
+                                            onClick={async () => {
+                                                const r = pendingRect!;
+                                                setPendingRect(null);
+                                                if (useOnnxSAM2 && onnxEmbeddingRef.current) {
+                                                    await runOnnxAndAddLayer({ bbox: r });
+                                                } else {
+                                                    addBoxLayer(r).catch(err =>
+                                                        showToast(`❌ 框選失敗：${err?.message?.slice(0, 60) || ''}`)
+                                                    );
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '5px 12px',
+                                                borderRadius: 9999,
+                                                background: '#7c3aed',
+                                                color: '#fff',
+                                                border: 'none',
+                                                fontSize: 12,
+                                                fontWeight: 700,
+                                                lineHeight: '1',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 2px 8px rgba(124,58,237,0.4)',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            開始分析
+                                        </button>
+                                        <button
+                                            onClick={() => setPendingRect(null)}
+                                            style={{
+                                                padding: '5px 10px',
+                                                borderRadius: 9999,
+                                                background: '#fff',
+                                                color: '#6b7280',
+                                                border: '1px solid #e5e7eb',
+                                                fontSize: 12,
+                                                fontWeight: 600,
+                                                lineHeight: '1',
+                                                cursor: 'pointer',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            取消
+                                        </button>
+                                    </div>
+                                </>
+                            );
+                        })()}
 
                         {/* B：多點標記 */}
                         {activeTool === 'points' && multiPoints.map((pt, i) => (
@@ -1916,6 +2124,133 @@ export function SemanticEditorView({
                                 transition: 'opacity 0.2s',
                             } as React.CSSProperties}
                         />
+
+                        {/* C：筆塗 overlay canvas（跟著 img 尺寸） */}
+                        {activeTool === 'brush' && (
+                            <>
+                                <canvas
+                                    ref={brushCanvasRefCb}
+                                    style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        pointerEvents: 'none',
+                                        zIndex: 14,
+                                        cursor: brushEraser ? 'cell' : 'crosshair',
+                                    }}
+                                />
+                                {/* 筆塗 HUD — 與多點模式 bar 同規格 */}
+                                {!isLoading && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: 12, left: '50%',
+                                        transform: 'translateX(-50%)',
+                                        zIndex: 22,
+                                        cursor: 'default',
+                                        background: 'rgba(18,20,28,0.92)',
+                                        backdropFilter: 'blur(12px)',
+                                        borderRadius: 9999,
+                                        padding: '6px 6px 6px 16px',
+                                        display: 'flex', alignItems: 'center', gap: 16,
+                                        border: '1px solid rgba(255,255,255,0.08)',
+                                        boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                                        whiteSpace: 'nowrap',
+                                        userSelect: 'none',
+                                    }}>
+                                        {/* 筆刷大小 */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 500 }}>筆刷</span>
+                                            <input
+                                                type="range" min={8} max={80} value={brushSize}
+                                                onChange={e => setBrushSize(Number(e.target.value))}
+                                                style={{ width: 72, accentColor: '#7c3aed', cursor: 'pointer' }}
+                                                onMouseDown={e => e.stopPropagation()}
+                                            />
+                                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, fontFamily: 'monospace', minWidth: 20 }}>{brushSize}</span>
+                                        </div>
+
+                                        <span style={{ color: 'rgba(255,255,255,0.18)', fontSize: 14 }}>|</span>
+
+                                        {/* 橡皮擦 */}
+                                        <button
+                                            onMouseDown={e => e.stopPropagation()}
+                                            onClick={() => setBrushEraser(v => !v)}
+                                            style={{
+                                                background: brushEraser ? 'linear-gradient(135deg,#7c3aed,#6366f1)' : 'rgba(255,255,255,0.08)',
+                                                color: brushEraser ? '#fff' : 'rgba(255,255,255,0.65)',
+                                                border: '1px solid rgba(255,255,255,0.12)',
+                                                borderRadius: 9999, padding: '5px 12px',
+                                                fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                                                lineHeight: '1', whiteSpace: 'nowrap',
+                                                boxShadow: brushEraser ? '0 4px 12px rgba(124,58,237,0.35)' : 'none',
+                                                transition: 'all 0.15s',
+                                            }}
+                                        >橡皮擦</button>
+
+                                        {/* 清除 */}
+                                        {brushHasStroke && (
+                                            <button
+                                                onMouseDown={e => e.stopPropagation()}
+                                                onClick={() => {
+                                                    const c = brushCanvasRef.current;
+                                                    if (c) c.getContext('2d')?.clearRect(0, 0, c.width, c.height);
+                                                    brushHasStrokeRef.current = false;
+                                                    brushSnapshot.current = null;
+                                                    brushStrokePoints.current = [];
+                                                    setBrushHasStroke(false);
+                                                }}
+                                                style={{
+                                                    background: 'rgba(255,255,255,0.08)',
+                                                    color: 'rgba(255,255,255,0.65)',
+                                                    border: '1px solid rgba(255,255,255,0.12)',
+                                                    borderRadius: 9999, padding: '5px 12px',
+                                                    fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                                                    lineHeight: '1', whiteSpace: 'nowrap',
+                                                }}
+                                            >清除</button>
+                                        )}
+
+                                        {/* 取消模式 */}
+                                        <button
+                                            onMouseDown={e => e.stopPropagation()}
+                                            onClick={() => handleToolChange('select')}
+                                            style={{
+                                                background: 'rgba(255,255,255,0.08)',
+                                                color: 'rgba(255,255,255,0.65)',
+                                                border: '1px solid rgba(255,255,255,0.12)',
+                                                borderRadius: 9999, padding: '5px 12px',
+                                                fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                                                lineHeight: '1', whiteSpace: 'nowrap',
+                                            }}
+                                        >取消</button>
+
+                                        {/* 確認送 SAM2 */}
+                                        {brushHasStroke && (
+                                            <button
+                                                onMouseDown={e => e.stopPropagation()}
+                                                onClick={handleBrushConfirm}
+                                                style={{
+                                                    background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+                                                    color: '#fff', border: 'none',
+                                                    borderRadius: 9999, padding: '7px 18px',
+                                                    fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                                                    display: 'flex', alignItems: 'center', gap: 6,
+                                                    boxShadow: '0 4px 12px rgba(124,58,237,0.35)',
+                                                    transition: 'all 0.15s',
+                                                    lineHeight: '1', whiteSpace: 'nowrap',
+                                                }}
+                                            >
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <polyline points="20 6 9 17 4 12"/>
+                                                </svg>
+                                                SAM2 分割
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </>
+                        )}
 
                         {/* 選中層高亮（疊在暗化的原圖上） */}
                         {selectedLayer && (
