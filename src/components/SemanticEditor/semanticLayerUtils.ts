@@ -347,6 +347,56 @@ async function buildSmartLayer(
     };
 }
 
+// ─── 影像裁切工具 ──────────────────────────────────────────────────────────────
+
+/** 依 bbox（0-1 比例）裁切圖片，回傳裁切後的 base64 */
+async function cropToBBox(
+    imageBase64: string,
+    bbox: { x: number; y: number; w: number; h: number },
+): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const W = img.naturalWidth, H = img.naturalHeight;
+            const x = Math.round(bbox.x * W);
+            const y = Math.round(bbox.y * H);
+            const w = Math.max(1, Math.round(bbox.w * W));
+            const h = Math.max(1, Math.round(bbox.h * H));
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d')!.drawImage(img, x, y, w, h, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = reject;
+        img.src = imageBase64;
+    });
+}
+
+/** 把裁切圖貼回全尺寸透明畫布的 bbox 位置 */
+async function placeInFullCanvas(
+    croppedBase64: string,
+    fullW: number,
+    fullH: number,
+    bbox: { x: number; y: number; w: number; h: number },
+): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = fullW; canvas.height = fullH;
+            const ctx = canvas.getContext('2d')!;
+            ctx.drawImage(
+                img, 0, 0, img.naturalWidth, img.naturalHeight,
+                Math.round(bbox.x * fullW), Math.round(bbox.y * fullH),
+                Math.round(bbox.w * fullW), Math.round(bbox.h * fullH),
+            );
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = reject;
+        img.src = croppedBase64;
+    });
+}
+
 // ─── 自動分層（Gemini bbox → SAM2）──────────────────────────────────────────
 
 export interface SegmentOptions {

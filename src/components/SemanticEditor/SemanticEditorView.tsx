@@ -776,6 +776,17 @@ function PillToolbar({
     hasLayers: boolean;
     lamaReady: boolean;
 }) {
+    // 游標選取圖示
+    const CursorIcon = () => (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 4l14 9-7.5 1.5-3 6.5z"
+                fill={activeTool === 'select' ? '#7c3aed' : '#6b7280'}
+                fillOpacity={activeTool === 'select' ? 0.25 : 0.15}
+                stroke={activeTool === 'select' ? '#7c3aed' : '#6b7280'}
+                strokeWidth="1.7"/>
+        </svg>
+    );
+
     // SAM2 點選圖示：藍色游標 + 右上大閃光
     const Sam2Icon = () => (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
@@ -827,6 +838,7 @@ function PillToolbar({
     );
 
     const tools = [
+        { id: 'select',  icon: <CursorIcon />, label: '選取圖層 (Select Layer)',       onClick: () => onTool('select'), disabled: false },
         { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Ic.Scan />, label: '全圖分析 (Analyze)', onClick: onReanalyze, disabled: false },
         { id: 'sam2',    icon: <Sam2Icon />,  label: '智能點選 (Auto Segment)',      onClick: () => onTool('sam2'),   disabled: false },
         { id: 'rect',    icon: <RectIcon />,  label: '矩形框選 (Bounding Box)',       onClick: () => onTool('rect'),   disabled: false },
@@ -1286,6 +1298,21 @@ export function SemanticEditorView({
         const pixY = Math.round(relY * imgRef.current.naturalHeight);
         return { relX, relY, pixX, pixY };
     }, []);
+
+    // 選取模式：點擊畫布選中最上層的圖層
+    const handleSelectClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        e.stopPropagation();
+        const c = getImgCoords(e);
+        if (!c) return;
+        const { relX, relY } = c;
+        // 找所有可見圖層中包含該點的，取 zIndex 最高的
+        const hit = [...state.layers]
+            .filter(l => l.isVisible && l.category !== 'BACKGROUND')
+            .filter(l => relX >= l.cropRatio.x && relX <= l.cropRatio.x + l.cropRatio.w
+                      && relY >= l.cropRatio.y && relY <= l.cropRatio.y + l.cropRatio.h)
+            .sort((a, b) => b.zIndex - a.zIndex)[0];
+        selectLayer(hit?.id ?? null);
+    }, [state.layers, getImgCoords, selectLayer]);
 
     // SAM2 單點模式：click
     const handleCanvasClick = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
@@ -1810,10 +1837,12 @@ export function SemanticEditorView({
                             cursor: activeTool === 'sam2' ? 'crosshair'
                                 : activeTool === 'rect' ? 'crosshair'
                                 : activeTool === 'points' ? 'cell'
+                                : activeTool === 'select' ? 'default'
                                 : 'default',
                         }}
                         onClick={activeTool === 'sam2'    ? handleCanvasClick
                                : activeTool === 'points'  ? handlePointsClick
+                               : activeTool === 'select'  ? handleSelectClick
                                : (e => e.stopPropagation())}
                         onMouseDown={activeTool === 'rect'  ? handleRectMouseDown
                                    : activeTool === 'brush' ? handleBrushMouseDown : undefined}
