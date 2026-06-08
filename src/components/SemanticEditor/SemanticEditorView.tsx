@@ -776,16 +776,20 @@ function PillToolbar({
     hasLayers: boolean;
     lamaReady: boolean;
 }) {
-    // 游標選取圖示
-    const CursorIcon = () => (
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 4l14 9-7.5 1.5-3 6.5z"
-                fill={activeTool === 'select' ? '#7c3aed' : '#6b7280'}
-                fillOpacity={activeTool === 'select' ? 0.25 : 0.15}
-                stroke={activeTool === 'select' ? '#7c3aed' : '#6b7280'}
-                strokeWidth="1.7"/>
-        </svg>
-    );
+    // 手指選取圖示
+    const CursorIcon = () => {
+        const c = activeTool === 'select' ? '#7c3aed' : '#6b7280';
+        return (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                {/* 食指 */}
+                <path d="M9 11V5a2 2 0 0 1 4 0v6"/>
+                {/* 手掌 */}
+                <path d="M13 11a2 2 0 0 1 4 0v3"/>
+                <path d="M17 14a2 2 0 0 1 4 0v1a6 6 0 0 1-6 6H9a6 6 0 0 1-5.83-4.49l-1.1-4.4A2 2 0 0 1 4 10a2 2 0 0 1 2 2v3"/>
+                <path d="M9 11a2 2 0 0 0-2 2v2"/>
+            </svg>
+        );
+    };
 
     // SAM2 點選圖示：藍色游標 + 右上大閃光
     const Sam2Icon = () => (
@@ -1837,7 +1841,7 @@ export function SemanticEditorView({
                             cursor: activeTool === 'sam2' ? 'crosshair'
                                 : activeTool === 'rect' ? 'crosshair'
                                 : activeTool === 'points' ? 'cell'
-                                : activeTool === 'select' ? 'default'
+                                : activeTool === 'select' ? 'pointer'
                                 : 'default',
                         }}
                         onClick={activeTool === 'sam2'    ? handleCanvasClick
