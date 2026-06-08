@@ -703,55 +703,53 @@ function LayerRow({
                 )}
             </div>
 
-            {/* 鎖定常態顯示 */}
-            {isLocked && !hovered && (
-                <span style={{ color: '#d97706', display: 'flex', flexShrink: 0 }}>
-                    <Ic.Lock />
-                </span>
-            )}
-
-            {/* Hover 操作按鈕群 */}
-            {hovered && (
-                <div
-                    onClick={e => e.stopPropagation()}
-                    style={{ display: 'flex', alignItems: 'center', gap: 2 }}
-                >
+            {/* 右側操作區：鎖頭永遠占位，其他按鈕 hover 才出現 */}
+            <div
+                onClick={e => e.stopPropagation()}
+                style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}
+            >
+                {hovered && (
                     <button onClick={() => onToggleVisibility()}
                         title={isVisible ? '隱藏' : '顯示'} style={iconBtn}
                         onMouseEnter={e => (e.currentTarget.style.color = '#374151')}
                         onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}>
                         {isVisible ? <Ic.Eye /> : <Ic.EyeOff />}
                     </button>
+                )}
 
-                    {onToggleLock && (
-                        <button onClick={() => onToggleLock()}
-                            title={isLocked ? '解鎖' : '鎖定'}
-                            style={{ ...iconBtn, color: isLocked ? '#d97706' : '#9ca3af' }}
-                            onMouseEnter={e => (e.currentTarget.style.color = '#d97706')}
-                            onMouseLeave={e => (e.currentTarget.style.color = isLocked ? '#d97706' : '#9ca3af')}>
-                            {isLocked ? <Ic.Lock /> : <Ic.Unlock />}
-                        </button>
-                    )}
+                {/* 鎖頭：永遠佔位，locked 時橙色，hover 未鎖定時灰色，其餘透明 */}
+                {onToggleLock && (
+                    <button onClick={() => onToggleLock()}
+                        title={isLocked ? '解鎖' : '鎖定'}
+                        style={{
+                            ...iconBtn,
+                            color: isLocked ? '#d97706' : hovered ? '#9ca3af' : 'transparent',
+                            pointerEvents: hovered || isLocked ? 'auto' : 'none',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#d97706')}
+                        onMouseLeave={e => (e.currentTarget.style.color = isLocked ? '#d97706' : hovered ? '#9ca3af' : 'transparent')}>
+                        {isLocked ? <Ic.Lock /> : <Ic.Unlock />}
+                    </button>
+                )}
 
-                    {onDownload && (
-                        <button onClick={() => onDownload()}
-                            title="下載此圖層（PNG）" style={iconBtn}
-                            onMouseEnter={e => (e.currentTarget.style.color = '#374151')}
-                            onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}>
-                            <Ic.Download />
-                        </button>
-                    )}
+                {hovered && onDownload && (
+                    <button onClick={() => onDownload()}
+                        title="下載此圖層（PNG）" style={iconBtn}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#374151')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}>
+                        <Ic.Download />
+                    </button>
+                )}
 
-                    {onDelete && (
-                        <button onClick={() => onDelete()}
-                            title="刪除圖層" style={iconBtn}
-                            onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                            onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}>
-                            <Ic.Trash />
-                        </button>
-                    )}
-                </div>
-            )}
+                {hovered && onDelete && (
+                    <button onClick={() => onDelete()}
+                        title="刪除圖層" style={iconBtn}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}>
+                        <Ic.Trash />
+                    </button>
+                )}
+            </div>
         </div>
     );
 }
