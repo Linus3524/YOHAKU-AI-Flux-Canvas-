@@ -134,55 +134,16 @@ export function useSemanticEditor({
                     onProgress: msg => setStatus('segmenting', msg),
                 });
 
-            // ── LaMa 背景圖層生成 ──────────────────────────────────────────────
-            let lamaBackground: string | undefined;
-            let allLayers: SmartLayer[] = fgLayers;
-            try {
-                const { getModelStatus, loadModel } = await import('../../utils/onnxModelCache');
-                if (await getModelStatus('lama') === 'ready') {
-                    setStatus('compositing', 'LaMa 生成純背景圖層...');
-                    const { buildCombinedMaskFromLayers, runLama } = await import('../../utils/lamaOnnx');
-                    const { getImageDims } = await import('./semanticLayerUtils');
-                    const { w: fullW, h: fullH } = await getImageDims(originalBase64);
-                    const combinedMask = await buildCombinedMaskFromLayers(fgLayers, fullW, fullH);
-                    const lamaSession = await loadModel('lama');
-                    lamaBackground = await runLama(lamaSession, originalBase64, combinedMask);
-
-                    const bgLayer: SmartLayer = {
-                        id: `bg_lama_${Date.now()}`,
-                        name: '背景',
-                        category: 'BACKGROUND',
-                        base64: lamaBackground,
-                        originalBase64: lamaBackground,
-                        prompt: '原始背景',
-                        appliedPrompt: '原始背景',
-                        bbox:      { x: 0, y: 0, w: 1, h: 1 },
-                        cropRatio: { x: 0, y: 0, w: 1, h: 1 },
-                        pixelWidth: fullW,
-                        pixelHeight: fullH,
-                        history: [],
-                        isVisible: true,
-                        isLocked: true,
-                        zIndex: -1,
-                    };
-                    allLayers = [...fgLayers, bgLayer];
-                }
-            } catch (lamaErr) {
-                console.warn('[analyzeImage] LaMa 背景生成失敗（跳過）:', lamaErr);
-            }
-
             setStatus('compositing', '合成預覽...');
-            const bgBase64 = lamaBackground ?? originalBase64;
-            // 合成時只傳前景層，背景由 backgroundBase64 控制
-            const composite = await compositeSmartLayers(bgBase64, fgLayers);
+            const composite = await compositeSmartLayers(originalBase64, fgLayers);
 
             setState(s => ({
                 ...s,
-                layers:             allLayers,
-                originalLayers:     allLayers,
+                layers:             fgLayers,
+                originalLayers:     fgLayers,
                 compositeBase64:    composite,
-                backgroundBase64:   bgBase64,
-                lamaBackgroundBase64: lamaBackground,
+                backgroundBase64:   s.originalBase64,
+                lamaBackgroundBase64: undefined,
                 selectedLayerId:    null,
                 status:             'idle',
                 statusMessage:      '',
@@ -196,6 +157,63 @@ export function useSemanticEditor({
         }
         analyzingRef.current = false;
     }, [originalBase64, geminiApiKey, falApiKey, onnxEncoderSession, onnxDecoderSession, setStatus]);
+
+    // ── LaMa 純背景圖層生成（手動觸發，與 SAM2 分析分開）────────────────────────
+    const generateLamaBackground = useCallback(async () => {
+        const fgLayers = state.layers.filter(l => l.category !== 'BACKGROUND');
+        if (fgLayers.length === 0) throw new Error('請先執行分析，再生成背景圖層');
+
+        setStatus('compositing', 'LaMa 移除前景、生成純背景...');
+        try {
+            const { getModelStatus, loadModel } = await import('../../utils/onnxModelCache');
+            if (await getModelStatus('lama') !== 'ready')
+                throw new Error('LaMa 模型尚未下載，請先在「本機 AI 模型」下載');
+
+            const { buildCombinedMaskFromLayers, runLama } = await import('../../utils/lamaOnnx');
+            const { getImageDims } = await import('./semanticLayerUtils');
+            const { w: fullW, h: fullH } = await getImageDims(originalBase64);
+            const combinedMask = await buildCombinedMaskFromLayers(fgLayers, fullW, fullH);
+            const lamaSession  = await loadModel('lama');
+            const lamaBackground = await runLama(lamaSession, originalBase64, combinedMask);
+
+            const bgLayer: SmartLayer = {
+                id:             `bg_lama_${Date.now()}`,
+                name:           '背景',
+                category:       'BACKGROUND',
+                base64:         lamaBackground,
+                originalBase64: lamaBackground,
+                prompt:         '原始背景',
+                appliedPrompt:  '原始背景',
+                bbox:           { x: 0, y: 0, w: 1, h: 1 },
+                cropRatio:      { x: 0, y: 0, w: 1, h: 1 },
+                pixelWidth:     fullW,
+                pixelHeight:    fullH,
+                history:        [],
+                isVisible:      true,
+                isLocked:       true,
+                zIndex:         -1,
+            };
+
+            // 移除舊的 BACKGROUND 圖層（重新生成時替換）
+            const withoutOldBg = state.layers.filter(l => l.category !== 'BACKGROUND');
+            const allLayers = [...withoutOldBg, bgLayer];
+            const composite = await compositeSmartLayers(lamaBackground, fgLayers);
+
+            setState(s => ({
+                ...s,
+                layers:               allLayers,
+                originalLayers:       s.activeVersionIndex === -1 ? allLayers : s.originalLayers,
+                compositeBase64:      composite,
+                backgroundBase64:     lamaBackground,
+                lamaBackgroundBase64: lamaBackground,
+                status:               'idle',
+                statusMessage:        '',
+            }));
+        } catch (e) {
+            setStatus('idle', '');
+            throw e;
+        }
+    }, [state.layers, originalBase64, setStatus]);
 
     // ── 選取圖層 ─────────────────────────────────────────────────────────────
     const selectLayer = useCallback((id: string | null) => {
@@ -701,6 +719,7 @@ export function useSemanticEditor({
         resetLayer,
         renameLayer,
         renameVersion,
+        generateLamaBackground,
         setStatus,
     };
 }

@@ -762,13 +762,19 @@ function PillToolbar({
     onTool,
     onExport,
     onReanalyze,
+    onGenerateLama,
     isAnalyzing,
+    hasLayers,
+    lamaReady,
 }: {
     activeTool: string;
     onTool: (t: string) => void;
     onExport: () => void;
     onReanalyze: () => void;
+    onGenerateLama: () => void;
     isAnalyzing: boolean;
+    hasLayers: boolean;
+    lamaReady: boolean;
 }) {
     // SAM2 點選圖示：藍色游標 + 右上大閃光
     const Sam2Icon = () => (
@@ -797,11 +803,29 @@ function PillToolbar({
         </svg>
     );
 
+    // LaMa 背景圖示：魔法棒 + 層次感
+    const LamaIcon = () => (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="14" width="20" height="8" rx="2" fill="#6b7280" fillOpacity="0.15" stroke="#6b7280" strokeWidth="1.5"/>
+            <path d="M6 14V8" stroke="#6b7280" strokeWidth="1.5"/>
+            <path d="M12 14V6" stroke="#6b7280" strokeWidth="1.5"/>
+            <path d="M18 14V10" stroke="#6b7280" strokeWidth="1.5"/>
+            <path d="M17 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" fill="#a855f7" stroke="#a855f7" strokeWidth="0.5"/>
+        </svg>
+    );
+
     const tools = [
-        { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Ic.Scan />, label: '全圖分析 (Analyze)', onClick: onReanalyze },
-        { id: 'sam2',    icon: <Sam2Icon />,   label: '智能點選 (Auto Segment)', onClick: () => onTool('sam2') },
-        { id: 'rect',    icon: <RectIcon />,   label: '矩形框選 (Bounding Box)', onClick: () => onTool('rect') },
-        { id: 'points',  icon: <PointsIcon />, label: '多點精確選取 (Multi-points)', onClick: () => onTool('points') },
+        { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Ic.Scan />, label: '全圖分析 (Analyze)', onClick: onReanalyze, disabled: false },
+        { id: 'sam2',    icon: <Sam2Icon />,  label: '智能點選 (Auto Segment)',      onClick: () => onTool('sam2'),   disabled: false },
+        { id: 'rect',    icon: <RectIcon />,  label: '矩形框選 (Bounding Box)',       onClick: () => onTool('rect'),   disabled: false },
+        { id: 'points',  icon: <PointsIcon />,label: '多點精確選取 (Multi-points)',   onClick: () => onTool('points'), disabled: false },
+        {
+            id: 'lama',
+            icon: <LamaIcon />,
+            label: lamaReady ? 'LaMa 生成純背景' : 'LaMa（需先下載模型）',
+            onClick: onGenerateLama,
+            disabled: !lamaReady || !hasLayers,
+        },
     ];
 
     const btnBase: React.CSSProperties = {
@@ -839,11 +863,14 @@ function PillToolbar({
                     }}
                 >
                 <button
-                    onClick={t.onClick ?? (() => onTool(t.id))}
+                    onClick={t.disabled ? undefined : (t.onClick ?? (() => onTool(t.id)))}
+                    disabled={t.disabled}
                     style={{
                         ...btnBase,
                         background: activeTool === t.id ? '#eff6ff' : 'transparent',
-                        color: activeTool === t.id ? '#9333ea' : '#6b7280',
+                        color: t.disabled ? '#d1d5db' : activeTool === t.id ? '#9333ea' : '#6b7280',
+                        cursor: t.disabled ? 'not-allowed' : 'pointer',
+                        opacity: t.disabled ? 0.5 : 1,
                     }}
                     onMouseEnter={e => {
                         if (activeTool !== t.id) {
@@ -939,6 +966,7 @@ export function SemanticEditorView({
         resetLayer,
         renameLayer,
         renameVersion,
+        generateLamaBackground,
         dirtyCount,
         applyAllDirtyLayers,
     } = useSemanticEditor({
@@ -961,9 +989,16 @@ export function SemanticEditorView({
     const isComputingEmbeddingRef = useRef(false); // 防止並發 Embedding 計算
 
     // 開啟時檢查 ONNX 模型是否已下載
+    const [lamaReady, setLamaReady] = useState(false);
     useEffect(() => {
-        Promise.all([getModelStatus('sam2_encoder'), getModelStatus('sam2_decoder')])
-            .then(([enc, dec]) => setOnnxSAM2Ready(enc === 'ready' && dec === 'ready'));
+        Promise.all([
+            getModelStatus('sam2_encoder'),
+            getModelStatus('sam2_decoder'),
+            getModelStatus('lama'),
+        ]).then(([enc, dec, lama]) => {
+            setOnnxSAM2Ready(enc === 'ready' && dec === 'ready');
+            setLamaReady(lama === 'ready');
+        });
     }, []);
 
     // 載入 ONNX sessions（切換到 ONNX 模式時）
@@ -1177,6 +1212,13 @@ export function SemanticEditorView({
             showToast(`❌ 分析失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
         });
     }, [geminiApiKey, falApiKey, analyzeImage, showToast, useOnnxSAM2]);
+
+    // LaMa 生成純背景
+    const handleGenerateLama = useCallback(() => {
+        generateLamaBackground().catch(e => {
+            showToast(`❌ LaMa 背景生成失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
+        });
+    }, [generateLamaBackground, showToast]);
 
     // 匯出
     const handleExport = useCallback(() => {
@@ -1937,7 +1979,10 @@ export function SemanticEditorView({
                         onTool={handleToolChange}
                         onExport={handleExport}
                         onReanalyze={handleReanalyze}
+                        onGenerateLama={handleGenerateLama}
                         isAnalyzing={isLoading}
+                        hasLayers={state.layers.filter(l => l.category !== 'BACKGROUND').length > 0}
+                        lamaReady={lamaReady}
                     />
                 </div>
             </div>
