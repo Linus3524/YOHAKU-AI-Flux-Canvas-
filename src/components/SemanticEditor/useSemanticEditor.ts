@@ -15,6 +15,7 @@ import {
     segmentSemanticLayers, segmentSemanticLayersOnnx, compositeSmartLayers, regenerateLayer,
     addLayerByClick, addLayerByBox, addLayerByPoints,
     describeLayerWithGemini, buildSmartLayerFromMask,
+    layerToFullCanvas, transparentPngToInpaintMask,
     type SAM2Point,
 } from './semanticLayerUtils';
 
@@ -40,7 +41,9 @@ export interface SemanticEditorOptions {
     /** 上次退出時保留的狀態（重新開啟時恢復） */
     initialState?: {
         compositeBase64: string;
+        backgroundBase64?: string;
         layers: SmartLayer[];
+        originalLayers?: SmartLayer[];
         versions: EditorVersion[];
     };
 }
@@ -63,9 +66,9 @@ export function useSemanticEditor({
     const [state, setState] = useState<SemanticEditorState>(() => ({
         originalBase64,
         compositeBase64:    initialState?.compositeBase64 ?? originalBase64,
-        backgroundBase64:   initBackground,
+        backgroundBase64:   initialState?.backgroundBase64 ?? initBackground,
         layers:             initialState?.layers          ?? [],
-        originalLayers:     initialState?.layers          ?? [],
+        originalLayers:     initialState?.originalLayers ?? initialState?.layers ?? [],
         selectedLayerId:    null,
         status:             'idle',
         statusMessage:      '',
@@ -231,12 +234,34 @@ export function useSemanticEditor({
         if (engine === 'gemini' && !geminiApiKey) throw new Error('Gemini 重繪需要 Gemini API Key');
 
         cancelledRef.current = false;
-        // 建立新的 AbortController，使用者按取消時呼叫 abort()
         const ctrl = new AbortController();
         abortCtrlRef.current = ctrl;
         setStatus('regenerating', `重新生成「${layer.name}」...`);
 
         try {
+            // Gemini 路線：用 LaMa 填補舊物件區域，讓它真正消失
+            let cleanBase: string | undefined;
+            if (engine === 'gemini') {
+                const { getModelStatus } = await import('../../utils/onnxModelCache');
+                const lamaReady = await getModelStatus('lama') === 'ready';
+                if (lamaReady) {
+                    const { runLamaInWorker } = await import('../../utils/lamaWorkerClient');
+                    const dims = await import('./semanticLayerUtils').then(m => m.getImageDims(state.compositeBase64));
+                    const fullLayerPng = await layerToFullCanvas(layer, dims.w, dims.h);
+                    const maskBase64   = await transparentPngToInpaintMask(fullLayerPng);
+                    setStatus('regenerating', '🧹 LaMa 移除舊物件...');
+                    cleanBase = await runLamaInWorker(state.compositeBase64, maskBase64);
+                } else {
+                    // LaMa 未下載：退而用其他圖層合成
+                    const otherLayers = state.layers.filter(
+                        l => l.id !== layer.id && l.isVisible && l.category !== 'BACKGROUND'
+                    );
+                    cleanBase = await compositeSmartLayers(
+                        state.backgroundBase64 ?? state.originalBase64, otherLayers
+                    );
+                }
+            }
+
             const result = await regenerateLayer({
                 layer,
                 originalBase64: state.compositeBase64,
@@ -245,6 +270,7 @@ export function useSemanticEditor({
                 atlasApiKey,
                 geminiApiKey,
                 imageModel,
+                cleanBase,
                 falApiKey: falApiKey || undefined,
                 signal:    ctrl.signal,
                 onProgress: msg => { if (!cancelledRef.current) setStatus('regenerating', msg); },

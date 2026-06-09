@@ -878,7 +878,7 @@ interface SemanticEditorViewProps {
      * save=true  → 保留編輯紀錄（返回畫布）
      * save=false → 清除紀錄（垃圾桶）
      */
-    onClose: (save: boolean, state?: { compositeBase64: string; layers: import('../../types').SmartLayer[]; versions: import('../../types').EditorVersion[] }) => void;
+    onClose: (save: boolean, state?: { compositeBase64: string; backgroundBase64?: string; layers: import('../../types').SmartLayer[]; originalLayers?: import('../../types').SmartLayer[]; versions: import('../../types').EditorVersion[] }) => void;
     /** 上次保留的狀態（重新開啟時恢復） */
     initialState?: {
         compositeBase64: string;
@@ -1648,11 +1648,13 @@ export function SemanticEditorView({
     // 返回畫布（保留狀態）
     const handleBack = useCallback(() => {
         onClose(true, {
-            compositeBase64: state.compositeBase64,
-            layers:          state.layers,
-            versions:        state.versions,
+            compositeBase64:  state.compositeBase64,
+            backgroundBase64: state.backgroundBase64,
+            layers:           state.layers,
+            originalLayers:   state.originalLayers,
+            versions:         state.versions,
         });
-    }, [onClose, state.compositeBase64, state.layers, state.versions]);
+    }, [onClose, state.compositeBase64, state.backgroundBase64, state.layers, state.originalLayers, state.versions]);
 
     // 刪除並退出（清除紀錄）
     const handleDelete = useCallback(() => {

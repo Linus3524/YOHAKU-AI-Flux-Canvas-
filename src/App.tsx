@@ -215,7 +215,9 @@ const App: React.FC = () => {
    */
   const [savedSemanticStates, setSavedSemanticStates] = useState<Record<string, {
     compositeBase64: string;
+    backgroundBase64?: string;
     layers: import('./types').SmartLayer[];
+    originalLayers?: import('./types').SmartLayer[];
     versions: import('./types').EditorVersion[];
   }>>({});
 
@@ -372,7 +374,7 @@ const App: React.FC = () => {
   /** 退出語意編輯器：save=true 保留紀錄，save=false 清除 */
   const handleCloseSemanticEditor = useCallback((
     save: boolean,
-    savedState?: { compositeBase64: string; layers: import('./types').SmartLayer[]; versions: import('./types').EditorVersion[] }
+    savedState?: { compositeBase64: string; backgroundBase64?: string; layers: import('./types').SmartLayer[]; originalLayers?: import('./types').SmartLayer[]; versions: import('./types').EditorVersion[] }
   ) => {
     if (save && savedState && semanticEditorTarget) {
       const key = semanticStateKey(semanticEditorTarget.src);

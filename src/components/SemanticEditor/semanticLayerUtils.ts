@@ -763,7 +763,7 @@ export function compositeSmartLayers(
  *   黑色（0）  = 保留的區域
  * mask 略微膨脹（dilate），讓邊緣銜接更自然
  */
-function transparentPngToInpaintMask(
+export function transparentPngToInpaintMask(
     transparentFullPng: string,
 ): Promise<string> {
     return new Promise(resolve => {
@@ -818,7 +818,7 @@ function transparentPngToInpaintMask(
  * 把 SmartLayer 放回全圖的透明 PNG
  * cropRatio 的位置 + 原圖尺寸 → 全圖大小的透明 PNG
  */
-async function layerToFullCanvas(layer: SmartLayer, origW: number, origH: number): Promise<string> {
+export async function layerToFullCanvas(layer: SmartLayer, origW: number, origH: number): Promise<string> {
     return new Promise(resolve => {
         const img = new Image();
         img.onload = () => {
@@ -951,6 +951,12 @@ export interface RegenerateLayerOptions {
     atlasApiKey?: string;   // engine === 'gpt' 時必要
     geminiApiKey?: string;  // engine === 'gemini' 時必要
     imageModel?: string;    // Gemini 使用的模型
+    /**
+     * Gemini 路線專用：不含當前圖層的乾淨底圖。
+     * 裁切給 Gemini 看的是 originalBase64（含舊物件），
+     * 但最終 composite 要疊在這張乾淨底圖上，讓舊物件消失。
+     */
+    cleanBase?: string;
     falApiKey?: string;
     signal?: AbortSignal;         // ← 傳入後可中止 Atlas 輪詢
     onProgress?: (msg: string) => void;
@@ -978,6 +984,7 @@ export async function regenerateLayer({
     atlasApiKey,
     geminiApiKey,
     imageModel,
+    cleanBase,
     falApiKey,
     signal,
     onProgress,
@@ -1054,7 +1061,8 @@ export async function regenerateLayer({
 
         const fakeLayer = { base64: newLayerBase64, cropRatio: newCropRatio, pixelWidth: newPixelW, pixelHeight: newPixelH } as SmartLayer;
         const fullLayerPng       = await layerToFullCanvas(fakeLayer, dims.w, dims.h);
-        const newCompositeBase64 = await compositeLayerOverOriginal(originalBase64, fullLayerPng);
+        // 疊在乾淨底圖（不含舊物件）上，讓舊物件消失
+        const newCompositeBase64 = await compositeLayerOverOriginal(cleanBase ?? originalBase64, fullLayerPng);
         return { newLayerBase64, newCropRatio, newCompositeBase64, pixelWidth: newPixelW, pixelHeight: newPixelH };
     }
 
