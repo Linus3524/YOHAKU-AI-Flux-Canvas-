@@ -127,33 +127,33 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; purple?: b
   {
     id: 'about',
     label: '關於 YOHAKU',
-    icon: <Icon name="info" size={16} />
+    icon: <Icon name="info" size={18} />
   },
   {
     id: 'features',
     label: '核心特色',
-    icon: <Icon name="layers" size={16} />
+    icon: <Icon name="star_shine" size={18} />
   },
   {
     id: 'guide',
     label: '功能指南',
-    icon: <Icon name="menu_book" size={16} />
+    icon: <Icon name="menu_book" size={18} />
   },
   {
     id: 'consultant',
     label: '靈感顧問',
     purple: true,
-    icon: <Icon name="chat_bubble" size={16} />
+    icon: <Icon name="chat_bubble" size={18} />
   },
   {
     id: 'security',
     label: '安全性與費用',
-    icon: <Icon name="verified_user" size={16} />
+    icon: <Icon name="verified_user" size={18} />
   },
   {
     id: 'legal',
     label: '服務條款',
-    icon: <Icon name="description" size={16} />
+    icon: <Icon name="description" size={18} />
   },
   {
     id: 'local_models',
