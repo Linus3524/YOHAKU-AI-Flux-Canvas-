@@ -1372,7 +1372,7 @@ const App: React.FC = () => {
         if (e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
         else if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
         else if (e.key.toLowerCase() === 'c') { e.preventDefault(); copySelection(); }
-        else if (e.key.toLowerCase() === 'v') { e.preventDefault(); pasteSelection(); }
+        // 'v' 由 paste 事件統一處理（避免 preventDefault 阻止 paste 事件觸發）
         else if (e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelection(); }
         else if (e.key.toLowerCase() === 'g') { e.preventDefault(); if (e.shiftKey) handleUngroup(); else handleGroup(); }
       }
@@ -1381,7 +1381,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [deleteElement, undo, redo, editingDrawing, editingImage, outpaintingState, copySelection, pasteSelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
+  }, [deleteElement, undo, redo, editingDrawing, editingImage, outpaintingState, copySelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
   
   useEffect(() => {
     const preventDefaults = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
@@ -1423,16 +1423,17 @@ const App: React.FC = () => {
         if (isEditingText) return;
 
         const items = e.clipboardData?.items;
-        if (!items) return;
 
         // 優先：圖片（從瀏覽器、截圖工具、設計軟體複製）
-        for (const item of Array.from(items)) {
-            if (item.type.startsWith('image/')) {
-                const file = item.getAsFile();
-                if (file) {
-                    e.preventDefault();
-                    addImagesToCanvas([file], getCenterOfViewport());
-                    return;
+        if (items) {
+            for (const item of Array.from(items)) {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        e.preventDefault();
+                        addImagesToCanvas([file], getCenterOfViewport());
+                        return;
+                    }
                 }
             }
         }
@@ -1442,12 +1443,17 @@ const App: React.FC = () => {
         if (text) {
             e.preventDefault();
             addText(getCenterOfViewport(), text);
+            return;
         }
+
+        // Fallback：貼上畫布內複製的元素（Ctrl+C 複製的圖層）
+        e.preventDefault();
+        pasteSelection();
     };
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [addImagesToCanvas, addText, getCenterOfViewport]);
+  }, [addImagesToCanvas, addText, getCenterOfViewport, pasteSelection]);
 
   return (
     <>
