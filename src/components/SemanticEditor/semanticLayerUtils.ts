@@ -946,7 +946,11 @@ export interface RegenerateLayerOptions {
     /** 當前完整畫面（作為 inpaint 的 base image） */
     originalBase64: string;
     newPrompt: string;
-    atlasApiKey: string;
+    /** 'gpt'（預設）= Atlas inpaint；'gemini' = crop → Gemini img2img → SAM2 */
+    engine?: 'gpt' | 'gemini';
+    atlasApiKey?: string;   // engine === 'gpt' 時必要
+    geminiApiKey?: string;  // engine === 'gemini' 時必要
+    imageModel?: string;    // Gemini 使用的模型
     falApiKey?: string;
     signal?: AbortSignal;         // ← 傳入後可中止 Atlas 輪詢
     onProgress?: (msg: string) => void;
@@ -970,7 +974,10 @@ export async function regenerateLayer({
     layer,
     originalBase64,
     newPrompt,
+    engine = 'gpt',
     atlasApiKey,
+    geminiApiKey,
+    imageModel,
     falApiKey,
     signal,
     onProgress,
@@ -983,6 +990,76 @@ export async function regenerateLayer({
     pixelWidth?: number;
     pixelHeight?: number;
 }> {
+
+    // ══ Gemini crop 路線：crop → img2img → SAM2 切邊 → composite ══════════════
+    if (engine === 'gemini') {
+        if (!geminiApiKey) throw new Error('Gemini 重繪需要 Gemini API Key');
+        const dims = await getImageDims(originalBase64);
+
+        onProgress?.(`✂️ 裁切「${layer.name}」區域...`);
+        const croppedBase64 = await cropToBBox(originalBase64, layer.bbox);
+
+        onProgress?.(`🎨 Gemini 重新生成「${layer.name}」...`);
+        const { callGeminiWithRetry } = await import('../../utils/helpers');
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+        const [cropHeader, cropData] = croppedBase64.split(',');
+        const cropMime = cropHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
+
+        const response = await callGeminiWithRetry(() => ai.models.generateContent({
+            model: imageModel || 'gemini-2.0-flash-preview-image-generation',
+            contents: {
+                parts: [
+                    { inlineData: { data: cropData, mimeType: cropMime } },
+                    { text: `Edit the main subject in this image: ${newPrompt}. Keep the same scale, perspective, lighting, and background context. Output only the edited image.` },
+                ],
+            },
+        }));
+
+        let geminiCropBase64: string | null = null;
+        for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+            if (part.inlineData) {
+                geminiCropBase64 = `data:image/png;base64,${part.inlineData.data}`;
+                break;
+            }
+        }
+        if (!geminiCropBase64) throw new Error('Gemini 未回傳圖片');
+
+        let newLayerBase64 = layer.base64;
+        let newCropRatio   = layer.cropRatio;
+        let newPixelW: number | undefined;
+        let newPixelH: number | undefined;
+
+        if (falApiKey) {
+            onProgress?.(`✂️ SAM2 切割物件邊緣...`);
+            try {
+                const geminiDims = await getImageDims(geminiCropBase64);
+                const cx = Math.round(geminiDims.w / 2);
+                const cy = Math.round(geminiDims.h / 2);
+                const cropTransparent = await sam2Segment(geminiCropBase64, falApiKey, geminiDims, {
+                    clickPt: { x: cx, y: cy },
+                });
+                const fullT   = await placeInFullCanvas(cropTransparent, dims.w, dims.h, layer.bbox);
+                const trimmed = await trimTransparentPixels(fullT);
+                newLayerBase64 = trimmed.base64;
+                newCropRatio   = {
+                    x: trimmed.cropRatioX, y: trimmed.cropRatioY,
+                    w: trimmed.cropRatioW, h: trimmed.cropRatioH,
+                };
+                newPixelW = trimmed.pixelWidth;
+                newPixelH = trimmed.pixelHeight;
+            } catch (e) {
+                console.warn('[regenerateLayer Gemini] SAM2 failed, keeping old shape:', e);
+            }
+        }
+
+        const fakeLayer = { base64: newLayerBase64, cropRatio: newCropRatio, pixelWidth: newPixelW, pixelHeight: newPixelH } as SmartLayer;
+        const fullLayerPng       = await layerToFullCanvas(fakeLayer, dims.w, dims.h);
+        const newCompositeBase64 = await compositeLayerOverOriginal(originalBase64, fullLayerPng);
+        return { newLayerBase64, newCropRatio, newCompositeBase64, pixelWidth: newPixelW, pixelHeight: newPixelH };
+    }
+
+    // ══ GPT / Atlas 路線（原有，完全不動）══════════════════════════════════════
+    if (!atlasApiKey) throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
     const { callAtlasInpaint, compressForAtlas } = await import('../../utils/atlasImage');
     const dims = await getImageDims(originalBase64);
 

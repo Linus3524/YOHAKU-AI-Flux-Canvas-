@@ -196,7 +196,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
 
   // Inpaint engine selector
   const canSwitchEngine = !!(atlasKey || apiKey);
-  const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'gemini' | 'lama'>(atlasKey ? 'gpt' : 'gemini');
+  const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'gemini'>(atlasKey ? 'gpt' : 'gemini');
   const [lamaReady, setLamaReady] = useState(false);
 
   useEffect(() => {
@@ -725,9 +725,18 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
     try {
       const bwMaskBase64Url = await createBlackAndWhiteMask(context.baseImageSrc, context.maskDataUrl);
 
-      // ══ 路線 0：本機 LaMa ONNX（Web Worker，不阻塞 UI）══════
+      // ══ 路線 0：移除物件（LaMa 優先，無 LaMa 降級 Gemini）══════
+      if (context.type === 'remove') {
+        if (lamaReady) {
+          const result = await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
+          setPreviewImageSrc(result);
+          return;
+        }
+        // LaMa 未下載 → 用 Gemini 填補背景
+      }
+
+      // ══ 路線 0b：手動選 LaMa 模式（直接移除，無論 action 為何）══════
       if (inpaintEngine === 'lama') {
-        // Worker 內自行載入 session，主執行緒不凍結
         const result = await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
         setPreviewImageSrc(result);
         return;
@@ -984,16 +993,14 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
                   <select
                     value={inpaintEngine}
                     onChange={e => {
-                      const val = e.target.value as 'gpt' | 'gemini' | 'lama';
+                      const val = e.target.value as 'gpt' | 'gemini';
                       if (val === 'gemini' && !apiKey) return;
-                      if (val === 'lama' && !lamaReady) return;
                       setInpaintEngine(val);
                     }}
                     className="appearance-none bg-transparent py-1 pl-2 pr-6 text-[11px] font-bold text-purple-600 focus:outline-none cursor-pointer"
                   >
                     {atlasKey && <option value="gpt">GPT Image 2</option>}
                     <option value="gemini" disabled={!apiKey}>Gemini{!apiKey ? ' (需 Key)' : ''}</option>
-                    <option value="lama" disabled={!lamaReady}>本機 LaMa{!lamaReady ? ' (未下載)' : ''}</option>
                   </select>
                   <svg className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                 </div>
@@ -1256,7 +1263,7 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
                     disabled={isLoading || isBaking}
                     className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-[13px] font-bold rounded-xl shadow-md transition-all hover:shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-wait"
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
                     編輯物件
                   </button>
                   <button

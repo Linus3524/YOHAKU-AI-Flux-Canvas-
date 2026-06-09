@@ -34,6 +34,7 @@ export interface SemanticEditorOptions {
     geminiApiKey?: string;
     atlasApiKey?: string;
     falApiKey?: string;
+    imageModel?: string;
     /** 是否使用本機 SAM2 Worker（替代 fal.ai） */
     useLocalSAM2?: boolean;
     /** 上次退出時保留的狀態（重新開啟時恢復） */
@@ -49,6 +50,7 @@ export function useSemanticEditor({
     geminiApiKey,
     atlasApiKey,
     falApiKey,
+    imageModel,
     useLocalSAM2 = false,
     initialState,
 }: SemanticEditorOptions) {
@@ -224,8 +226,9 @@ export function useSemanticEditor({
     }, []);
 
     // ── 單層 Apply（inpaint → 全部重新切割）────────────────────────────────
-    const applyLayerRegen = useCallback(async (layer: SmartLayer) => {
-        if (!atlasApiKey) throw new Error('Apply 需要 Atlas（GPT Image 2）API Key');
+    const applyLayerRegen = useCallback(async (layer: SmartLayer, engine: 'gpt' | 'gemini' = 'gpt') => {
+        if (engine === 'gpt'    && !atlasApiKey)  throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
+        if (engine === 'gemini' && !geminiApiKey) throw new Error('Gemini 重繪需要 Gemini API Key');
 
         cancelledRef.current = false;
         // 建立新的 AbortController，使用者按取消時呼叫 abort()
@@ -238,7 +241,10 @@ export function useSemanticEditor({
                 layer,
                 originalBase64: state.compositeBase64,
                 newPrompt: layer.prompt,
+                engine,
                 atlasApiKey,
+                geminiApiKey,
+                imageModel,
                 falApiKey: falApiKey || undefined,
                 signal:    ctrl.signal,
                 onProgress: msg => { if (!cancelledRef.current) setStatus('regenerating', msg); },
@@ -321,11 +327,12 @@ export function useSemanticEditor({
             setStatus('idle', '');
             throw e;
         }
-    }, [state.compositeBase64, state.layers, state.versions.length, geminiApiKey, atlasApiKey, falApiKey, setStatus]);
+    }, [state.compositeBase64, state.layers, state.versions.length, geminiApiKey, atlasApiKey, falApiKey, imageModel, setStatus]);
 
     // ── 批次 Apply（所有 prompt 已修改但未套用的圖層）────────────────────────
-    const applyAllDirtyLayers = useCallback(async () => {
-        if (!atlasApiKey) throw new Error('Apply 需要 Atlas（GPT Image 2）API Key');
+    const applyAllDirtyLayers = useCallback(async (engine: 'gpt' | 'gemini' = 'gpt') => {
+        if (engine === 'gpt'    && !atlasApiKey)  throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
+        if (engine === 'gemini' && !geminiApiKey) throw new Error('Gemini 重繪需要 Gemini API Key');
 
         // 找出所有「prompt 已改但未套用」的圖層
         const dirtyLayers = state.layers.filter(
@@ -353,7 +360,10 @@ export function useSemanticEditor({
                     layer:          latestLayer,
                     originalBase64: currentComposite,   // 疊加上一層結果
                     newPrompt:      latestLayer.prompt,
+                    engine,
                     atlasApiKey,
+                    geminiApiKey,
+                    imageModel,
                     falApiKey: falApiKey || undefined,
                     onProgress: msg => setStatus('regenerating', msg),
                 });
@@ -423,7 +433,7 @@ export function useSemanticEditor({
             setStatus('idle', '');
             throw e;
         }
-    }, [state.compositeBase64, state.layers, state.versions.length, atlasApiKey, falApiKey, setStatus]);
+    }, [state.compositeBase64, state.layers, state.versions.length, geminiApiKey, atlasApiKey, falApiKey, imageModel, setStatus]);
 
     // ── 切換版本 ─────────────────────────────────────────────────────────────
     const switchVersion = useCallback((index: number) => {
@@ -618,7 +628,18 @@ export function useSemanticEditor({
             compositeSmartLayers(newBg, fgLayers).then(composite => {
                 setState(ss => ({ ...ss, compositeBase64: composite }));
             });
-            return { ...s, layers: updated, backgroundBase64: newBg };
+
+            const onOriginal = s.activeVersionIndex === -1;
+            const updatedVersions = onOriginal ? s.versions : s.versions.map((ver, i) =>
+                i === s.activeVersionIndex ? { ...ver, layers: updated } : ver
+            );
+            return {
+                ...s,
+                layers: updated,
+                backgroundBase64: newBg,
+                originalLayers: onOriginal ? updated : s.originalLayers,
+                versions: updatedVersions,
+            };
         });
     }, []);
 

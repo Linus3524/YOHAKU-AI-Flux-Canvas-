@@ -2230,6 +2230,7 @@ const App: React.FC = () => {
         geminiApiKey={effectiveApiKey || undefined}
         atlasApiKey={atlasApiKey || undefined}
         falApiKey={falApiKey || undefined}
+        imageModel={imageModel}
       />
     )}
     </>

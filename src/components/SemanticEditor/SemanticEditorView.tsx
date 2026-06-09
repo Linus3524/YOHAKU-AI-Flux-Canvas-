@@ -892,6 +892,7 @@ interface SemanticEditorViewProps {
     geminiApiKey?: string;
     atlasApiKey?: string;
     falApiKey?: string;
+    imageModel?: string;
 }
 
 export function SemanticEditorView({
@@ -904,6 +905,7 @@ export function SemanticEditorView({
     geminiApiKey,
     atlasApiKey,
     falApiKey,
+    imageModel,
 }: SemanticEditorViewProps) {
     // 工具模式：'select' | 'sam2' | 'rect' | 'points'
     const [activeTool, setActiveTool] = useState('select');
@@ -940,9 +942,14 @@ export function SemanticEditorView({
         dirtyCount,
         applyAllDirtyLayers,
     } = useSemanticEditor({
-        originalBase64, geminiApiKey, atlasApiKey, falApiKey, initialState,
+        originalBase64, geminiApiKey, atlasApiKey, falApiKey, imageModel, initialState,
         useLocalSAM2: useOnnxSAM2,
     });
+
+    // 重繪引擎
+    const canUseGpt    = !!atlasApiKey;
+    const canUseGemini = !!geminiApiKey;
+    const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'gemini'>(canUseGpt ? 'gpt' : 'gemini');
     const [onnxSAM2Ready, setOnnxSAM2Ready] = useState(false);
     const [onnxEmbeddingLoading, setOnnxEmbeddingLoading] = useState(false);
     const [onnxEmbeddingReady, setOnnxEmbeddingReady] = useState(false);
@@ -1206,20 +1213,22 @@ export function SemanticEditorView({
 
     // Apply：單層重繪
     const handleApply = useCallback(async (layer: SmartLayer) => {
-        if (!atlasApiKey) { showToast('⚠️ Apply 需要 Atlas（GPT Image 2）API Key'); return; }
-        if (!falApiKey)   { showToast('⚠️ Apply 需要 fal.ai Key（SAM2 分割用）'); return; }
-        applyLayerRegen(layer).catch(e => {
+        if (inpaintEngine === 'gpt'    && !atlasApiKey)  { showToast('⚠️ GPT 重繪需要 Atlas API Key'); return; }
+        if (inpaintEngine === 'gemini' && !geminiApiKey) { showToast('⚠️ Gemini 重繪需要 Gemini API Key'); return; }
+        if (!falApiKey) { showToast('⚠️ 需要 fal.ai Key（SAM2 分割用）'); return; }
+        applyLayerRegen(layer, inpaintEngine).catch(e => {
             showToast(`❌ 重繪失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
         });
-    }, [geminiApiKey, applyLayerRegen, showToast]);
+    }, [inpaintEngine, atlasApiKey, geminiApiKey, falApiKey, applyLayerRegen, showToast]);
 
     // Apply All（批次）
     const handleApplyAll = useCallback(() => {
-        if (!atlasApiKey) { showToast('⚠️ Apply 需要 Atlas（GPT Image 2）API Key'); return; }
-        applyAllDirtyLayers().catch(e => {
+        if (inpaintEngine === 'gpt'    && !atlasApiKey)  { showToast('⚠️ GPT 重繪需要 Atlas API Key'); return; }
+        if (inpaintEngine === 'gemini' && !geminiApiKey) { showToast('⚠️ Gemini 重繪需要 Gemini API Key'); return; }
+        applyAllDirtyLayers(inpaintEngine).catch(e => {
             showToast(`❌ 批次重繪失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
         });
-    }, [atlasApiKey, applyAllDirtyLayers, showToast]);
+    }, [inpaintEngine, atlasApiKey, geminiApiKey, applyAllDirtyLayers, showToast]);
 
     // 重新分析
     const handleReanalyze = useCallback(() => {
@@ -1753,6 +1762,37 @@ export function SemanticEditorView({
                                 {useOnnxSAM2 ? '本機 SAM2' : 'fal.ai SAM2'}
                                 {onnxEmbeddingLoading && <span style={{ opacity: 0.6 }}>計算中...</span>}
                             </button>
+                        )}
+                        {/* 重繪模型選單 */}
+                        {(canUseGpt && canUseGemini) && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center',
+                                background: '#f9fafb', border: '1px solid #e5e7eb',
+                                borderRadius: 8, overflow: 'hidden',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                            }}>
+                                <span style={{
+                                    padding: '4px 10px', borderRight: '1px solid #e5e7eb',
+                                    fontSize: 10, fontWeight: 600, color: '#9ca3af', letterSpacing: '0.05em',
+                                    pointerEvents: 'none', userSelect: 'none',
+                                }}>重繪</span>
+                                <div style={{ position: 'relative' }}>
+                                    <select
+                                        value={inpaintEngine}
+                                        onChange={e => setInpaintEngine(e.target.value as 'gpt' | 'gemini')}
+                                        style={{
+                                            appearance: 'none', background: 'transparent',
+                                            border: 'none', outline: 'none', cursor: 'pointer',
+                                            padding: '4px 22px 4px 8px',
+                                            fontSize: 11, fontWeight: 700, color: '#7c3aed',
+                                        }}
+                                    >
+                                        <option value="gpt">GPT Image 2</option>
+                                        <option value="gemini">Gemini</option>
+                                    </select>
+                                    <svg style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                </div>
+                            </div>
                         )}
                         {onImportToCanvas && (
                             <NavBtn title="匯入目前版本到畫布" onClick={() => onImportToCanvas(state.compositeBase64, { compositeBase64: state.compositeBase64, layers: state.layers, versions: state.versions })}>
