@@ -1530,7 +1530,7 @@ const App: React.FC = () => {
           </div>
       )}
 
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[6000]">
+      {!semanticEditorTarget && <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[6000]">
       <div className="animate-fade-in-down flex items-center gap-2">
           <button
               onClick={() => setShowKeyModal(true)}
@@ -1585,7 +1585,7 @@ const App: React.FC = () => {
               </div>
           )}
       </div>
-      </div>
+      </div>}
 
       {/* ── 生成意圖 Modal ── */}
       {intentModal && (

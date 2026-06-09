@@ -97,44 +97,40 @@ export async function runSAM2Decoder(
         coords = [options.clickPoint.x * scaleX, options.clickPoint.y * scaleY, 0, 0];
         labels = [1, -1];
     } else if (options.roughMask) {
-        // roughMask 模式：自動從筆塗區域算重心作為 click prompt
-        coords = [0, 0, 0, 0];
-        labels = [1, -1];
-        // 重心計算在 roughMask tensor 建立後更新 coords
-    } else {
-        throw new Error('SAM2 Decoder: 需要提供 clickPoint、points、bbox 或 roughMask');
-    }
-
-    // ── roughMask → 256×256 mask_input tensor ──────────────────────────────
-    let maskData = new Float32Array(256 * 256);
-    let hasMask  = 0;
-    if (options.roughMask) {
+        // roughMask → 多個分散正點，讓 SAM2 知道整個塗抹區域都是前景
         await new Promise<void>(resolve => {
             const img = new Image();
             img.onload = () => {
+                const mW = img.naturalWidth || 256, mH = img.naturalHeight || 256;
                 const c = document.createElement('canvas');
-                c.width = c.height = 256;
-                c.getContext('2d')!.drawImage(img, 0, 0, 256, 256);
-                const px = c.getContext('2d')!.getImageData(0, 0, 256, 256).data;
-                let sumX = 0, sumY = 0, count = 0;
-                for (let i = 0; i < 256 * 256; i++) {
-                    const v = px[i * 4] / 255;  // 白=1 → 要選，黑=0
-                    maskData[i] = v > 0.5 ? 20 : -20;  // SAM2 logit 慣例：強正/負
-                    if (v > 0.5) { sumX += i % 256; sumY += Math.floor(i / 256); count++; }
+                c.width = mW; c.height = mH;
+                c.getContext('2d')!.drawImage(img, 0, 0, mW, mH);
+                const px = c.getContext('2d')!.getImageData(0, 0, mW, mH).data;
+                const painted: [number, number][] = [];
+                for (let i = 0; i < mW * mH; i++) {
+                    if (px[i * 4] > 127) painted.push([i % mW, Math.floor(i / mW)]);
                 }
-                if (count > 0) {
-                    // 重心換算回原圖像素座標，再換算到 SAM 1024 空間
-                    const cx = (sumX / count / 256) * origW * scaleX;
-                    const cy = (sumY / count / 256) * origH * scaleY;
-                    coords = [cx, cy, 0, 0];
+                if (painted.length === 0) { coords = [0, 0, 0, 0]; labels = [1, -1]; }
+                else {
+                    const N = Math.min(8, painted.length);
+                    const step = Math.floor(painted.length / N);
+                    const pts: [number, number][] = [];
+                    for (let k = 0; k < N; k++) pts.push(painted[k * step]);
+                    coords = pts.flatMap(([x, y]) => [(x / mW) * origW * scaleX, (y / mH) * origH * scaleY]);
+                    labels = pts.map(() => 1);
+                    coords.push(0, 0); labels.push(-1);
                 }
-                hasMask = 1;
                 resolve();
             };
             img.onerror = () => resolve();
             img.src = options.roughMask!;
         });
+    } else {
+        throw new Error('SAM2 Decoder: 需要提供 clickPoint、points、bbox 或 roughMask');
     }
+
+    const maskData = new Float32Array(256 * 256);
+    const hasMask  = 0;
 
     const numPoints = coords.length / 2;
     const pointCoords  = new ort.Tensor('float32', new Float32Array(coords),  [1, numPoints, 2]);

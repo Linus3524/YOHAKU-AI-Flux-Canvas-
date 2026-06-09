@@ -13,7 +13,7 @@ import { buildSmartLayerFromMask, describeLayerWithGemini } from './semanticLaye
 import { Icon } from '../Icon';
 
 const Ic = {
-    Home:         () => <Icon name="home" size={14} />,
+    Home:         () => <Icon name="home" size={15} />,
     Dots:         () => <Icon name="more_horiz" size={16} />,
     Trash:        () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
     Lock:         () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
@@ -1404,8 +1404,9 @@ export function SemanticEditorView({
             const maskBase64 = await sam2DecodeInWorker(options, state.compositeBase64);
             const newLayer = await buildSmartLayerFromMask(maskBase64);
             if (geminiApiKey) {
-                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
-                    if (desc) updatePrompt(newLayer.id, desc);
+                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(({ name, prompt }) => {
+                    if (prompt) updatePrompt(newLayer.id, prompt);
+                    if (name) renameLayer(newLayer.id, name);
                 });
             }
             await addLayerFromMaskBase64(newLayer);
@@ -1570,33 +1571,70 @@ export function SemanticEditorView({
         if (useOnnxSAM2 && onnxEmbeddingReady) {
             await runOnnxAndAddLayer({ roughMask });
         } else if (falApiKey) {
-            // fal.ai fallback：從筆塗重心算出 click point
-            let sumX = 0, sumY = 0, count = 0;
+            // fal.ai：網格均勻取樣 + 四角負點
+            // 1. 收集筆塗像素，算出 bbox
+            let minX = W, minY = H, maxX = 0, maxY = 0;
+            const painted: [number, number][] = [];
             for (let i = 0; i < W * H; i++) {
                 if (bwData.data[i * 4] > 127) {
-                    sumX += i % W; sumY += Math.floor(i / W); count++;
+                    const x = i % W, y = Math.floor(i / W);
+                    painted.push([x, y]);
+                    if (x < minX) minX = x; if (x > maxX) maxX = x;
+                    if (y < minY) minY = y; if (y > maxY) maxY = y;
                 }
             }
-            if (count === 0) return;
-            // brush canvas 是顯示尺寸，需換算回原圖像素座標
+            if (painted.length === 0) return;
+
+            // 2. 3×3 網格均勻取樣（每格取最靠近中心的筆塗點）
+            const GRID = 3;
+            const cellW = (maxX - minX + 1) / GRID;
+            const cellH = (maxY - minY + 1) / GRID;
+            const posPoints: [number, number][] = [];
+            for (let row = 0; row < GRID; row++) {
+                for (let col = 0; col < GRID; col++) {
+                    const cx = minX + cellW * (col + 0.5);
+                    const cy = minY + cellH * (row + 0.5);
+                    // 找此格內最靠近中心的筆塗點
+                    let best: [number, number] | null = null;
+                    let bestDist = Infinity;
+                    for (const [px, py] of painted) {
+                        if (px >= minX + cellW * col && px < minX + cellW * (col + 1) &&
+                            py >= minY + cellH * row && py < minY + cellH * (row + 1)) {
+                            const d = (px - cx) ** 2 + (py - cy) ** 2;
+                            if (d < bestDist) { bestDist = d; best = [px, py]; }
+                        }
+                    }
+                    if (best) posPoints.push(best);
+                }
+            }
+            if (posPoints.length === 0) posPoints.push(painted[Math.floor(painted.length / 2)]);
+
+            // 3. 四角加負點（bbox 角落若未塗到，則排除）
+            const corners: [number, number][] = [[minX, minY], [maxX, minY], [minX, maxY], [maxX, maxY]];
+            const negPoints = corners.filter(([cx, cy]) => {
+                const i = cy * W + cx;
+                return bwData.data[i * 4] <= 127;
+            });
+
+            // 4. 換算到原圖像素座標
             const img = imgRef.current;
             const dispW = img ? img.offsetWidth  : W;
             const dispH = img ? img.offsetHeight : H;
             const { getImageDims } = await import('./semanticLayerUtils');
             const origDims = await getImageDims(state.compositeBase64);
-            const scaleX = origDims.w / dispW;
-            const scaleY = origDims.h / dispH;
-            const clickPixel = {
-                x: Math.round((sumX / count) * scaleX),
-                y: Math.round((sumY / count) * scaleY),
-            };
-            addClickLayer(clickPixel).catch(err =>
+            const sx = origDims.w / dispW;
+            const sy = origDims.h / dispH;
+            const points = [
+                ...posPoints.map(([x, y]) => ({ x: Math.round(x * sx), y: Math.round(y * sy), label: 1 as 0 | 1 })),
+                ...negPoints.map(([x, y]) => ({ x: Math.round(x * sx), y: Math.round(y * sy), label: 0 as 0 | 1 })),
+            ];
+            addPointsLayer(points, 'SAM2 筆塗選區分割中...', '筆塗物件').catch(err =>
                 showToast(`❌ 分割失敗：${err?.message?.slice(0, 60) || ''}`)
             );
         } else {
             showToast('⚠️ 筆塗模式需要本機 SAM2 ONNX 或 fal.ai API Key');
         }
-    }, [brushHasStroke, useOnnxSAM2, falApiKey, runOnnxAndAddLayer, addClickLayer, showToast]);
+    }, [brushHasStroke, useOnnxSAM2, falApiKey, runOnnxAndAddLayer, addClickLayer, addPointsLayer, showToast]);
 
     // 返回畫布（保留狀態）
     const handleBack = useCallback(() => {
@@ -1657,25 +1695,24 @@ export function SemanticEditorView({
                     zIndex: 30,
                 }}>
                     {/* ← 返回畫布（保留紀錄） */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#9ca3af', fontWeight: 500 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: '#9ca3af' }}>
                         <button
                             onClick={handleBack}
                             title="返回畫布（保留編輯紀錄）"
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 6,
                                 background: 'none', border: 'none', cursor: 'pointer',
-                                color: '#9ca3af', fontSize: 13, fontWeight: 500,
+                                color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit',
                                 padding: 0, transition: 'color 0.15s',
                             }}
                             onMouseEnter={e => (e.currentTarget.style.color = '#111827')}
                             onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}
                         >
-                            {/* ← 箭頭 */}
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ display: 'block', flexShrink: 0 }}><polyline points="15 18 9 12 15 6"/></svg>
                             <Ic.Home />
                             <span>YOHAKU</span>
                         </button>
-                        <span style={{ color: '#d1d5db' }}>/</span>
+                        <span style={{ color: '#d1d5db', marginTop: '-2px' }}>|</span>
                         <span style={{ color: '#111827', fontWeight: 700, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {imageName}
                         </span>
@@ -1689,12 +1726,6 @@ export function SemanticEditorView({
 
                     {/* 右側操作按鈕 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16, color: '#9ca3af' }}>
-                        {/* 匯入畫布 icon（有版本才顯示，和其他 NavBtn 統一風格） */}
-                        {onImportToCanvas && state.versions.length > 0 && (
-                            <NavBtn title="匯入目前版本到畫布" onClick={() => onImportToCanvas(state.compositeBase64, { compositeBase64: state.compositeBase64, layers: state.layers, versions: state.versions })}>
-                                <Icon name="place_item" size={20} />
-                            </NavBtn>
-                        )}
                         {/* SAM2 模式切換（有 ONNX 模型才顯示） */}
                         {onnxSAM2Ready && (
                             <button
@@ -1723,7 +1754,14 @@ export function SemanticEditorView({
                                 {onnxEmbeddingLoading && <span style={{ opacity: 0.6 }}>計算中...</span>}
                             </button>
                         )}
-                        <NavBtn title="匯出 PNG" onClick={handleExport}><Icon name="download" size={20} /></NavBtn>
+                        {onImportToCanvas && (
+                            <NavBtn title="匯入目前版本到畫布" onClick={() => onImportToCanvas(state.compositeBase64, { compositeBase64: state.compositeBase64, layers: state.layers, versions: state.versions })}>
+                                <Icon name="place_item" size={20} />
+                            </NavBtn>
+                        )}
+                        <NavBtn title="匯出 PNG" onClick={handleExport}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/><circle cx="9" cy="9" r="2"/></svg>
+                        </NavBtn>
                         <NavBtn title="清除所有編輯紀錄並退出" onClick={handleDelete}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></NavBtn>
                     </div>
                 </div>

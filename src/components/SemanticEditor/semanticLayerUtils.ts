@@ -284,7 +284,7 @@ Return ONLY valid JSON array:
 export async function describeLayerWithGemini(
     base64: string,
     geminiApiKey: string,
-): Promise<string> {
+): Promise<{ name: string; prompt: string }> {
     try {
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
         const clean = base64.split(',')[1] || base64;
@@ -295,18 +295,20 @@ export async function describeLayerWithGemini(
             contents: {
                 parts: [
                     { inlineData: { mimeType: mime, data: clean } },
-                    { text: `Describe this image object in 15-35 words for an image generation prompt.
-Be specific: include subject type, appearance, colors, pose/state, notable details.
-Output ONLY the description text, no quotes, no explanation.
-Example: "A vibrant orange goldfish with flowing white fins, swimming horizontally in clear water."` },
+                    { text: `Analyze this image object and respond ONLY with a JSON object (no markdown):
+{"name":"<2-4 char Traditional Chinese noun, e.g. 人物/金魚/蝴蝶結>","prompt":"<15-35 word English image generation description with subject, colors, pose, details>"}` },
                 ],
             },
         });
 
-        const text = (response.text ?? '').trim().replace(/^["']|["']$/g, '');
-        return text || '';
+        const raw = (response.text ?? '').trim().replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(raw);
+        return {
+            name:   (parsed.name   ?? '').trim(),
+            prompt: (parsed.prompt ?? '').trim(),
+        };
     } catch {
-        return '';
+        return { name: '', prompt: '' };
     }
 }
 
@@ -657,6 +659,7 @@ export interface AddLayerByPointsOptions {
     falApiKey: string;
     /** 在原圖的像素座標 */
     points: SAM2Point[];
+    layerName?: string;
     onProgress?: (msg: string) => void;
 }
 
@@ -664,9 +667,10 @@ export async function addLayerByPoints({
     imageBase64,
     falApiKey,
     points,
+    layerName,
     onProgress,
 }: AddLayerByPointsOptions): Promise<SmartLayer> {
-    onProgress?.('SAM2 多點分割...');
+    // 初始 progress 訊息由呼叫端控制，這裡不覆蓋
     const dims = await getImageDims(imageBase64);
 
     const transparentPng = await sam2Segment(
@@ -684,12 +688,12 @@ export async function addLayerByPoints({
 
     return {
         id:             `sl_pts_${Date.now()}`,
-        name:           `多點物件 ${new Date().toLocaleTimeString()}`,
+        name:           layerName ? `${layerName} ${new Date().toLocaleTimeString()}` : `多點物件 ${new Date().toLocaleTimeString()}`,
         category:       'OBJECTS',
         base64:         trimmed.base64,
         originalBase64: trimmed.base64,
-        prompt:         '多點選取物件',
-        appliedPrompt:  '多點選取物件',
+        prompt:         layerName ?? '多點選取物件',
+        appliedPrompt:  layerName ?? '多點選取物件',
         bbox:           approxBbox,
         cropRatio:      approxBbox,
         pixelWidth:  trimmed.pixelWidth,

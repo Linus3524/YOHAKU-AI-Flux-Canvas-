@@ -127,20 +127,55 @@ async function handleDecode(
         labels = options.points.map(p => p.label);
         coords.push(0, 0); labels.push(-1);
     } else if (options.roughMask) {
+        // roughMask → 3×3 網格正點 + 四角負點
         const bmp = await base64ToBitmap(options.roughMask);
-        const c = new OffscreenCanvas(256, 256);
-        c.getContext('2d')!.drawImage(bmp, 0, 0, 256, 256);
-        const px = c.getContext('2d')!.getImageData(0, 0, 256, 256).data;
+        const mW = bmp.width, mH = bmp.height;
+        const c = new OffscreenCanvas(mW, mH);
+        c.getContext('2d')!.drawImage(bmp, 0, 0, mW, mH);
+        const px = c.getContext('2d')!.getImageData(0, 0, mW, mH).data;
         bmp.close();
-        let sumX = 0, sumY = 0, count = 0;
-        for (let i = 0; i < 256 * 256; i++) {
-            const v = px[i * 4] / 255;
-            maskData[i] = v > 0.5 ? 20 : -20;
-            if (v > 0.5) { sumX += i % 256; sumY += Math.floor(i / 256); count++; }
+        let minX = mW, minY = mH, maxX = 0, maxY = 0;
+        const painted: [number, number][] = [];
+        for (let i = 0; i < mW * mH; i++) {
+            if (px[i * 4] > 127) {
+                const x = i % mW, y = Math.floor(i / mW);
+                painted.push([x, y]);
+                if (x < minX) minX = x; if (x > maxX) maxX = x;
+                if (y < minY) minY = y; if (y > maxY) maxY = y;
+            }
         }
-        const cx = count > 0 ? (sumX / count / 256) * origW * scaleX : 0;
-        const cy = count > 0 ? (sumY / count / 256) * origH * scaleY : 0;
-        coords = [cx, cy, 0, 0]; labels = [1, -1]; hasMask = 1;
+        if (painted.length === 0) { coords = [0, 0, 0, 0]; labels = [1, -1]; }
+        else {
+            // 3×3 網格取樣正點
+            const GRID = 3;
+            const cellW = (maxX - minX + 1) / GRID;
+            const cellH = (maxY - minY + 1) / GRID;
+            const posPoints: [number, number][] = [];
+            for (let row = 0; row < GRID; row++) {
+                for (let col = 0; col < GRID; col++) {
+                    const cx = minX + cellW * (col + 0.5), cy = minY + cellH * (row + 0.5);
+                    let best: [number, number] | null = null, bestDist = Infinity;
+                    for (const [bx, by] of painted) {
+                        if (bx >= minX + cellW * col && bx < minX + cellW * (col + 1) &&
+                            by >= minY + cellH * row && by < minY + cellH * (row + 1)) {
+                            const d = (bx - cx) ** 2 + (by - cy) ** 2;
+                            if (d < bestDist) { bestDist = d; best = [bx, by]; }
+                        }
+                    }
+                    if (best) posPoints.push(best);
+                }
+            }
+            if (posPoints.length === 0) posPoints.push(painted[Math.floor(painted.length / 2)]);
+            // 四角負點（未塗到的角落）
+            const corners: [number, number][] = [[minX, minY], [maxX, minY], [minX, maxY], [maxX, maxY]];
+            const negPoints = corners.filter(([nx, ny]) => px[(ny * mW + nx) * 4] <= 127);
+            coords = [
+                ...posPoints.flatMap(([x, y]) => [(x / mW) * origW * scaleX, (y / mH) * origH * scaleY]),
+                ...negPoints.flatMap(([x, y]) => [(x / mW) * origW * scaleX, (y / mH) * origH * scaleY]),
+            ];
+            labels = [...posPoints.map(() => 1), ...negPoints.map(() => 0)];
+            coords.push(0, 0); labels.push(-1);
+        }
     } else if (options.clickPoint) {
         coords = [options.clickPoint.x * scaleX, options.clickPoint.y * scaleY, 0, 0];
         labels = [1, -1];

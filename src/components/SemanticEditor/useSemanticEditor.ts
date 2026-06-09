@@ -469,11 +469,11 @@ export function useSemanticEditor({
 
             // Gemini 非同步生成描述（不阻塞圖層顯示）
             if (geminiApiKey) {
-                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
-                    if (desc) setState(s => ({
+                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(({ name, prompt }) => {
+                    if (name || prompt) setState(s => ({
                         ...s,
                         layers: s.layers.map(l => l.id === newLayer.id
-                            ? { ...l, prompt: desc, appliedPrompt: desc } : l),
+                            ? { ...l, ...(name && { name }), ...(prompt && { prompt, appliedPrompt: prompt }) } : l),
                     }));
                 });
             }
@@ -513,11 +513,11 @@ export function useSemanticEditor({
                 onProgress: msg => setStatus('segmenting', msg),
             });
             if (geminiApiKey) {
-                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
-                    if (desc) setState(s => ({
+                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(({ name, prompt }) => {
+                    if (name || prompt) setState(s => ({
                         ...s,
                         layers: s.layers.map(l => l.id === newLayer.id
-                            ? { ...l, prompt: desc, appliedPrompt: desc } : l),
+                            ? { ...l, ...(name && { name }), ...(prompt && { prompt, appliedPrompt: prompt }) } : l),
                     }));
                 });
             }
@@ -534,23 +534,24 @@ export function useSemanticEditor({
     }, [state.compositeBase64, falApiKey, geminiApiKey, setStatus]);
 
     // ── B：多點模式新增圖層 ──────────────────────────────────────────────────
-    const addPointsLayer = useCallback(async (points: SAM2Point[]) => {
+    const addPointsLayer = useCallback(async (points: SAM2Point[], statusMsg?: string, layerName?: string) => {
         if (!falApiKey) throw new Error('SAM2 需要 fal.ai API Key');
-        setStatus('segmenting', 'SAM2 多點分割...');
+        setStatus('segmenting', statusMsg ?? 'SAM2 多點分割...');
         const workingImage = state.compositeBase64;
         try {
             const newLayer = await addLayerByPoints({
                 imageBase64: workingImage,
                 falApiKey,
                 points,
+                layerName,
                 onProgress: msg => setStatus('segmenting', msg),
             });
             if (geminiApiKey) {
-                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
-                    if (desc) setState(s => ({
+                describeLayerWithGemini(newLayer.base64, geminiApiKey).then(({ name, prompt }) => {
+                    if (name || prompt) setState(s => ({
                         ...s,
                         layers: s.layers.map(l => l.id === newLayer.id
-                            ? { ...l, prompt: desc, appliedPrompt: desc } : l),
+                            ? { ...l, ...(name && { name }), ...(prompt && { prompt, appliedPrompt: prompt }) } : l),
                     }));
                 });
             }
