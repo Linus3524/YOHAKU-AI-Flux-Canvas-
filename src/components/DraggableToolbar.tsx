@@ -39,25 +39,25 @@ interface DraggableToolbarProps {
 }
 
 const Icons = {
-  Grip:     () => <Icon name="drag_indicator" size={16} className="text-black/20" />,
-  Select:   () => <Icon name="arrow_selector_tool" size={16} />,
-  Hand:     () => <Icon name="pan_tool" size={16} />,
-  Note:     () => <Icon name="sticky_note_2" size={16} />,
-  Text:     () => <Icon name="title" size={16} />,
-  Draw:     () => <Icon name="draw" size={16} />,
-  Arrow:    () => <Icon name="trending_flat" size={16} />,
-  Shape:    () => <Icon name="category" size={16} />,
-  Add:      () => <Icon name="add" size={16} />,
-  Image:    () => <Icon name="image" size={16} />,
-  Frame:    () => <Icon name="crop_free" size={16} />,
-  Copy:     () => <Icon name="content_copy" size={14} />,
-  Undo:     () => <Icon name="undo" size={14} />,
-  Redo:     () => <Icon name="redo" size={14} />,
-  Magic:    () => <Icon name="auto_awesome" size={14} />,
-  Crop:     () => <Icon name="crop" size={14} />,
-  Patterns: () => <Icon name="style" size={16} />,
-  Export:   () => <Icon name="save" size={16} />,
-  Import:   () => <Icon name="file_open" size={16} />,
+  Grip:     () => <Icon name="drag_indicator" size={18} className="text-black/20" />,
+  Select:   () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12.586 12.586 19 19"/><path d="M3.688 3.037a.497.497 0 0 0-.651.651l6.5 15.999a.501.501 0 0 0 .947-.062l1.569-6.083a2 2 0 0 1 1.448-1.479l6.124-1.579a.5.5 0 0 0 .063-.947z"/></svg>,
+  Hand:     () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>,
+  Note:     () => <Icon name="note_stack_add" size={20} />,
+  Text:     () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></svg>,
+  Draw:     () => <Icon name="draw" size={20} />,
+  Arrow:    () => <Icon name="trending_flat" size={20} />,
+  Shape:    () => <Icon name="pentagon" size={20} />,
+  Add:      () => <Icon name="add" size={20} />,
+  Image:    () => <Icon name="image" size={20} />,
+  Frame:    () => <Icon name="crop_free" size={20} />,
+  Copy:     () => <Icon name="content_copy" size={18} />,
+  Undo:     () => <Icon name="undo" size={18} />,
+  Redo:     () => <Icon name="redo" size={18} />,
+  Magic:    () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>,
+  Crop:     () => <Icon name="crop" size={18} />,
+  Patterns: () => <Icon name="pentagon" size={20} />,
+  Export:   () => <Icon name="save" size={20} />,
+  Import:   () => <Icon name="file_open" size={20} />,
 };
 
 const ASPECT_RATIOS = [
@@ -72,7 +72,7 @@ const SHAPES = [
     { type: 'rectangle', label: '矩形', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg> },
     { type: 'circle', label: '圓形', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg> },
     { type: 'triangle', label: '三角形', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 22h20L12 2z"/></svg> },
-    { type: 'pentagon', label: '五角形', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l10 7-3.5 13H5.5L2 9z"/></svg> },
+    { type: 'pentagon', label: '五角形', icon: <Icon name="pentagon" size={20} /> },
     { type: 'hexagon', label: '六角形', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l9 5v10l-9 5-9-5V7z"/></svg> },
     { type: 'star', label: '星形', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> },
     { type: 'heart', label: '心形', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 21.35C12 21.35 22 13 22 8.5C22 5.42 19.58 3 16.5 3C14.76 3 13.09 3.81 12 5.09C10.91 3.81 9.24 3 7.5 3C4.42 3 2 5.42 2 8.5C2 13 12 21.35 12 21.35Z"/></svg> },
@@ -509,12 +509,12 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
           `}
         >
           <div className={`
-              flex items-center justify-center w-4 h-4 transition-all
+              flex items-center justify-center w-5 h-5 transition-all
               ${isProcessing ? 'animate-spin border-2 border-[#AF52DE] border-t-transparent rounded-full' : 'text-[#AF52DE]'}
           `}>
                 {!isProcessing && <Icons.Magic />}
           </div>
-          <span className={`text-[9px] font-medium leading-none tracking-tight ${isProcessing ? 'text-yohaku-text-muted' : 'text-yohaku-text-muted group-hover:text-[#AF52DE]'}`}>
+          <span className={`text-[10px] font-medium leading-none tracking-tight ${isProcessing ? 'text-yohaku-text-muted' : 'text-yohaku-text-muted group-hover:text-[#AF52DE]'}`}>
               Magic
           </span>
         </button>
@@ -538,7 +538,7 @@ const ToolButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React
       min-w-[48px]
     `}
   >
-    <div className="text-current">{icon}</div>
-    <span className="text-[9px] font-medium tracking-tight leading-none text-current">{label}</span>
+    <div className="text-current flex items-center justify-center" style={{ height: 20 }}>{icon}</div>
+    <span className="text-[10px] font-medium tracking-tight leading-none text-current">{label}</span>
   </button>
 );

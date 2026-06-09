@@ -13,7 +13,7 @@ export const Icon: React.FC<IconProps> = ({ name, size = 20, filled = false, cla
     className={`material-symbols-rounded${className ? ` ${className}` : ''}`}
     style={{
       fontSize: size,
-      fontVariationSettings: `'opsz' 20, 'wght' 300, 'FILL' ${filled ? 1 : 0}, 'GRAD' -25`,
+      fontVariationSettings: `'opsz' 24, 'wght' 325, 'FILL' ${filled ? 1 : 0}, 'GRAD' 0`,
       ...style,
     }}
   >

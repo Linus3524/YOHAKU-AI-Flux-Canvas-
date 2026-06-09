@@ -23,25 +23,25 @@ interface LayerPanelProps {
 }
 
 const Icons = {
-    EyeOpen:      () => <Icon name="visibility" size={14} />,
-    EyeClosed:    () => <Icon name="visibility_off" size={14} />,
-    LockOpen:     () => <Icon name="lock_open" size={14} />,
-    LockClosed:   () => <Icon name="lock" size={14} />,
-    Group:        () => <Icon name="group_work" size={14} />,
-    Ungroup:      () => <Icon name="ungroup" size={14} />,
-    Merge:        () => <Icon name="merge" size={14} />,
-    Image:        () => <Icon name="image" size={12} />,
-    Note:         () => <Icon name="sticky_note_2" size={12} />,
-    Text:         () => <Icon name="title" size={12} />,
-    Arrow:        () => <Icon name="trending_flat" size={12} />,
-    Draw:         () => <Icon name="draw" size={12} />,
-    Frame:        () => <Icon name="crop_free" size={12} />,
-    Shape:        () => <Icon name="category" size={12} />,
-    Layer:        () => <Icon name="layers" size={16} />,
-    Trash:        () => <Icon name="delete" size={14} />,
-    Folder:       () => <Icon name="folder" size={12} />,
-    ChevronDown:  () => <Icon name="expand_more" size={14} />,
-    ChevronRight: () => <Icon name="chevron_right" size={14} />,
+    EyeOpen:      () => <Icon name="visibility" size={16} />,
+    EyeClosed:    () => <Icon name="visibility_off" size={16} />,
+    LockOpen:     () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
+    LockClosed:   () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+    Group:        () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5c0-1.1.9-2 2-2h2"/><path d="M17 3h2c1.1 0 2 .9 2 2v2"/><path d="M21 17v2c0 1.1-.9 2-2 2h-2"/><path d="M7 21H5c-1.1 0-2-.9-2-2v-2"/><rect width="7" height="5" x="7" y="7" rx="1"/><rect width="7" height="5" x="10" y="12" rx="1"/></svg>,
+    Ungroup:      () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="8" height="6" x="5" y="4" rx="1"/><rect width="8" height="6" x="11" y="14" rx="1"/></svg>,
+    Merge:        () => <Icon name="merge" size={16} />,
+    Image:        () => <Icon name="image" size={14} />,
+    Note:         () => <Icon name="sticky_note_2" size={14} />,
+    Text:         () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></svg>,
+    Arrow:        () => <Icon name="trending_flat" size={14} />,
+    Draw:         () => <Icon name="draw" size={14} />,
+    Frame:        () => <Icon name="crop_free" size={14} />,
+    Shape:        () => <Icon name="category" size={14} />,
+    Layer:        () => <Icon name="layers" size={18} />,
+    Trash:        () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+    Folder:       () => <Icon name="folder" size={14} />,
+    ChevronDown:  () => <Icon name="expand_more" size={16} />,
+    ChevronRight: () => <Icon name="chevron_right" size={16} />,
 };
 
 export const getLayerColor = (type: string) => {
@@ -671,7 +671,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
                     onMouseDown={handleResizeMouseDown}
                 >
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M9 1L1 9M9 5L5 9M9 9H9.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        <path d="M9 1L1 9M9 5L5 9M9 9H9.01" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
                     </svg>
                 </div>
             </div>

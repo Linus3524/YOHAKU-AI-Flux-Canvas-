@@ -15,10 +15,10 @@ import { Icon } from '../Icon';
 const Ic = {
     Home:         () => <Icon name="home" size={14} />,
     Dots:         () => <Icon name="more_horiz" size={16} />,
-    Trash:        () => <Icon name="delete" size={13} />,
-    Lock:         () => <Icon name="lock" size={13} />,
-    Unlock:       () => <Icon name="lock_open" size={13} />,
-    Download:     () => <Icon name="download" size={16} />,
+    Trash:        () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+    Lock:         () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+    Unlock:       () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
+    Download:     () => <Icon name="download" size={14.5} />,
     Refresh:      () => <Icon name="refresh" size={16} />,
     Scan:         () => <Icon name="document_scanner" size={19} />,
     Crop:         () => <Icon name="crop" size={16} />,
@@ -30,7 +30,7 @@ const Ic = {
     Paperclip:    () => <Icon name="attach_file" size={16} />,
     Plus:         () => <Icon name="add_circle" size={16} />,
     Send:         () => <Icon name="arrow_upward" size={14} />,
-    Eye:          () => <Icon name="visibility" size={13} />,
+    Eye:          () => <Icon name="visibility" size={14.5} />,
     EyeOff:       () => <Icon name="visibility_off" size={13} />,
     Wand:         () => <Icon name="magic_button" size={13} />,
     Spinner:      () => <Icon name="progress_activity" size={13} className="animate-spin" style={{ animationDuration: '0.8s' }} />,
@@ -775,15 +775,15 @@ function PillToolbar({
     lamaReady: boolean;
 }) {
     const tools = [
-        { id: 'select',  icon: <Icon name="arrow_selector_tool" size={18} style={{ color: '#6b7280' }} />, label: '選取圖層 (Select Layer)',     onClick: () => onTool('select'), disabled: false },
-        { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Icon name="document_scanner" size={19} />, label: '全圖分析 (Analyze)',           onClick: onReanalyze, disabled: false },
-        { id: 'sam2',    icon: <Icon name="frame_inspect" size={19} style={{ color: '#3b82f6' }} />,       label: '智能點選 (Auto Segment)',      onClick: () => onTool('sam2'),   disabled: false },
-        { id: 'rect',    icon: <Icon name="crop_square" size={19} style={{ color: '#7c3aed' }} />,         label: '矩形框選 (Bounding Box)',      onClick: () => onTool('rect'),   disabled: false },
-        { id: 'points',  icon: <Icon name="scatter_plot" size={19} style={{ color: '#22c55e' }} />,        label: '多點精確選取 (Multi-points)',  onClick: () => onTool('points'), disabled: false },
-        { id: 'brush',   icon: <Icon name="brush" size={19} style={{ color: '#f97316' }} />,               label: '筆塗選取 (Brush Select)',      onClick: () => onTool('brush'),  disabled: false },
+        { id: 'select',  icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12.586 12.586 19 19"/><path d="M3.688 3.037a.497.497 0 0 0-.651.651l6.5 15.999a.501.501 0 0 0 .947-.062l1.569-6.083a2 2 0 0 1 1.448-1.479l6.124-1.579a.5.5 0 0 0 .063-.947z"/></svg>, label: '選取圖層 (Select Layer)',     onClick: () => onTool('select'), disabled: false },
+        { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Icon name="split_scene_2" size={20} />, label: '全圖分析 (Analyze)',           onClick: onReanalyze, disabled: false },
+        { id: 'sam2',    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12.034 12.681a.498.498 0 0 1 .647-.647l9 3.5a.5.5 0 0 1-.033.943l-3.444 1.068a1 1 0 0 0-.66.66l-1.067 3.443a.5.5 0 0 1-.943.033z"/><path d="M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/></svg>, label: '智能點選 (Auto Segment)',      onClick: () => onTool('sam2'),   disabled: false },
+        { id: 'rect',    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg>, label: '矩形框選 (Bounding Box)',      onClick: () => onTool('rect'),   disabled: false },
+        { id: 'points',  icon: <Icon name="scatter_plot" size={20} style={{ color: '#22c55e' }} />, label: '多點精確選取 (Multi-points)',  onClick: () => onTool('points'), disabled: false },
+        { id: 'brush',   icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.4 2.245 4.5 4.5 0 0 0 8.4-2.245c0-.399-.078-.78-.22-1.128Zm0 0a15.998 15.998 0 0 0 3.388-1.62m-5.043-.025a15.994 15.994 0 0 1 1.622-3.395m3.42 3.42a15.995 15.995 0 0 0 4.764-4.648l3.876-5.814a1.151 1.151 0 0 0-1.597-1.597L14.146 6.32a15.996 15.996 0 0 0-4.649 4.763m3.42 3.42a6.776 6.776 0 0 0-3.42-3.42"/></svg>, label: '筆塗選取 (Brush Select)',      onClick: () => onTool('brush'),  disabled: false },
         {
             id: 'lama',
-            icon: <Icon name="format_paint" size={19} style={{ color: '#38bdf8' }} />,
+            icon: <Icon name="background_replace" size={20} style={{ color: '#0ea5e9' }} />,
             label: lamaReady ? 'LaMa 生成純背景' : 'LaMa（需先下載模型）',
             onClick: onGenerateLama,
             disabled: !lamaReady || !hasLayers,
@@ -1668,8 +1668,8 @@ export function SemanticEditorView({
                                 {onnxEmbeddingLoading && <span style={{ opacity: 0.6 }}>計算中...</span>}
                             </button>
                         )}
-                        <NavBtn title="匯出 PNG" onClick={handleExport}><Ic.Download /></NavBtn>
-                        <NavBtn title="清除所有編輯紀錄並退出" onClick={handleDelete}><Ic.Trash /></NavBtn>
+                        <NavBtn title="匯出 PNG" onClick={handleExport}><Icon name="download" size={20} /></NavBtn>
+                        <NavBtn title="清除所有編輯紀錄並退出" onClick={handleDelete}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></NavBtn>
                     </div>
                 </div>
 
