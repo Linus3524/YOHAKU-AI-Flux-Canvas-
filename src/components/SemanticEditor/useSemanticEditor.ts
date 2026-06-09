@@ -207,6 +207,19 @@ export function useSemanticEditor({
         }
     }, [state.layers, originalBase64, setStatus]);
 
+    // ── 版本快照同步 helper ──────────────────────────────────────────────────
+    // 所有修改 layers 的操作都必須呼叫此函式，確保當前版本快照也同步更新
+    const withLayerSync = (s: SemanticEditorState, updated: SmartLayer[]) => {
+        const onOriginal = s.activeVersionIndex === -1;
+        return {
+            layers:         updated,
+            originalLayers: onOriginal ? updated : s.originalLayers,
+            versions:       onOriginal ? s.versions : s.versions.map((ver, i) =>
+                i === s.activeVersionIndex ? { ...ver, layers: updated } : ver
+            ),
+        };
+    };
+
     // ── 選取圖層 ─────────────────────────────────────────────────────────────
     const selectLayer = useCallback((id: string | null) => {
         setState(s => ({ ...s, selectedLayerId: id }));
@@ -214,18 +227,18 @@ export function useSemanticEditor({
 
     // ── 更新 Prompt ──────────────────────────────────────────────────────────
     const updatePrompt = useCallback((layerId: string, prompt: string) => {
-        setState(s => ({
-            ...s,
-            layers: s.layers.map(l => l.id === layerId ? { ...l, prompt } : l),
-        }));
+        setState(s => {
+            const updated = s.layers.map(l => l.id === layerId ? { ...l, prompt } : l);
+            return { ...s, ...withLayerSync(s, updated) };
+        });
     }, []);
 
     // ── 更新參考圖 ────────────────────────────────────────────────────────────
     const updateReferenceImage = useCallback((layerId: string, referenceImage: string | undefined) => {
-        setState(s => ({
-            ...s,
-            layers: s.layers.map(l => l.id === layerId ? { ...l, referenceImage } : l),
-        }));
+        setState(s => {
+            const updated = s.layers.map(l => l.id === layerId ? { ...l, referenceImage } : l);
+            return { ...s, ...withLayerSync(s, updated) };
+        });
     }, []);
 
     // ── 單層 Apply（inpaint → 全部重新切割）────────────────────────────────
@@ -506,11 +519,11 @@ export function useSemanticEditor({
             // Gemini 非同步生成描述（不阻塞圖層顯示）
             if (geminiApiKey) {
                 describeLayerWithGemini(newLayer.base64, geminiApiKey).then(({ name, prompt }) => {
-                    if (name || prompt) setState(s => ({
-                        ...s,
-                        layers: s.layers.map(l => l.id === newLayer.id
-                            ? { ...l, ...(name && { name }), ...(prompt && { prompt, appliedPrompt: prompt }) } : l),
-                    }));
+                    if (name || prompt) setState(s => {
+                        const updated = s.layers.map(l => l.id === newLayer.id
+                            ? { ...l, ...(name && { name }), ...(prompt && { prompt, appliedPrompt: prompt }) } : l);
+                        return { ...s, ...withLayerSync(s, updated) };
+                    });
                 });
             }
             setState(s => {
@@ -519,16 +532,7 @@ export function useSemanticEditor({
                 compositeSmartLayers(s.backgroundBase64, fgLayers).then(composite => {
                     setState(ss => ({ ...ss, compositeBase64: composite }));
                 });
-                // 在原始版本時，同步更新 originalLayers 快照
-                const onOriginal = s.activeVersionIndex === -1;
-                return {
-                    ...s,
-                    layers: updated,
-                    originalLayers: onOriginal ? updated : s.originalLayers,
-                    selectedLayerId: newLayer.id,
-                    status: 'idle',
-                    statusMessage: '',
-                };
+                return { ...s, ...withLayerSync(s, updated), selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
             });
         } catch (e) {
             setStatus('idle', '');
@@ -550,21 +554,20 @@ export function useSemanticEditor({
             });
             if (geminiApiKey) {
                 describeLayerWithGemini(newLayer.base64, geminiApiKey).then(({ name, prompt }) => {
-                    if (name || prompt) setState(s => ({
-                        ...s,
-                        layers: s.layers.map(l => l.id === newLayer.id
-                            ? { ...l, ...(name && { name }), ...(prompt && { prompt, appliedPrompt: prompt }) } : l),
-                    }));
+                    if (name || prompt) setState(s => {
+                        const updated = s.layers.map(l => l.id === newLayer.id
+                            ? { ...l, ...(name && { name }), ...(prompt && { prompt, appliedPrompt: prompt }) } : l);
+                        return { ...s, ...withLayerSync(s, updated) };
+                    });
                 });
             }
             setState(s => {
                 const updated = [...s.layers, newLayer];
-                const onOriginal = s.activeVersionIndex === -1;
                 const fgLayers = updated.filter(l => l.category !== 'BACKGROUND');
                 compositeSmartLayers(s.backgroundBase64, fgLayers).then(c =>
                     setState(ss => ({ ...ss, compositeBase64: c }))
                 );
-                return { ...s, layers: updated, originalLayers: onOriginal ? updated : s.originalLayers, selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
+                return { ...s, ...withLayerSync(s, updated), selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
             });
         } catch (e) { setStatus('idle', ''); throw e; }
     }, [state.compositeBase64, falApiKey, geminiApiKey, setStatus]);
@@ -584,21 +587,20 @@ export function useSemanticEditor({
             });
             if (geminiApiKey) {
                 describeLayerWithGemini(newLayer.base64, geminiApiKey).then(({ name, prompt }) => {
-                    if (name || prompt) setState(s => ({
-                        ...s,
-                        layers: s.layers.map(l => l.id === newLayer.id
-                            ? { ...l, ...(name && { name }), ...(prompt && { prompt, appliedPrompt: prompt }) } : l),
-                    }));
+                    if (name || prompt) setState(s => {
+                        const updated = s.layers.map(l => l.id === newLayer.id
+                            ? { ...l, ...(name && { name }), ...(prompt && { prompt, appliedPrompt: prompt }) } : l);
+                        return { ...s, ...withLayerSync(s, updated) };
+                    });
                 });
             }
             setState(s => {
                 const updated = [...s.layers, newLayer];
-                const onOriginal = s.activeVersionIndex === -1;
                 const fgLayers = updated.filter(l => l.category !== 'BACKGROUND');
                 compositeSmartLayers(s.backgroundBase64, fgLayers).then(c =>
                     setState(ss => ({ ...ss, compositeBase64: c }))
                 );
-                return { ...s, layers: updated, originalLayers: onOriginal ? updated : s.originalLayers, selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
+                return { ...s, ...withLayerSync(s, updated), selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
             });
         } catch (e) { setStatus('idle', ''); throw e; }
     }, [state.compositeBase64, falApiKey, geminiApiKey, setStatus]);
@@ -608,28 +610,20 @@ export function useSemanticEditor({
         // Gemini 非同步生成 prompt
         if (geminiApiKey) {
             describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
-                if (desc) setState(s => ({
-                    ...s,
-                    layers: s.layers.map(l => l.id === newLayer.id
-                        ? { ...l, prompt: desc, appliedPrompt: desc } : l),
-                }));
+                if (desc) setState(s => {
+                    const updated = s.layers.map(l => l.id === newLayer.id
+                        ? { ...l, prompt: desc, appliedPrompt: desc } : l);
+                    return { ...s, ...withLayerSync(s, updated) };
+                });
             });
         }
         setState(s => {
             const updated = [...s.layers, newLayer];
-            const onOriginal = s.activeVersionIndex === -1;
             const fgLayers = updated.filter(l => l.category !== 'BACKGROUND');
             compositeSmartLayers(s.backgroundBase64, fgLayers).then(c =>
                 setState(ss => ({ ...ss, compositeBase64: c }))
             );
-            return {
-                ...s,
-                layers: updated,
-                originalLayers: onOriginal ? updated : s.originalLayers,
-                selectedLayerId: newLayer.id,
-                status: 'idle',
-                statusMessage: '',
-            };
+            return { ...s, ...withLayerSync(s, updated), selectedLayerId: newLayer.id, status: 'idle', statusMessage: '' };
         });
     }, [geminiApiKey, setStatus]);
 
@@ -655,28 +649,16 @@ export function useSemanticEditor({
                 setState(ss => ({ ...ss, compositeBase64: composite }));
             });
 
-            const onOriginal = s.activeVersionIndex === -1;
-            const updatedVersions = onOriginal ? s.versions : s.versions.map((ver, i) =>
-                i === s.activeVersionIndex ? { ...ver, layers: updated } : ver
-            );
-            return {
-                ...s,
-                layers: updated,
-                backgroundBase64: newBg,
-                originalLayers: onOriginal ? updated : s.originalLayers,
-                versions: updatedVersions,
-            };
+            return { ...s, ...withLayerSync(s, updated), backgroundBase64: newBg };
         });
     }, []);
 
     // ── 切換鎖定 ─────────────────────────────────────────────────────────────
     const toggleLock = useCallback((layerId: string) => {
-        setState(s => ({
-            ...s,
-            layers: s.layers.map(l =>
-                l.id === layerId ? { ...l, isLocked: !l.isLocked } : l
-            ),
-        }));
+        setState(s => {
+            const updated = s.layers.map(l => l.id === layerId ? { ...l, isLocked: !l.isLocked } : l);
+            return { ...s, ...withLayerSync(s, updated) };
+        });
     }, []);
 
     // ── 刪除圖層 ─────────────────────────────────────────────────────────────
@@ -687,11 +669,9 @@ export function useSemanticEditor({
             compositeSmartLayers(s.backgroundBase64, fgLayers).then(composite => {
                 setState(ss => ({ ...ss, compositeBase64: composite }));
             });
-            const onOriginal = s.activeVersionIndex === -1;
             return {
                 ...s,
-                layers: updated,
-                originalLayers: onOriginal ? updated : s.originalLayers,
+                ...withLayerSync(s, updated),
                 selectedLayerId: s.selectedLayerId === layerId ? null : s.selectedLayerId,
             };
         });
@@ -707,7 +687,7 @@ export function useSemanticEditor({
             compositeSmartLayers(s.backgroundBase64, fgLayers).then(composite => {
                 setState(ss => ({ ...ss, compositeBase64: composite }));
             });
-            return { ...s, layers: updated };
+            return { ...s, ...withLayerSync(s, updated) };
         });
     }, []);
 
@@ -715,7 +695,10 @@ export function useSemanticEditor({
     const isLoading     = state.status !== 'idle';
 
     const renameLayer = useCallback((layerId: string, newName: string) => {
-        setState(s => ({ ...s, layers: s.layers.map(l => l.id === layerId ? { ...l, name: newName } : l) }));
+        setState(s => {
+            const updated = s.layers.map(l => l.id === layerId ? { ...l, name: newName } : l);
+            return { ...s, ...withLayerSync(s, updated) };
+        });
     }, []);
 
     const renameVersion = useCallback((versionIndex: number, newLabel: string) => {
