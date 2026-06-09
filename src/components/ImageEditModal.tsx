@@ -3,6 +3,7 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { GoogleGenAI, Modality } from "@google/genai";
 import type { ImageElement, Point } from '../types';
 import { callGeminiWithRetry, analyzeDominantColor } from '../utils/helpers';
+import { Icon } from './Icon';
 import { rgbToHsl, hslToRgb, compositeImagesPixelPerfect, createPrefilledImage } from '../utils/imageProcessing';
 import { callAtlasInpaint } from '../utils/atlasImage';
 import { getModelStatus } from '../utils/onnxModelCache';
@@ -81,12 +82,11 @@ const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 5;
 
 const EditIcons = {
-    // Icons reverted to text where requested, keeping other utility icons
-    Undo: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>,
-    Redo: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>,
-    Eye: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
-    EyeOff: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>,
-    Trash: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+    Undo:   () => <Icon name="undo" size={16} />,
+    Redo:   () => <Icon name="redo" size={16} />,
+    Eye:    () => <Icon name="visibility" size={16} />,
+    EyeOff: () => <Icon name="visibility_off" size={16} />,
+    Trash:  () => <Icon name="delete" size={16} />,
 };
 
 const AdjustmentSlider: React.FC<{

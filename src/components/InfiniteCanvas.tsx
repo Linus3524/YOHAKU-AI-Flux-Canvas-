@@ -5,6 +5,7 @@ import type { OutpaintingState } from '../types';
 import { TransformableElement } from './TransformableElement';
 import { AppearancePanel } from './AppearancePanel';
 import { getModelSizes } from '../utils/atlasImage';
+import { Icon } from './Icon';
 
 interface OutpaintingFrameProps {
   outpaintingState: OutpaintingState;
@@ -232,14 +233,7 @@ const DraggableOutpaintingPanel: React.FC<{
             {/* Header */}
             <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                    <svg
-                        className={`flex-shrink-0 transition-colors ${isDragging ? 'text-[#94a3b8] cursor-grabbing' : 'text-[#cbd5e1] hover:text-[#94a3b8] cursor-grab'}`}
-                        width="14" height="14" viewBox="0 0 24 24" fill="currentColor"
-                    >
-                        <circle cx="8" cy="4" r="1.5"/><circle cx="16" cy="4" r="1.5"/>
-                        <circle cx="8" cy="12" r="1.5"/><circle cx="16" cy="12" r="1.5"/>
-                        <circle cx="8" cy="20" r="1.5"/><circle cx="16" cy="20" r="1.5"/>
-                    </svg>
+                    <Icon name="drag_indicator" size={14} className={`flex-shrink-0 transition-colors ${isDragging ? 'text-[#94a3b8] cursor-grabbing' : 'text-[#cbd5e1] hover:text-[#94a3b8] cursor-grab'}`} />
                     <h2 className="text-[13px] font-bold text-gray-900 tracking-tight">
                         AI 擴圖
                         <span className="text-gray-400 font-medium text-[11px] ml-1">(Outpainting)</span>
@@ -250,9 +244,7 @@ const DraggableOutpaintingPanel: React.FC<{
                     onMouseDown={(e) => e.stopPropagation()}
                     className="text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 hover:bg-gray-100 p-1 rounded-md"
                 >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
+                    <Icon name="close" size={12} />
                 </button>
             </div>
 
@@ -298,9 +290,7 @@ const DraggableOutpaintingPanel: React.FC<{
                             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168,85,247,0.15)'; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168,85,247,0.08)'; }}
                         >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364-.707-.707M6.343 6.343l-.707-.707m12.728 0-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/>
-                            </svg>
+                            <Icon name="wb_sunny" size={12} />
                             {isAutoPrompting ? '分析中...' : '自動發想'}
                         </button>
 
@@ -312,9 +302,7 @@ const DraggableOutpaintingPanel: React.FC<{
                             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 16px rgba(139,92,246,0.35)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(139,92,246,0.25)'; (e.currentTarget as HTMLButtonElement).style.transform = 'none'; }}
                         >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                            </svg>
+                            <Icon name="auto_awesome" size={12} filled />
                             生成
                         </button>
                     </div>
@@ -322,9 +310,7 @@ const DraggableOutpaintingPanel: React.FC<{
 
                 {/* Microcopy hint */}
                 <div className="mt-2.5 flex items-start gap-1.5 text-[10px] text-gray-500 leading-relaxed">
-                    <svg className="text-purple-400 mt-0.5 flex-shrink-0" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-                    </svg>
+                    <Icon name="info" size={11} className="text-purple-400 mt-0.5 flex-shrink-0" />
                     <p>拖曳畫布上的 <span className="font-medium text-purple-600">紫色虛線框</span> 調整生成範圍。提示詞越精確，生成效果越好。</p>
                 </div>
             </div>
@@ -448,14 +434,14 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
                     onClick={onCancel}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur-md text-[#1D1D1F] text-xs font-bold border border-black/10 shadow-[0_4px_12px_rgba(0,0,0,0.12)] hover:bg-white hover:scale-105 transition-all active:scale-95"
                  >
-                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                     <Icon name="close" size={12} />
                      取消
                  </button>
                  <button 
                     onClick={() => onConfirm(cropRect)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/90 backdrop-blur-md text-white text-xs font-bold border border-transparent shadow-[0_4px_12px_rgba(0,0,0,0.2)] hover:bg-black hover:scale-105 transition-all active:scale-95"
                  >
-                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                     <Icon name="check" size={12} />
                      確認裁剪
                  </button>
             </div>
@@ -530,18 +516,18 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 5;
 
 const CameraIcons = {
-    TopLeft: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10"/><path d="M7 7v10"/></svg>,
-    Top: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>,
-    TopRight: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M17 7H7"/><path d="M17 7v10"/></svg>,
-    NW: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="17" x2="7" y2="7"/><polyline points="7 17 7 7 17 7"/></svg>,
-    N:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>,
-    NE: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>,
-    W:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
-    Center: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="3"/></svg>,
-    E:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
-    SW: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="17 17 7 17 7 7"/></svg>,
-    S:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>,
-    SE: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="7" x2="17" y2="17"/><polyline points="17 7 17 17 7 17"/></svg>,
+    TopLeft: () => <Icon name="north_west" size={16} />,
+    Top:     () => <Icon name="north" size={16} />,
+    TopRight:() => <Icon name="north_east" size={16} />,
+    NW:      () => <Icon name="north_west" size={16} />,
+    N:       () => <Icon name="north" size={16} />,
+    NE:      () => <Icon name="north_east" size={16} />,
+    W:       () => <Icon name="west" size={16} />,
+    Center:  () => <Icon name="circle" size={16} filled />,
+    E:       () => <Icon name="east" size={16} />,
+    SW:      () => <Icon name="south_west" size={16} />,
+    S:       () => <Icon name="south" size={16} />,
+    SE:      () => <Icon name="south_east" size={16} />,
 };
 
 // ── 生成分裂按鈕（左：生成、右：選張數）────────────────────────────────────
@@ -559,7 +545,7 @@ const GenerateSplitButton: React.FC<{ onGenerate: (count: 1 | 2 | 3 | 4) => void
                     onClick={() => onGenerate(count)}
                     className="flex-1 flex items-center justify-center gap-2 text-white py-3 text-sm font-semibold hover:bg-white/10 transition-colors active:bg-white/20 rounded-l-xl"
                 >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+                    <Icon name="auto_awesome" size={15} filled />
                     一鍵生成圖片
                 </button>
                 <div className="w-[1.5px] bg-white/30 my-2.5"/>
@@ -570,9 +556,7 @@ const GenerateSplitButton: React.FC<{ onGenerate: (count: 1 | 2 | 3 | 4) => void
                     aria-label="選擇生成張數"
                 >
                     <span className="text-xs font-semibold tabular-nums">{count}</span>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="6 9 12 15 18 9"/>
-                    </svg>
+                    <Icon name="expand_more" size={10} />
                 </button>
             </div>
 
@@ -601,10 +585,10 @@ const GenerateSplitButton: React.FC<{ onGenerate: (count: 1 | 2 | 3 | 4) => void
 };
 
 const SelectionMenuIcons = {
-    MagicFilled: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" /></svg>),
-    Settings: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>),
-    Collapse: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>),
-    Upscale: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1"/></svg>)
+    MagicFilled: () => <Icon name="auto_awesome" size={20} filled />,
+    Settings:    () => <Icon name="tune" size={20} />,
+    Collapse:    () => <Icon name="expand_less" size={16} />,
+    Upscale:     () => <Icon name="open_in_full" size={14} />,
 };
 
 const CAMERA_ANGLES = [
@@ -1318,10 +1302,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
               {el.id === badgeId && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="bg-white/90 backdrop-blur-md rounded-full px-2.5 py-1 flex items-center gap-1.5 shadow-lg">
-                    <svg className="animate-spin h-3 w-3 text-gray-800 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                    </svg>
+                    <Icon name="progress_activity" size={12} className="animate-spin flex-shrink-0" style={{ color: '#1f2937', animationDuration: '0.8s' }} />
                     <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">AI 運算中</span>
                   </div>
                 </div>
@@ -1390,7 +1371,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                   className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-black/5 text-[#1D1D1F] transition-colors"
                   aria-label="Zoom Out"
               >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  <Icon name="remove" size={14} />
               </button>
 
               <span className="w-10 text-center text-[11px] font-mono font-medium text-[#1D1D1F] select-none">
@@ -1402,7 +1383,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                   className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-black/5 text-[#1D1D1F] transition-colors"
                   aria-label="Zoom In"
               >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  <Icon name="add" size={14} />
               </button>
           </div>
 
@@ -1411,9 +1392,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
               className="w-9 h-9 bg-white/90 backdrop-blur-xl rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.08)] border border-black/5 flex items-center justify-center text-[#1D1D1F] hover:bg-white hover:scale-105 transition-all active:scale-95"
               title="適合畫面 (Fit to Screen)"
           >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-              </svg>
+              <Icon name="fit_screen" size={18} />
           </button>
       </div>
 
@@ -1459,7 +1438,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                             onClick={onHarmonize}
                             className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-2.5 rounded-xl text-[13px] font-semibold shadow-sm shadow-orange-500/20 hover:opacity-90 transition-all active:scale-95"
                         >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                            <Icon name="view_in_ar" size={15} />
                             一鍵調和
                         </button>
                     )}
@@ -1480,10 +1459,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                 onClick={() => setShowGen(!showGen)}
                             >
                                 <span className="text-[12px] font-bold text-gray-900">生成設定</span>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                                    style={{ transform: showGen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                                    <polyline points="6 9 12 15 18 9"/>
-                                </svg>
+                                <Icon name="expand_more" size={14} style={{ color: '#94a3b8', transform: showGen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
                             </div>
                             {showGen && (
                                 <div className="px-5 pb-4 flex flex-col gap-3">
@@ -1503,7 +1479,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 <option value="qwen-image-2" disabled={!hasAtlasKey}>通義千問 Qwen Image 2.0{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
                                             </select>
                                             <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-gray-400">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                                                <Icon name="expand_more" size={16} />
                                             </div>
                                         </div>
                                         {!hasAtlasKey && (
@@ -1562,7 +1538,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 })()}
                                             </select>
                                             <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-gray-400">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                                                <Icon name="expand_more" size={16} />
                                             </div>
                                         </div>
                                     </div>
@@ -1639,7 +1615,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                         <RatioSVG ratio={triggerRatio} selected={true} />
                                                         <span className="font-medium text-[#1D1D1F]">{triggerRatio}</span>
                                                         <span className="text-[#86868B] text-xs">{triggerDims}</span>
-                                                        <svg className={`ml-auto w-4 h-4 text-[#86868B] flex-shrink-0 transition-transform duration-150 ${ratioOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                                                        <Icon name="expand_more" size={16} className="ml-auto flex-shrink-0" style={{ color: '#86868B', transition: 'transform 0.15s', transform: ratioOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
                                                     </button>
 
                                                     {/* 下拉列表 — 往下展開，阻止滾輪冒泡到畫布 */}
@@ -1660,7 +1636,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                                 <RatioSVG ratio="Original" selected={isSel} />
                                                                                 <span className={`${isSel ? 'text-[#5B5BF6] font-medium' : 'text-[#1D1D1F]'}`}>原圖比例</span>
                                                                                 <span className="ml-auto text-[#86868B] text-xs">依原圖</span>
-                                                                                {isSel && <svg className="w-3.5 h-3.5 text-[#5B5BF6] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>}
+                                                                                {isSel && <Icon name="check" size={14} className="flex-shrink-0" style={{ color: '#5B5BF6' }} />}
                                                                             </button>
                                                                         );
                                                                     })()}
@@ -1680,7 +1656,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                                             <RatioSVG ratio={s.ratio} selected={isSel} />
                                                                                             <span className={`font-medium w-9 ${isSel ? 'text-[#5B5BF6]' : 'text-[#1D1D1F]'}`}>{s.ratio}</span>
                                                                                             <span className="ml-auto text-[#86868B] text-xs tabular-nums">{pw}×{ph}</span>
-                                                                                            {isSel && <svg className="w-3.5 h-3.5 text-[#5B5BF6] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>}
+                                                                                            {isSel && <Icon name="check" size={14} className="flex-shrink-0" style={{ color: '#5B5BF6' }} />}
                                                                                         </button>
                                                                                     );
                                                                                 })}
@@ -1698,7 +1674,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                             <RatioSVG ratio={r.value} selected={isSel} />
                                                                             <span className={`${isSel ? 'text-[#5B5BF6] font-medium' : 'text-[#1D1D1F]'}`}>{r.label}</span>
                                                                             <span className="ml-auto text-[#86868B] text-xs tabular-nums">{geminiDims(r.value)}</span>
-                                                                            {isSel && <svg className="w-3.5 h-3.5 text-[#5B5BF6] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>}
+                                                                            {isSel && <Icon name="check" size={14} className="flex-shrink-0" style={{ color: '#5B5BF6' }} />}
                                                                         </button>
                                                                     );
                                                                 })
@@ -1747,10 +1723,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         onClick={() => setShowTools(!showTools)}
                                     >
                                         <span className="text-[12px] font-bold text-gray-900">圖片工具</span>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                                            style={{ transform: showTools ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                                            <polyline points="6 9 12 15 18 9"/>
-                                        </svg>
+                                        <Icon name="expand_more" size={14} style={{ color: '#94a3b8', transform: showTools ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
                                     </div>
                                     {showTools && (
                                         <div className="px-5 pb-4 flex flex-col gap-2.5">
@@ -1758,7 +1731,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 onClick={() => onRemoveBackground('enhanced')}
                                                 className="w-full py-2.5 bg-[#1e293b] text-white rounded-xl text-[13px] font-medium hover:bg-[#0f172a] transition-colors flex items-center justify-center gap-2"
                                             >
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+                                                <Icon name="content_cut" size={14} />
                                                 Gemini 智慧去背
                                             </button>
                                             {hasFalKey && onBiRefNetRemoveBackground && (() => {
@@ -1779,7 +1752,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                 onClick={() => onBiRefNetRemoveBackground(birefnetModel)}
                                                                 className="flex-1 flex items-center justify-center gap-2 bg-white text-gray-800 py-2.5 text-[13px] font-medium hover:bg-gray-50 transition-colors"
                                                             >
-                                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+                                                                <Icon name="content_cut" size={13} style={{ color: '#f97316' }} />
                                                                 BiRefNet 快速去背
                                                             </button>
                                                             <div className="w-px bg-gray-200 my-0"/>
@@ -1790,9 +1763,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                 aria-label="選擇去背模式"
                                                             >
                                                                 <span className="text-[12px] font-medium whitespace-nowrap">{currentOpt.label}</span>
-                                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                    <polyline points="6 9 12 15 18 9"/>
-                                                                </svg>
+                                                                <Icon name="expand_more" size={10} />
                                                             </button>
                                                         </div>
                                                         {birefnetOpen && (
@@ -1810,7 +1781,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                                 <div className="text-[10px] text-[#86868B]">{opt.desc}</div>
                                                                             </div>
                                                                             {birefnetModel === opt.key && (
-                                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F97316" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                                                <Icon name="check" size={12} style={{ color: '#F97316' }} />
                                                                             )}
                                                                         </button>
                                                                     ))}
@@ -1836,7 +1807,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                     onClick={() => onUpscale(upscaleFactor)}
                                                     className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-800 text-[13px] font-medium rounded-xl transition-colors active:scale-95 flex items-center justify-center gap-1.5"
                                                 >
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1"/></svg>
+                                                    <Icon name="open_in_full" size={14} style={{ color: '#3b82f6' }} />
                                                     智能放大
                                                 </button>
                                             </div>
@@ -1850,10 +1821,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         onClick={() => setShowAppearance(!showAppearance)}
                                       >
                                         <span className="text-[12px] font-bold text-gray-900">外觀</span>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                                          style={{ transform: showAppearance ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                                          <polyline points="6 9 12 15 18 9"/>
-                                        </svg>
+                                        <Icon name="expand_more" size={14} style={{ color: '#94a3b8', transform: showAppearance ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
                                       </div>
                                       {showAppearance && (
                                         <div className="px-5 pb-4">
@@ -1875,10 +1843,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         onClick={() => setShowCamera(!showCamera)}
                                     >
                                         <span className="text-[12px] font-bold text-gray-900">視角控制器</span>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                                            style={{ transform: showCamera ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                                            <polyline points="6 9 12 15 18 9"/>
-                                        </svg>
+                                        <Icon name="expand_more" size={14} style={{ color: '#94a3b8', transform: showCamera ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
                                     </div>
                                     {showCamera && (
                                         <div className="px-5 pb-5 flex flex-col gap-3">

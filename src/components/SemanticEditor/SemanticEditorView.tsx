@@ -10,31 +10,31 @@ import type { SmartLayer, SmartLayerCategory } from '../../types';
 import { getModelStatus } from '../../utils/onnxModelCache';
 import { sam2EncodeInWorker, sam2DecodeInWorker } from '../../utils/sam2WorkerClient';
 import { buildSmartLayerFromMask, describeLayerWithGemini } from './semanticLayerUtils';
+import { Icon } from '../Icon';
 
-// ─── SVG 圖示 ──────────────────────────────────────────────────────────────────
 const Ic = {
-    Home: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
-    Dots: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>,
-    Trash: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
-    Lock: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
-    Unlock: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
-    Download: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-    Refresh: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21"/></svg>,
-    Scan: () => <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12" strokeWidth="2.5"/></svg>,
-    Crop: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"/><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"/></svg>,
-    Brush: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>,
-    Eraser: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 20H7L3 16C2.5 15.5 2.5 14.5 3 14L13 4C13.5 3.5 14.5 3.5 15 4L20 9C20.5 9.5 20.5 10.5 20 11L11 20"/><path d="M16 16L20 20"/></svg>,
-    Image: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
-    ChevronDown: () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>,
-    ChevronRight: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
-    Paperclip: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>,
-    Plus: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>,
-    Send: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>,
-    Eye: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
-    EyeOff: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>,
-    Wand: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg>,
-    Spinner: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="animate-spin" style={{ animationDuration: '0.8s' }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
-    Close: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+    Home:         () => <Icon name="home" size={14} />,
+    Dots:         () => <Icon name="more_horiz" size={16} />,
+    Trash:        () => <Icon name="delete" size={13} />,
+    Lock:         () => <Icon name="lock" size={13} />,
+    Unlock:       () => <Icon name="lock_open" size={13} />,
+    Download:     () => <Icon name="download" size={16} />,
+    Refresh:      () => <Icon name="refresh" size={16} />,
+    Scan:         () => <Icon name="document_scanner" size={19} />,
+    Crop:         () => <Icon name="crop" size={16} />,
+    Brush:        () => <Icon name="brush" size={16} />,
+    Eraser:       () => <Icon name="ink_eraser" size={16} />,
+    Image:        () => <Icon name="image" size={16} />,
+    ChevronDown:  () => <Icon name="expand_more" size={12} />,
+    ChevronRight: () => <Icon name="chevron_right" size={14} />,
+    Paperclip:    () => <Icon name="attach_file" size={16} />,
+    Plus:         () => <Icon name="add_circle" size={16} />,
+    Send:         () => <Icon name="arrow_upward" size={14} />,
+    Eye:          () => <Icon name="visibility" size={13} />,
+    EyeOff:       () => <Icon name="visibility_off" size={13} />,
+    Wand:         () => <Icon name="magic_button" size={13} />,
+    Spinner:      () => <Icon name="progress_activity" size={13} className="animate-spin" style={{ animationDuration: '0.8s' }} />,
+    Close:        () => <Icon name="close" size={16} />,
 };
 
 // ─── 選取框（用 cropRatio：SAM2 精確像素邊界，不用 Gemini bbox 矩形）────────────
@@ -774,74 +774,16 @@ function PillToolbar({
     hasLayers: boolean;
     lamaReady: boolean;
 }) {
-    // 選取圖示（與外部畫布工具列一致）
-    const CursorIcon = () => (
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="#e5e7eb"/>
-            <path d="M13 13l6 6"/>
-        </svg>
-    );
-
-    // SAM2 點選圖示：魔術棒（Ic.Wand 水平鏡像，縮小）+ 一顆四角星（放大）
-    const Sam2Icon = () => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <g transform="translate(12,12) scale(-0.95,0.95) translate(-12,-12)">
-                <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72" fill="#bfdbfe"/>
-                <path d="m14 7 3 3"/>
-            </g>
-            {/* 四角星（右上，大） */}
-            <path d="M18.5 0.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="#3b82f6" stroke="none"/>
-        </svg>
-    );
-
-    // 矩形框選圖示：紫色虛線方框 + 淺紫填色
-    const RectIcon = () => (
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.8" strokeLinecap="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" fill="#ede9fe" strokeDasharray="5 3"/>
-        </svg>
-    );
-    // 多點圖示
-    const PointsIcon = () => (
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round">
-            <circle cx="6"  cy="13" r="2.5" fill="#22c55e" stroke="#22c55e"/>
-            <circle cx="17" cy="7"  r="2.5" fill="#22c55e" stroke="#22c55e"/>
-            <circle cx="13" cy="18" r="2.5" fill="#ef4444" stroke="#ef4444"/>
-        </svg>
-    );
-
-    // LaMa 背景圖示：魔法棒 + 層次感
-    // 生成純背景：圓角方框 + 左上四角星（縱向拉長）+ 下方地平線弧
-    const LamaIcon = () => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-            {/* 圓角方框 */}
-            <rect x="1.5" y="1.5" width="21" height="21" rx="3.5" fill="#f0f9ff"/>
-            {/* 四角星（縱向拉長，左上角，加粗） */}
-            <path d="M8.75 4.25 L9.95 7.75 L13.25 8.75 L9.95 9.75 L8.75 13.25 L7.55 9.75 L4.25 8.75 L7.55 7.75 Z" fill="#38bdf8" stroke="none"/>
-            {/* 地平線弧（平緩，上移） */}
-            <path d="M4 17 Q12 12.5 20 17" fill="none" strokeWidth="1.9"/>
-        </svg>
-    );
-
-    // 筆塗選取：使用者提供的手繪波浪筆觸 SVG
-    const BrushIcon = () => (
-        <svg width="21" height="21" viewBox="-8 -8 152 130" fill="none" strokeLinecap="round" strokeLinejoin="round">
-            <path
-                d="M5.5,59.34c11.99-10.48,23.65-21.15,35.41-31.77,9.39-8.1,19.18-17.3,31.16-21.07,13.01-4,21.73,4.48,17.38,17.42-5.91,20.33-46.61,44.14-46.36,64.03.79,4.74,8.58,3.02,12.7,1.13,5.93-2.42,12.59-7.01,18.48-11.78,7.83-6.16,14.8-13.48,23.55-17.06,6.95-2.98,15.19-1.4,14.76,7.39-.35,8.99-7.93,18.89-8.96,28.29-.98,6.2,2.75,12.02,9.42,11.99,6.02.15,12.05-3.07,17.63-5.97"
-                stroke="#f97316" strokeWidth="15" fill="none"
-            />
-        </svg>
-    );
-
     const tools = [
-        { id: 'select',  icon: <CursorIcon />, label: '選取圖層 (Select Layer)',       onClick: () => onTool('select'), disabled: false },
-        { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Ic.Scan />, label: '全圖分析 (Analyze)', onClick: onReanalyze, disabled: false },
-        { id: 'sam2',    icon: <Sam2Icon />,  label: '智能點選 (Auto Segment)',      onClick: () => onTool('sam2'),   disabled: false },
-        { id: 'rect',    icon: <RectIcon />,  label: '矩形框選 (Bounding Box)',       onClick: () => onTool('rect'),   disabled: false },
-        { id: 'points',  icon: <PointsIcon />,label: '多點精確選取 (Multi-points)',   onClick: () => onTool('points'), disabled: false },
-        { id: 'brush',   icon: <BrushIcon />, label: '筆塗選取 (Brush Select)',         onClick: () => onTool('brush'),  disabled: false },
+        { id: 'select',  icon: <Icon name="arrow_selector_tool" size={18} style={{ color: '#6b7280' }} />, label: '選取圖層 (Select Layer)',     onClick: () => onTool('select'), disabled: false },
+        { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Icon name="document_scanner" size={19} />, label: '全圖分析 (Analyze)',           onClick: onReanalyze, disabled: false },
+        { id: 'sam2',    icon: <Icon name="frame_inspect" size={19} style={{ color: '#3b82f6' }} />,       label: '智能點選 (Auto Segment)',      onClick: () => onTool('sam2'),   disabled: false },
+        { id: 'rect',    icon: <Icon name="crop_square" size={19} style={{ color: '#7c3aed' }} />,         label: '矩形框選 (Bounding Box)',      onClick: () => onTool('rect'),   disabled: false },
+        { id: 'points',  icon: <Icon name="scatter_plot" size={19} style={{ color: '#22c55e' }} />,        label: '多點精確選取 (Multi-points)',  onClick: () => onTool('points'), disabled: false },
+        { id: 'brush',   icon: <Icon name="brush" size={19} style={{ color: '#f97316' }} />,               label: '筆塗選取 (Brush Select)',      onClick: () => onTool('brush'),  disabled: false },
         {
             id: 'lama',
-            icon: <LamaIcon />,
+            icon: <Icon name="format_paint" size={19} style={{ color: '#38bdf8' }} />,
             label: lamaReady ? 'LaMa 生成純背景' : 'LaMa（需先下載模型）',
             onClick: onGenerateLama,
             disabled: !lamaReady || !hasLayers,

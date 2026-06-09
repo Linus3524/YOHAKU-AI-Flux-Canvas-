@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ShapeElement } from '../types';
 import { AdvancedColorPicker } from './AdvancedColorPicker'; // ✅ 新增
+import { Icon } from './Icon';
 
 interface ShapePropertyPanelProps {
   element: ShapeElement;
@@ -12,14 +13,14 @@ interface ShapePropertyPanelProps {
 const PRESET_COLORS = ['#1D1D1F', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#AF52DE', '#8E8E93', '#E5E5EA', '#FFFFFF', 'transparent'];
 
 const Icons = {
-    Grip: () => <svg width="8" height="16" viewBox="0 0 8 16" fill="currentColor" className="text-black/10"><circle cx="2" cy="2" r="1.5"/><circle cx="2" cy="8" r="1.5"/><circle cx="2" cy="14" r="1.5"/><circle cx="6" cy="2" r="1.5"/><circle cx="6" cy="8" r="1.5"/><circle cx="6" cy="14" r="1.5"/></svg>,
-    Check: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
-    Close: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
+    Grip: () => <Icon name="drag_indicator" size={16} className="text-black/20" />,
+    Check: () => <Icon name="check" size={14} />,
+    Close: () => <Icon name="close" size={14} />,
     Solid: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="2" y1="12" x2="22" y2="12" /></svg>,
     Dashed: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12h4M10 12h4M18 12h4" /></svg>,
     Dotted: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="2" y1="12" x2="2" y2="12" /><line x1="8" y1="12" x2="8" y2="12" /><line x1="14" y1="12" x2="14" y2="12" /><line x1="20" y1="12" x2="20" y2="12" /></svg>,
-    Link: () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>,
-    Unlink: () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>,
+    Link: () => <Icon name="link" size={12} />,
+    Unlink: () => <Icon name="link_off" size={12} />,
 };
 
 export const ShapePropertyPanel: React.FC<ShapePropertyPanelProps> = ({ element, onUpdate, onClose }) => {

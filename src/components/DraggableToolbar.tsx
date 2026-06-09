@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ShapeType, ArrowElement, Point, CanvasElement } from '../types';
 import { getPresetsByGroup, ArtboardPreset } from '../features/artboard/presets';
+import { Icon } from './Icon';
 
 interface DraggableToolbarProps {
   onAddNote: () => void;
@@ -37,129 +38,26 @@ interface DraggableToolbarProps {
   hasAtlasKey?: boolean;
 }
 
-// Icons (Apple Style - Minimalist Thin Stroke 1.5px, Neutral Gray)
 const Icons = {
-  Grip: () => (
-    <svg width="6" height="14" viewBox="0 0 6 14" fill="currentColor" className="text-black/10">
-      <circle cx="1" cy="1" r="1"/>
-      <circle cx="1" cy="7" r="1"/>
-      <circle cx="1" cy="13" r="1"/>
-      <circle cx="5" cy="1" r="1"/>
-      <circle cx="5" cy="7" r="1"/>
-      <circle cx="5" cy="13" r="1"/>
-    </svg>
-  ),
-  Select: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path><path d="M13 13l6 6"></path>
-    </svg>
-  ),
-  Hand: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"></path><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
-    </svg>
-  ),
-  Note: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-      <polyline points="14 2 14 8 20 8"/>
-      <line x1="16" y1="13" x2="8" y2="13"/>
-      <line x1="16" y1="17" x2="8" y2="17"/>
-      <line x1="10" y1="9" x2="8" y2="9"/>
-    </svg>
-  ),
-  Text: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="4 7 4 4 20 4 20 7"></polyline>
-      <line x1="9" y1="20" x2="15" y2="20"></line>
-      <line x1="12" y1="4" x2="12" y2="20"></line>
-    </svg>
-  ),
-  Draw: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 19l7-7 3 3-7 7-3-3z"/>
-      <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
-      <path d="M2 2l7.586 7.586"/>
-    </svg>
-  ),
-  Arrow: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="5" y1="12" x2="19" y2="12"/>
-      <polyline points="12 5 19 12 12 19"/>
-    </svg>
-  ),
-  Shape: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-    </svg>
-  ),
-  Add: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="5" x2="12" y2="19"></line>
-      <line x1="5" y1="12" x2="19" y2="12"></line>
-    </svg>
-  ),
-  Image: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-      <circle cx="8.5" cy="8.5" r="1.5"/>
-      <polyline points="21 15 16 10 5 21"/>
-    </svg>
-  ),
-  Frame: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" strokeDasharray="4 4"></rect>
-      <line x1="12" y1="8" x2="12" y2="16"></line>
-      <line x1="8" y1="12" x2="16" y2="12"></line>
-    </svg>
-  ),
-  Copy: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-    </svg>
-  ),
-  Undo: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 7v6h6"/>
-      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
-    </svg>
-  ),
-  Redo: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 7v6h-6"/>
-      <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/>
-    </svg>
-  ),
-  Magic: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-    </svg>
-  ),
-  Crop: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="6" cy="6" r="3" />
-      <circle cx="6" cy="18" r="3" />
-      <line x1="20" y1="4" x2="8.12" y2="15.88" />
-      <line x1="14.47" y1="14.48" x2="20" y2="20" />
-      <line x1="8.12" y1="8.12" x2="12" y2="12" />
-    </svg>
-  ),
-  Patterns: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2l10 7-3.5 13H5.5L2 9z"/>
-    </svg>
-  ),
-  Export: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>
-    </svg>
-  ),
-  Import: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>
-    </svg>
-  )
+  Grip:     () => <Icon name="drag_indicator" size={16} className="text-black/20" />,
+  Select:   () => <Icon name="arrow_selector_tool" size={16} />,
+  Hand:     () => <Icon name="pan_tool" size={16} />,
+  Note:     () => <Icon name="sticky_note_2" size={16} />,
+  Text:     () => <Icon name="title" size={16} />,
+  Draw:     () => <Icon name="draw" size={16} />,
+  Arrow:    () => <Icon name="trending_flat" size={16} />,
+  Shape:    () => <Icon name="category" size={16} />,
+  Add:      () => <Icon name="add" size={16} />,
+  Image:    () => <Icon name="image" size={16} />,
+  Frame:    () => <Icon name="crop_free" size={16} />,
+  Copy:     () => <Icon name="content_copy" size={14} />,
+  Undo:     () => <Icon name="undo" size={14} />,
+  Redo:     () => <Icon name="redo" size={14} />,
+  Magic:    () => <Icon name="auto_awesome" size={14} />,
+  Crop:     () => <Icon name="crop" size={14} />,
+  Patterns: () => <Icon name="style" size={16} />,
+  Export:   () => <Icon name="save" size={16} />,
+  Import:   () => <Icon name="file_open" size={16} />,
 };
 
 const ASPECT_RATIOS = [
