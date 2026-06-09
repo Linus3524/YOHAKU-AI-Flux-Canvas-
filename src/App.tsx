@@ -1411,6 +1411,44 @@ const App: React.FC = () => {
     };
   }, [addImagesToCanvas]);
 
+  // 剪貼簿貼上：外部圖片 / 外部文字 → 直接放進畫布
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+        const target = e.target as HTMLElement;
+        // 正在編輯文字輸入框 → 讓瀏覽器正常處理
+        const isEditingText =
+            target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.isContentEditable;
+        if (isEditingText) return;
+
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        // 優先：圖片（從瀏覽器、截圖工具、設計軟體複製）
+        for (const item of Array.from(items)) {
+            if (item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) {
+                    e.preventDefault();
+                    addImagesToCanvas([file], getCenterOfViewport());
+                    return;
+                }
+            }
+        }
+
+        // 其次：純文字 → 建立文字元素
+        const text = e.clipboardData?.getData('text/plain')?.trim();
+        if (text) {
+            e.preventDefault();
+            addText(getCenterOfViewport(), text);
+        }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [addImagesToCanvas, addText, getCenterOfViewport]);
+
   return (
     <>
     <main

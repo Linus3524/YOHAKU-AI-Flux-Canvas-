@@ -251,14 +251,14 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         });
     }, [addElement, getCenterOfViewport]);
 
-    const addText = useCallback((position?: Point) => {
+    const addText = useCallback((position?: Point, content?: string) => {
         addElement({
           type: 'text',
           position: position || getCenterOfViewport(),
           width: 300,
           height: 100,
           rotation: 0,
-          text: '雙擊編輯文字',
+          text: content ?? '雙擊編輯文字',
           fontFamily: '"Noto Sans TC", sans-serif',
           fontSize: 24,
           color: '#1D1D1F',
