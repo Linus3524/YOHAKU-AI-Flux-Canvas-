@@ -231,7 +231,7 @@ const DraggableOutpaintingPanel: React.FC<{
             onMouseDown={handleMouseDown}
         >
             {/* Header */}
-            <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+            <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                     <Icon name="drag_indicator" size={14} className={`flex-shrink-0 transition-colors ${isDragging ? 'text-[#94a3b8] cursor-grabbing' : 'text-[#cbd5e1] hover:text-[#94a3b8] cursor-grab'}`} />
                     <h2 className="text-[13px] font-bold text-gray-900 tracking-tight">
@@ -242,14 +242,14 @@ const DraggableOutpaintingPanel: React.FC<{
                 <button
                     onClick={onCancel}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className="text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 hover:bg-gray-100 p-1 rounded-md"
+                    className="text-gray-400 hover:text-gray-600 transition-colors hover:bg-gray-100 w-6 h-6 flex items-center justify-center rounded-full"
                 >
-                    <Icon name="close" size={12} />
+                    <Icon name="close" size={14} />
                 </button>
             </div>
 
             {/* Content */}
-            <div className="px-4 pb-4 pt-3">
+            <div className="px-4 pb-4 pt-2.5">
                 {/* Command area */}
                 <div
                     className="flex flex-col rounded-xl border transition-all duration-200 overflow-hidden"
@@ -285,32 +285,32 @@ const DraggableOutpaintingPanel: React.FC<{
                             onClick={handleAutoPrompt}
                             disabled={isAutoPrompting}
                             onMouseDown={(e) => e.stopPropagation()}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all disabled:opacity-50"
                             style={{ background: 'rgba(168,85,247,0.08)', color: '#9333ea' }}
                             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168,85,247,0.15)'; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(168,85,247,0.08)'; }}
                         >
-                            <Icon name="wb_sunny" size={12} />
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/></svg>
                             {isAutoPrompting ? '分析中...' : '自動發想'}
                         </button>
 
                         <button
                             onClick={onGenerate}
                             onMouseDown={(e) => e.stopPropagation()}
-                            className="text-white px-4 py-1.5 rounded-lg text-[12px] font-bold flex items-center gap-1.5 transition-all"
+                            className="text-white px-4 py-1.5 rounded-lg text-[12px] font-bold flex items-center gap-1 transition-all"
                             style={{ background: 'linear-gradient(135deg,#a855f7 0%,#8b5cf6 100%)', boxShadow: '0 4px 12px rgba(139,92,246,0.25)' }}
                             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 16px rgba(139,92,246,0.35)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(139,92,246,0.25)'; (e.currentTarget as HTMLButtonElement).style.transform = 'none'; }}
                         >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
                             生成
                         </button>
                     </div>
                 </div>
 
                 {/* Microcopy hint */}
-                <div className="mt-2.5 flex items-start gap-1.5 text-[10px] text-gray-500 leading-relaxed">
-                    <Icon name="info" size={11} className="text-purple-400 mt-0.5 flex-shrink-0" />
+                <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-gray-500 leading-relaxed">
+                    <Icon name="info" size={14} className="text-purple-600 flex-shrink-0" style={{ fontVariationSettings: "'opsz' 24, 'wght' 500, 'FILL' 0, 'GRAD' 0" }} />
                     <p>拖曳畫布上的 <span className="font-medium text-purple-600">紫色虛線框</span> 調整生成範圍。提示詞越精確，生成效果越好。</p>
                 </div>
             </div>
@@ -545,7 +545,7 @@ const GenerateSplitButton: React.FC<{ onGenerate: (count: 1 | 2 | 3 | 4) => void
                     onClick={() => onGenerate(count)}
                     className="flex-1 flex items-center justify-center gap-2 text-white py-3 text-sm font-semibold hover:bg-white/10 transition-colors active:bg-white/20 rounded-l-xl"
                 >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
                     一鍵生成圖片
                 </button>
                 <div className="w-[1.5px] bg-white/30 my-2.5"/>
@@ -1436,9 +1436,9 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                     {selectedImagesCount >= 2 && (
                         <button
                             onClick={onHarmonize}
-                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-2.5 rounded-xl text-[13px] font-semibold shadow-sm shadow-orange-500/20 hover:opacity-90 transition-all active:scale-95"
+                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-3 rounded-xl text-sm font-semibold shadow-sm shadow-orange-500/20 hover:opacity-90 transition-all active:scale-95"
                         >
-                            <Icon name="view_in_ar" size={15} />
+                            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></svg>
                             一鍵調和
                         </button>
                     )}
@@ -1645,7 +1645,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                         return (
                                                                             <div key={tier}>
                                                                                 <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-[#86868B] tracking-widest uppercase">{tier}</div>
-                                                                                {sizes.map(s => {
+                                                                                {sizes.filter(s => tier === '2K' || s.w4k !== s.w2k).map(s => {
                                                                                     const px = tier === '4K' ? s.w4k : s.w2k;
                                                                                     const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
                                                                                     const isSel = imageAspectRatio === s.ratio && imageSize === tier;
@@ -1731,7 +1731,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 onClick={() => onRemoveBackground('enhanced')}
                                                 className="w-full py-2.5 bg-[#1e293b] text-white rounded-xl text-[13px] font-medium hover:bg-[#0f172a] transition-colors flex items-center justify-center gap-2"
                                             >
-                                                <Icon name="content_cut" size={14} />
+                                                <Icon name="content_cut" size={17} />
                                                 Gemini 智慧去背
                                             </button>
                                             {hasFalKey && onBiRefNetRemoveBackground && (() => {
@@ -1752,7 +1752,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                 onClick={() => onBiRefNetRemoveBackground(birefnetModel)}
                                                                 className="flex-1 flex items-center justify-center gap-2 bg-white text-gray-800 py-2.5 text-[13px] font-medium hover:bg-gray-50 transition-colors"
                                                             >
-                                                                <Icon name="content_cut" size={13} style={{ color: '#f97316' }} />
+                                                                <Icon name="content_cut" size={17} style={{ color: '#f97316' }} />
                                                                 BiRefNet 快速去背
                                                             </button>
                                                             <div className="w-px bg-gray-200 my-0"/>
@@ -1807,7 +1807,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                     onClick={() => onUpscale(upscaleFactor)}
                                                     className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-800 text-[13px] font-medium rounded-xl transition-colors active:scale-95 flex items-center justify-center gap-1.5"
                                                 >
-                                                    <Icon name="open_in_full" size={14} style={{ color: '#3b82f6' }} />
+                                                    <Icon name="open_in_full" size={17} style={{ color: '#3b82f6' }} />
                                                     智能放大
                                                 </button>
                                             </div>

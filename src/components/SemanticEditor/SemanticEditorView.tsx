@@ -18,7 +18,7 @@ const Ic = {
     Trash:        () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
     Lock:         () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
     Unlock:       () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
-    Download:     () => <Icon name="download" size={14.5} />,
+    Download:     () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/><circle cx="9" cy="9" r="2"/></svg>,
     Refresh:      () => <Icon name="refresh" size={16} />,
     Scan:         () => <Icon name="document_scanner" size={19} />,
     Crop:         () => <Icon name="crop" size={16} />,
@@ -450,7 +450,7 @@ function RightPanel({
                                 color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 8px',
                                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
                         >
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                            <Icon name="place_item" size={15} />
                             匯入畫布
                         </button>
                     )}
@@ -1048,13 +1048,48 @@ export function SemanticEditorView({
     const [brushHasStroke, setBrushHasStroke] = useState(false);
 
     // stable ref callback — 只在 mount 時設尺寸，不因 re-render 重複執行清 canvas
+    /** objectFit:contain 下，計算圖片實際渲染區域（相對容器的偏移 + 尺寸） */
+    const getRenderedImageRect = useCallback(() => {
+        const img = imgRef.current;
+        if (!img) return null;
+        const cW = img.offsetWidth;
+        const cH = img.offsetHeight;
+        const nW = img.naturalWidth;
+        const nH = img.naturalHeight;
+        if (!nW || !nH) return null;
+        const naturalAspect    = nW / nH;
+        const containerAspect = cW / cH;
+        let imgW: number, imgH: number, imgX: number, imgY: number;
+        if (naturalAspect > containerAspect) {
+            // 橫向填滿，上下 letterbox
+            imgW = cW;
+            imgH = cW / naturalAspect;
+            imgX = 0;
+            imgY = (cH - imgH) / 2;
+        } else {
+            // 縱向填滿，左右 pillarbox
+            imgH = cH;
+            imgW = cH * naturalAspect;
+            imgX = (cW - imgW) / 2;
+            imgY = 0;
+        }
+        return { imgX, imgY, imgW, imgH };
+    }, []);
+
     const brushCanvasRefCb = useCallback((el: HTMLCanvasElement | null) => {
         brushCanvasRef.current = el;
         if (el && imgRef.current) {
-            el.width  = imgRef.current.offsetWidth;
-            el.height = imgRef.current.offsetHeight;
+            const r = getRenderedImageRect();
+            // 用實際圖片渲染尺寸作為 canvas 像素大小，排除 letterbox 空白
+            el.width  = r ? Math.round(r.imgW) : imgRef.current.offsetWidth;
+            el.height = r ? Math.round(r.imgH) : imgRef.current.offsetHeight;
+            // 定位 canvas 剛好覆蓋圖片（非整個容器）
+            el.style.left   = r ? `${r.imgX}px` : '0';
+            el.style.top    = r ? `${r.imgY}px` : '0';
+            el.style.width  = r ? `${r.imgW}px` : '100%';
+            el.style.height = r ? `${r.imgH}px` : '100%';
         }
-    }, []);
+    }, [getRenderedImageRect]);
 
     // HUD 拖曳狀態
     const [hudPos, setHudPos] = useState<{ x: number; y: number } | null>(null);
@@ -1418,13 +1453,22 @@ export function SemanticEditorView({
 
     // C：筆塗 handlers
     const getBrushPos = useCallback((e: React.MouseEvent | MouseEvent) => {
-        if (!imgRef.current) return null;
-        const rect = imgRef.current.getBoundingClientRect();
+        if (!imgRef.current || !brushCanvasRef.current) return null;
+        const containerRect = imgRef.current.getBoundingClientRect();
+        const r = getRenderedImageRect();
+        if (!r) return null;
+        const canvas = brushCanvasRef.current;
+        // 滑鼠相對容器的位置，減去 letterbox 偏移，得到相對圖片的座標
+        const xInImg = e.clientX - containerRect.left - r.imgX;
+        const yInImg = e.clientY - containerRect.top  - r.imgY;
+        // 再從 CSS 顯示尺寸換算到 canvas 像素座標
+        const scaleX = canvas.width  / r.imgW;
+        const scaleY = canvas.height / r.imgH;
         return {
-            x: Math.max(0, Math.min(rect.width,  e.clientX - rect.left)),
-            y: Math.max(0, Math.min(rect.height, e.clientY - rect.top)),
+            x: Math.max(0, Math.min(canvas.width,  xInImg * scaleX)),
+            y: Math.max(0, Math.min(canvas.height, yInImg * scaleY)),
         };
-    }, []);
+    }, [getRenderedImageRect]);
 
     // 每次 mousemove 清掉「本筆畫的起始快照」再重繪整條路徑
     // 同 ImageEditModal 做法：整筆一次 stroke，不會有半透明重疊接頭
@@ -1534,7 +1578,18 @@ export function SemanticEditorView({
                 }
             }
             if (count === 0) return;
-            const clickPixel = { x: Math.round(sumX / count), y: Math.round(sumY / count) };
+            // brush canvas 是顯示尺寸，需換算回原圖像素座標
+            const img = imgRef.current;
+            const dispW = img ? img.offsetWidth  : W;
+            const dispH = img ? img.offsetHeight : H;
+            const { getImageDims } = await import('./semanticLayerUtils');
+            const origDims = await getImageDims(state.compositeBase64);
+            const scaleX = origDims.w / dispW;
+            const scaleY = origDims.h / dispH;
+            const clickPixel = {
+                x: Math.round((sumX / count) * scaleX),
+                y: Math.round((sumY / count) * scaleY),
+            };
             addClickLayer(clickPixel).catch(err =>
                 showToast(`❌ 分割失敗：${err?.message?.slice(0, 60) || ''}`)
             );
@@ -1637,7 +1692,7 @@ export function SemanticEditorView({
                         {/* 匯入畫布 icon（有版本才顯示，和其他 NavBtn 統一風格） */}
                         {onImportToCanvas && state.versions.length > 0 && (
                             <NavBtn title="匯入目前版本到畫布" onClick={() => onImportToCanvas(state.compositeBase64, { compositeBase64: state.compositeBase64, layers: state.layers, versions: state.versions })}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                                <Icon name="place_item" size={20} />
                             </NavBtn>
                         )}
                         {/* SAM2 模式切換（有 ONNX 模型才顯示） */}
@@ -2110,9 +2165,6 @@ export function SemanticEditorView({
                                     ref={brushCanvasRefCb}
                                     style={{
                                         position: 'absolute',
-                                        inset: 0,
-                                        width: '100%',
-                                        height: '100%',
                                         pointerEvents: 'none',
                                         zIndex: 14,
                                         cursor: brushEraser ? 'cell' : 'crosshair',

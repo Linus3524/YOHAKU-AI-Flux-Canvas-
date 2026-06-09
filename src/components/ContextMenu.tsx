@@ -88,15 +88,15 @@ const MenuIcons = {
   Trash:        () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
   ArtPalette:   () => <Icon name="palette" size={15} />,
   Paste:        () => <Icon name="note_alt" size={15} />,
-  Edit:         () => <Icon name="edit" size={15} />,
+  Edit:         () => <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>,
   Expand:       () => <Icon name="open_in_full" size={15} />,
-  Download:     () => <Icon name="download" size={15} />,
+  Download:     () => <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/><circle cx="9" cy="9" r="2"/></svg>,
   Palette:      () => <Icon name="palette" size={15} />,
   LayerUp:      () => <Icon name="flip_to_front" size={15} />,
   LayerDown:    () => <Icon name="flip_to_back" size={15} />,
   File:         () => <Icon name="draft" size={15} />,
-  Group:        () => <Icon name="group_work" size={15} />,
-  Ungroup:      () => <Icon name="ungroup" size={15} />,
+  Group:        () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5c0-1.1.9-2 2-2h2"/><path d="M17 3h2c1.1 0 2 .9 2 2v2"/><path d="M21 17v2c0 1.1-.9 2-2 2h-2"/><path d="M7 21H5c-1.1 0-2-.9-2-2v-2"/><rect width="7" height="5" x="7" y="7" rx="1"/><rect width="7" height="5" x="10" y="12" rx="1"/></svg>,
+  Ungroup:      () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="8" height="6" x="5" y="4" rx="1"/><rect width="8" height="6" x="11" y="14" rx="1"/></svg>,
   Lock:         () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
   Unlock:       () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
   Eye:          () => <Icon name="visibility" size={15} />,
@@ -104,7 +104,7 @@ const MenuIcons = {
   UnlockAll:    () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
   ShowAll:      () => <Icon name="visibility" size={15} />,
   Text:         () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></svg>,
-  Merge:        () => <Icon name="merge" size={15} />,
+  Merge:        () => <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" width="13" height="13"><path fill="currentColor" d="M4.875 13.75c-0.233335 0 -0.4375 -0.0875 -0.6125 -0.2625 -0.175 -0.175 -0.2625 -0.37915 -0.2625 -0.6125 0 -0.23335 0.0875 -0.4375 0.2625 -0.6125 0.175 -0.175 0.379165 -0.2625 0.6125 -0.2625h14.25c0.23335 0 0.4375 0.0875 0.6125 0.2625 0.175 0.175 0.2625 0.37915 0.2625 0.6125 0 0.23335 -0.0875 0.4375 -0.2625 0.6125 -0.175 0.175 -0.37915 0.2625 -0.6125 0.2625H4.875Zm-0.125 -3.025c-0.216665 0 -0.395835 -0.07085 -0.5375 -0.2125C4.070835 10.37085 4 10.19165 4 9.975c0 -0.21665 0.070835 -0.39585 0.2125 -0.5375 0.141665 -0.14165 0.320835 -0.2125 0.5375 -0.2125h14.5c0.21665 0 0.39585 0.07085 0.5375 0.2125s0.2125 0.32085 0.2125 0.5375c0 0.21665 -0.07085 0.39585 -0.2125 0.5375s-0.32085 0.2125 -0.5375 0.2125h-14.5ZM11.975 22c-0.21665 0 -0.39585 -0.07085 -0.5375 -0.2125s-0.2125 -0.32085 -0.2125 -0.5375v-3.2l-1.4 1.375c-0.15 0.13335 -0.325 0.20415 -0.525 0.2125 -0.2 0.00835 -0.375 -0.0625 -0.525 -0.2125 -0.15 -0.15 -0.225 -0.325 -0.225 -0.525s0.075 -0.375 0.225 -0.525l2.675 -2.65c0.08335 -0.08335 0.16665 -0.14165 0.25 -0.175 0.08335 -0.03335 0.175 -0.05 0.275 -0.05 0.1 0 0.19165 0.01665 0.275 0.05 0.08335 0.03335 0.16665 0.09165 0.25 0.175l2.625 2.65c0.13335 0.15 0.20415 0.325 0.2125 0.525 0.00835 0.2 -0.0625 0.375 -0.2125 0.525 -0.15 0.15 -0.325 0.225 -0.525 0.225s-0.375 -0.075 -0.525 -0.225l-1.35 -1.375v3.2c0 0.21665 -0.07085 0.39585 -0.2125 0.5375S12.19165 22 11.975 22Zm0 -14.5c-0.1 0 -0.19165 -0.01665 -0.275 -0.05 -0.08335 -0.03335 -0.16665 -0.09165 -0.25 -0.175l-2.65 -2.65c-0.13335 -0.133335 -0.20415 -0.304165 -0.2125 -0.5125 -0.00835 -0.208335 0.0625 -0.3875 0.2125 -0.5375 0.15 -0.15 0.325 -0.225 0.525 -0.225s0.375 0.075 0.525 0.225l1.35 1.375V1.75c0 -0.216665 0.07085 -0.395835 0.2125 -0.5375 0.14165 -0.141665 0.32085 -0.2125 0.5375 -0.2125 0.21665 0 0.39585 0.070835 0.5375 0.2125 0.14165 0.141665 0.2125 0.320835 0.2125 0.5375v3.2l1.4 -1.375c0.15 -0.133335 0.325 -0.204165 0.525 -0.2125 0.2 -0.008335 0.375 0.0625 0.525 0.2125 0.15 0.15 0.225 0.325 0.225 0.525s-0.075 0.375 -0.225 0.525l-2.65 2.65c-0.08335 0.08335 -0.16665 0.14165 -0.25 0.175 -0.08335 0.03335 -0.175 0.05 -0.275 0.05Z" strokeWidth="0.5"/></svg>,
   LayerUpOne:   () => <Icon name="move_up" size={15} />,
   LayerDownOne: () => <Icon name="move_down" size={15} />,
   FlipH:        () => <Icon name="flip" size={15} />,
@@ -112,8 +112,9 @@ const MenuIcons = {
   Layout:       () => <Icon name="space_dashboard" size={15} />,
   Reorder:      () => <Icon name="reorder" size={15} />,
   Export:       () => <Icon name="save" size={15} />,
-  Import:       () => <Icon name="file_open" size={15} />,
-  Search:       () => <Icon name="search" size={15} />,
+  Save:         () => <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>,
+  Import:       () => <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>,
+  Search:       () => <svg width="15" height="15" viewBox="0 0 24 24" strokeWidth="1.5" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 14L20 9C20 9 19.5 7 17.5 7C17.5 7 17.5 5 15.5 5C13.5 5 13.5 7 13.5 7H10.5C10.5 7 10.5 5 8.5 5C6.5 5 6.5 7 6.5 7C4.5 7 4 9 4 9L2.5 14"/><path d="M6 20C8.20914 20 10 18.2091 10 16C10 13.7909 8.20914 12 6 12C3.79086 12 2 13.7909 2 16C2 18.2091 3.79086 20 6 20Z"/><path d="M18 20C20.2091 20 22 18.2091 22 16C22 13.7909 20.2091 12 18 12C15.7909 12 14 13.7909 14 16C14 18.2091 15.7909 20 18 20Z"/><path d="M12 16C13.1046 16 14 15.1046 14 14C14 12.8954 13.1046 12 12 12C10.8954 12 10 12.8954 10 14C10 15.1046 10.8954 16 12 16Z"/></svg>,
   OCR:          () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>,
 };
 
@@ -135,7 +136,7 @@ const MenuItem: React.FC<{ onClick: () => void; children: React.ReactNode; disab
             ${destructive && !disabled ? 'text-red-500 hover:bg-red-50' : 'text-[#1D1D1F]'}
         `}
     >
-        {icon && <span className={`shrink-0 ${destructive ? 'text-red-500' : 'text-[#86868B] group-hover:text-[#1D1D1F]'} transition-colors`}>{icon}</span>}
+        {icon && <span className={`w-4 h-4 flex items-center justify-center shrink-0 ${destructive ? 'text-red-500' : 'text-[#86868B] group-hover:text-[#1D1D1F]'} transition-colors`}>{icon}</span>}
         <span className="flex-1 min-w-0 text-left">{children}</span>
     </button>
 );
@@ -252,7 +253,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
                         {/* Grouping / Merging */}
                         {selectionCount > 1 && (
-                            <MenuItem icon={<MenuIcons.Group />} onClick={() => handleAction(actions.group)}>
+                            <MenuItem icon={<MenuIcons.Group />} onClick={() => handleAction(actions.group)} disabled={isGrouped}>
                                 建立群組 (Group)
                             </MenuItem>
                         )}
@@ -360,10 +361,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                     魔法分層
                                 </MenuItem>
                                 <MenuItem
-                                    icon={<Icon name="frame_inspect" size={14} />}
+                                    icon={<Icon name="wallpaper" size={15} />}
                                     onClick={() => handleAction(() => actions.semanticEditor(menuData.elementId!))}
                                 >
-                                    語意編輯器
+                                    物件感知編輯
                                 </MenuItem>
                                 <MenuItem icon={<MenuIcons.OCR />} onClick={() => handleAction(() => actions.ocrConvert(menuData.elementId!))}>
                                     文字辨識轉換
@@ -507,7 +508,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     <div className="border-t my-0.5 border-gray-100/50" />
 
                     {actions.isFileSystemSupported ? (<>
-                        <MenuItem icon={<MenuIcons.Export />} onClick={() => handleAction(actions.saveFile!)}>
+                        <MenuItem icon={<MenuIcons.Save />} onClick={() => handleAction(actions.saveFile!)}>
                             {actions.currentFileName ? (
                                 <span className="flex flex-col items-start leading-snug w-full min-w-0">
                                     <span>儲存</span>
@@ -516,7 +517,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                             ) : '儲存檔案'}
                         </MenuItem>
                         <MenuItem icon={<MenuIcons.Import />} onClick={() => handleAction(actions.openFile!)}>開啟檔案</MenuItem>
-                        <MenuItem icon={<MenuIcons.Export />} onClick={() => handleAction(actions.saveAsFile!)}>另存新檔</MenuItem>
+                        <MenuItem icon={<MenuIcons.Save />} onClick={() => handleAction(actions.saveAsFile!)}>另存新檔</MenuItem>
                     </>) : (<>
                         <MenuItem icon={<MenuIcons.Export />} onClick={() => handleAction(actions.exportCanvas)}>匯出畫布</MenuItem>
                         <MenuItem icon={<MenuIcons.Import />} onClick={() => handleAction(actions.importCanvas)}>匯入畫布</MenuItem>

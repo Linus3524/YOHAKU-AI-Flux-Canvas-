@@ -29,7 +29,7 @@ const Icons = {
     LockClosed:   () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
     Group:        () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5c0-1.1.9-2 2-2h2"/><path d="M17 3h2c1.1 0 2 .9 2 2v2"/><path d="M21 17v2c0 1.1-.9 2-2 2h-2"/><path d="M7 21H5c-1.1 0-2-.9-2-2v-2"/><rect width="7" height="5" x="7" y="7" rx="1"/><rect width="7" height="5" x="10" y="12" rx="1"/></svg>,
     Ungroup:      () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="8" height="6" x="5" y="4" rx="1"/><rect width="8" height="6" x="11" y="14" rx="1"/></svg>,
-    Merge:        () => <Icon name="merge" size={16} />,
+    Merge:        () => <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M4.875 13.75c-0.233335 0 -0.4375 -0.0875 -0.6125 -0.2625 -0.175 -0.175 -0.2625 -0.37915 -0.2625 -0.6125 0 -0.23335 0.0875 -0.4375 0.2625 -0.6125 0.175 -0.175 0.379165 -0.2625 0.6125 -0.2625h14.25c0.23335 0 0.4375 0.0875 0.6125 0.2625 0.175 0.175 0.2625 0.37915 0.2625 0.6125 0 0.23335 -0.0875 0.4375 -0.2625 0.6125 -0.175 0.175 -0.37915 0.2625 -0.6125 0.2625H4.875Zm-0.125 -3.025c-0.216665 0 -0.395835 -0.07085 -0.5375 -0.2125C4.070835 10.37085 4 10.19165 4 9.975c0 -0.21665 0.070835 -0.39585 0.2125 -0.5375 0.141665 -0.14165 0.320835 -0.2125 0.5375 -0.2125h14.5c0.21665 0 0.39585 0.07085 0.5375 0.2125s0.2125 0.32085 0.2125 0.5375c0 0.21665 -0.07085 0.39585 -0.2125 0.5375s-0.32085 0.2125 -0.5375 0.2125h-14.5ZM11.975 22c-0.21665 0 -0.39585 -0.07085 -0.5375 -0.2125s-0.2125 -0.32085 -0.2125 -0.5375v-3.2l-1.4 1.375c-0.15 0.13335 -0.325 0.20415 -0.525 0.2125 -0.2 0.00835 -0.375 -0.0625 -0.525 -0.2125 -0.15 -0.15 -0.225 -0.325 -0.225 -0.525s0.075 -0.375 0.225 -0.525l2.675 -2.65c0.08335 -0.08335 0.16665 -0.14165 0.25 -0.175 0.08335 -0.03335 0.175 -0.05 0.275 -0.05 0.1 0 0.19165 0.01665 0.275 0.05 0.08335 0.03335 0.16665 0.09165 0.25 0.175l2.625 2.65c0.13335 0.15 0.20415 0.325 0.2125 0.525 0.00835 0.2 -0.0625 0.375 -0.2125 0.525 -0.15 0.15 -0.325 0.225 -0.525 0.225s-0.375 -0.075 -0.525 -0.225l-1.35 -1.375v3.2c0 0.21665 -0.07085 0.39585 -0.2125 0.5375S12.19165 22 11.975 22Zm0 -14.5c-0.1 0 -0.19165 -0.01665 -0.275 -0.05 -0.08335 -0.03335 -0.16665 -0.09165 -0.25 -0.175l-2.65 -2.65c-0.13335 -0.133335 -0.20415 -0.304165 -0.2125 -0.5125 -0.00835 -0.208335 0.0625 -0.3875 0.2125 -0.5375 0.15 -0.15 0.325 -0.225 0.525 -0.225s0.375 0.075 0.525 0.225l1.35 1.375V1.75c0 -0.216665 0.07085 -0.395835 0.2125 -0.5375 0.14165 -0.141665 0.32085 -0.2125 0.5375 -0.2125 0.21665 0 0.39585 0.070835 0.5375 0.2125 0.14165 0.141665 0.2125 0.320835 0.2125 0.5375v3.2l1.4 -1.375c0.15 -0.133335 0.325 -0.204165 0.525 -0.2125 0.2 -0.008335 0.375 0.0625 0.525 0.2125 0.15 0.15 0.225 0.325 0.225 0.525s-0.075 0.375 -0.225 0.525l-2.65 2.65c-0.08335 0.08335 -0.16665 0.14165 -0.25 0.175 -0.08335 0.03335 -0.175 0.05 -0.275 0.05Z" strokeWidth="0.5"/></svg>,
     Image:        () => <Icon name="image" size={14} />,
     Note:         () => <Icon name="sticky_note_2" size={14} />,
     Text:         () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></svg>,
@@ -453,7 +453,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
                 
                 {/* Labels (Protected from truncation) */}
                 <div className="flex-shrink-0 flex items-center gap-1">
-                    {el.groupId && <span className="px-1.5 py-0.5 rounded text-[9px] bg-purple-100 text-purple-600 font-bold">GRP</span>}
+                    {el.groupId && <span className="px-1 py-px rounded text-[8px] font-bold" style={{ color: '#5856D6', background: 'rgba(88,86,214,0.12)', border: '1.5px solid rgba(88,86,214,0.55)', lineHeight: 1.2 }}>GRP</span>}
                     {isArtboard && <span className="px-1.5 py-0.5 rounded text-[9px] bg-blue-100 text-blue-600 font-bold">AB</span>}
                 </div>
 
@@ -646,7 +646,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
                                             群組 ({row.members.length})
                                         </div>
                                         {/* Badge */}
-                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold flex-shrink-0" style={{ background: '#5856D6', color: 'white' }}>GRP</span>
+                                        <span className="px-1 py-px rounded text-[8px] font-bold flex-shrink-0" style={{ color: '#5856D6', background: 'rgba(88,86,214,0.12)', border: '1.5px solid rgba(88,86,214,0.55)', lineHeight: 1.2 }}>GRP</span>
                                     </div>
                                     {/* Children */}
                                     {isExpanded && row.members.map(m => (

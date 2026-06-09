@@ -98,7 +98,7 @@ async function callSAM2({ imageUrl, falKey, boxPrompts, pointPrompts }: SAM2Opti
     if (boxPrompts?.length)   input.box_prompts   = boxPrompts;
     if (pointPrompts?.length) input.prompts        = pointPrompts;
 
-    const result = await fal.subscribe('fal-ai/sam2/image', { input });
+    const result = await fal.subscribe('fal-ai/sam2/image', { input: input as any });
     const data   = result.data as any;
 
     // 取結果 URL

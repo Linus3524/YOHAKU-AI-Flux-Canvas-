@@ -143,7 +143,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; purple?: b
     id: 'consultant',
     label: '靈感顧問',
     purple: true,
-    icon: <Icon name="chat_bubble" size={18} />
+    icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 6V2H8"/><path d="M15 11v2"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M20 16a2 2 0 0 1-2 2H8.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 4 20.286V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/><path d="M9 11v2"/></svg>
   },
   {
     id: 'security',
@@ -667,7 +667,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   {chatHistory.map(msg => (
                     <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                       {msg.role === 'ai' && (
-                        <div className="w-9 h-9 rounded-full bg-purple-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs shadow-md">AI</div>
+                        <div className="w-9 h-9 rounded-full bg-purple-600 flex-shrink-0 flex items-center justify-center text-white shadow-md"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></div>
                       )}
                       <div className={`space-y-2 max-w-[85%] ${msg.role === 'user' ? 'order-first' : ''}`}>
                         <div className={`p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-sm
@@ -687,7 +687,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   ))}
                   {isThinking && (
                     <div className="flex gap-3">
-                      <div className="w-9 h-9 rounded-full bg-purple-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs shadow-md">AI</div>
+                      <div className="w-9 h-9 rounded-full bg-purple-600 flex-shrink-0 flex items-center justify-center text-white shadow-md"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></div>
                       <div className="flex items-center gap-1.5 bg-white border border-purple-50 p-3 rounded-2xl rounded-tl-sm shadow-sm">
                         {[0, 0.2, 0.4].map((d, i) => <div key={i} className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: `${d}s` }} />)}
                       </div>
@@ -708,7 +708,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   <button onClick={handleSend} disabled={isThinking || !inputValue.trim()}
                     className={`absolute bottom-2.5 right-2.5 w-8 h-8 rounded-xl flex items-center justify-center transition-all
                       ${inputValue.trim() ? 'bg-gray-900 text-white hover:bg-gray-700 shadow-md' : 'bg-gray-100 text-gray-600 cursor-not-allowed'}`}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
                   </button>
                 </div>
                 <p className="text-center text-[9px] text-yohaku-text-muted mt-2">連按兩次 Enter 可快速送出</p>

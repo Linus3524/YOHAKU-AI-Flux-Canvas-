@@ -46,7 +46,7 @@ const Icons = {
   Text:     () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></svg>,
   Draw:     () => <Icon name="draw" size={20} />,
   Arrow:    () => <Icon name="trending_flat" size={20} />,
-  Shape:    () => <Icon name="pentagon" size={20} />,
+  Shape:    () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M11 13.5v8H3v-8h8zm9.5.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zM10 15H4v5h6v-5zm11 .5a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM15 2l4.5 7.5H10.5L15 2zm-5 1H2V11h8V3zm6.5.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zM9 4H3v6h6V4zm7.5.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM15 4.4 12.27 9h5.46L15 4.4z"/></svg>,
   Add:      () => <Icon name="add" size={20} />,
   Image:    () => <Icon name="image" size={20} />,
   Frame:    () => <Icon name="crop_free" size={20} />,
@@ -55,7 +55,7 @@ const Icons = {
   Redo:     () => <Icon name="redo" size={18} />,
   Magic:    () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>,
   Crop:     () => <Icon name="crop" size={18} />,
-  Patterns: () => <Icon name="pentagon" size={20} />,
+  Patterns: () => <Icon name="shapes" size={20} />,
   Export:   () => <Icon name="save" size={20} />,
   Import:   () => <Icon name="file_open" size={20} />,
 };
@@ -529,7 +529,7 @@ const ToolButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React
     onClick={onClick}
     disabled={disabled}
     className={`
-      flex flex-col items-center justify-center gap-1 px-3 py-1.5 rounded-xl transition-all duration-200
+      flex flex-col items-center justify-center gap-[5px] px-3 py-1.5 rounded-xl transition-all duration-200
       ${disabled
         ? 'opacity-30 cursor-not-allowed'
         : active
@@ -538,7 +538,7 @@ const ToolButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React
       min-w-[48px]
     `}
   >
-    <div className="text-current flex items-center justify-center" style={{ height: 20 }}>{icon}</div>
+    <div className="text-current flex items-center justify-center w-5 h-5 shrink-0">{icon}</div>
     <span className="text-[10px] font-medium tracking-tight leading-none text-current">{label}</span>
   </button>
 );
