@@ -127,7 +127,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; purple?: b
   {
     id: 'about',
     label: '關於 YOHAKU',
-    icon: <Icon name="info" size={18} />
+    icon: <Icon name="info" size={18} style={{ fontVariationSettings: "'opsz' 24, 'wght' 400, 'FILL' 0, 'GRAD' 0" }} />
   },
   {
     id: 'features',
@@ -148,7 +148,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; purple?: b
   {
     id: 'security',
     label: '安全性與費用',
-    icon: <Icon name="verified_user" size={18} />
+    icon: <Icon name="verified_user" size={19} />
   },
   {
     id: 'legal',
@@ -353,7 +353,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           : 'text-yohaku-text-muted hover:bg-gray-100 hover:text-yohaku-text-main'
                       }`}
                   >
-                    <span className={activeSection === item.id && item.purple ? 'text-purple-600' : 'text-yohaku-text-muted'}>{item.icon}</span>
+                    <span className={`flex items-center justify-center w-5 h-5 flex-shrink-0 ${activeSection === item.id && item.purple ? 'text-purple-600' : 'text-yohaku-text-muted'}`}>{item.icon}</span>
                     {item.label}
                     {item.purple && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />}
                   </button>
