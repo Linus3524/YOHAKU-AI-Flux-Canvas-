@@ -1,6 +1,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import type { DrawingElement, Point } from '../types';
+import { Pencil, Eraser, Undo, Redo } from 'lucide-react';
 
 interface DrawingModalProps {
   element: DrawingElement;
@@ -8,8 +9,7 @@ interface DrawingModalProps {
   onClose: () => void;
 }
 
-const BRUSH_SIZES = [2, 5, 10, 20, 30];
-const COLORS = ['#1D1D1F', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#AF52DE', '#FF2D55'];
+const COLORS = ['#1D1D1F', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#AF52DE', '#5AC8FA'];
 
 // Use a large, fixed-size canvas for a better drawing experience
 const CANVAS_INTERNAL_WIDTH = 1200;
@@ -190,81 +190,90 @@ export const DrawingModal: React.FC<DrawingModalProps> = ({ element, onSave, onC
   }
 
   return (
-    <div className="fixed inset-0 z-[7000] bg-[#F5F5F7]/90 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden border border-black/5" onClick={e => e.stopPropagation()}>
-        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white flex-shrink-0">
-          <h2 className="text-xl font-bold text-[#1D1D1F]">繪圖板 (透明背景)</h2>
-          <button onClick={onClose} className="text-[#86868B] hover:text-[#1D1D1F] text-2xl leading-none transition-colors">&times;</button>
+    <div className="fixed inset-0 z-[7000] bg-[#F5F5F7]/95 backdrop-blur-xl flex items-center justify-center overflow-hidden pt-24 pb-6 px-8">
+
+      {/* 頂部置中浮動工具列 */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-white/85 backdrop-blur-xl border border-black/[0.06] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.12),0_1px_3px_rgba(0,0,0,0.05)] rounded-full px-2.5 py-1.5 select-none">
+
+        {/* 工具切換 */}
+        <div className="flex items-center gap-1 bg-[#F5F5F7] rounded-full p-1">
+          <button onClick={() => setTool('pencil')} title="鉛筆"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${tool === 'pencil' ? 'bg-[#1D1D1F] text-white shadow-md' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}>
+            <Pencil size={15} />
+          </button>
+          <button onClick={() => setTool('eraser')} title="橡皮擦"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${tool === 'eraser' ? 'bg-[#1D1D1F] text-white shadow-md' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}>
+            <Eraser size={15} />
+          </button>
         </div>
 
-        <div className="p-3 border-b border-gray-100 flex flex-wrap items-center gap-6 bg-[#FAFAFA] flex-shrink-0">
-            {/* Tools */}
-            <div className="flex items-center bg-white rounded-lg p-1 shadow-sm border border-gray-200">
-                <button onClick={() => setTool('pencil')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${tool === 'pencil' ? 'bg-black text-white shadow-md' : 'text-[#86868B] hover:bg-gray-50'}`}>鉛筆</button>
-                <button onClick={() => setTool('eraser')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${tool === 'eraser' ? 'bg-black text-white shadow-md' : 'text-[#86868B] hover:bg-gray-50'}`}>橡皮擦</button>
-            </div>
-            
-            {/* Undo/Redo */}
-            <div className="flex items-center gap-2 pl-4 border-l border-gray-200">
-                <button onClick={undo} disabled={!canUndo} className="p-2 rounded-full text-[#1D1D1F] hover:bg-white hover:shadow-sm disabled:text-gray-300 disabled:bg-transparent transition-all">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                </button>
-                <button onClick={redo} disabled={!canRedo} className="p-2 rounded-full text-[#1D1D1F] hover:bg-white hover:shadow-sm disabled:text-gray-300 disabled:bg-transparent transition-all">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" /></svg>
-                </button>
-            </div>
+        <div className="w-px h-5 bg-black/[0.08]" />
 
-            {/* Brush Size */}
-            <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-[#86868B] uppercase tracking-wider">筆刷</span>
-                <div className="flex items-center gap-1 bg-white p-1 rounded-full border border-gray-200">
-                    {BRUSH_SIZES.map(size => (
-                        <button key={size} onClick={() => setBrushSize(size)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${brushSize === size ? 'bg-[#F5F5F7] ring-1 ring-black' : 'hover:bg-[#F5F5F7]'}`}>
-                            <span className="block rounded-full bg-[#1D1D1F]" style={{ width: Math.max(4, size/2), height: Math.max(4, size/2) }}></span>
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Color */}
-            <div className="flex items-center gap-3 ml-auto">
-                <span className="text-xs font-bold text-[#86868B] uppercase tracking-wider">顏色</span>
-                <div className="flex items-center -space-x-1">
-                    {COLORS.map(c => (
-                         <button key={c} onClick={() => setColor(c)} className={`w-8 h-8 rounded-full border-2 border-white ring-1 ring-black/5 shadow-sm hover:z-10 hover:scale-110 transition-all ${color === c ? 'z-20 scale-110 ring-2 ring-black' : ''}`} style={{ backgroundColor: c }} />
-                    ))}
-                </div>
-                <div className="relative ml-2">
-                    <button onClick={() => setShowColorPicker(!showColorPicker)} className="w-8 h-8 rounded-full border border-gray-300 bg-white flex items-center justify-center text-xs text-gray-500 hover:border-black transition-colors">
-                        +
-                    </button>
-                     {showColorPicker && (
-                        <div className="absolute top-full mt-2 right-0 z-10 p-2 bg-white rounded-xl shadow-xl border border-gray-100">
-                            <input type="color" value={color} onChange={handleColorChange} className="w-8 h-8 p-0 border-none cursor-pointer bg-transparent" />
-                        </div>
-                    )}
-                </div>
-            </div>
-             <button onClick={clearCanvas} className="ml-2 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">清除畫布</button>
-        </div>
-        
-        {/* Added checkered background to visualize transparency */}
-        <div className="flex-grow p-8 bg-[#F5F5F7] flex items-center justify-center overflow-auto bg-[radial-gradient(#C1C1C5_1px,transparent_1px)] [background-size:16px_16px]">
-            <canvas
-                ref={canvasRef}
-                onMouseDown={startDrawing}
-                onMouseUp={finishDrawing}
-                onMouseLeave={finishDrawing}
-                onMouseMove={draw}
-                className="bg-transparent shadow-[0_8px_30px_rgba(0,0,0,0.05)] rounded-lg cursor-crosshair max-w-full max-h-full border border-black/5"
-            />
+        {/* 復原 / 重做 */}
+        <div className="flex items-center gap-1">
+          <button onClick={undo} disabled={!canUndo} title="復原"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#1D1D1F] hover:bg-[#F5F5F7] disabled:opacity-30 disabled:hover:bg-transparent transition-all">
+            <Undo size={15} />
+          </button>
+          <button onClick={redo} disabled={!canRedo} title="重做"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#1D1D1F] hover:bg-[#F5F5F7] disabled:opacity-30 disabled:hover:bg-transparent transition-all">
+            <Redo size={15} />
+          </button>
         </div>
 
-        <div className="p-5 border-t border-gray-100 flex justify-end gap-3 bg-white flex-shrink-0">
-          <button onClick={onClose} className="px-5 py-2.5 text-sm font-medium text-[#1D1D1F] bg-[#F5F5F7] hover:bg-[#E5E5E5] rounded-full transition-all">取消</button>
-          <button onClick={handleSave} className="px-5 py-2.5 text-sm font-medium text-white bg-black hover:bg-gray-800 rounded-full shadow-lg shadow-black/5 transition-all">儲存繪圖</button>
+        <div className="w-px h-5 bg-black/[0.08]" />
+
+        {/* 筆刷粗細 */}
+        <div className="flex items-center gap-2.5 px-1">
+          <span className="block rounded-full bg-[#1D1D1F] shrink-0" style={{ width: Math.max(4, brushSize / 2), height: Math.max(4, brushSize / 2) }} />
+          <input type="range" min={2} max={40} value={brushSize} onChange={e => setBrushSize(Number(e.target.value))} title="筆刷粗細"
+            className="drawing-brush-slider w-24 h-1.5 rounded-full appearance-none cursor-pointer bg-[#E2E2E7] accent-[#1D1D1F]" />
         </div>
+
+        <div className="w-px h-5 bg-black/[0.08]" />
+
+        {/* 調色盤 */}
+        <div className="flex items-center pl-1">
+          {COLORS.map((c, i) => (
+            <button key={c} onClick={() => setColor(c)} title={c}
+              className={`w-5 h-5 rounded-full border-2 border-white shadow-[0_1px_4px_rgba(0,0,0,0.12)] transition-transform hover:scale-[1.25] hover:-translate-y-0.5 hover:z-10 ${color === c ? 'scale-[1.2] -translate-y-0.5 z-10 ring-2 ring-[#1D1D1F] ring-offset-1' : ''}`}
+              style={{ backgroundColor: c, marginLeft: i === 0 ? 0 : -6 }} />
+          ))}
+          <div className="relative ml-1.5">
+            <button onClick={() => setShowColorPicker(!showColorPicker)} title="自訂顏色"
+              className="w-5 h-5 rounded-full border border-dashed border-gray-300 bg-white flex items-center justify-center text-xs text-gray-400 hover:border-[#1D1D1F] hover:text-[#1D1D1F] transition-colors">+</button>
+            {showColorPicker && (
+              <div className="absolute top-full mt-2 right-0 z-10 p-2 bg-white rounded-xl shadow-xl border border-gray-100">
+                <input type="color" value={color} onChange={handleColorChange} className="w-9 h-9 p-0 border-none cursor-pointer bg-transparent" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="w-px h-5 bg-black/[0.08]" />
+
+        {/* 清除 */}
+        <button onClick={clearCanvas} title="清除畫布"
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[#86868B] hover:bg-red-50 hover:text-red-500 transition-all">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
       </div>
+
+      {/* 右上角動作：取消 / 儲存 */}
+      <div className="absolute top-5 right-5 z-50 flex items-center gap-2">
+        <button onClick={onClose} className="px-4 py-2.5 text-sm font-medium text-[#1D1D1F] bg-white/85 backdrop-blur-xl border border-black/[0.06] shadow-sm hover:bg-white rounded-full transition-all">取消</button>
+        <button onClick={handleSave} className="px-5 py-2.5 text-sm font-bold text-white bg-[#1D1D1F] hover:bg-black rounded-full shadow-[0_8px_20px_-6px_rgba(0,0,0,0.4)] transition-all active:scale-95">儲存繪圖</button>
+      </div>
+
+      {/* 畫布本體：唯一的「透明紙」，格紋 + 陰影 + 圓角，邊界清楚 */}
+      <canvas
+        ref={canvasRef}
+        onMouseDown={startDrawing}
+        onMouseUp={finishDrawing}
+        onMouseLeave={finishDrawing}
+        onMouseMove={draw}
+        className="rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.2)] ring-1 ring-black/5 cursor-crosshair max-w-full max-h-full bg-[radial-gradient(#D8D8DD_1px,transparent_1px)] [background-size:16px_16px] bg-white/40"
+      />
     </div>
   );
 };

@@ -239,7 +239,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
       }}
       onMouseDown={handleMouseDown}
       className={`
-        fixed z-[999] flex items-center gap-1 px-1.5 py-1.5
+        fixed z-[999] flex items-center gap-0.5 px-1 py-1
         bg-white/80 backdrop-blur-xl
         rounded-full
         border border-white/50
@@ -254,22 +254,26 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
       </div>
 
       {/* Interaction Mode Switcher */}
-      <div className="flex bg-black/5 rounded-2xl p-0.5 gap-0.5">
-          <ToolButton 
-            onClick={() => onSetInteractionMode('select')} 
-            icon={<Icons.Select />} 
-            label="選取" 
-            active={interactionMode === 'select'}
-          />
-          <ToolButton 
-            onClick={() => onSetInteractionMode('hand')} 
-            icon={<Icons.Hand />} 
-            label="抓手" 
-            active={interactionMode === 'hand'}
-          />
+      <div className="flex items-center bg-[#F5F5F7] rounded-full p-0.5 gap-0.5">
+          {([
+            { mode: 'select', label: '選取', Icon: Icons.Select },
+            { mode: 'hand',   label: '抓手', Icon: Icons.Hand   },
+          ] as const).map(({ mode, label, Icon }) => (
+            <div key={mode} className="relative group">
+              <button
+                onClick={() => onSetInteractionMode(mode)}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${interactionMode === mode ? 'bg-[#1D1D1F] text-white shadow-md' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
+              >
+                <div className="w-[18px] h-[18px] flex items-center justify-center"><Icon /></div>
+              </button>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900/90 text-white text-[11px] font-medium rounded-lg whitespace-nowrap pointer-events-none z-50 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                {label}
+              </div>
+            </div>
+          ))}
       </div>
 
-      <div className="w-px h-6 bg-black/5 mx-0.5" />
+      <div className="w-px h-5 bg-black/5 ml-1" />
 
       {/* Creation Tools */}
       <ToolButton onClick={onAddNote} icon={<Icons.Note />} label="便利貼" />
@@ -476,27 +480,27 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
           )}
       </div>
 
-      <div className="w-px h-6 bg-black/5 mx-0.5" />
+      <div className="w-px h-5 bg-black/5 mx-0" />
       
       {/* Duplicate Tool */}
       <ToolButton onClick={onDuplicate} icon={<Icons.Copy />} label="複製" disabled={!hasSelection} />
 
-      <div className="w-px h-6 bg-black/5 mx-0.5" />
+      <div className="w-px h-5 bg-black/5 mx-0" />
 
       {/* History Controls */}
       <ToolButton onClick={onUndo} icon={<Icons.Undo />} label="復原" disabled={!canUndo} />
       <ToolButton onClick={onRedo} icon={<Icons.Redo />} label="重做" disabled={!canRedo} />
       
-      <div className="w-px h-6 bg-black/5 mx-0.5" />
+      <div className="w-px h-5 bg-black/5 mx-0" />
 
       {/* Crop Tool */}
       <ToolButton onClick={onCrop} icon={<Icons.Crop />} label="裁剪" disabled={!canCrop} />
 
-      <div className="w-px h-6 bg-black/5 mx-0.5" />
+      <div className="w-px h-5 bg-black/5 mx-0" />
 
       {/* Magic Button */}
       {selectedElement?.type !== 'artboard' && (
-        <div className="relative group">
+        <div className="relative group pr-1">
           <button
             onClick={(e) => {
                 e.stopPropagation();
@@ -504,7 +508,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
             }}
             disabled={isProcessing}
             className={`
-                flex items-center justify-center p-2 rounded-xl transition-all duration-200
+                flex items-center justify-center p-1.5 rounded-lg transition-all duration-200
                 ${isProcessing
                     ? 'opacity-50 cursor-wait'
                     : 'hover:bg-purple-50 active:scale-95'}
@@ -535,7 +539,7 @@ const ToolButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React
         onClick={onClick}
         disabled={disabled}
         className={`
-          flex items-center justify-center p-2 rounded-xl transition-all duration-200
+          flex items-center justify-center p-1.5 rounded-lg transition-all duration-200
           ${disabled
             ? 'opacity-30 cursor-not-allowed'
             : active
@@ -543,7 +547,7 @@ const ToolButton: React.FC<{ onClick: (e: React.MouseEvent) => void; icon: React
                 : 'hover:bg-black/5 text-yohaku-text-muted hover:text-yohaku-text-main active:scale-95'}
         `}
       >
-        <div className="text-current flex items-center justify-center w-5 h-5 shrink-0">{icon}</div>
+        <div className="text-current flex items-center justify-center w-[18px] h-[18px] shrink-0">{icon}</div>
       </button>
       {show && !disabled && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900/90 text-white text-[11px] font-medium rounded-lg whitespace-nowrap pointer-events-none z-50 shadow-lg">
