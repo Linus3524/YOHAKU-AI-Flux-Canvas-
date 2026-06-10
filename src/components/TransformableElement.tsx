@@ -1271,16 +1271,25 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             </div>
                         );
                     }
-                    case 'drawing':
+                    case 'drawing': {
+                        // 提示文字反向縮放：zoom 縮小時維持螢幕固定字級（目標約 10px），避免看不清
+                        const hintScale = 1 / Math.min(zoom, 1);
+                        const hintFont = Math.min(48, Math.round(10 * hintScale));
+                        const hintPadH = Math.min(40, Math.round(10 * hintScale));
+                        const hintPadV = Math.min(28, Math.round(7 * hintScale));
                         return (
                             <div style={style} className="rounded-xl flex items-center justify-center">
                                 {el.src ? (
                                     <img src={el.src} alt="User drawing" style={style} className="rounded-xl object-contain drop-shadow-xl" draggable="false" />
                                 ) : (
-                                    <span className="text-[#86868B] p-2 text-center text-sm bg-white/50 rounded-lg backdrop-blur-sm border border-black/5">點擊兩下以繪圖</span>
+                                    <span
+                                        className="text-[#86868B] text-center bg-white/50 rounded-lg backdrop-blur-sm border border-black/5 whitespace-nowrap"
+                                        style={{ fontSize: hintFont, padding: `${hintPadV}px ${hintPadH}px`, lineHeight: 1.2 }}
+                                    >點擊兩下以繪圖</span>
                                 )}
                             </div>
                         );
+                    }
                     case 'frame':
                         return (
                             <div style={style} className="border-[3px] border-dashed border-[#D1D1D6] bg-[#F2F2F7]/50 rounded-2xl flex items-center justify-center relative overflow-hidden group hover:border-[#AF52DE] hover:bg-[#AF52DE]/5 transition-colors">
