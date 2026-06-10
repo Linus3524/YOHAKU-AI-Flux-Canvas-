@@ -1899,6 +1899,13 @@ const App: React.FC = () => {
               onExport={() => downloadArtboard(artboardForPanel, elements)}
               onExportSVG={() => setShowSVGExportModal(true)}
               onClose={() => setSelectedElementIds([])}
+              selectedArtboardCount={selectedElements.filter(el => el.type === 'artboard').length}
+              onBatchExport={() => {
+                  const artboardsToExport = selectedElements
+                      .filter((el): el is ArtboardElement => el.type === 'artboard')
+                      .sort((a, b) => b.zIndex - a.zIndex);
+                  downloadMultipleArtboards(artboardsToExport, elements);
+              }}
           />
       )}
 
