@@ -19,6 +19,9 @@ import {
     type SAM2Point,
 } from './semanticLayerUtils';
 
+// 安全取字串：防止非字串值（如曾誤存的物件）導致 .trim() 崩潰
+const asText = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
 // ── Category 顯示設定 ────────────────────────────────────────────────────────
 export const CATEGORY_META: Record<SmartLayerCategory, { label: string; color: string; priority: number }> = {
     SUBJECT:    { label: '主角',   color: '#7c3aed', priority: 0 },
@@ -375,7 +378,7 @@ export function useSemanticEditor({
 
         // 找出所有「prompt 已改但未套用」的圖層
         const dirtyLayers = state.layers.filter(
-            l => l.prompt.trim() !== l.appliedPrompt.trim() && !l.isLocked
+            l => asText(l.prompt) !== asText(l.appliedPrompt) && !l.isLocked
         );
         if (dirtyLayers.length === 0) return;
 
@@ -609,10 +612,10 @@ export function useSemanticEditor({
     const addLayerFromMaskBase64 = useCallback(async (newLayer: SmartLayer) => {
         // Gemini 非同步生成 prompt
         if (geminiApiKey) {
-            describeLayerWithGemini(newLayer.base64, geminiApiKey).then(desc => {
-                if (desc) setState(s => {
+            describeLayerWithGemini(newLayer.base64, geminiApiKey).then(({ name, prompt }) => {
+                if (name || prompt) setState(s => {
                     const updated = s.layers.map(l => l.id === newLayer.id
-                        ? { ...l, prompt: desc, appliedPrompt: desc } : l);
+                        ? { ...l, ...(name && { name }), ...(prompt && { prompt, appliedPrompt: prompt }) } : l);
                     return { ...s, ...withLayerSync(s, updated) };
                 });
             });
@@ -710,7 +713,7 @@ export function useSemanticEditor({
 
     // 有 prompt 已改但未套用的圖層
     const dirtyCount = state.layers.filter(
-        l => l.prompt.trim() !== l.appliedPrompt.trim() && !l.isLocked
+        l => asText(l.prompt) !== asText(l.appliedPrompt) && !l.isLocked
     ).length;
 
     return {

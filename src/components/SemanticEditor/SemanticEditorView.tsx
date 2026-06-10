@@ -478,7 +478,7 @@ function RightPanel({
 
                     {/* 語意圖層 */}
                     {sorted.map(layer => {
-                        const isDirty   = layer.prompt.trim() !== layer.appliedPrompt.trim();
+                        const isDirty   = (typeof layer.prompt === 'string' ? layer.prompt.trim() : '') !== (typeof layer.appliedPrompt === 'string' ? layer.appliedPrompt.trim() : '');
                         const isChecked = checkedLayerIds.includes(layer.id);
                         return (
                         <React.Fragment key={layer.id}>
