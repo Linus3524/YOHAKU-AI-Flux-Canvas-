@@ -23,22 +23,22 @@ interface LayerPanelProps {
 }
 
 const Icons = {
-    EyeOpen:      () => <Icon name="visibility" size={16} />,
-    EyeClosed:    () => <Icon name="visibility_off" size={16} />,
-    LockOpen:     () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
-    LockClosed:   () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+    EyeOpen:      () => <Icon name="visibility" size={15} />,
+    EyeClosed:    () => <Icon name="visibility_off" size={15} />,
+    LockOpen:     () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
+    LockClosed:   () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
     Group:        () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5c0-1.1.9-2 2-2h2"/><path d="M17 3h2c1.1 0 2 .9 2 2v2"/><path d="M21 17v2c0 1.1-.9 2-2 2h-2"/><path d="M7 21H5c-1.1 0-2-.9-2-2v-2"/><rect width="7" height="5" x="7" y="7" rx="1"/><rect width="7" height="5" x="10" y="12" rx="1"/></svg>,
     Ungroup:      () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="8" height="6" x="5" y="4" rx="1"/><rect width="8" height="6" x="11" y="14" rx="1"/></svg>,
     Merge:        () => <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M4.875 13.75c-0.233335 0 -0.4375 -0.0875 -0.6125 -0.2625 -0.175 -0.175 -0.2625 -0.37915 -0.2625 -0.6125 0 -0.23335 0.0875 -0.4375 0.2625 -0.6125 0.175 -0.175 0.379165 -0.2625 0.6125 -0.2625h14.25c0.23335 0 0.4375 0.0875 0.6125 0.2625 0.175 0.175 0.2625 0.37915 0.2625 0.6125 0 0.23335 -0.0875 0.4375 -0.2625 0.6125 -0.175 0.175 -0.37915 0.2625 -0.6125 0.2625H4.875Zm-0.125 -3.025c-0.216665 0 -0.395835 -0.07085 -0.5375 -0.2125C4.070835 10.37085 4 10.19165 4 9.975c0 -0.21665 0.070835 -0.39585 0.2125 -0.5375 0.141665 -0.14165 0.320835 -0.2125 0.5375 -0.2125h14.5c0.21665 0 0.39585 0.07085 0.5375 0.2125s0.2125 0.32085 0.2125 0.5375c0 0.21665 -0.07085 0.39585 -0.2125 0.5375s-0.32085 0.2125 -0.5375 0.2125h-14.5ZM11.975 22c-0.21665 0 -0.39585 -0.07085 -0.5375 -0.2125s-0.2125 -0.32085 -0.2125 -0.5375v-3.2l-1.4 1.375c-0.15 0.13335 -0.325 0.20415 -0.525 0.2125 -0.2 0.00835 -0.375 -0.0625 -0.525 -0.2125 -0.15 -0.15 -0.225 -0.325 -0.225 -0.525s0.075 -0.375 0.225 -0.525l2.675 -2.65c0.08335 -0.08335 0.16665 -0.14165 0.25 -0.175 0.08335 -0.03335 0.175 -0.05 0.275 -0.05 0.1 0 0.19165 0.01665 0.275 0.05 0.08335 0.03335 0.16665 0.09165 0.25 0.175l2.625 2.65c0.13335 0.15 0.20415 0.325 0.2125 0.525 0.00835 0.2 -0.0625 0.375 -0.2125 0.525 -0.15 0.15 -0.325 0.225 -0.525 0.225s-0.375 -0.075 -0.525 -0.225l-1.35 -1.375v3.2c0 0.21665 -0.07085 0.39585 -0.2125 0.5375S12.19165 22 11.975 22Zm0 -14.5c-0.1 0 -0.19165 -0.01665 -0.275 -0.05 -0.08335 -0.03335 -0.16665 -0.09165 -0.25 -0.175l-2.65 -2.65c-0.13335 -0.133335 -0.20415 -0.304165 -0.2125 -0.5125 -0.00835 -0.208335 0.0625 -0.3875 0.2125 -0.5375 0.15 -0.15 0.325 -0.225 0.525 -0.225s0.375 0.075 0.525 0.225l1.35 1.375V1.75c0 -0.216665 0.07085 -0.395835 0.2125 -0.5375 0.14165 -0.141665 0.32085 -0.2125 0.5375 -0.2125 0.21665 0 0.39585 0.070835 0.5375 0.2125 0.14165 0.141665 0.2125 0.320835 0.2125 0.5375v3.2l1.4 -1.375c0.15 -0.133335 0.325 -0.204165 0.525 -0.2125 0.2 -0.008335 0.375 0.0625 0.525 0.2125 0.15 0.15 0.225 0.325 0.225 0.525s-0.075 0.375 -0.225 0.525l-2.65 2.65c-0.08335 0.08335 -0.16665 0.14165 -0.25 0.175 -0.08335 0.03335 -0.175 0.05 -0.275 0.05Z" strokeWidth="0.5"/></svg>,
     Image:        () => <Icon name="image" size={14} />,
     Note:         () => <Icon name="sticky_note_2" size={14} />,
-    Text:         () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></svg>,
+    Text:         () => <Icon name="title" size={14} />,
     Arrow:        () => <Icon name="trending_flat" size={14} />,
     Draw:         () => <Icon name="draw" size={14} />,
     Frame:        () => <Icon name="crop_free" size={14} />,
     Shape:        () => <Icon name="category" size={14} />,
     Layer:        () => <Icon name="layers" size={18} />,
-    Trash:        () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+    Trash:        () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
     Folder:       () => <Icon name="folder" size={14} />,
     ChevronDown:  () => <Icon name="expand_more" size={16} />,
     ChevronRight: () => <Icon name="chevron_right" size={16} />,
@@ -46,13 +46,14 @@ const Icons = {
 
 export const getLayerColor = (type: string) => {
     switch (type) {
-        case 'artboard': return '#007AFF'; // 專業藍
-        case 'text': return '#34C759'; // 蘋果綠
-        case 'image':
-        case 'drawing': return '#AF52DE'; // 精緻紫
-        case 'shape':
-        case 'note': return '#FF9500'; // 活力橘
-        default: return '#86868B'; // 預設灰
+        case 'artboard': return '#007AFF'; // 藍
+        case 'text':     return '#34C759'; // 蘋果綠
+        case 'image':    return '#AF52DE'; // 精緻紫
+        case 'drawing':  return '#ec4899'; // 粉紅
+        case 'shape':    return '#FF9500'; // 活力橘
+        case 'note':     return '#0ea5e9'; // 水藍（與物件感知生成純背景同色）
+        case 'arrow':    return '#FF3B30'; // 蘋果紅
+        default:         return '#86868B'; // 預設灰
     }
 };
 
@@ -392,7 +393,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, el.id)}
                 className={`
-                    group flex items-center gap-1.5 py-1 px-1.5 rounded-md text-xs border-2 transition-all select-none
+                    group flex items-center gap-1 py-1 px-1.5 rounded-md text-xs border-2 transition-all select-none
                     ${isSelected ? 'bg-[#007AFF]/10 border-[#007AFF]/20' : 'border-transparent hover:bg-white hover:border-black/5 hover:shadow-sm'}
                     ${isDragOver ? 'border-t-2 border-t-[#AF52DE] bg-purple-50' : ''}
                     ${!el.isVisible ? 'opacity-50' : ''}
@@ -403,32 +404,32 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
                     onSelect(el.id, e.shiftKey || e.metaKey);
                 }}
             >
-                {/* Color Bar */}
-                <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: layerColor }} />
-
                 {/* Drag Grip */}
                 <div className="text-[#86868B]/30 cursor-grab active:cursor-grabbing">
                     <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor"><circle cx="1" cy="1" r="1"/><circle cx="1" cy="5" r="1"/><circle cx="1" cy="9" r="1"/><circle cx="5" cy="1" r="1"/><circle cx="5" cy="5" r="1"/><circle cx="5" cy="9" r="1"/></svg>
                 </div>
 
-                {/* Visibility */}
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onToggleVisibility(el.id); }}
-                    className={`text-[#86868B] hover:text-[#1D1D1F] p-1 rounded-md ${!el.isVisible && 'text-red-500'}`}
-                >
-                    {el.isVisible ? <Icons.EyeOpen /> : <Icons.EyeClosed />}
-                </button>
+                {/* Color Bar */}
+                <div className="w-0.5 self-stretch shrink-0 mx-1" style={{ backgroundColor: layerColor }} />
 
-                {/* Lock */}
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onToggleLock(el.id); }}
-                    className={`text-[#86868B] hover:text-[#1D1D1F] p-1 rounded-md ${el.isLocked && 'text-[#007AFF]'}`}
-                >
-                    {el.isLocked ? <Icons.LockClosed /> : <Icons.LockOpen />}
-                </button>
+                {/* Visibility + Lock（緊靠在一起） */}
+                <div className="flex items-center gap-0.5">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onToggleVisibility(el.id); }}
+                        className={`text-[#86868B] hover:text-[#1D1D1F] p-0.5 rounded-md ${!el.isVisible && 'text-red-500'}`}
+                    >
+                        {el.isVisible ? <Icons.EyeOpen /> : <Icons.EyeClosed />}
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onToggleLock(el.id); }}
+                        className={`text-[#86868B] hover:text-[#1D1D1F] p-0.5 rounded-md ${el.isLocked && 'text-[#007AFF]'}`}
+                    >
+                        {el.isLocked ? <Icons.LockClosed /> : <Icons.LockOpen />}
+                    </button>
+                </div>
 
-                {/* Type Icon */}
-                <div className="text-[#86868B]">
+                {/* Type Icon（與鎖頭稍隔開） */}
+                <div style={{ color: layerColor }} className="ml-1">
                     {isArtboard ? <Icons.Folder /> : <ElementIcon type={el.type} />}
                 </div>
 
@@ -454,7 +455,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
                 {/* Labels (Protected from truncation) */}
                 <div className="flex-shrink-0 flex items-center gap-1">
                     {el.groupId && <span className="px-1 py-px rounded text-[8px] font-bold" style={{ color: '#5856D6', background: 'rgba(88,86,214,0.12)', border: '1.5px solid rgba(88,86,214,0.55)', lineHeight: 1.2 }}>GRP</span>}
-                    {isArtboard && <span className="px-1.5 py-0.5 rounded text-[9px] bg-blue-100 text-blue-600 font-bold">AB</span>}
+                    {isArtboard && <span className="px-1 py-px rounded text-[8px] font-bold" style={{ color: '#007AFF', background: 'rgba(0,122,255,0.12)', border: '1.5px solid rgba(0,122,255,0.55)', lineHeight: 1.2 }}>AB</span>}
                 </div>
 
                 {/* Delete Button */}
@@ -595,7 +596,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
                                         onDragOver={(e) => { e.preventDefault(); setDragOverId(`grp-${row.groupId}`); }}
                                         onDragLeave={handleDragLeave}
                                         onDrop={(e) => handleDropOnGroup(e, row.groupId, row.leader.id)}
-                                        className={`group flex items-center gap-2 py-1.5 px-2 rounded-lg text-sm border-2 transition-all select-none cursor-grab active:cursor-grabbing
+                                        className={`group flex items-center gap-1 py-1 px-1.5 rounded-md text-xs border-2 transition-all select-none cursor-grab active:cursor-grabbing
                                             ${isDragOverGroup ? 'border-t-2 border-t-[#5856D6] bg-[#5856D6]/5' : allSelected ? 'bg-[#5856D6]/10 border-[#5856D6]/30' : someSelected ? 'bg-[#5856D6]/5 border-[#5856D6]/15' : 'border-transparent hover:bg-white hover:border-black/5 hover:shadow-sm'}
                                             ${!allVisible ? 'opacity-50' : ''}`}
                                         onClick={(e) => {
@@ -607,22 +608,25 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
                                         <div className="text-[#5856D6]/30 cursor-grab active:cursor-grabbing flex-shrink-0">
                                             <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor"><circle cx="1" cy="1" r="1"/><circle cx="1" cy="5" r="1"/><circle cx="1" cy="9" r="1"/><circle cx="5" cy="1" r="1"/><circle cx="5" cy="5" r="1"/><circle cx="5" cy="9" r="1"/></svg>
                                         </div>
-                                        {/* Visibility toggle for whole group */}
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onToggleGroupVisibility(row.groupId); }}
-                                            className={`p-1 rounded-md hover:text-[#1D1D1F] transition-colors flex-shrink-0 ${!allVisible ? 'text-red-400' : 'text-[#86868B]'}`}
-                                            title={allVisible ? '隱藏群組' : '顯示群組'}
-                                        >
-                                            {allVisible ? <Icons.EyeOpen /> : <Icons.EyeClosed />}
-                                        </button>
-                                        {/* Lock toggle for whole group */}
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onToggleGroupLock(row.groupId); }}
-                                            className={`p-1 rounded-md hover:text-[#1D1D1F] transition-colors flex-shrink-0 ${allLocked ? 'text-[#5856D6]' : someLocked ? 'text-orange-400' : 'text-[#86868B]'}`}
-                                            title={allLocked ? '解鎖群組' : '鎖定群組'}
-                                        >
-                                            {allLocked ? <Icons.LockClosed /> : <Icons.LockOpen />}
-                                        </button>
+                                        {/* Color Bar */}
+                                        <div className="w-0.5 self-stretch shrink-0 mx-1" style={{ backgroundColor: '#5856D6' }} />
+                                        {/* Visibility + Lock（緊靠） */}
+                                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); onToggleGroupVisibility(row.groupId); }}
+                                                className={`p-0.5 rounded-md hover:text-[#1D1D1F] transition-colors ${!allVisible ? 'text-red-400' : 'text-[#86868B]'}`}
+                                                title={allVisible ? '隱藏群組' : '顯示群組'}
+                                            >
+                                                {allVisible ? <Icons.EyeOpen /> : <Icons.EyeClosed />}
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); onToggleGroupLock(row.groupId); }}
+                                                className={`p-0.5 rounded-md hover:text-[#1D1D1F] transition-colors ${allLocked ? 'text-[#5856D6]' : someLocked ? 'text-orange-400' : 'text-[#86868B]'}`}
+                                                title={allLocked ? '解鎖群組' : '鎖定群組'}
+                                            >
+                                                {allLocked ? <Icons.LockClosed /> : <Icons.LockOpen />}
+                                            </button>
+                                        </div>
                                         {/* Expand/Collapse */}
                                         <button
                                             onClick={(e) => {

@@ -1833,13 +1833,15 @@ const App: React.FC = () => {
             elements={elements}
             selectedElementIds={selectedElementIds}
             onSelect={(id, shiftKey) => {
-                if (!shiftKey && selectedElementIds.includes(id)) {
-                    // ✅ 修改：已選取 + 無 Shift = 從清單移除（圖層面板單獨取消選取）
-                    const newIds = selectedElementIds.filter(sid => sid !== id);
-                    setSelectedElementIds(newIds);
-                } else {
-                    handleSelectElement(id, shiftKey);
-                }
+                // 圖層面板直接選取單一物件，不走群組展開邏輯
+                // 這樣才能在圖層面板點選群組成員來單獨選取並解散群組
+                setSelectedElementIds(prev => {
+                    if (shiftKey) {
+                        return prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id];
+                    }
+                    if (prev.length === 1 && prev[0] === id) return prev;
+                    return [id];
+                });
             }}
             onToggleVisibility={handleToggleVisibility}
             onToggleLock={handleToggleLock}
