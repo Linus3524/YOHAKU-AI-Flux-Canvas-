@@ -530,6 +530,29 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 10 個物件層。</p>
                       <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 需 <code className="font-mono bg-purple-100 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-purple-100 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
                     </div>
+                    {/* 物件感知編輯 */}
+                    <div className="bg-blue-50/40 border border-blue-100 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-blue-900 text-[13px] mb-1">✦ 物件感知編輯</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">雙擊圖片進入編輯器，Gemini 自動識別圖中所有物件並用 SAM2 精準去背，每個物件成為獨立圖層，可分別修改提示詞重繪、切換版本、或單獨匯入畫布。</p>
+                      <div className="grid grid-cols-2 gap-1.5 mb-2">
+                        {[
+                          { label: '語意分層', desc: 'Gemini 偵測 + SAM2 精準去背，自動分類主角／商品／文字／裝飾' },
+                          { label: '智能點選', desc: '點一下圖中任意位置，SAM2 自動抓出點選處的完整物件邊緣' },
+                          { label: '矩形框選', desc: '拖曳框住目標區域，SAM2 切出框內主體物件' },
+                          { label: '筆塗選取', desc: '筆刷塗抹任意形狀區域，本機 SAM2 或 fal.ai 均支援' },
+                          { label: '多點精確選取', desc: '左鍵放前景點、右鍵放背景排除點，多點組合精準控制分割範圍' },
+                          { label: '物件重繪', desc: '選物件改提示詞，GPT Image 2 或 Gemini 重繪後自動切割回貼' },
+                          { label: '版本管理', desc: '每次重繪產生新版本分頁，可切換比較或刪除' },
+                          { label: 'LaMa 純背景', desc: '一鍵移除所有前景，生成乾淨純背景圖層' },
+                        ].map((m, i) => (
+                          <div key={i} className="bg-white/80 border border-blue-100 rounded-lg px-2.5 py-2">
+                            <div className="font-bold text-blue-700 text-[11px] mb-0.5">{m.label}</div>
+                            <div className="text-gray-500 text-[10px] leading-snug">{m.desc}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-[11px] text-blue-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 語意分層需 <code className="font-mono bg-blue-100 px-1 rounded">Gemini Key</code>；物件重繪最佳品質需 <code className="font-mono bg-blue-100 px-1 rounded">Atlas Key</code>（GPT Image 2）或 <code className="font-mono bg-blue-100 px-1 rounded">Gemini Key</code>；SAM2 分割需 <code className="font-mono bg-blue-100 px-1 rounded">fal.ai Key</code> 或下載本機模型。</div>
+                    </div>
                     {/* 快速去背 */}
                     <div className="bg-orange-50/40 border border-orange-100 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-orange-900 text-[13px] mb-1">✦ 快速去背（BiRefNet）</h4>

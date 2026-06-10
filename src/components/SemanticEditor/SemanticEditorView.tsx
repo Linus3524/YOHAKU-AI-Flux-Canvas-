@@ -1774,7 +1774,7 @@ export function SemanticEditorView({
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: 5,
                                     padding: '4px 10px', borderRadius: 9999,
-                                    border: '1px solid #ddd6fe',
+                                    border: '1px solid #8b5cf6',
                                     background: '#f5f3ff',
                                     color: '#7c3aed',
                                     fontSize: 11, fontWeight: 600, cursor: 'pointer',
