@@ -260,21 +260,37 @@ export function useSemanticEditor({
             if (engine === 'gemini') {
                 const { getModelStatus } = await import('../../utils/onnxModelCache');
                 const lamaReady = await getModelStatus('lama') === 'ready';
+
+                // 失敗保底：用其他可見圖層合成乾淨底圖
+                const fallbackClean = () => compositeSmartLayers(
+                    state.backgroundBase64 ?? state.originalBase64,
+                    state.layers.filter(l => l.id !== layer.id && l.isVisible && l.category !== 'BACKGROUND'),
+                );
+
                 if (lamaReady) {
-                    const { runLamaInWorker } = await import('../../utils/lamaWorkerClient');
-                    const dims = await import('./semanticLayerUtils').then(m => m.getImageDims(state.compositeBase64));
-                    const fullLayerPng = await layerToFullCanvas(layer, dims.w, dims.h);
-                    const maskBase64   = await transparentPngToInpaintMask(fullLayerPng);
-                    setStatus('regenerating', '🧹 LaMa 移除舊物件...');
-                    cleanBase = await runLamaInWorker(state.compositeBase64, maskBase64);
+                    try {
+                        // E：先釋放本機 SAM2 Worker 記憶體，降低與 LaMa 同時佔用的峰值
+                        try {
+                            const { terminateSam2Worker } = await import('../../utils/sam2WorkerClient');
+                            terminateSam2Worker();
+                        } catch { /* 無 SAM2 worker 時忽略 */ }
+
+                        const dims = await import('./semanticLayerUtils').then(m => m.getImageDims(state.compositeBase64));
+                        const fullLayerPng = await layerToFullCanvas(layer, dims.w, dims.h);
+                        const maskBase64   = await transparentPngToInpaintMask(fullLayerPng);
+                        setStatus('regenerating', '🧹 LaMa 移除舊物件...');
+                        // A：只在 bbox+邊距 的小區域跑 LaMa，遮罩貼回（省記憶體、保畫質）
+                        const { lamaInpaintRegion } = await import('./semanticLayerUtils');
+                        cleanBase = await lamaInpaintRegion(state.compositeBase64, maskBase64, layer.bbox);
+                    } catch (lamaErr) {
+                        // ②：LaMa 失敗（OOM/逾時等）→ 降級合成，不中斷流程
+                        console.warn('[applyLayerRegen] LaMa 失敗，改用合成保底:', lamaErr);
+                        setStatus('regenerating', '⚠️ LaMa 失敗，改用合成模式...');
+                        cleanBase = await fallbackClean();
+                    }
                 } else {
                     // LaMa 未下載：退而用其他圖層合成
-                    const otherLayers = state.layers.filter(
-                        l => l.id !== layer.id && l.isVisible && l.category !== 'BACKGROUND'
-                    );
-                    cleanBase = await compositeSmartLayers(
-                        state.backgroundBase64 ?? state.originalBase64, otherLayers
-                    );
+                    cleanBase = await fallbackClean();
                 }
             }
 
@@ -504,6 +520,31 @@ export function useSemanticEditor({
         }));
     }, []);
 
+    // ── 刪除某個版本 ─────────────────────────────────────────────────────────
+    const deleteVersion = useCallback((index: number) => {
+        setState(s => {
+            if (index < 0 || index >= s.versions.length) return s;
+            const newVersions = s.versions.filter((_, i) => i !== index);
+            // 刪除目前正在檢視的版本 → 退回原始；刪除前面的版本 → 索引前移一格
+            if (s.activeVersionIndex === index) {
+                return {
+                    ...s,
+                    versions:           newVersions,
+                    compositeBase64:    s.originalBase64,
+                    backgroundBase64:   s.originalBase64,
+                    layers:             s.originalLayers,
+                    selectedLayerId:    null,
+                    activeVersionIndex: -1,
+                };
+            }
+            return {
+                ...s,
+                versions:           newVersions,
+                activeVersionIndex: s.activeVersionIndex > index ? s.activeVersionIndex - 1 : s.activeVersionIndex,
+            };
+        });
+    }, []);
+
     // ── 手動點選新增圖層 ─────────────────────────────────────────────────────
     const addClickLayer = useCallback(async (clickPixel: { x: number; y: number }) => {
         if (!falApiKey) throw new Error('SAM2 需要 fal.ai API Key');
@@ -729,6 +770,7 @@ export function useSemanticEditor({
         applyAllDirtyLayers,
         switchVersion,
         switchToOriginal,
+        deleteVersion,
         cancelOperation,
         addClickLayer,
         addBoxLayer,

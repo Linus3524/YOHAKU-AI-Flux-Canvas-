@@ -927,6 +927,7 @@ export function SemanticEditorView({
         cancelOperation,
         switchVersion,
         switchToOriginal,
+        deleteVersion,
         addClickLayer,
         addBoxLayer,
         addPointsLayer,
@@ -1765,36 +1766,27 @@ export function SemanticEditorView({
                                 {onnxEmbeddingLoading && <span style={{ opacity: 0.6 }}>計算中...</span>}
                             </button>
                         )}
-                        {/* 重繪模型選單 */}
+                        {/* 重繪模型切換（與 SAM2 切換同款） */}
                         {(canUseGpt && canUseGemini) && (
-                            <div style={{
-                                display: 'flex', alignItems: 'center',
-                                background: '#f9fafb', border: '1px solid #e5e7eb',
-                                borderRadius: 8, overflow: 'hidden',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                            }}>
+                            <button
+                                onClick={() => setInpaintEngine(inpaintEngine === 'gpt' ? 'gemini' : 'gpt')}
+                                title={`重繪模型：${inpaintEngine === 'gpt' ? 'GPT Image 2' : 'Gemini'} — 點選切換`}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 5,
+                                    padding: '4px 10px', borderRadius: 9999,
+                                    border: '1px solid #ddd6fe',
+                                    background: '#f5f3ff',
+                                    color: '#7c3aed',
+                                    fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                    transition: 'all 0.15s',
+                                }}
+                            >
                                 <span style={{
-                                    padding: '4px 10px', borderRight: '1px solid #e5e7eb',
-                                    fontSize: 10, fontWeight: 600, color: '#9ca3af', letterSpacing: '0.05em',
-                                    pointerEvents: 'none', userSelect: 'none',
-                                }}>重繪</span>
-                                <div style={{ position: 'relative' }}>
-                                    <select
-                                        value={inpaintEngine}
-                                        onChange={e => setInpaintEngine(e.target.value as 'gpt' | 'gemini')}
-                                        style={{
-                                            appearance: 'none', background: 'transparent',
-                                            border: 'none', outline: 'none', cursor: 'pointer',
-                                            padding: '4px 22px 4px 8px',
-                                            fontSize: 11, fontWeight: 700, color: '#7c3aed',
-                                        }}
-                                    >
-                                        <option value="gpt">GPT Image 2</option>
-                                        <option value="gemini">Gemini</option>
-                                    </select>
-                                    <svg style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                                </div>
-                            </div>
+                                    width: 6, height: 6, borderRadius: '50%',
+                                    background: '#7c3aed', flexShrink: 0,
+                                }} />
+                                {inpaintEngine === 'gpt' ? 'GPT Image 2' : 'Gemini'}
+                            </button>
                         )}
                         {onImportToCanvas && (
                             <NavBtn title="匯入目前版本到畫布" onClick={() => onImportToCanvas(state.compositeBase64, { compositeBase64: state.compositeBase64, layers: state.layers, versions: state.versions })}>
@@ -2495,6 +2487,7 @@ export function SemanticEditorView({
                             isActive={state.activeVersionIndex === i}
                             onClick={() => switchVersion(i)}
                             onRename={(n) => renameVersion(i, n)}
+                            onDelete={() => deleteVersion(i)}
                         /></React.Fragment>
                     ))}
 
@@ -2529,8 +2522,8 @@ export function SemanticEditorView({
 
 // ─── 版本縮圖 ─────────────────────────────────────────────────────────────────
 function VersionThumb({
-    label, thumbnailBase64, isActive, onClick, onRename,
-}: { label: string; thumbnailBase64: string; isActive: boolean; onClick: () => void; onImport?: () => void; onRename?: (n: string) => void }) {
+    label, thumbnailBase64, isActive, onClick, onRename, onDelete,
+}: { label: string; thumbnailBase64: string; isActive: boolean; onClick: () => void; onImport?: () => void; onRename?: (n: string) => void; onDelete?: () => void }) {
     const [hovered, setHovered] = useState(false);
     const [editing, setEditing] = useState(false);
     const [editVal, setEditVal] = useState(label);
@@ -2567,6 +2560,22 @@ function VersionThumb({
                 <img src={thumbnailBase64} alt={label}
                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
             </div>
+            {onDelete && hovered && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                    title="刪除此版本"
+                    style={{
+                        position: 'absolute', top: -6, right: -6,
+                        width: 18, height: 18, borderRadius: '50%',
+                        background: '#ef4444', color: '#fff', border: '2px solid #fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', padding: 0, lineHeight: 1,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 2,
+                    }}
+                >
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+                </button>
+            )}
             {editing ? (
                 <input
                     ref={inputRef}

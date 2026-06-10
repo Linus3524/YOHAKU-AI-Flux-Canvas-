@@ -132,34 +132,41 @@ export async function sam2Segment(
 ): Promise<string> {
     const imageUrl = await uploadToFal(imageBase64, falKey);
 
+    // box 與 point 可同時提供（box 圈範圍、point 強化主體），SAM2 會一起考量
+    const boxPrompts: SAM2BoxPrompt[] = [];
+    const pointPrompts: SAM2PointPrompt[] = [];
+
     if (options.bbox) {
         const { bbox } = options;
-        const boxPrompts: SAM2BoxPrompt[] = [{
+        boxPrompts.push({
             x_min: Math.round(bbox.x * dims.w),
             y_min: Math.round(bbox.y * dims.h),
             x_max: Math.round((bbox.x + bbox.w) * dims.w),
             y_max: Math.round((bbox.y + bbox.h) * dims.h),
-        }];
-        return callSAM2({ imageUrl, falKey, boxPrompts });
+        });
     }
-
     if (options.points && options.points.length > 0) {
-        const pointPrompts: SAM2PointPrompt[] = options.points.map(p => ({
+        pointPrompts.push(...options.points.map(p => ({
             x: Math.round(p.x), y: Math.round(p.y), label: p.label,
-        }));
-        return callSAM2({ imageUrl, falKey, pointPrompts });
+        })));
     }
-
     if (options.clickPt) {
-        const pointPrompts: SAM2PointPrompt[] = [{
+        pointPrompts.push({
             x: Math.round(options.clickPt.x),
             y: Math.round(options.clickPt.y),
             label: 1,
-        }];
-        return callSAM2({ imageUrl, falKey, pointPrompts });
+        });
     }
 
-    throw new Error('sam2Segment: 需要提供 bbox、points 或 clickPt');
+    if (!boxPrompts.length && !pointPrompts.length) {
+        throw new Error('sam2Segment: 需要提供 bbox、points 或 clickPt');
+    }
+
+    return callSAM2({
+        imageUrl, falKey,
+        boxPrompts:   boxPrompts.length   ? boxPrompts   : undefined,
+        pointPrompts: pointPrompts.length ? pointPrompts : undefined,
+    });
 }
 
 // ─── Gemini 偵測 ──────────────────────────────────────────────────────────────
@@ -397,6 +404,96 @@ async function placeInFullCanvas(
         img.onerror = reject;
         img.src = croppedBase64;
     });
+}
+
+/** 載入 base64 為 HTMLImageElement */
+function loadImg(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+    });
+}
+
+/**
+ * 區域 LaMa 填補（A 方案）：只在「舊物件 bbox + 邊距」的小範圍跑 LaMa，
+ * 再用遮罩把填補結果貼回原圖（只覆蓋破洞像素，其餘維持原圖銳利）。
+ *
+ * 為何這樣做：
+ *  - Worker 內部一律壓到 512×512 推論。整張圖會讓全圖降質模糊；只跑 crop
+ *    可把 512 解析度用在小區域 → 填補更銳利，記憶體/canvas 也更小。
+ *  - Worker 回傳的是「整塊 crop 重繪」，故貼回時只取遮罩白色處，避免接縫。
+ *
+ * @param compositeBase64 目前合成圖（含舊物件）
+ * @param fullMaskBase64  全尺寸黑白遮罩（白=要填補的舊物件區）
+ * @param bbox            舊物件 bbox（0–1）
+ * @param padFrac         邊距比例（相對 bbox 尺寸，預設 0.5＝各邊外擴半個物件寬高）
+ */
+export async function lamaInpaintRegion(
+    compositeBase64: string,
+    fullMaskBase64: string,
+    bbox: { x: number; y: number; w: number; h: number },
+    padFrac = 0.5,
+): Promise<string> {
+    const { runLamaInWorker } = await import('../../utils/lamaWorkerClient');
+    const { w: W, h: H } = await getImageDims(compositeBase64);
+
+    // 1) bbox 外擴邊距，clamp 到 [0,1]
+    const padW = bbox.w * padFrac;
+    const padH = bbox.h * padFrac;
+    const ex = {
+        x: Math.max(0, bbox.x - padW),
+        y: Math.max(0, bbox.y - padH),
+        w: 0, h: 0,
+    };
+    ex.w = Math.min(1 - ex.x, bbox.w + padW * 2);
+    ex.h = Math.min(1 - ex.y, bbox.h + padH * 2);
+
+    // 2) 同步裁切「合成圖」與「遮罩」到 ex 區域
+    const [cropImg, cropMask] = await Promise.all([
+        cropToBBox(compositeBase64, ex),
+        cropToBBox(fullMaskBase64, ex),
+    ]);
+
+    // 3) 只對小 crop 跑 LaMa（整塊會被重繪）
+    const lamaCrop = await runLamaInWorker(cropImg, cropMask);
+
+    // 4) 遮罩貼回：用 cropMask 白色處的 alpha，只把 LaMa 填補像素蓋回原圖
+    const [origImg, lamaImg, maskImg] = await Promise.all([
+        loadImg(compositeBase64), loadImg(lamaCrop), loadImg(cropMask),
+    ]);
+    const cw = lamaImg.naturalWidth, ch = lamaImg.naturalHeight;
+
+    // 4a) 在 crop 尺寸上，把 LaMa 結果依遮罩轉成「只有破洞不透明」
+    const patch = document.createElement('canvas');
+    patch.width = cw; patch.height = ch;
+    const pctx = patch.getContext('2d')!;
+    pctx.drawImage(lamaImg, 0, 0, cw, ch);
+    const patchData = pctx.getImageData(0, 0, cw, ch);
+
+    const mc = document.createElement('canvas');
+    mc.width = cw; mc.height = ch;
+    const mctx = mc.getContext('2d')!;
+    mctx.drawImage(maskImg, 0, 0, cw, ch);
+    const maskData = mctx.getImageData(0, 0, cw, ch).data;
+    for (let i = 0; i < cw * ch; i++) {
+        // 遮罩白(>127)=填補區→保留；黑=透明
+        patchData.data[i * 4 + 3] = maskData[i * 4] > 127 ? 255 : 0;
+    }
+    pctx.putImageData(patchData, 0, 0);
+
+    // 4b) 原圖上，於 ex 位置疊上 patch（只覆蓋破洞）
+    const out = document.createElement('canvas');
+    out.width = W; out.height = H;
+    const octx = out.getContext('2d')!;
+    octx.drawImage(origImg, 0, 0, W, H);
+    octx.drawImage(
+        patch, 0, 0, cw, ch,
+        Math.round(ex.x * W), Math.round(ex.y * H),
+        Math.round(ex.w * W), Math.round(ex.h * H),
+    );
+    return out.toDataURL('image/png');
 }
 
 // ─── 自動分層（Gemini bbox → SAM2）──────────────────────────────────────────
@@ -1004,7 +1101,10 @@ export async function regenerateLayer({
         const dims = await getImageDims(originalBase64);
 
         onProgress?.(`✂️ 裁切「${layer.name}」區域...`);
-        const croppedBase64 = await cropToBBox(originalBase64, layer.bbox);
+        const croppedRaw = await cropToBBox(originalBase64, layer.bbox);
+        // ③：壓縮 crop 後再傳 Gemini，降低 payload 與主執行緒記憶體壓力（crop 通常小，畫質損失極小）
+        const { compressForAtlas } = await import('../../utils/atlasImage');
+        const croppedBase64 = await compressForAtlas(croppedRaw, 1024, 0.92, false);
 
         onProgress?.(`🎨 Gemini 重新生成「${layer.name}」...`);
         const { callGeminiWithRetry } = await import('../../utils/helpers');
@@ -1040,10 +1140,20 @@ export async function regenerateLayer({
             onProgress?.(`✂️ SAM2 切割物件邊緣...`);
             try {
                 const geminiDims = await getImageDims(geminiCropBase64);
-                const cx = Math.round(geminiDims.w / 2);
-                const cy = Math.round(geminiDims.h / 2);
+                const { w: gw, h: gh } = geminiDims;
+                // 甲：整個 crop 當 bbox（內縮 6% 避免抓到邊緣背景）
+                // 乙：中心 + 四象限前景點，覆蓋細長/分散造型，避免只切到一部分
+                const inset = 0.06;
+                const fgPoints: { x: number; y: number; label: 0 | 1 }[] = [
+                    { x: gw * 0.5,  y: gh * 0.5,  label: 1 },
+                    { x: gw * 0.32, y: gh * 0.32, label: 1 },
+                    { x: gw * 0.68, y: gh * 0.32, label: 1 },
+                    { x: gw * 0.32, y: gh * 0.68, label: 1 },
+                    { x: gw * 0.68, y: gh * 0.68, label: 1 },
+                ];
                 const cropTransparent = await sam2Segment(geminiCropBase64, falApiKey, geminiDims, {
-                    clickPt: { x: cx, y: cy },
+                    bbox:   { x: inset, y: inset, w: 1 - inset * 2, h: 1 - inset * 2 },
+                    points: fgPoints,
                 });
                 const fullT   = await placeInFullCanvas(cropTransparent, dims.w, dims.h, layer.bbox);
                 const trimmed = await trimTransparentPixels(fullT);
