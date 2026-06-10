@@ -37,7 +37,7 @@ const Icons = {
     Draw:         () => <Icon name="draw" size={14} />,
     Frame:        () => <Icon name="crop_free" size={14} />,
     Shape:        () => <Icon name="category" size={14} />,
-    Layer:        () => <Icon name="layers" size={18} />,
+    Layer:        () => <Icon name="layers" size={18} style={{ display: 'block', lineHeight: 1 }} />,
     Trash:        () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
     Folder:       () => <Icon name="folder" size={14} />,
     ChevronDown:  () => <Icon name="expand_more" size={16} />,
@@ -479,7 +479,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
                 ref={panelRef}
                 onMouseDown={handleMouseDown}
                 style={{ left: position.x, top: position.y }}
-                className={`fixed z-[998] bg-white/80 backdrop-blur-xl p-3 rounded-xl shadow-lg border border-white/50 text-[#1D1D1F] hover:bg-white transition-colors ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                className={`fixed z-[998] bg-white/80 backdrop-blur-xl w-[42px] h-[42px] flex items-center justify-center rounded-xl shadow-lg border border-white/50 text-[#1D1D1F] hover:bg-white transition-colors ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                 title="打開圖層管理 (按住可拖曳)"
             >
                 <Icons.Layer />
@@ -495,7 +495,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
         >
             {/* Header (Drag Handle) */}
             <div
-                className={`p-3 border-b border-black/5 bg-white/50 flex justify-between items-center select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                className={`px-3 py-2 border-b border-black/5 bg-white/50 flex justify-between items-center select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                 onMouseDown={handleMouseDown}
             >
                 <div className="flex items-center gap-1.5 pointer-events-none">
@@ -504,7 +504,7 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
                 </div>
                 <button 
                     onClick={(e) => { e.stopPropagation(); setIsOpen(false); }} 
-                    className="text-[#86868B] hover:text-[#1D1D1F] p-1 rounded-md hover:bg-black/5 transition-colors cursor-pointer"
+                    className="text-[#86868B] hover:text-[#1D1D1F] w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors cursor-pointer leading-none"
                 >
                     &times;
                 </button>

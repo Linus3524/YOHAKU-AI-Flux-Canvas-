@@ -97,7 +97,7 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 ref={panelRef}
                 onMouseDown={handleMouseDown}
                 style={{ left: position.x, top: position.y }}
-                className={`fixed z-[5000] bg-white/80 backdrop-blur-xl p-3 rounded-xl shadow-lg border border-white/50 text-[#1D1D1F] hover:bg-white transition-colors ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                className={`fixed z-[5000] bg-white/80 backdrop-blur-xl w-[42px] h-[42px] flex items-center justify-center rounded-xl shadow-lg border border-white/50 text-[#1D1D1F] hover:bg-white transition-colors ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                 title="打開工作區域設定 (按住可拖曳)"
             >
                 <ArtboardIcon />
@@ -119,7 +119,7 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
         >
             {/* Header */}
             <div
-                className={`p-3 border-b border-black/5 bg-white/50 flex justify-between items-center select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                className={`px-3 py-2 border-b border-black/5 bg-white/50 flex justify-between items-center select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                 onMouseDown={handleMouseDown}
             >
                 <div className="flex items-center gap-1.5 pointer-events-none">
@@ -128,13 +128,13 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 </div>
                 <button
                     onClick={(e) => { e.stopPropagation(); setIsOpen(false); }}
-                    className="text-[#86868B] hover:text-[#1D1D1F] p-1 rounded-md hover:bg-black/5 transition-colors cursor-pointer"
+                    className="text-[#86868B] hover:text-[#1D1D1F] w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors cursor-pointer leading-none"
                 >
                     &times;
                 </button>
             </div>
 
-            <div className="p-3 space-y-3 overflow-y-auto max-h-[70vh]">
+            <div className="px-3 pt-1.5 pb-2.5 space-y-2 overflow-y-auto max-h-[70vh]">
                 {/* Name */}
                 <div className="space-y-1">
                     <label className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">名稱</label>
@@ -224,7 +224,7 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 </div>
 
                 {/* Export Buttons */}
-                <div className="pt-3 border-t border-gray-100 flex flex-col gap-1.5">
+                <div className="pt-2.5 border-t border-gray-100 flex flex-col gap-1.5">
                     {selectedArtboardCount > 1 && onBatchExport ? (
                         <button
                             onClick={onBatchExport}
