@@ -1789,7 +1789,7 @@ export function SemanticEditorView({
                             </button>
                         )}
                         {onImportToCanvas && (
-                            <NavBtn title="匯入目前版本到畫布" onClick={() => onImportToCanvas(state.compositeBase64, { compositeBase64: state.compositeBase64, layers: state.layers, versions: state.versions })}>
+                            <NavBtn title="匯入目前版本到畫布" onClick={() => { onImportToCanvas(state.compositeBase64, { compositeBase64: state.compositeBase64, layers: state.layers, versions: state.versions }); showToast('✅ 已匯入目前版本到畫布'); }}>
                                 <Icon name="place_item" size={20} />
                             </NavBtn>
                         )}
@@ -2447,7 +2447,10 @@ export function SemanticEditorView({
                 onToggleCheck={toggleCheck}
                 onDownloadLayer={downloadLayer}
                 onDownloadChecked={downloadCheckedLayers}
-                onImportLayersToCanvas={onImportLayersToCanvas}
+                onImportLayersToCanvas={onImportLayersToCanvas ? (layers) => {
+                    onImportLayersToCanvas(layers);
+                    showToast(`✅ 已匯入 ${layers.length} 個圖層到畫布`);
+                } : undefined}
             />
 
             {/* ── 版本分頁列（有版本時才顯示，固定在底部） ── */}

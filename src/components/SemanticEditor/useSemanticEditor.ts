@@ -166,10 +166,12 @@ export function useSemanticEditor({
             const { buildCombinedMaskFromLayers } = await import('../../utils/lamaOnnx');
             const { runLamaInWorker } = await import('../../utils/lamaWorkerClient');
             const { getImageDims } = await import('./semanticLayerUtils');
-            const { w: fullW, h: fullH } = await getImageDims(originalBase64);
+            // 用「目前版本的合成圖」而非原始圖，否則在新版本生成背景時會跑出已被移除的舊物件
+            const baseImage = state.compositeBase64;
+            const { w: fullW, h: fullH } = await getImageDims(baseImage);
             const combinedMask = await buildCombinedMaskFromLayers(fgLayers, fullW, fullH);
             // Worker 推論：不阻塞主執行緒，轉圈動畫保持運作
-            const lamaBackground = await runLamaInWorker(originalBase64, combinedMask);
+            const lamaBackground = await runLamaInWorker(baseImage, combinedMask);
 
             const bgLayer: SmartLayer = {
                 id:             `bg_lama_${Date.now()}`,
@@ -208,7 +210,7 @@ export function useSemanticEditor({
             setStatus('idle', '');
             throw e;
         }
-    }, [state.layers, originalBase64, setStatus]);
+    }, [state.layers, state.compositeBase64, setStatus]);
 
     // ── 版本快照同步 helper ──────────────────────────────────────────────────
     // 所有修改 layers 的操作都必須呼叫此函式，確保當前版本快照也同步更新
