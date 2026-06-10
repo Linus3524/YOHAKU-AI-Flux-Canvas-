@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { ArtboardElement } from '../../types';
 import { ARTBOARD_PRESETS } from './presets';
+import { Icon } from '../../components/Icon';
 
 interface ArtboardPanelProps {
     element: ArtboardElement;
@@ -8,6 +9,8 @@ interface ArtboardPanelProps {
     onExport: () => void;
     onExportSVG: () => void;
     onClose: () => void;
+    selectedArtboardCount?: number;
+    onBatchExport?: () => void;
 }
 
 const ArtboardIcon = () => (
@@ -16,7 +19,7 @@ const ArtboardIcon = () => (
     </svg>
 );
 
-export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate, onExport, onExportSVG, onClose }) => {
+export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate, onExport, onExportSVG, onClose, selectedArtboardCount = 1, onBatchExport }) => {
     const [widthInput, setWidthInput]   = useState(String(Math.round(element.width)));
     const [heightInput, setHeightInput] = useState(String(Math.round(element.height)));
     
@@ -94,7 +97,7 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 ref={panelRef}
                 onMouseDown={handleMouseDown}
                 style={{ left: position.x, top: position.y }}
-                className={`fixed z-[5000] bg-white/80 backdrop-blur-xl p-3 rounded-xl shadow-lg border border-white/50 text-[#1D1D1F] hover:bg-white transition-colors ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                className={`fixed z-[5000] bg-white/80 backdrop-blur-xl w-[42px] h-[42px] flex items-center justify-center rounded-xl shadow-lg border border-white/50 text-[#1D1D1F] hover:bg-white transition-colors ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                 title="打開工作區域設定 (按住可拖曳)"
             >
                 <ArtboardIcon />
@@ -109,14 +112,14 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 position: 'fixed',
                 left: position.x,
                 top: position.y,
-                width: 256,
+                width: 224,
                 zIndex: 5000,
             }}
             className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.12)] border border-white/50 flex flex-col overflow-hidden animate-fade-in-right"
         >
             {/* Header */}
             <div
-                className={`p-3 border-b border-black/5 bg-white/50 flex justify-between items-center select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                className={`px-3 py-2 border-b border-black/5 bg-white/50 flex justify-between items-center select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                 onMouseDown={handleMouseDown}
             >
                 <div className="flex items-center gap-1.5 pointer-events-none">
@@ -125,13 +128,13 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 </div>
                 <button
                     onClick={(e) => { e.stopPropagation(); setIsOpen(false); }}
-                    className="text-[#86868B] hover:text-[#1D1D1F] p-1 rounded-md hover:bg-black/5 transition-colors cursor-pointer"
+                    className="text-[#86868B] hover:text-[#1D1D1F] w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors cursor-pointer leading-none"
                 >
                     &times;
                 </button>
             </div>
 
-            <div className="p-3 space-y-3 overflow-y-auto max-h-[70vh]">
+            <div className="px-3 pt-1.5 pb-2.5 space-y-2 overflow-y-auto max-h-[70vh]">
                 {/* Name */}
                 <div className="space-y-1">
                     <label className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">名稱</label>
@@ -221,18 +224,29 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 </div>
 
                 {/* Export Buttons */}
-                <div className="pt-3 border-t border-gray-100 flex flex-col gap-1.5">
-                    <button
-                        onClick={onExport}
-                        className="w-full py-2 bg-[#007AFF] text-white rounded-xl text-xs font-bold hover:bg-[#0066CC] transition-colors shadow-sm active:scale-95"
-                    >
-                        匯出此工作區域（PNG）
-                    </button>
+                <div className="pt-2.5 border-t border-gray-100 flex flex-col gap-1.5">
+                    {selectedArtboardCount > 1 && onBatchExport ? (
+                        <button
+                            onClick={onBatchExport}
+                            className="w-full py-2 bg-[#007AFF] text-white rounded-xl text-xs font-bold hover:bg-[#0066CC] transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/><circle cx="9" cy="9" r="2"/></svg>
+                            批次匯出 PNG（{selectedArtboardCount}）
+                        </button>
+                    ) : (
+                        <button
+                            onClick={onExport}
+                            className="w-full py-2 bg-[#007AFF] text-white rounded-xl text-xs font-bold hover:bg-[#0066CC] transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/><circle cx="9" cy="9" r="2"/></svg>
+                            匯出工作區域（PNG）
+                        </button>
+                    )}
                     <button
                         onClick={onExportSVG}
                         className="w-full py-2 bg-[#1D1D1F] text-white rounded-xl text-xs font-bold hover:bg-[#333] transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
                     >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                        <Icon name="download_2" size={14} />
                         匯出工作區域（SVG）
                     </button>
                 </div>
