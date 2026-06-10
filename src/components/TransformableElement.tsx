@@ -634,20 +634,26 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                     onDoubleClick={() => {/* 雙擊可重新命名 */}}
                     onContextMenu={handleArtboardContextMenu}
                 >
-                    {/* 左上角名稱標籤 */}
-                    <div style={{
-                        position: 'absolute',
-                        top: -22,
-                        left: 0,
-                        fontSize: 11,
-                        color: '#86868B',
-                        fontWeight: 500,
-                        whiteSpace: 'nowrap',
-                        pointerEvents: 'none',
-                        userSelect: 'none',
-                    }}>
-                        {element.artboardName}
-                    </div>
+                    {/* 左上角名稱標籤：反向縮放，螢幕上維持約 13px 可讀大小 */}
+                    {(() => {
+                        const fs = Math.round(10 / zoom);
+                        return (
+                            <div style={{
+                                position: 'absolute',
+                                top: -(fs + Math.round(4 / zoom)),
+                                left: 0,
+                                fontSize: fs,
+                                lineHeight: 1,
+                                color: '#6E6E73',
+                                fontWeight: 500,
+                                whiteSpace: 'nowrap',
+                                pointerEvents: 'none',
+                                userSelect: 'none',
+                            }}>
+                                {element.artboardName}
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* 頂層邊框層：確保邊框永遠可見 */}
