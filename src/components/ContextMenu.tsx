@@ -3,6 +3,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import type { Point, ElementType } from '../types';
 import { COLORS } from '../utils/helpers';
 import { Icon } from './Icon';
+import { SaveAll } from 'lucide-react';
 
 interface ContextMenuData {
     x: number;
@@ -517,7 +518,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                             ) : '儲存檔案'}
                         </MenuItem>
                         <MenuItem icon={<MenuIcons.Import />} onClick={() => handleAction(actions.openFile!)}>開啟檔案</MenuItem>
-                        <MenuItem icon={<MenuIcons.Save />} onClick={() => handleAction(actions.saveAsFile!)}>另存新檔</MenuItem>
+                        <MenuItem icon={<SaveAll size={13} strokeWidth={2} />} onClick={() => handleAction(actions.saveAsFile!)}>另存新檔</MenuItem>
                     </>) : (<>
                         <MenuItem icon={<MenuIcons.Export />} onClick={() => handleAction(actions.exportCanvas)}>匯出畫布</MenuItem>
                         <MenuItem icon={<MenuIcons.Import />} onClick={() => handleAction(actions.importCanvas)}>匯入畫布</MenuItem>

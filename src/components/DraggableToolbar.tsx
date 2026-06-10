@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { ShapeType, ArrowElement, Point, CanvasElement } from '../types';
 import { getPresetsByGroup, ArtboardPreset } from '../features/artboard/presets';
 import { Icon } from './Icon';
-import { Plus, Copy, Undo, Redo, Crop } from 'lucide-react';
+import { Plus, Copy, Undo, Redo, Crop, Save, FolderOpen, SaveAll } from 'lucide-react';
 
 interface DraggableToolbarProps {
   onAddNote: () => void;
@@ -57,8 +57,9 @@ const Icons = {
   Magic:    () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>,
   Crop:     () => <Crop size={18} strokeWidth={1.75} />,
   Patterns: () => <Icon name="shapes" size={20} />,
-  Export:   () => <Icon name="save" size={20} />,
-  Import:   () => <Icon name="file_open" size={20} />,
+  Export:   () => <Save size={18} strokeWidth={1.75} />,
+  Import:   () => <FolderOpen size={18} strokeWidth={1.75} />,
+  SaveAs:   () => <SaveAll size={18} strokeWidth={1.75} />,
 };
 
 const ASPECT_RATIOS = [
@@ -370,16 +371,19 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
                         <button
                             key={ratio.label}
                             onClick={() => { onAddFrame(ratio.label, ratio.value); setShowAddMenu(false); }}
-                            className="border-[1.5px] border-dashed border-[#c0c0c0] rounded-xl py-2 px-1.5 cursor-pointer text-center flex flex-col items-center gap-1 bg-[#fafafa] hover:border-purple-400 hover:bg-purple-50 transition-colors"
+                            className="border-[1.5px] border-dashed border-[#c0c0c0] rounded-xl py-2 px-1.5 cursor-pointer text-center flex flex-col items-center gap-1.5 bg-[#fafafa] hover:border-purple-400 hover:bg-purple-50 transition-colors"
                         >
-                            <div 
-                                className="border-2 border-dashed border-gray-300 rounded-sm"
-                                style={{ 
-                                    width: ratio.value >= 1 ? '16px' : `${16 * ratio.value}px`,
-                                    height: ratio.value >= 1 ? `${16 / ratio.value}px` : '16px'
-                                }}
-                            />
-                            <div className="text-xs font-semibold text-yohaku-text-main">{ratio.label}</div>
+                            {/* 固定高度容器，虛線方塊垂直置中，確保數字高度一致 */}
+                            <div className="flex items-center justify-center" style={{ width: 24, height: 24 }}>
+                                <div
+                                    className="border-2 border-dashed border-gray-300 rounded-sm"
+                                    style={{
+                                        width:  ratio.value >= 1 ? 20 : Math.round(20 * ratio.value),
+                                        height: ratio.value >= 1 ? Math.round(20 / ratio.value) : 20,
+                                    }}
+                                />
+                            </div>
+                            <div className="text-xs font-semibold text-yohaku-text-main leading-none">{ratio.label}</div>
                         </button>
                     ))}
                 </div>
@@ -433,28 +437,36 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
                                 📄 {currentFileName}
                             </div>
                         )}
-                        <div className="flex gap-2 mt-0">
+                        <button
+                            onClick={() => { onAddImage(); setShowAddMenu(false); }}
+                            className="w-full mb-2 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                        >
+                            <Icons.Image />
+                            新增圖片
+                        </button>
+                        <div className="flex gap-2">
                             <button
                                 onClick={() => { onSaveFile?.(); setShowAddMenu(false); }}
-                                className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                                className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1 hover:bg-gray-100 transition-colors"
                             >
                                 <Icons.Export />
-                                {currentFileName ? '儲存' : '儲存檔案'}
+                                {currentFileName ? '儲存' : '儲存'}
                             </button>
                             <button
                                 onClick={() => { onOpenFile?.(); setShowAddMenu(false); }}
-                                className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                                className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-main text-center cursor-pointer flex items-center justify-center gap-1 hover:bg-gray-100 transition-colors"
                             >
                                 <Icons.Import />
-                                開啟檔案
+                                開啟
+                            </button>
+                            <button
+                                onClick={() => { onSaveAsFile?.(); setShowAddMenu(false); }}
+                                className="flex-1 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-sub text-center cursor-pointer flex items-center justify-center gap-1 hover:bg-gray-100 transition-colors"
+                            >
+                                <Icons.SaveAs />
+                                另存
                             </button>
                         </div>
-                        <button
-                            onClick={() => { onSaveAsFile?.(); setShowAddMenu(false); }}
-                            className="w-full mt-2 p-2 rounded-xl text-xs font-medium border border-[#e8e8e8] bg-[#fafafa] text-yohaku-text-sub text-center cursor-pointer flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
-                        >
-                            另存新檔
-                        </button>
                     </>
                 ) : (
                     /* Fallback for unsupported browsers */
