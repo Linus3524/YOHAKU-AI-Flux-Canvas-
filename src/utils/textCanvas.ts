@@ -1,9 +1,8 @@
 import { TextElement } from '../types';
-import { wrapTextCanvas, isCJK } from './helpers';
+import { wrapTextCanvas, isCJK, getTextBoxPadding } from './helpers';
 
 export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement, x: number, y: number): void => {
-    const strokeW = el.strokeWidth || 0;
-    const textPadding = 12 + Math.ceil(strokeW / 2);
+    const textPadding = getTextBoxPadding(el);
 
     ctx.font = `${el.isItalic ? 'italic' : ''} ${el.isBold ? 'bold' : ''} ${el.fontSize}px ${el.fontFamily}`;
     const lineHeightPx = el.fontSize * el.lineHeight;
@@ -23,9 +22,11 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
         ctx.fillRect(x, y, el.width, el.height);
     }
 
-    const padding = 12 + Math.ceil(strokeW / 2);
+    const padding = textPadding;
 
     const maxConstraint = (() => {
+        // 彎曲文字不按盒寬換行（與畫面渲染一致，避免重排回饋循環）
+        if (isCurved) return 100000;
         if (el.isWidthLocked && !isVertical) {
             return Math.max(10, el.width - padding * 2);
         }
@@ -156,7 +157,6 @@ const drawTextContent = (
             // R = totalColHeight / (|curvatureNorm| × 2π)
             const curvatureNorm = curveStrength / 100;
             const isNeg = curvatureNorm < 0;
-            const centerY = y + el.height / 2;
 
             lines.forEach((lineIdx2, i) => {
                 const line = lineIdx2;
@@ -175,6 +175,13 @@ const drawTextContent = (
                 const sagitta = R * (1 - Math.cos(arcAngle / 2));
                 const shiftX = isNeg ? -sagitta / 2 : sagitta / 2;
 
+                // 對齊：直書弧心 Y 依 align 靠上(left)/置中/靠下(right) — 與 SVG 渲染一致
+                const halfArcV = arcAngle / 2;
+                const ySpanLine = halfArcV <= Math.PI / 2 ? 2 * R * Math.sin(halfArcV) : 2 * R;
+                let arcCenterY = y + el.height / 2;
+                if (el.align === 'left') arcCenterY = y + padding + ySpanLine / 2;
+                else if (el.align === 'right') arcCenterY = y + el.height - padding - ySpanLine / 2;
+
                 let accumulated = 0;
                 chars.forEach((char, idx) => {
                     const charH = charHeights[idx];
@@ -182,7 +189,7 @@ const drawTextContent = (
                     accumulated += charH + spacingPx; // always add spacingPx (wrap-gap fix)
 
                     const theta = s / R;
-                    const cy = centerY + R * Math.sin(theta);
+                    const cy = arcCenterY + R * Math.sin(theta);
                     const baseX = R * (1 - Math.cos(theta));
                     // Positive: center bows RIGHT; Negative: center bows LEFT
                     const cx = isNeg ? colX + baseX + shiftX : colX - baseX + shiftX;
@@ -242,7 +249,6 @@ const drawTextContent = (
         // R = totalLineWidth / (|curvatureNorm| * 2π)  →  at ±1, text wraps exactly once around circle
         const curvatureNorm = curveStrength / 100;
         const isNeg = curvatureNorm < 0;
-        const centerX = x + el.width / 2;
         const boxCenterY = y + el.height / 2;
 
         lines.forEach((line, lineIdx) => {
@@ -262,6 +268,13 @@ const drawTextContent = (
             // Vertical shift to keep arc visually centred in the box
             const shiftY = isNeg ? sagitta / 2 : -sagitta / 2;
 
+            // 對齊：弧心 X 依 align 靠左/置中/靠右 — 與 SVG 渲染一致
+            const halfArcH = arcAngle / 2;
+            const xSpanLine = halfArcH <= Math.PI / 2 ? 2 * R * Math.sin(halfArcH) : 2 * R;
+            let arcCenterX = x + el.width / 2;
+            if (el.align === 'left') arcCenterX = x + padding + xSpanLine / 2;
+            else if (el.align === 'right') arcCenterX = x + el.width - padding - xSpanLine / 2;
+
             // Arc offset s for each char (left → right, relative to text centre)
             let accumulated = 0;
             chars.forEach((char, i) => {
@@ -270,7 +283,7 @@ const drawTextContent = (
                 accumulated += charW + spacingPx; // always add spacingPx (wrap-gap fix)
 
                 const theta = s / R;
-                const charX = centerX + R * Math.sin(theta);
+                const charX = arcCenterX + R * Math.sin(theta);
                 const baseY = isNeg ? -R * (1 - Math.cos(theta)) : R * (1 - Math.cos(theta));
                 const charY = boxCenterY + baseY + shiftY;
                 // isNeg: mirror lean (-theta), NOT flip 180° (theta+π would invert chars upside-down)

@@ -667,10 +667,20 @@ export const isCJK = (char: string) => {
     return /[\u4E00-\u9FFF\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\uFF00-\uFFEF\u2000-\u206F]/.test(char);
 };
 
+// 文字框 padding 唯一來源：量測 / 渲染 / resize / 匯出都必須引用這裡，
+// 否則盒子與文字會錯位。基礎 2px 容忍字形 ink 微超出 em box；描邊外擴一半寬。
+// 陰影 / 光暈不撐大盒子（以 overflow visible 渲染、匯出時另加 bleed）。
+export const getTextBoxPadding = (el: Pick<TextElement, 'strokeWidth'>): number => {
+    return 2 + Math.ceil((el.strokeWidth || 0) / 2);
+};
+
+// 新建文字元素後自動進入編輯狀態：addText 登記 id，TransformableElement 掛載時 consume
+const pendingTextAutoEdit = new Set<string>();
+export const requestTextAutoEdit = (id: string) => { pendingTextAutoEdit.add(id); };
+export const consumeTextAutoEdit = (id: string): boolean => pendingTextAutoEdit.delete(id);
+
 export const measureTextVisualBounds = (element: TextElement, ctx: CanvasRenderingContext2D) => {
-    const strokeW = element.strokeWidth || 0;
-    const shadowB = Math.max(element.shadowBlur || 0, element.glowBlur || 0);
-    const effectPadding = 20 + strokeW + shadowB * 1.5; 
+    const effectPadding = getTextBoxPadding(element);
 
     ctx.font = `${element.isItalic ? 'italic' : ''} ${element.isBold ? 'bold' : ''} ${element.fontSize}px ${element.fontFamily}`;
     // Always use 0px — letter spacing is applied manually below for consistent measurement
@@ -740,8 +750,16 @@ export const measureTextVisualBounds = (element: TextElement, ctx: CanvasRenderi
         }
     }
 
-    finalWidth = Math.max(finalWidth, 50);
-    finalHeight = Math.max(finalHeight, 50);
+    // 最小尺寸以字級為基準（取消舊 50×50 硬限制，避免小字被撐出空白盒）
+    const minLength = element.fontSize * 0.5 + effectPadding * 2;
+    const minThickness = lineHeightPx + effectPadding * 2;
+    if (isVertical) {
+        finalWidth = Math.max(finalWidth, minThickness);
+        finalHeight = Math.max(finalHeight, minLength);
+    } else {
+        finalWidth = Math.max(finalWidth, minLength);
+        finalHeight = Math.max(finalHeight, minThickness);
+    }
 
     return {
         width: Math.ceil(finalWidth),

@@ -1,5 +1,5 @@
 import type { CanvasElement, ArtboardElement, ImageElement, TextElement, ShapeElement } from '../../types';
-import { loadImage, createShapeDataUrl } from '../../utils/helpers';
+import { loadImage, createShapeDataUrl, getTextBoxPadding } from '../../utils/helpers';
 import { drawTextOnCanvas } from '../../utils/textCanvas';
 import { jsPDF } from 'jspdf';
 
@@ -428,9 +428,13 @@ export const exportArtboardAsSVG = async (
             const style  = te.isItalic ? 'italic' : 'normal';
             const deco   = te.isUnderline ? 'underline' : 'none';
             const anchor = te.align === 'center' ? 'middle' : te.align === 'right' ? 'end' : 'start';
-            const anchorX = te.align === 'center' ? cx : te.align === 'right' ? x + el.width : x;
+            // 與畫布渲染對齊：padding 來自 getTextBoxPadding、行垂直置中、dominant-baseline central
+            const pad = getTextBoxPadding(te);
+            const anchorX = te.align === 'center' ? cx : te.align === 'right' ? x + el.width - pad : x + pad;
             const lineH   = te.fontSize * (te.lineHeight ?? 1.3);
             const lines   = te.text.split('\n');
+            const totalH  = lines.length * lineH;
+            const firstLineCenterY = y + (el.height - totalH) / 2 + lineH / 2;
 
             const tspans = lines.map((line, i) =>
                 `<tspan x="${anchorX.toFixed(2)}" dy="${i === 0 ? 0 : lineH}">${escapeXml(line || ' ')}</tspan>`
@@ -438,10 +442,10 @@ export const exportArtboardAsSVG = async (
 
             parts.push(
                 `<text ${tr} ${op} ` +
-                `x="${anchorX.toFixed(2)}" y="${(y + te.fontSize).toFixed(2)}" ` +
+                `x="${anchorX.toFixed(2)}" y="${firstLineCenterY.toFixed(2)}" ` +
                 `font-size="${te.fontSize}" font-family="${escapeXml(te.fontFamily)}" ` +
                 `font-weight="${weight}" font-style="${style}" text-decoration="${deco}" ` +
-                `fill="${te.color}" text-anchor="${anchor}">${tspans}</text>`
+                `fill="${te.color}" text-anchor="${anchor}" dominant-baseline="central">${tspans}</text>`
             );
 
         } else if (el.type === 'shape') {

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import type { CanvasElement, Point, ArrowElement, NoteElement, TextElement, ShapeElement } from '../types';
-import { wrapTextCanvas, getArrowHeadPath, isCJK, measureTextVisualBounds } from '../utils/helpers';
+import { wrapTextCanvas, getArrowHeadPath, isCJK, measureTextVisualBounds, getTextBoxPadding, consumeTextAutoEdit } from '../utils/helpers';
 import { getLayerColor } from './LayerPanel';
 import { generateSimpleMaskCSS } from '../utils/maskHelpers';
 import { isGradient, parseLinearGradient, gradientAngleToSVG } from '../utils/gradientUtils'; // ✅ 修改 A (import)
@@ -253,6 +253,18 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
     }
   }, [isSelected]);
 
+  // 新建文字元素自動進入編輯（addText 透過 requestTextAutoEdit 登記）
+  useEffect(() => {
+    if (element.type === 'text' && consumeTextAutoEdit(element.id)) {
+        setIsEditing(true);
+        setTimeout(() => {
+            textareaRef.current?.focus();
+            textareaRef.current?.setSelectionRange(0, textareaRef.current.value.length);
+        }, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // -- UseEffect to Sync Visual Bounds for Text (Auto-Resize Logic) --
   useEffect(() => {
       if (element.type === 'text' && !interaction) {
@@ -263,13 +275,22 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
               // Curved text always auto-resizes (ignore locks) so box always wraps text
               const isCurvedMode = Math.abs((element as any).curveStrength || 0) > 0.1;
 
-              if (!isCurvedMode && element.isWidthLocked && element.isHeightLocked) {
+              if (isCurvedMode) {
+                  // ── 彎曲模式：內容決定自然尺寸；使用者拉過的主軸（鎖定軸）保留，對齊才有意義 ──
+                  const bounds = measureTextVisualBounds(element, ctx);
+                  let targetW = bounds.width;
+                  let targetH = bounds.height;
+                  if (!isVertical && element.isWidthLocked) targetW = Math.max(element.width, bounds.width);
+                  if (isVertical && element.isHeightLocked) targetH = Math.max(element.height, bounds.height);
+                  if (Math.abs(targetW - element.width) > 2 || Math.abs(targetH - element.height) > 2) {
+                      onUpdate({ ...element, width: targetW, height: targetH });
+                  }
+              } else if (element.isWidthLocked && element.isHeightLocked) {
                   // ── 固定模式：寬高都鎖，什麼都不做 ──
 
-              } else if (!isCurvedMode && (element.isWidthLocked || element.isHeightLocked)) {
+              } else if (element.isWidthLocked || element.isHeightLocked) {
                   // ── 固定寬 / 固定高模式：一軸固定，另一軸自動 ──
-                  const strokeW = element.strokeWidth || 0;
-                  const padding = 12 + Math.ceil(strokeW / 2);
+                  const padding = getTextBoxPadding(element);
                   ctx.font = `${element.isItalic ? 'italic' : ''} ${element.isBold ? 'bold' : ''} ${element.fontSize}px ${element.fontFamily}`;
                   const lineHeightPx = element.fontSize * element.lineHeight;
 
@@ -289,14 +310,7 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                       const { height: textHeight } = wrapTextCanvas(
                           ctx, element.text, availableWidth, lineHeightPx, isVertical, element.fontSize, element.letterSpacing || 0
                       );
-                      const curveStr2 = (element as any).curveStrength || 0;
-                      let extraH = 0;
-                      if (Math.abs(curveStr2) > 0.1) {
-                          const arcAngle2 = Math.abs(curveStr2 / 100) * 2 * Math.PI;
-                          const R2 = availableWidth / arcAngle2;
-                          extraH = R2 * (1 - Math.cos(arcAngle2 / 2));
-                      }
-                      const newHeight = textHeight + padding * 2 + extraH;
+                      const newHeight = textHeight + padding * 2;
                       if (Math.abs(newHeight - element.height) > 2) {
                           onUpdate({ ...element, height: newHeight });
                       }
@@ -341,9 +355,10 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
       const lineHeightPx = element.fontSize * element.lineHeight;
       const isVertical = element.writingMode === 'vertical';
       
-      const strokeW = element.strokeWidth || 0;
-      const textPadding = 12 + Math.ceil(strokeW / 2);
-      const isLocked = element.isWidthLocked || element.isHeightLocked;
+      const textPadding = getTextBoxPadding(element);
+      // 彎曲文字不按盒寬換行重排：盒寬（弦長）遠小於直排寬，重排會造成換行→量測縮小→再換行的回饋循環
+      const isCurvedText = Math.abs((element as any).curveStrength || 0) > 0.1;
+      const isLocked = !isCurvedText && (element.isWidthLocked || element.isHeightLocked);
       const maxWidth = isLocked
           ? isVertical
               ? Math.max(10, element.height - textPadding * 2)
@@ -463,17 +478,36 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
             const isVerticalEl = isText && (startElement as TextElement).writingMode === 'vertical';
             const shouldKeepRatio = isImage ? !e.shiftKey : e.shiftKey;
 
-            if (isText) {
-                const padding = 12 + Math.ceil((startElement.strokeWidth || 0) / 2);
+            const isTextCornerScale = isText && ws !== 0 && hs !== 0;
+            let textScaledProps: Partial<TextElement> = {};
+
+            if (isTextCornerScale) {
+                // 角落把手：等比縮放字級（Figma/Canva 慣例）；側邊把手才是重排版
+                const startText = startElement as TextElement;
+                const kRaw = Math.abs(ws * rotDx) > Math.abs(hs * rotDy)
+                    ? newWidth / startElement.width
+                    : newHeight / startElement.height;
+                const newFontSize = Math.max(4, Math.min(500, startText.fontSize * kRaw));
+                const k = newFontSize / startText.fontSize;
+                newWidth  = startElement.width * k;
+                newHeight = startElement.height * k;
+                textScaledProps = {
+                    fontSize: newFontSize,
+                    letterSpacing: (startText.letterSpacing || 0) * k,
+                };
+            } else if (isText) {
+                const padding = getTextBoxPadding(startElement);
                 const lineHeightPx = startElement.fontSize * startElement.lineHeight;
                 const minBoxWidth  = isVerticalEl ? padding * 2 + lineHeightPx : padding * 2 + Math.ceil(startElement.fontSize * 0.5);
                 const minBoxHeight = isVerticalEl ? padding * 2 + Math.ceil(startElement.fontSize * 0.5) : padding * 2 + lineHeightPx;
                 newWidth  = Math.max(minBoxWidth,  newWidth);
                 newHeight = Math.max(minBoxHeight, newHeight);
 
+                // 彎曲文字不重排：側邊把手只改主軸尺寸，放開後 effect 會校正另一軸
+                const isCurvedResize = Math.abs(((startElement as TextElement).curveStrength) || 0) > 0.1;
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                if (ctx) {
+                if (ctx && !isCurvedResize) {
                     ctx.font = `${startElement.isItalic ? 'italic' : ''} ${startElement.isBold ? 'bold' : ''} ${startElement.fontSize}px ${startElement.fontFamily}`;
                     const letterSp = (startElement as TextElement).letterSpacing || 0;
                     if (isVerticalEl) {
@@ -500,8 +534,9 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
 
             const dw = newWidth  - startElement.width;
             const dh = newHeight - startElement.height;
-            // For horizontal text, top edge is always the anchor (text grows downward)
-            const effectivePy = (isText && !isVerticalEl) ? +1 : py;
+            // For horizontal text side-resize, top edge is always the anchor (text grows downward);
+            // corner scale anchors the opposite corner like other elements
+            const effectivePy = (isText && !isVerticalEl && !isTextCornerScale) ? +1 : py;
             const localDx = dw / 2 * px;
             const localDy = dh / 2 * effectivePy;
             const posDx = localDx * Math.cos(rad) - localDy * Math.sin(rad);
@@ -511,10 +546,11 @@ export const TransformableElement: React.FC<TransformableElementProps> = ({ elem
                 ...startElement,
                 width: newWidth,
                 height: newHeight,
-                ...(isText ? {
+                ...(isText && !isTextCornerScale ? {
                     isWidthLocked: !isVerticalEl ? true : (startElement as TextElement).isWidthLocked,
                     isHeightLocked: isVerticalEl ? true : (startElement as TextElement).isHeightLocked
                 } : {}),
+                ...textScaledProps,
                 position: {
                     x: startElement.position.x + posDx,
                     y: startElement.position.y + posDy
@@ -871,7 +907,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                     case 'text':
                         {
                             // SVG RENDERER FOR TEXT (always shown; transparent textarea overlaid when editing)
-                            const padding = 12 + Math.ceil((el.strokeWidth || 0) / 2);
+                            const padding = getTextBoxPadding(el);
                             const isVertical = el.writingMode === 'vertical';
                             const lineHeightPx = el.fontSize * el.lineHeight;
 
@@ -933,7 +969,6 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     const curveStrength = el.curveStrength!;
                                                     const curvatureNorm = curveStrength / 100;
                                                     const isNeg = curvatureNorm < 0;
-                                                    const centerY = el.height / 2;
 
                                                     const allCurvedCharsV: { char: string; cx: number; cy: number; rotDeg: number; key: string }[] = [];
 
@@ -953,6 +988,13 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                         const sagitta = R * (1 - Math.cos(arcAngle / 2));
                                                         const shiftX = isNeg ? -sagitta / 2 : sagitta / 2;
 
+                                                        // 對齊：直書弧心 Y 依 align 靠上(left)/置中/靠下(right)
+                                                        const halfArcV = arcAngle / 2;
+                                                        const ySpanLine = halfArcV <= Math.PI / 2 ? 2 * R * Math.sin(halfArcV) : 2 * R;
+                                                        let arcCenterY = el.height / 2;
+                                                        if (el.align === 'left') arcCenterY = padding + ySpanLine / 2;
+                                                        else if (el.align === 'right') arcCenterY = el.height - padding - ySpanLine / 2;
+
                                                         let accumulated = 0;
                                                         chars.forEach((char, charIdx) => {
                                                             const charH = charHeights[charIdx];
@@ -960,7 +1002,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                             accumulated += charH + spacingPx; // always add (wrap-gap fix)
 
                                                             const theta = s / R;
-                                                            const cy = centerY + R * Math.sin(theta);
+                                                            const cy = arcCenterY + R * Math.sin(theta);
                                                             const baseX = R * (1 - Math.cos(theta));
                                                             const cx = isNeg ? colX + baseX + shiftX : colX - baseX + shiftX;
                                                             // isNeg: mirror lean (-theta), NOT flip 180°
@@ -1056,7 +1098,6 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                 const curveStrength = el.curveStrength!;
                                                 const curvatureNorm = curveStrength / 100;
                                                 const isNeg = curvatureNorm < 0;
-                                                const centerX = el.width / 2;
                                                 const boxCenterY = el.height / 2;
 
                                                 const allCurvedChars: { char: string; x: number; y: number; rotation: number; key: string }[] = [];
@@ -1078,6 +1119,13 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     const sagitta = R * (1 - Math.cos(arcAngle / 2));
                                                     const shiftY = isNeg ? sagitta / 2 : -sagitta / 2;
 
+                                                    // 對齊：弧心 X 依 align 靠左/置中/靠右（xSpan = 弧的水平跨距）
+                                                    const halfArcH = arcAngle / 2;
+                                                    const xSpanLine = halfArcH <= Math.PI / 2 ? 2 * R * Math.sin(halfArcH) : 2 * R;
+                                                    let arcCenterX = el.width / 2;
+                                                    if (el.align === 'left') arcCenterX = padding + xSpanLine / 2;
+                                                    else if (el.align === 'right') arcCenterX = el.width - padding - xSpanLine / 2;
+
                                                     let accumulated = 0;
                                                     chars.forEach((char, charIdx) => {
                                                         const charW = charWidths[charIdx];
@@ -1085,7 +1133,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                         accumulated += charW + spacingPx; // always add (wrap-gap fix)
 
                                                         const theta = s / R;
-                                                        const charX = centerX + R * Math.sin(theta);
+                                                        const charX = arcCenterX + R * Math.sin(theta);
                                                         const baseY = isNeg ? -R * (1 - Math.cos(theta)) : R * (1 - Math.cos(theta));
                                                         const charY = boxCenterY + baseY + shiftY;
                                                         // isNeg: mirror lean (-theta), NOT flip 180°
@@ -1229,7 +1277,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                 resize: 'none',
                                                 border: 'none',
                                                 outline: 'none',
-                                                padding: `${12 + Math.ceil((el.strokeWidth || 0) / 2)}px`,
+                                                padding: `${getTextBoxPadding(el)}px`,
                                                 fontSize: `${el.fontSize}px`,
                                                 lineHeight: el.lineHeight,
                                                 letterSpacing: `${el.letterSpacing || 0}px`,
@@ -1431,10 +1479,11 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                 <div className="absolute left-1/2 -translate-x-1/2 w-px pointer-events-none opacity-40"
                                     style={{ top: CTop, height: CLen, backgroundColor: layerColor }} />
 
-                                {/* Curved text or group mode: suppress individual resize handles */}
+                                {/* Group mode: suppress individual resize handles */}
                                 {(() => {
+                                    // 彎曲文字：保留角落把手（等比縮放字級），只隱藏側邊重排把手
                                     const isCurvedText = element.type === 'text' && Math.abs((element as any).curveStrength || 0) > 0.1;
-                                    if (isCurvedText || disableResizeHandles) return null;
+                                    if (disableResizeHandles) return null;
                                     return (
                                         <>
                                             {/* Corner handles */}
@@ -1450,7 +1499,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     onMouseDown={(e) => handleInteractionStart(e, 'resize', dir)} />
                                             ))}
                                             {/* Edge handles */}
-                                            {([
+                                            {isCurvedText ? null : ([
                                                 ['e', { top: '50%', right: HO, transform: 'translateY(-50%)' }, 'cursor-e-resize',  true],
                                                 ['w', { top: '50%', left:  HO, transform: 'translateY(-50%)' }, 'cursor-w-resize',  true],
                                                 ['s', { bottom: HO, left: '50%', transform: 'translateX(-50%)' }, 'cursor-s-resize', element.type !== 'text'],

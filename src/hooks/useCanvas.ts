@@ -15,7 +15,7 @@ import type {
     ImageElement, TextElement, ShapeElement, ArrowElement, NoteElement, FrameElement, DrawingElement, ArtboardElement 
 } from '../types';
 import { useHistoryState } from './useHistoryState';
-import { trimCanvas, wrapTextCanvas, loadImage, createShapeDataUrl, createArrowDataUrl, COLORS, getRandomPosition } from '../utils/helpers';
+import { trimCanvas, wrapTextCanvas, loadImage, createShapeDataUrl, createArrowDataUrl, COLORS, getRandomPosition, measureTextVisualBounds, requestTextAutoEdit } from '../utils/helpers';
 import { drawTextOnCanvas } from '../utils/textCanvas'; // ✅ 修改
 import type { CanvasApi } from '../components/InfiniteCanvas';
 import { saveFileHandle, loadFileHandle, clearFileHandle, verifyHandlePermission } from '../utils/fileHandleStore';
@@ -252,17 +252,17 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     }, [addElement, getCenterOfViewport]);
 
     const addText = useCallback((position?: Point, content?: string) => {
-        addElement({
-          type: 'text',
+        const draft = {
+          type: 'text' as const,
           position: position || getCenterOfViewport(),
           width: 300,
           height: 100,
           rotation: 0,
-          text: content ?? '雙擊編輯文字',
+          text: content ?? '輸入文字',
           fontFamily: '"Noto Sans TC", sans-serif',
           fontSize: 24,
           color: '#1D1D1F',
-          align: 'left',
+          align: 'left' as const,
           letterSpacing: 0,
           lineHeight: 1.5,
           isBold: false,
@@ -275,7 +275,21 @@ export const useCanvas = (showToast: (msg: string) => void) => {
           shadowBlur: 0,
           glowColor: undefined,
           glowBlur: 0
-        });
+        };
+
+        // 建立時即量測初始大小（auto 模式緊貼文字），避免先閃 300×100 佔位盒
+        const measureCtx = document.createElement('canvas').getContext('2d');
+        if (measureCtx) {
+            const bounds = measureTextVisualBounds(draft as unknown as TextElement, measureCtx);
+            draft.width = bounds.width;
+            draft.height = bounds.height;
+        }
+
+        const id = addElement(draft);
+        setSelectedElementIds([id]);
+        // 只有「新增文字」工具自動進入編輯；貼上文字（帶 content）不搶焦點
+        if (content === undefined) requestTextAutoEdit(id);
+        return id;
     }, [addElement, getCenterOfViewport]);
 
     const addArrow = useCallback((config: Partial<ArrowElement> = {}) => {
