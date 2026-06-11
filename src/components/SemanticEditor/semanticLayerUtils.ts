@@ -205,6 +205,11 @@ Do NOT include:
 Related touching objects = ONE layer:
 - Person + clothing/accessories/held items → ONE layer
 - Product + its packaging/base → ONE layer
+- Logo lockup (icon + wordmark + tagline) → ONE layer. NEVER output both a "logo"/"decoration" AND a separate "text" element for the same visual unit.
+
+━━━ NO DUPLICATES ━━━
+Every pixel region belongs to AT MOST ONE element.
+No bbox may contain or duplicate another output bbox. Self-check before returning.
 
 ━━━ LAYER COUNT ━━━
 - 1-2 objects: return 2-3 layers
@@ -257,16 +262,40 @@ Return ONLY valid JSON array:
     };
     objects.sort((a, b) => (PRIORITY[a.category] ?? 5) - (PRIORITY[b.category] ?? 5));
 
-    // IoU 去重
-    const iou = (a: DetectedObject['bbox'], b: DetectedObject['bbox']) => {
+    // 去重：TEXT/DECOR 的 logo 重複辨識是「一大一小包含關係」，IoU 天生失效，
+    // 改用 overlap coefficient（交集 ÷ 較小框面積）並合併成聯集框；其他類別維持 IoU
+    type BBox = DetectedObject['bbox'];
+    const intersectArea = (a: BBox, b: BBox) => {
         const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
         const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-        const inter = ix * iy;
+        return ix * iy;
+    };
+    const iou = (a: BBox, b: BBox) => {
+        const inter = intersectArea(a, b);
         const union = a.w * a.h + b.w * b.h - inter;
         return union > 0 ? inter / union : 0;
     };
+    const overlapCoeff = (a: BBox, b: BBox) => {
+        const inter = intersectArea(a, b);
+        const minArea = Math.min(a.w * a.h, b.w * b.h);
+        return minArea > 0 ? inter / minArea : 0;
+    };
+    const isLogoLike = (cat: string) => cat === 'TEXT' || cat === 'DECOR';
     const deduped: DetectedObject[] = [];
     for (const obj of objects) {
+        const logoDup = isLogoLike(obj.category)
+            ? deduped.find(k => isLogoLike(k.category) && overlapCoeff(k.bbox, obj.bbox) > 0.55)
+            : undefined;
+        if (logoDup) {
+            const x = Math.min(logoDup.bbox.x, obj.bbox.x), y = Math.min(logoDup.bbox.y, obj.bbox.y);
+            logoDup.bbox = {
+                x, y,
+                w: Math.max(logoDup.bbox.x + logoDup.bbox.w, obj.bbox.x + obj.bbox.w) - x,
+                h: Math.max(logoDup.bbox.y + logoDup.bbox.h, obj.bbox.y + obj.bbox.h) - y,
+            };
+            if (obj.edgeComplexity === 'complex') logoDup.edgeComplexity = 'complex';
+            continue;
+        }
         if (!deduped.some(k => iou(k.bbox, obj.bbox) > 0.5)) deduped.push(obj);
     }
 
@@ -1043,7 +1072,7 @@ function compositeLayerOverOriginal(
  * 只取遮罩白色區域的重繪像素（放大至原尺寸），其餘像素維持原圖。
  * 避免每次 Apply 全圖被壓到 1024 → 多次編輯後畫質單向劣化。
  */
-async function pasteInpaintRegion(
+export async function pasteInpaintRegion(
     fullResBase64: string,
     inpaintedBase64: string,
     maskBase64: string,

@@ -14,7 +14,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { callAtlasImg2Img, callAtlasInpaint, compressForAtlas, detectClosestRatio } from './atlasImage';
+import { callAtlasImg2Img, compressForAtlas, detectClosestRatio } from './atlasImage';
 import { birefnetRemoveBg, selectBiRefNetModel } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
@@ -103,7 +103,13 @@ Physically touching or functionally related objects MUST be grouped into ONE lay
 - Character + vehicle/mount they are on → ONE layer
 - Product + its stand/base/packaging it rests on → ONE layer
 - Group of identical/similar small objects (e.g. multiple tickets, icons of the same type) → ONE layer
-Do NOT split a person from their chair, a rider from their bike, etc.
+- A logo lockup (icon + wordmark/logotype + tagline) → ONE layer. NEVER output both a "logo"/"decoration" element AND a separate "text" element for the same visual unit — that is a duplicate.
+Do NOT split a person from their chair, a rider from their bike, a wordmark from its logo, etc.
+
+━━━ NO DUPLICATES (critical) ━━━
+Every pixel region belongs to AT MOST ONE element.
+None of your output bboxes may contain, be contained by, or substantially overlap another output bbox.
+Before returning, self-check: if two elements cover the same visual unit (e.g. a logo and its text), merge them into ONE element with ONE bbox.
 
 ━━━ LAYER COUNT RULES ━━━
 Determine count based on actual image complexity — never force layers:
@@ -173,24 +179,51 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         (CATEGORY_PRIORITY[a.category] ?? 5) - (CATEGORY_PRIORITY[b.category] ?? 5)
     );
 
-    // IoU 去重：bbox 重疊超過 50% 視為同一物件，保留優先順序較高的（已排序在前）
-    const iou = (a: DetectedObject['bbox'], b: DetectedObject['bbox']): number => {
+    // 去重：logo 重複辨識（標準字被同時認成 TEXT 和 DECOR）的典型形態是
+    // 「一大一小的包含關係」，IoU 在這種情況天生失效（完全包含的小框 IoU 可能只有 0.2）。
+    // TEXT/DECOR 組合改用 overlap coefficient（交集 ÷ 較小框面積）：包含時 = 1.0，與尺寸差異無關。
+    type BBox = DetectedObject['bbox'];
+    const intersectArea = (a: BBox, b: BBox): number => {
         const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
         const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-        const intersection = ix * iy;
-        const union = a.w * a.h + b.w * b.h - intersection;
-        return union > 0 ? intersection / union : 0;
+        return ix * iy;
     };
+    const iou = (a: BBox, b: BBox): number => {
+        const inter = intersectArea(a, b);
+        const union = a.w * a.h + b.w * b.h - inter;
+        return union > 0 ? inter / union : 0;
+    };
+    const overlapCoeff = (a: BBox, b: BBox): number => {
+        const inter = intersectArea(a, b);
+        const minArea = Math.min(a.w * a.h, b.w * b.h);
+        return minArea > 0 ? inter / minArea : 0;
+    };
+    const unionBbox = (a: BBox, b: BBox): BBox => {
+        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+        return {
+            x, y,
+            w: Math.max(a.x + a.w, b.x + b.w) - x,
+            h: Math.max(a.y + a.h, b.y + b.h) - y,
+        };
+    };
+    const isLogoLike = (cat: string) => cat === 'TEXT' || cat === 'DECOR';
+
     const deduplicated: DetectedObject[] = [];
     for (const obj of objects) {
-        const isLogoRelated = (cat: string) => cat === 'TEXT' || cat === 'DECOR';
-        const isDuplicate = deduplicated.some(kept => {
-            const score = iou(kept.bbox, obj.bbox);
-            // TEXT ↔ DECOR 組合：降低閾值到 0.25
-            if (isLogoRelated(kept.category) && isLogoRelated(obj.category)) return score > 0.25;
-            return score > 0.5;
-        });
-        if (!isDuplicate) deduplicated.push(obj);
+        // logo 形態（TEXT/DECOR 互相）：overlap > 0.55 → 合併成聯集框。
+        // 不能只丟掉小的：只留 TEXT 小框會缺 logo 圖示，只留 DECOR 大框分類不對。
+        // 已按優先級排序，保留者（TEXT 優先）繼承名稱與分類，bbox 擴成聯集涵蓋完整 logo。
+        const logoDup = isLogoLike(obj.category)
+            ? deduplicated.find(kept => isLogoLike(kept.category) && overlapCoeff(kept.bbox, obj.bbox) > 0.55)
+            : undefined;
+        if (logoDup) {
+            logoDup.bbox = unionBbox(logoDup.bbox, obj.bbox);
+            if (obj.edgeComplexity === 'complex') logoDup.edgeComplexity = 'complex';
+            continue;
+        }
+        // 其他類別組合維持 IoU 0.5：包含關係可能是合法的（商品 bbox 在人物 bbox 內），不能用 overlap 誤殺
+        if (deduplicated.some(kept => iou(kept.bbox, obj.bbox) > 0.5)) continue;
+        deduplicated.push(obj);
     }
     objects = deduplicated;
 
@@ -502,6 +535,7 @@ async function geminiIsolateOnSolidBg(
     apiKey: string,
     model: string,
     bgColor: { hex: string; rgb: string },
+    perspectiveHint = '',
 ): Promise<string> {
     const ai = new GoogleGenAI({ apiKey });
     const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
@@ -511,7 +545,8 @@ async function geminiIsolateOnSolidBg(
         `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
         `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
         `The background must be a perfectly uniform solid color with NO gradients, NO shadows, NO variations. ` +
-        `Do NOT blend or feather the object edges into the background. Hard, clean boundary required.`;
+        `Do NOT blend or feather the object edges into the background. Hard, clean boundary required.` +
+        perspectiveHint;
     const response = await ai.models.generateContent({
         model,
         contents: { parts: [{ inlineData: { data: cleanBase64, mimeType } }, { text: prompt }] },
@@ -519,6 +554,31 @@ async function geminiIsolateOnSolidBg(
     const part = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
     if (!part?.inlineData?.data) throw new Error('Gemini isolation 未回傳圖片');
     return `data:image/png;base64,${part.inlineData.data}`;
+}
+
+// ── 參考圖裁切：從原解析度原圖按 bbox + padding 裁出物件特寫 ─────────────────
+// PRODUCT/TEXT 類隔離時附上，作為視角與字形的像素級錨點（防止模型把斜的轉正、字寫錯）
+function cropBBoxWithPad(
+    imageBase64: string,
+    bbox: { x: number; y: number; w: number; h: number },
+    padFrac = 0.04,
+): Promise<string> {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const W = img.naturalWidth, H = img.naturalHeight;
+            const x = Math.max(0, (bbox.x - padFrac)) * W;
+            const y = Math.max(0, (bbox.y - padFrac)) * H;
+            const w = Math.max(1, Math.min(W - x, (bbox.w + padFrac * 2) * W));
+            const h = Math.max(1, Math.min(H - y, (bbox.h + padFrac * 2) * H));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(w); canvas.height = Math.round(h);
+            canvas.getContext('2d')!.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve('');
+        img.src = imageBase64;
+    });
 }
 
 // ── 單一物件提取（供 Promise.all 並發）──────────────────────────────────────
@@ -531,6 +591,7 @@ async function extractOneLayer(
     geminiApiKey: string,          // Gemini fallback 用
     geminiImageModel: string,      // Gemini 隔離 model
     onProgress?: (msg: string) => void,
+    referenceCrop?: string,        // PRODUCT/TEXT：原圖 bbox 特寫，視角與字形錨點
 ): Promise<LayerResult | null> {
     // TEXT / DECOR 類別：硬邊幾何形狀，BiRefNet 反而會誤判字母負空間
     // → 強制走 Chroma Key（純色背景下效果更準確）
@@ -540,6 +601,17 @@ async function extractOneLayer(
 
     try {
         // ── 2a：隔離生成（GPT Image 2 優先；無 Atlas Key 降級 Gemini Flash Image）──
+        // A'：條件式視角約束（只套 PRODUCT/TEXT——產品與文字最常被模型「轉正」成型錄視角；
+        // 條件式寫法：斜的保持斜、正面的保持正面，不會誘發反向錯誤）
+        const needsAngleLock = obj.category === 'PRODUCT' || obj.category === 'TEXT';
+        const perspectiveHint = needsAngleLock
+            ? ` Reproduce the "${obj.labelEn}" at the EXACT same viewing angle, perspective, rotation and foreshortening as it appears in the source image — if it is photographed at an angle or tilted, keep that exact angle; if frontal, keep it frontal. Do NOT normalize it into a straight catalog-style view. Text and letterforms must keep their original font, weight, spacing, and angle.`
+            : '';
+        // B：參考圖用途說明（特寫只當視角/字形錨點，不要複製它的背景）
+        const refHint = referenceCrop
+            ? ` The second image is a close-up crop of this exact object from the source image — use it ONLY as a reference for the precise viewing angle, proportions and letterforms. Do NOT copy its background.`
+            : '';
+
         let isolatedSrc: string;
         if (atlasKey) {
             const isolated = await callAtlasImg2Img(
@@ -549,17 +621,19 @@ async function extractOneLayer(
                 `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations. ` +
                 `CRITICAL: Do NOT blend or feather the object edges into the background. ` +
                 `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
-                `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.`,
+                `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.` +
+                perspectiveHint + refHint,
                 'gpt-image-2',
                 atlasKey,
                 compressedImage,
                 1,
                 { ratio: detectedRatio },
+                referenceCrop ? [referenceCrop] : undefined,
             );
             if (!isolated[0]) return null;
             isolatedSrc = isolated[0];
         } else {
-            isolatedSrc = await geminiIsolateOnSolidBg(obj, compressedImage, geminiApiKey, geminiImageModel, bgColor);
+            isolatedSrc = await geminiIsolateOnSolidBg(obj, compressedImage, geminiApiKey, geminiImageModel, bgColor, perspectiveHint);
         }
 
         // ── 2a.5：背景均一化（修正 Gemini 背景殘留雜訊，確保 BiRefNet 看到乾淨對比）──
@@ -611,6 +685,81 @@ async function extractOneLayer(
     }
 }
 
+// ── 路線 0：SAM2 精確輪廓遮罩 + 本機 LaMa 補背景 ─────────────────────────────
+// 零 API 費用、真 inpaint（洞外像素完全不動）、不會畫框線。
+// 遮罩優先序：本機 SAM2 → fal.ai SAM2 → bbox 矩形（單一物件失敗時退級）
+// 模型未下載或物件面積過大（LaMa 512 推論會糊）→ 回傳 null 交給 GPT 路線
+async function lamaBackgroundFill(
+    imageBase64: string,
+    objects: DetectedObject[],
+    falKey: string | undefined,
+    onProgress?: (msg: string) => void,
+): Promise<string | null> {
+    const { getModelStatus } = await import('./onnxModelCache');
+    if (await getModelStatus('lama') !== 'ready') return null;
+
+    // 面積門檻：bbox 總面積 > 35% 時大面積紋理延伸超出 LaMa 能力，交給 GPT 語意補圖
+    const totalArea = objects.reduce((s, o) => s + o.bbox.w * o.bbox.h, 0);
+    if (totalArea > 0.35) {
+        console.info(`[magicLayer] 物件總面積 ${(totalArea * 100).toFixed(0)}% 過大，LaMa 跳過改走 GPT`);
+        return null;
+    }
+
+    const semUtils = await import('../components/SemanticEditor/semanticLayerUtils');
+    const dims = await getDims(imageBase64);
+    if (!dims) return null;
+
+    // ── 每個物件的精確輪廓遮罩 ──
+    const masks: string[] = [];
+    const localSam2Ready =
+        (await getModelStatus('sam2_encoder')) === 'ready' &&
+        (await getModelStatus('sam2_decoder')) === 'ready';
+
+    if (localSam2Ready) {
+        const { sam2EncodeInWorker, sam2DecodeInWorker, terminateSam2Worker } =
+            await import('./sam2WorkerClient');
+        try {
+            onProgress?.('🧠 本機 SAM2 計算輪廓遮罩...');
+            await sam2EncodeInWorker(imageBase64);
+            for (const o of objects) {
+                try {
+                    const png = await sam2DecodeInWorker(
+                        { bbox: { x: o.bbox.x * dims.w, y: o.bbox.y * dims.h, w: o.bbox.w * dims.w, h: o.bbox.h * dims.h } },
+                        imageBase64,
+                    );
+                    masks.push(await semUtils.transparentPngToInpaintMask(png));
+                } catch {
+                    masks.push(await generateBboxMask(imageBase64, [o]));
+                }
+            }
+        } finally {
+            terminateSam2Worker(); // 釋放 SAM2 記憶體再跑 LaMa，降低峰值
+        }
+    } else if (falKey) {
+        onProgress?.('✂️ fal.ai SAM2 計算輪廓遮罩...');
+        const results = await Promise.all(objects.map(async o => {
+            try {
+                const png = await semUtils.sam2Segment(imageBase64, falKey, dims, { bbox: o.bbox });
+                return await semUtils.transparentPngToInpaintMask(png);
+            } catch {
+                return generateBboxMask(imageBase64, [o]);
+            }
+        }));
+        masks.push(...results);
+    } else {
+        for (const o of objects) masks.push(await generateBboxMask(imageBase64, [o]));
+    }
+
+    // ── 逐物件區域填補：小區域讓 512 推論解析度集中 → 填補銳利 ──
+    let current = imageBase64;
+    for (let i = 0; i < objects.length; i++) {
+        if (!masks[i]) continue;
+        onProgress?.(`🧹 LaMa 補背景 ${i + 1}/${objects.length}：${objects[i].label}`);
+        current = await semUtils.lamaInpaintRegion(current, masks[i], objects[i].bbox);
+    }
+    return current;
+}
+
 // ── 主要入口 ─────────────────────────────────────────────────────────────────
 export async function gptLayerSegment(
     imageBase64: string,
@@ -641,18 +790,33 @@ export async function gptLayerSegment(
     // 背景補全：GPT Inpaint 優先（品質佳）；無 Atlas Key 或失敗才降級 Gemini
     onProgress?.('🗺️ 背景分析，準備補全...');
     const bgPromise = (async () => {
+        // 路線 0：SAM2 輪廓遮罩 + 本機 LaMa（免費、零框線、洞外像素不動、全解析度）
+        try {
+            const lamaResult = await lamaBackgroundFill(imageBase64, objects, falKey, onProgress);
+            if (lamaResult) return lamaResult;
+        } catch (e) {
+            console.warn('[magicLayer] LaMa 補背景失敗，改走 GPT/Gemini', e);
+        }
         if (atlasKey) {
+            // 路線 1：全圖 + 指令移除（不挖洞）。
+            // 挖洞 inpaint 會把場景切碎成瑞士起司，模型只能局部猜 → 補圖不連貫、沿洞緣畫框線；
+            // 改給完整原圖讓模型理解整個場景，整張輸出「只剩背景」的版本，語意連貫性最好。
+            // 底圖墊在所有物件圖層下方，全圖重繪的微漂移可接受。
             try {
-                const maskBase64 = await generateBboxMask(compressedImage, objects);
-                if (maskBase64) {
-                    const gptPrompt = bgDescription
-                        ? `Fill ONLY the masked areas. Do NOT alter pixels outside the mask. Background: ${bgDescription}. Match edge colors and extend textures seamlessly.`
-                        : `Fill ONLY the masked areas by extending surrounding background naturally. Do not alter anything outside the mask.`;
-                    const result = await callAtlasInpaint(gptPrompt, compressedImage, maskBase64, atlasKey);
-                    if (result) return result;
-                }
+                const removalPrompt = [
+                    `Remove ALL of these foreground elements from this image: ${labelsList}.`,
+                    'Output the SAME image with ONLY the background scene remaining.',
+                    'Reconstruct the areas that were hidden behind the removed elements so the background continues naturally and seamlessly.',
+                    'Keep the background composition, colors, lighting, textures and every detail EXACTLY as the original.',
+                    'Do NOT add any new objects, people, text, watermarks, borders or frames.',
+                    bgDescription ? `Background reference: ${bgDescription}` : '',
+                ].filter(Boolean).join(' ');
+                const result = await callAtlasImg2Img(
+                    removalPrompt, 'gpt-image-2', atlasKey, compressedImage, 1, { ratio: detectedRatio },
+                );
+                if (result[0]) return result[0];
             } catch (e) {
-                console.warn('[magicLayer] GPT Inpaint failed, falling back to Gemini', e);
+                console.warn('[magicLayer] GPT 背景移除失敗，falling back to Gemini', e);
             }
         }
         return geminiInpaintBackground(compressedImage, objects, bgDescription, geminiApiKey, geminiImageModel)
@@ -661,8 +825,16 @@ export async function gptLayerSegment(
 
     // 所有物件平行去背
     const objectResults = await Promise.all(
-        objects.map((obj, i) => {
+        objects.map(async (obj, i) => {
             onProgress?.(`🎨 提取第 ${i + 1}/${objects.length} 層：${obj.label}`);
+            // B：PRODUCT/TEXT 附原圖 bbox 特寫當參考圖（視角與字形錨點，本機裁切零成本）
+            let referenceCrop: string | undefined;
+            if (atlasKey && (obj.category === 'PRODUCT' || obj.category === 'TEXT')) {
+                try {
+                    const rawCrop = await cropBBoxWithPad(imageBase64, obj.bbox);
+                    if (rawCrop) referenceCrop = await compressForAtlas(rawCrop, 768, 0.9, false);
+                } catch { /* 參考圖失敗不影響主流程 */ }
+            }
             return extractOneLayer(
                 obj,
                 compressedImage,
@@ -672,6 +844,7 @@ export async function gptLayerSegment(
                 geminiApiKey,
                 geminiImageModel,
                 onProgress,
+                referenceCrop,
             );
         })
     );

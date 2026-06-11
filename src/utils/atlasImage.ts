@@ -487,16 +487,43 @@ async function createTransparentMaskedImage(imageBase64: string, maskBase64: str
                 maskCtx.drawImage(maskImg, 0, 0);
                 const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
 
-                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                for (let y = 0; y < canvas.height; y++) {
-                    for (let x = 0; x < canvas.width; x++) {
-                        const mx = Math.floor(x * maskCanvas.width / canvas.width);
-                        const my = Math.floor(y * maskCanvas.height / canvas.height);
-                        const maskIdx = (my * maskCanvas.width + mx) * 4;
-                        if (maskData.data[maskIdx] > 128) {
-                            const idx = (y * canvas.width + x) * 4;
-                            imgData.data[idx + 3] = 0; // 透明
+                const W = canvas.width, H = canvas.height;
+                // 1) 先算每個像素的「洞」強度（1=完全挖空）
+                const hole = new Float32Array(W * H);
+                for (let y = 0; y < H; y++) {
+                    for (let x = 0; x < W; x++) {
+                        const mx = Math.floor(x * maskCanvas.width / W);
+                        const my = Math.floor(y * maskCanvas.height / H);
+                        hole[y * W + x] = maskData.data[(my * maskCanvas.width + mx) * 4] > 128 ? 1 : 0;
+                    }
+                }
+                // 2) 邊緣羽化（box blur ×2 ≈ 平滑漸層）：
+                //    硬切的直角 alpha 邊界會被 GPT 當成畫面特徵，沿著洞緣畫出框線；
+                //    漸層過渡讓模型自然融合，不會看到銳利邊
+                const r = 4;
+                const blurPass = (src: Float32Array, horizontal: boolean) => {
+                    const dst = new Float32Array(W * H);
+                    for (let y = 0; y < H; y++) {
+                        for (let x = 0; x < W; x++) {
+                            let sum = 0, cnt = 0;
+                            for (let d = -r; d <= r; d++) {
+                                const nx = horizontal ? x + d : x;
+                                const ny = horizontal ? y : y + d;
+                                if (nx >= 0 && nx < W && ny >= 0 && ny < H) { sum += src[ny * W + nx]; cnt++; }
+                            }
+                            dst[y * W + x] = sum / cnt;
                         }
+                    }
+                    return dst;
+                };
+                const blurred = blurPass(blurPass(hole, true), false);
+
+                const imgData = ctx.getImageData(0, 0, W, H);
+                for (let i = 0; i < W * H; i++) {
+                    // 取 max(硬洞, 模糊洞)：洞內保持全透明，邊緣向外漸層（只擴張不內縮，殘影也被涵蓋）
+                    const strength = Math.max(hole[i], blurred[i]);
+                    if (strength > 0) {
+                        imgData.data[i * 4 + 3] = Math.round(imgData.data[i * 4 + 3] * (1 - strength));
                     }
                 }
                 ctx.putImageData(imgData, 0, 0);
