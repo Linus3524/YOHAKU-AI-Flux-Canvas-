@@ -523,7 +523,8 @@ const App: React.FC = () => {
           const layerAreaTop  = el.position.y - el.height / 2;
 
           const newLayerElements: ImageElement[] = layers.map((layer, i) => {
-              const isBackground = i === 0;
+              // 背景補全可能失敗（不會 push 進 layers），不能用 i === 0 推斷
+              const isBackground = !!layer.isBackground;
               // 位置夾在 [0, 1] 安全範圍
               const clampedX = Math.max(0, Math.min(1, layer.cropRatioX));
               const clampedY = Math.max(0, Math.min(1, layer.cropRatioY));
@@ -560,7 +561,9 @@ const App: React.FC = () => {
           // 原圖保持可見，圖層貼在右側
           setElements(prev => [...prev, ...newLayerElements]);
           newLayerElements.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
-          showToast(`✅ 魔法分層完成！${layers.length - 1} 個物件圖層 + 補全背景`);
+          const objectCount = layers.filter(l => !l.isBackground).length;
+          const hasBg = layers.some(l => l.isBackground);
+          showToast(`✅ 魔法分層完成！${objectCount} 個物件圖層${hasBg ? ' + 補全背景' : '（背景補全失敗已略過）'}`);
       } catch (e: any) {
           showToast(`❌ 魔法分層失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
       } finally {

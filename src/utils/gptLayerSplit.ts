@@ -302,6 +302,39 @@ Return a single JSON object with these fields — no markdown, no extra text:
     }
 }
 
+// ── 背景補全圖裁切至原圖比例（cover-crop）────────────────────────────────────
+// GPT/Gemini 輸出比例受 detectClosestRatio 影響，可能與原圖不一致；
+// 回貼畫布時會硬套原圖寬高，比例不合就被拉伸 → 先置中裁切到原圖 AR
+function coverCropToAspect(base64: string, targetAR: number): Promise<string> {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const w = img.naturalWidth, h = img.naturalHeight;
+            const srcAR = w / h;
+            if (Math.abs(srcAR - targetAR) < 0.01) { resolve(base64); return; }
+            let cw = w, ch = h;
+            if (srcAR > targetAR) cw = Math.max(1, Math.round(h * targetAR));
+            else ch = Math.max(1, Math.round(w / targetAR));
+            const sx = Math.round((w - cw) / 2), sy = Math.round((h - ch) / 2);
+            const canvas = document.createElement('canvas');
+            canvas.width = cw; canvas.height = ch;
+            canvas.getContext('2d')!.drawImage(img, sx, sy, cw, ch, 0, 0, cw, ch);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(base64);
+        img.src = base64;
+    });
+}
+
+function getDims(base64: string): Promise<{ w: number; h: number } | null> {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = () => resolve(null);
+        img.src = base64;
+    });
+}
+
 // ── 用 Gemini bbox 陣列生成黑白遮罩（白=要填補、黑=保留）────────────────────
 function generateBboxMask(imageBase64: string, objects: DetectedObject[]): Promise<string> {
     return new Promise(resolve => {
@@ -651,16 +684,20 @@ export async function gptLayerSegment(
     const layers: LayerResult[] = [];
 
     if (bgResult) {
-        const bgSrc = typeof bgResult === 'string' ? bgResult : (bgResult as string[])[0];
+        let bgSrc = typeof bgResult === 'string' ? bgResult : (bgResult as string[])[0];
         if (bgSrc) {
+            // 裁切到原圖比例，回貼畫布套用原圖寬高時不會被拉伸
+            const origDims = await getDims(imageBase64);
+            if (origDims) bgSrc = await coverCropToAspect(bgSrc, origDims.w / origDims.h);
             layers.push({
-                base64:     bgSrc,
-                cropRatioX: 0,
-                cropRatioY: 0,
-                cropRatioW: 1,
-                cropRatioH: 1,
-                name:       '補全背景',
-                category:   'SUBJECT',
+                base64:       bgSrc,
+                cropRatioX:   0,
+                cropRatioY:   0,
+                cropRatioW:   1,
+                cropRatioH:   1,
+                name:         '補全背景',
+                category:     'SUBJECT',
+                isBackground: true,
             });
         }
     }

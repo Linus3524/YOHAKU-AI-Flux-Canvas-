@@ -86,6 +86,8 @@ export interface LayerResult {
     prompt?: string;
     /** Gemini 偵測的原始 bbox（0~1，相對整張原圖；語意編輯器定位用） */
     bbox?: { x: number; y: number; w: number; h: number };
+    /** 是否為補全背景圖層（回貼畫布時鋪滿原圖尺寸；不可用索引 0 推斷，背景可能生成失敗） */
+    isBackground?: boolean;
 }
 
 /**

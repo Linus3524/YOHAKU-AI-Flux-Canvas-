@@ -314,46 +314,20 @@ export function useSemanticEditor({
             // 使用者已按取消，忽略結果
             if (cancelledRef.current) return;
 
-            // Step 2：全部重新切割（Gemini + SAM2 從新合成圖重新分層）
-            let freshLayers: SmartLayer[] = [];
-            if (geminiApiKey && falApiKey) {
-                setStatus('segmenting', '重新分析圖層...');
-                try {
-                    freshLayers = await segmentSemanticLayers({
-                        imageBase64: result.newCompositeBase64,
-                        geminiApiKey,
-                        falApiKey,
-                        onProgress: msg => setStatus('segmenting', msg),
-                    });
-                } catch (segErr) {
-                    console.warn('[applyLayerRegen] Re-segment failed, keeping old layers:', segErr);
-                    // fallback：保留舊圖層（只更新被修改的那個）
-                    const layerVersion: SmartLayerVersion = {
-                        id: `v_${Date.now()}`, timestamp: Date.now(),
-                        prompt: layer.prompt, base64: layer.base64,
-                    };
-                    freshLayers = state.layers.map(l =>
-                        l.id === layer.id
-                            ? { ...l, base64: result.newLayerBase64, cropRatio: result.newCropRatio,
-                                pixelWidth: result.pixelWidth, pixelHeight: result.pixelHeight,
-                                appliedPrompt: layer.prompt, history: [...l.history, layerVersion] }
-                            : l
-                    );
-                }
-            } else {
-                // 無 API key → 只更新被修改的那層
-                const layerVersion: SmartLayerVersion = {
-                    id: `v_${Date.now()}`, timestamp: Date.now(),
-                    prompt: layer.prompt, base64: layer.base64,
-                };
-                freshLayers = state.layers.map(l =>
-                    l.id === layer.id
-                        ? { ...l, base64: result.newLayerBase64, cropRatio: result.newCropRatio,
-                            pixelWidth: result.pixelWidth, pixelHeight: result.pixelHeight,
-                            appliedPrompt: layer.prompt, history: [...l.history, layerVersion] }
-                        : l
-                );
-            }
+            // Step 2：只更新被修改的那一層。
+            // 不做全圖重切：inpaint 只改遮罩區，其他圖層像素未變；
+            // 重切會洗掉手動新增的圖層與改名，且每版獨立持有 layers 快照，互不影響。
+            const layerVersion: SmartLayerVersion = {
+                id: `v_${Date.now()}`, timestamp: Date.now(),
+                prompt: layer.prompt, base64: layer.base64,
+            };
+            const freshLayers: SmartLayer[] = state.layers.map(l =>
+                l.id === layer.id
+                    ? { ...l, base64: result.newLayerBase64, cropRatio: result.newCropRatio,
+                        pixelWidth: result.pixelWidth, pixelHeight: result.pixelHeight,
+                        appliedPrompt: layer.prompt, history: [...l.history, layerVersion] }
+                    : l
+            );
 
             // Step 3：建立新版本
             // backgroundBase64 = GPT inpaint 的輸出（新的底圖，物件已被重繪進背景）
@@ -400,6 +374,9 @@ export function useSemanticEditor({
         );
         if (dirtyLayers.length === 0) return;
 
+        cancelledRef.current = false;
+        const ctrl = new AbortController();
+        abortCtrlRef.current = ctrl;
         setStatus('regenerating', `批次重繪 ${dirtyLayers.length} 個圖層...`);
 
         // 依序處理，每次 inpaint 的結果作為下一次的 base（視覺一致）
@@ -408,6 +385,7 @@ export function useSemanticEditor({
 
         try {
             for (let i = 0; i < dirtyLayers.length; i++) {
+                if (cancelledRef.current) return;
                 const layer = dirtyLayers[i];
                 // 從 currentLayers 取最新版（可能上一輪已更新）
                 const latestLayer = currentLayers.find(l => l.id === layer.id) ?? layer;
@@ -425,8 +403,10 @@ export function useSemanticEditor({
                     geminiApiKey,
                     imageModel,
                     falApiKey: falApiKey || undefined,
-                    onProgress: msg => setStatus('regenerating', msg),
+                    signal:    ctrl.signal,
+                    onProgress: msg => { if (!cancelledRef.current) setStatus('regenerating', msg); },
                 });
+                if (cancelledRef.current) return;
 
                 // 更新 currentLayers（為下一個圖層準備）
                 const layerVersion: SmartLayerVersion = {
@@ -451,22 +431,8 @@ export function useSemanticEditor({
                 currentComposite = result.newCompositeBase64;
             }
 
-            // 所有 inpaint 完成，重新切割全部圖層
-            let finalLayers = currentLayers;
-            if (geminiApiKey && falApiKey) {
-                setStatus('segmenting', '重新分析圖層...');
-                try {
-                    finalLayers = await segmentSemanticLayers({
-                        imageBase64: currentComposite,
-                        geminiApiKey,
-                        falApiKey,
-                        onProgress: msg => setStatus('segmenting', msg),
-                    });
-                } catch (segErr) {
-                    console.warn('[applyAllDirtyLayers] Re-segment failed:', segErr);
-                    finalLayers = currentLayers; // fallback
-                }
-            }
+            // 所有 inpaint 完成。不做全圖重切（同單層 Apply：保留手動圖層與命名，版本互不影響）
+            const finalLayers = currentLayers;
 
             const changedNames = dirtyLayers.map(l => l.name).join('、');
             const newVersion: EditorVersion = {
@@ -479,6 +445,7 @@ export function useSemanticEditor({
                 layers:           finalLayers,
             };
 
+            abortCtrlRef.current = null;
             setState(s => ({
                 ...s,
                 compositeBase64:    currentComposite,
@@ -489,8 +456,10 @@ export function useSemanticEditor({
                 statusMessage:      '',
             }));
 
-        } catch (e) {
+        } catch (e: any) {
+            abortCtrlRef.current = null;
             setStatus('idle', '');
+            if (e?.name === 'AbortError' || e?.message === '使用者取消操作' || cancelledRef.current) return;
             throw e;
         }
     }, [state.compositeBase64, state.layers, state.versions.length, geminiApiKey, atlasApiKey, falApiKey, imageModel, setStatus]);

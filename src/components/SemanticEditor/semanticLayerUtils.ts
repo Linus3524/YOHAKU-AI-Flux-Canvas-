@@ -1038,6 +1038,43 @@ function compositeLayerOverOriginal(
     });
 }
 
+/**
+ * 把低解析度 inpaint 輸出貼回全解析度原圖：
+ * 只取遮罩白色區域的重繪像素（放大至原尺寸），其餘像素維持原圖。
+ * 避免每次 Apply 全圖被壓到 1024 → 多次編輯後畫質單向劣化。
+ */
+async function pasteInpaintRegion(
+    fullResBase64: string,
+    inpaintedBase64: string,
+    maskBase64: string,
+): Promise<string> {
+    const [orig, inp, mask] = await Promise.all([
+        loadImg(fullResBase64), loadImg(inpaintedBase64), loadImg(maskBase64),
+    ]);
+    const W = orig.naturalWidth, H = orig.naturalHeight;
+
+    // patch：inpaint 結果放大到全尺寸，alpha 取自遮罩（白=重繪區保留）
+    const patch = document.createElement('canvas');
+    patch.width = W; patch.height = H;
+    const pctx = patch.getContext('2d')!;
+    pctx.drawImage(inp, 0, 0, W, H);
+    const patchData = pctx.getImageData(0, 0, W, H);
+
+    const mc = document.createElement('canvas');
+    mc.width = W; mc.height = H;
+    const mctx = mc.getContext('2d')!;
+    mctx.drawImage(mask, 0, 0, W, H);
+    const maskData = mctx.getImageData(0, 0, W, H).data;
+    for (let i = 0; i < W * H; i++) {
+        patchData.data[i * 4 + 3] = maskData[i * 4] > 127 ? 255 : 0;
+    }
+    pctx.putImageData(patchData, 0, 0);
+
+    // 邊緣羽化，緩和重繪區（1024 放大）與原圖解析度差的接縫
+    const feathered = await featherAlphaEdges(patch.toDataURL('image/png'), 3);
+    return compositeLayerOverOriginal(fullResBase64, feathered);
+}
+
 export interface RegenerateLayerOptions {
     layer: SmartLayer;
     /** 當前完整畫面（作為 inpaint 的 base image） */
@@ -1203,7 +1240,7 @@ export async function regenerateLayer({
         compressForAtlas(maskBase64,     1024, 1.0,  true),   // PNG，keepAlpha=true
     ]);
 
-    const newCompositeBase64 = await callAtlasInpaint(
+    let newCompositeBase64 = await callAtlasInpaint(
         inpaintPrompt,
         compOrig,
         compMask,
@@ -1212,6 +1249,13 @@ export async function regenerateLayer({
         undefined,   // surroundingContext
         signal,      // AbortSignal → 取消後立即停止輪詢
     );
+
+    // 只取遮罩區的重繪像素貼回全解析度原圖，其餘維持原始畫質（避免多次 Apply 畫質遞減）
+    try {
+        newCompositeBase64 = await pasteInpaintRegion(originalBase64, newCompositeBase64, maskBase64);
+    } catch (e) {
+        console.warn('[regenerateLayer] 全解析度貼回失敗，沿用 inpaint 輸出:', e);
+    }
 
     // ── Step 3：SAM2 從 inpainted 結果重新切出物件（更新 SmartLayer）────────
     let newLayerBase64 = layer.base64;
