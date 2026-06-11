@@ -6,6 +6,25 @@
   src: url('/fonts/MaterialSymbolsRounded.woff2') format('woff2');
 }
 
+.slider-thumb-sm::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: currentColor;
+  cursor: pointer;
+}
+
+.slider-thumb-sm::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: currentColor;
+  cursor: pointer;
+}
+
 .material-symbols-rounded {
   font-family: 'Material Symbols Rounded';
   font-weight: normal;

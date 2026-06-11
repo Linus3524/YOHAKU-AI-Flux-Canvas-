@@ -140,10 +140,10 @@ export const ShapePropertyPanel: React.FC<ShapePropertyPanelProps> = ({ element,
     );
 
     return (
-        <div 
-            className="fixed z-[1000] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-gray-100 p-3 flex items-center gap-4 min-w-[380px] animate-fade-in-up"
-            style={{ 
-                left: position.x, 
+        <div
+            className="fixed z-[1000] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-gray-100 p-2.5 flex items-end gap-2.5 animate-fade-in-up"
+            style={{
+                left: position.x,
                 top: position.y,
                 cursor: isDragging ? 'grabbing' : 'default',
             }}
@@ -151,68 +151,66 @@ export const ShapePropertyPanel: React.FC<ShapePropertyPanelProps> = ({ element,
             onClick={(e) => e.stopPropagation()}
         >
             {/* Drag Handle */}
-            <div className="px-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors">
+            <div className="pb-2 px-0.5 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors">
                 <Icons.Grip />
             </div>
 
-            {/* --- NEW SECTION: Dimensions & Lock --- */}
-            <div className="flex items-center gap-1 bg-[#F5F5F7] rounded-lg p-1">
-                <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-bold text-[#86868B] w-3 text-center select-none">W</span>
+            {/* 尺寸：W ⇄ H 單一膠囊，比例鎖內嵌 */}
+            <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">尺寸</span>
+                <div className="flex items-center h-8 bg-[#F5F5F7] rounded-lg px-1.5">
+                    <span className="text-[9px] font-bold text-[#86868B] select-none">W</span>
                     <input
                         type="number"
                         value={Math.round(element.width)}
                         onChange={(e) => handleWidthChange(Number(e.target.value))}
-                        className="w-12 bg-transparent text-xs font-mono text-[#1D1D1F] outline-none text-right"
+                        className="w-10 bg-transparent text-xs font-mono text-[#1D1D1F] outline-none text-right pr-1"
                     />
-                </div>
-                <button
-                    onClick={() => setConstrainProportions(!constrainProportions)}
-                    className={`p-1 rounded transition-all ${constrainProportions ? 'text-black bg-white shadow-sm scale-110' : 'text-gray-300 hover:text-gray-500'}`}
-                    title={constrainProportions ? "解鎖比例" : "鎖定比例"}
-                >
-                    {constrainProportions ? <Icons.Link /> : <Icons.Unlink />}
-                </button>
-                <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-bold text-[#86868B] w-3 text-center select-none">H</span>
+                    <button
+                        onClick={() => setConstrainProportions(!constrainProportions)}
+                        className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${constrainProportions ? 'text-[#AF52DE]' : 'text-gray-300 hover:text-gray-500'}`}
+                        title={constrainProportions ? "解鎖比例" : "鎖定比例"}
+                    >
+                        {constrainProportions ? <Icons.Link /> : <Icons.Unlink />}
+                    </button>
+                    <span className="text-[9px] font-bold text-[#86868B] select-none ml-1">H</span>
                     <input
                         type="number"
                         value={Math.round(element.height)}
                         onChange={(e) => handleHeightChange(Number(e.target.value))}
-                        className="w-12 bg-transparent text-xs font-mono text-[#1D1D1F] outline-none text-right"
+                        className="w-10 bg-transparent text-xs font-mono text-[#1D1D1F] outline-none text-right pr-1"
                     />
                 </div>
             </div>
-            
-            <div className="w-px h-8 bg-gray-200" />
+
+            <div className="w-px h-6 bg-gray-200 self-end mb-1" />
 
             {/* Colors */}
-            {/* ✅ 替換為 AdvancedColorPicker */}
             <AdvancedColorPicker
                 value={element.fillColor}
                 onChange={(c) => onUpdate({ fillColor: c })}
                 label="填充"
             />
-            
+
             {renderColorPicker(
-                element.strokeColor, 
-                (c) => onUpdate({ strokeColor: c }), 
-                showStrokePicker, 
-                () => { setShowStrokePicker(!showStrokePicker); setShowFillPicker(false); }, 
+                element.strokeColor,
+                (c) => onUpdate({ strokeColor: c }),
+                showStrokePicker,
+                () => { setShowStrokePicker(!showStrokePicker); setShowFillPicker(false); },
                 "邊框"
             )}
 
-            <div className="w-px h-8 bg-gray-200" />
+            <div className="w-px h-6 bg-gray-200 self-end mb-1" />
 
             {/* Stroke Width */}
             <div className="flex flex-col gap-1">
                 <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">粗細</span>
-                <div className="flex bg-[#F5F5F7] rounded-lg p-0.5">
-                    {[2, 6, 12].map((width, i) => (
-                        <button 
+                <div className="flex h-8 bg-[#F5F5F7] rounded-lg p-0.5">
+                    {[2, 6, 12].map((width) => (
+                        <button
                             key={width}
                             onClick={() => onUpdate({ strokeWidth: width })}
-                            className={`w-8 h-7 flex items-center justify-center rounded-md transition-all ${element.strokeWidth === width ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`w-7 flex items-center justify-center rounded-md transition-all ${element.strokeWidth === width ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                             <div className="bg-current rounded-full" style={{ width: width + 2, height: width + 2, maxHeight: 14, maxWidth: 14 }} />
                         </button>
@@ -223,16 +221,16 @@ export const ShapePropertyPanel: React.FC<ShapePropertyPanelProps> = ({ element,
             {/* Stroke Style */}
             <div className="flex flex-col gap-1">
                 <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider">樣式</span>
-                <div className="flex bg-[#F5F5F7] rounded-lg p-0.5">
-                    <button onClick={() => onUpdate({ strokeStyle: 'solid' })} className={`p-1.5 rounded-md transition-all ${element.strokeStyle === 'solid' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.Solid /></button>
-                    <button onClick={() => onUpdate({ strokeStyle: 'dashed' })} className={`p-1.5 rounded-md transition-all ${element.strokeStyle === 'dashed' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.Dashed /></button>
-                    <button onClick={() => onUpdate({ strokeStyle: 'dotted' })} className={`p-1.5 rounded-md transition-all ${element.strokeStyle === 'dotted' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.Dotted /></button>
+                <div className="flex h-8 bg-[#F5F5F7] rounded-lg p-0.5">
+                    <button onClick={() => onUpdate({ strokeStyle: 'solid' })} className={`w-7 flex items-center justify-center rounded-md transition-all ${element.strokeStyle === 'solid' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.Solid /></button>
+                    <button onClick={() => onUpdate({ strokeStyle: 'dashed' })} className={`w-7 flex items-center justify-center rounded-md transition-all ${element.strokeStyle === 'dashed' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.Dashed /></button>
+                    <button onClick={() => onUpdate({ strokeStyle: 'dotted' })} className={`w-7 flex items-center justify-center rounded-md transition-all ${element.strokeStyle === 'dotted' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}><Icons.Dotted /></button>
                 </div>
             </div>
 
-            <div className="flex-1" />
+            <div className="w-px h-6 bg-gray-200 self-end mb-1" />
 
-            <button onClick={onClose} onMouseDown={(e) => e.stopPropagation()} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors self-end mb-1">
+            <button onClick={onClose} onMouseDown={(e) => e.stopPropagation()} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors">
                 <Icons.Close />
             </button>
         </div>

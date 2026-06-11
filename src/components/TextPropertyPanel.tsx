@@ -113,7 +113,7 @@ const SliderControl = ({ label, value, onChange, onDragStart, min, max, step = 1
             onMouseDown={() => onDragStart?.()}
             onTouchStart={() => onDragStart?.()}
             onChange={(e) => onChange(Number(e.target.value))}
-            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-yohaku-accent"
+            className="slider-thumb-sm w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer text-yohaku-accent"
         />
     </div>
 );
@@ -237,7 +237,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
             style={{
                 left: position.x,
                 top: position.y,
-                minWidth: showMore ? 460 : 340,
+                minWidth: showMore ? 440 : 340,
                 cursor: isDragging ? 'grabbing' : 'default',
                 boxShadow: isDragging ? '0 20px 60px rgba(0,0,0,0.2)' : '0 10px 40px rgba(0,0,0,0.15)'
             }}
@@ -256,7 +256,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                         value={element.fontFamily}
                         onChange={(e) => onUpdate({ fontFamily: e.target.value })}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="appearance-none bg-yohaku-bg-main hover:bg-gray-100 text-yohaku-text-main text-sm font-medium rounded-lg pl-3 pr-8 py-2 outline-none cursor-pointer w-44 truncate transition-colors"
+                        className="appearance-none bg-yohaku-bg-main hover:bg-gray-100 text-yohaku-text-main text-sm font-medium rounded-lg pl-3 pr-8 py-1.5 outline-none cursor-pointer w-44 truncate transition-colors"
                         style={{ fontFamily: element.fontFamily }}
                     >
                         {FONT_GROUPS.map(group => (
@@ -277,14 +277,14 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                 {/* Font size */}
                 <input
                     type="number"
-                    value={element.fontSize}
+                    value={Math.round(element.fontSize)}
                     min={1} max={999}
                     onChange={(e) => {
                         const val = Math.min(999, Math.max(1, Number(e.target.value)));
                         if (!isNaN(val)) onUpdate({ fontSize: val });
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className="bg-yohaku-bg-main hover:bg-gray-100 text-yohaku-text-main text-sm font-medium rounded-lg px-2 py-2 outline-none w-16 text-center transition-colors"
+                    className="bg-yohaku-bg-main hover:bg-gray-100 text-yohaku-text-main text-sm font-medium rounded-lg px-2 py-1.5 outline-none w-14 text-center transition-colors"
                 />
 
                 <div className="w-px h-8 bg-gray-200" />
@@ -312,14 +312,14 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
 
             {/* ── Expanded Panel ── */}
             {showMore && (
-                <div className="flex flex-col gap-0 p-1 pt-1" onMouseDown={(e) => e.stopPropagation()}>
-                    <div className="h-px bg-gray-100 w-full mb-3" />
+                <div className="flex flex-col gap-0 p-1 pt-0.5" onMouseDown={(e) => e.stopPropagation()}>
+                    <div className="h-px bg-gray-100 w-full mb-2.5" />
 
                     {/* Two-column layout */}
                     <div className="flex gap-0">
 
                         {/* ── LEFT COLUMN: Typography & Layout ── */}
-                        <div className="flex flex-col justify-between flex-1 pr-4">
+                        <div className="flex flex-col flex-1 pr-3">
 
                             {/* Row: Writing mode + Align + B/I/U on one line */}
                             <div className="flex items-center gap-1.5">
@@ -344,17 +344,20 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                                 </div>
                             </div>
 
-                            {/* Sliders */}
-                            <SliderControl label="行距" value={element.lineHeight} onDragStart={onSnapshot} onChange={(val) => onUpdate({ lineHeight: val }, { addToHistory: false })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
-                            <SliderControl label="字距" value={element.letterSpacing || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ letterSpacing: val }, { addToHistory: false })} min={-20} max={100} step={1} unit="px" decimals={0} />
-                            <SliderControl label="彎曲" value={(element as any).curveStrength || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ curveStrength: val } as any, { addToHistory: false })} min={-100} max={100} step={1} unit="" decimals={0} />
+                            {/* Sliders — fill the space below the toolbar, justify-between
+                                spreads the three evenly with 彎曲 aligned to 光暈 at the bottom */}
+                            <div className="flex flex-col flex-1 justify-between pt-2.5 pb-3">
+                                <SliderControl label="行距" value={element.lineHeight} onDragStart={onSnapshot} onChange={(val) => onUpdate({ lineHeight: val }, { addToHistory: false })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
+                                <SliderControl label="字距" value={element.letterSpacing || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ letterSpacing: val }, { addToHistory: false })} min={-20} max={100} step={1} unit="px" decimals={0} />
+                                <SliderControl label="彎曲" value={(element as any).curveStrength || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ curveStrength: val } as any, { addToHistory: false })} min={-100} max={100} step={1} unit="" decimals={0} />
+                            </div>
                         </div>
 
                         {/* ── Vertical divider ── */}
                         <div className="w-px bg-gray-100 mx-1 self-stretch" />
 
                         {/* ── RIGHT COLUMN: Effects (文字色/背景色 are in top bar) ── */}
-                        <div className="flex flex-col gap-3 pl-3" style={{ width: 170 }}>
+                        <div className="flex flex-col gap-2 pl-2.5" style={{ width: 152 }}>
                             {/* 邊框 */}
                             <div className="flex items-center gap-2">
                                 <ColorPickerButton label="邊框" color={element.strokeColor ?? '#FF3B30'} onChange={(c) => onUpdate({ strokeColor: c })} />
