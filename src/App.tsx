@@ -268,7 +268,12 @@ const App: React.FC = () => {
       } else {
           setIsKeyValid(false);
       }
-  }, [userApiKey]); 
+  }, [userApiKey]);
+
+  // 啟動時自動清除換模型後遺留的孤兒 ONNX 快取（舊版相片/動漫模型）
+  useEffect(() => {
+      import('./utils/onnxModelCache').then(m => m.cleanOrphanModelCaches());
+  }, []);
 
   const {
       elements,

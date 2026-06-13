@@ -2,7 +2,7 @@
  * ONNX 模型下載 & IndexedDB 快取管理
  * 首次下載後存入 IndexedDB，之後直接從快取載入（無需重新下載）
  */
-import { get, set, del } from 'idb-keyval';
+import { get, set, del, keys as idbKeys } from 'idb-keyval';
 import * as ort from 'onnxruntime-web/all';  // 需要 all bundle 含 WebGPU + WASM
 
 // 從 CDN 載入 WASM + JS glue（解決 Vite 無法 bundle 動態 import 的問題）
@@ -161,6 +161,30 @@ export async function loadModel(key: OnnxModelKey): Promise<ort.InferenceSession
 /** 刪除快取（釋放 IndexedDB 空間） */
 export async function deleteModel(key: OnnxModelKey): Promise<void> {
     await del(MODEL_CONFIGS[key].cacheKey);
+}
+
+/**
+ * 清除「孤兒」模型快取：IndexedDB 裡所有 onnx_ 開頭、但已不在現行 MODEL_CONFIGS 的快取。
+ * 用於換模型後自動回收舊檔（如舊版相片/動漫模型），對所有使用者自動生效。
+ * 回傳被清掉的 key 數量。
+ */
+export async function cleanOrphanModelCaches(): Promise<number> {
+    try {
+        const valid = new Set(Object.values(MODEL_CONFIGS).map(c => c.cacheKey));
+        const all = await idbKeys();
+        let removed = 0;
+        for (const k of all) {
+            if (typeof k === 'string' && k.startsWith('onnx_') && !valid.has(k)) {
+                await del(k);
+                removed++;
+            }
+        }
+        if (removed > 0) console.log(`[ONNX] 已清除 ${removed} 個孤兒模型快取`);
+        return removed;
+    } catch (e) {
+        console.warn('[ONNX] 清除孤兒快取失敗', e);
+        return 0;
+    }
 }
 
 /** 檢查所有模型的快取狀態 */
