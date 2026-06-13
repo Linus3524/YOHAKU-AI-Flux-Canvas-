@@ -42,6 +42,7 @@ import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 
 // --- API Key Modal Component ---
 const ApiKeyModal = ({
+    geminiKey: initialGeminiKey,
     onSubmit,
     onClose,
     atlasKey: initialAtlasKey,
@@ -49,6 +50,7 @@ const ApiKeyModal = ({
     falKey: initialFalKey,
     onSubmitFal,
 }: {
+    geminiKey?: string;
     onSubmit: (key: string) => void;
     onClose: () => void;
     atlasKey?: string;
@@ -56,12 +58,12 @@ const ApiKeyModal = ({
     falKey?: string;
     onSubmitFal?: (key: string) => void;
 }) => {
-    const [key, setKey] = useState('');
+    const [key, setKey] = useState(initialGeminiKey || '');
     const [atlasKey, setAtlasKey] = useState(initialAtlasKey || '');
     const [falKey, setFalKey] = useState(initialFalKey || '');
 
     return (
-        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fade-in">
+        <div className="fixed inset-0 z-[8000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fade-in">
             <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full border border-white/20 relative overflow-hidden">
                 {/* Close Button */}
                 <button 
@@ -1493,6 +1495,7 @@ const App: React.FC = () => {
 
       {showKeyModal && (
           <ApiKeyModal
+              geminiKey={effectiveApiKey || ''}
               onSubmit={handleSaveManualKey}
               onClose={() => setShowKeyModal(false)}
               atlasKey={atlasApiKey || ''}

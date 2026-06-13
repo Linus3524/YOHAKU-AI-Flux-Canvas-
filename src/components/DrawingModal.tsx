@@ -9,7 +9,7 @@ interface DrawingModalProps {
   onClose: () => void;
 }
 
-const COLORS = ['#1D1D1F', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#AF52DE', '#5AC8FA'];
+const COLORS = ['#1D1D1F', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#5AC8FA', '#007AFF', '#AF52DE'];
 
 // Use a large, fixed-size canvas for a better drawing experience
 const CANVAS_INTERNAL_WIDTH = 1200;
@@ -237,7 +237,7 @@ export const DrawingModal: React.FC<DrawingModalProps> = ({ element, onSave, onC
           {COLORS.map((c, i) => (
             <button key={c} onClick={() => setColor(c)} title={c}
               className={`w-5 h-5 rounded-full border-2 border-white shadow-[0_1px_4px_rgba(0,0,0,0.12)] transition-transform hover:scale-[1.25] hover:-translate-y-0.5 hover:z-10 ${color === c ? 'scale-[1.2] -translate-y-0.5 z-10 ring-2 ring-[#1D1D1F] ring-offset-1' : ''}`}
-              style={{ backgroundColor: c, marginLeft: i === 0 ? 0 : -6 }} />
+              style={{ backgroundColor: c, marginLeft: i === 0 ? 0 : -2 }} />
           ))}
           <div className="relative ml-1.5">
             <button onClick={() => setShowColorPicker(!showColorPicker)} title="自訂顏色"
