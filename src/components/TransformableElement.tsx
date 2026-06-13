@@ -239,7 +239,7 @@ const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, noteW
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const TransformableElement: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld, disableResizeHandles }) => {
+const TransformableElementInner: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld, disableResizeHandles }) => {
   const [interaction, setInteraction] = useState<Interaction>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [galleryHovered, setGalleryHovered] = useState(false);
@@ -1521,3 +1521,10 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
         </div>
     );
 };
+
+/**
+ * memo：只有當該元素自身的 props 改變時才重繪。
+ * 平移/縮放等不改變單一元素 props 的操作，未變動的元素直接跳過 → 大幅降低多圖時的卡頓。
+ * （props 多為穩定參考：element 物件僅在該元素被更新時換新引用，handler 皆 useCallback / 父層 prop）
+ */
+export const TransformableElement = React.memo(TransformableElementInner);

@@ -1194,11 +1194,19 @@ CONSTRAINTS:
         setIsGenerating(true);
         try {
             // 模型原生 4x；factor=2 時於 worker 內把 4x 結果降回 2x（仍享 4x 細節重構）
+            // 進度節流：每跨越一個 5% 級距才更新 state，避免每塊都觸發整張畫布重繪
+            let lastBucket = -1;
             const resultSrc = await runUpscaleInWorker(
                 element.src,
                 cfg.cacheKey,
                 factor,
-                (pct) => setGenProgress(pct),
+                (pct) => {
+                    const bucket = Math.floor(pct / 5);
+                    if (bucket !== lastBucket || pct >= 100) {
+                        lastBucket = bucket;
+                        setGenProgress(pct);
+                    }
+                },
             );
 
             // 顯示尺寸放大 factor 倍（與「智能放大」一致），底層解析度同步 → 清晰不糊

@@ -58,12 +58,15 @@ export const MODEL_CONFIGS: Record<OnnxModelKey, ModelConfig> = {
         sizeMB: 15,
     },
     // ── 本機高清放大（4x，純像素超解析，結構 100% 保留） ──
+    // 相片與插畫共用同一顆 UltraSharpV2 Lite（RealPLKSR，純 CNN → WASM SIMD 加速、快且通用）
+    // 兩者 url + cacheKey 相同 → 只下載一次即兩個按鈕通用
+    // 相片與插畫共用同一顆 PurePhoto SPAN（純 CNN・極輕 1.6MB・WASM 單核 ~370ms/128 tile，超快）
     upscale_photo: {
         key: 'upscale_photo',
-        name: '相片高清（ClearRealityV1）',
-        description: 'SPAN 架構，真實照片 4x 放大，體積極小、WebGPU 加速最快',
-        url: 'https://huggingface.co/yuvraj108c/ComfyUI-Upscaler-Onnx/resolve/main/4x-ClearRealityV1.onnx',
-        cacheKey: 'onnx_upscale_clearreality_v1',
+        name: '相片 / 插畫高清（PurePhoto SPAN）',
+        description: 'SPAN 架構，真實照片 / 插畫 4x 放大，極輕極快、WASM 友善',
+        url: 'https://huggingface.co/huggingworld/onnx-image-models/resolve/main/4xPurePhoto-Span.onnx',
+        cacheKey: 'onnx_upscale_purephoto_span_v1',
         sizeMB: 2,
     },
     upscale_anime: {
@@ -76,11 +79,11 @@ export const MODEL_CONFIGS: Record<OnnxModelKey, ModelConfig> = {
     },
     upscale_art: {
         key: 'upscale_art',
-        name: '插畫高清（UltraSharpV2 Lite）',
-        description: '數位繪圖 / 插畫 / 平面風 4x 放大，質感與細節平衡',
-        url: 'https://huggingface.co/yuvraj108c/ComfyUI-Upscaler-Onnx/resolve/main/4x-UltraSharpV2_Lite.onnx',
-        cacheKey: 'onnx_upscale_ultrasharpv2lite_v1',
-        sizeMB: 35,
+        name: '相片 / 插畫高清（PurePhoto SPAN）',
+        description: '數位繪圖 / 插畫 / 平面風 4x 放大，與「相片」共用同一顆模型',
+        url: 'https://huggingface.co/huggingworld/onnx-image-models/resolve/main/4xPurePhoto-Span.onnx',
+        cacheKey: 'onnx_upscale_purephoto_span_v1',
+        sizeMB: 2,
     },
 };
 

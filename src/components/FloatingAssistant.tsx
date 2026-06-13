@@ -1068,7 +1068,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     <span className="text-[10px] text-gray-400">純像素超解析・結構不變・免 API 額度</span>
                   </div>
                   <div className="space-y-3">
-                    {(['upscale_photo', 'upscale_anime', 'upscale_art'] as OnnxModelKey[]).map(key => {
+                    {/* upscale_art 與 upscale_photo 共用同一檔 → 只列一次 */}
+                    {(['upscale_photo', 'upscale_anime'] as OnnxModelKey[]).map(key => {
                       const cfg = MODEL_CONFIGS[key];
                       const status = modelStatuses[key];
                       const progress = modelProgress[key];

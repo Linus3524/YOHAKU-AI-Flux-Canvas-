@@ -1024,6 +1024,13 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
       const worldPoint = screenToWorld({ x: e.clientX, y: e.clientY });
       onContextMenu(e, worldPoint, elementId);
   };
+
+  // 穩定參考：避免每次 render 都產生新 fn → 破壞 TransformableElement 的 memo
+  const handleElementContextMenu = useCallback(
+      (e: React.MouseEvent, screenPoint: Point, id: string | null) =>
+          onContextMenu(e, screenToWorld(screenPoint), id),
+      [onContextMenu, screenToWorld],
+  );
   
   const handleAutoPrompt = async () => {
       if (!outpaintingState) return;
@@ -1181,7 +1188,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
             onUpdate={onUpdateElement}
             onInteractionStart={onInteractionStart}
             onInteractionEnd={onInteractionEnd}
-            onContextMenu={(e, screenPoint, id) => onContextMenu(e, screenToWorld(screenPoint), id)}
+            onContextMenu={handleElementContextMenu}
             onEditDrawing={onEditDrawing}
             onDuplicateInPlace={onDuplicateInPlace}
             onDragStart={onDragStart}
@@ -1866,9 +1873,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                             {/* 本機高清放大（ONNX，4x，純像素超解析・免額度・結構不變） */}
                                             {onLocalUpscale && (() => {
                                                 const upscaleOptions = [
-                                                    { key: 'upscale_photo', label: '相片', desc: '真實照片 / 人像 / 風景' },
-                                                    { key: 'upscale_anime', label: '動漫', desc: '動漫 / 賽璐璐 / 線稿' },
-                                                    { key: 'upscale_art',   label: '插畫', desc: '數位繪圖 / 插畫 / 平面風' },
+                                                    { key: 'upscale_photo', label: '相片/插畫', desc: '真實照片 / 人像 / 插畫 / 平面風' },
+                                                    { key: 'upscale_anime', label: '動漫',     desc: '動漫 / 賽璐璐 / 線稿' },
                                                 ] as { key: 'upscale_photo' | 'upscale_anime' | 'upscale_art'; label: string; desc: string }[];
                                                 const currentUp = upscaleOptions.find(o => o.key === upscaleModel) ?? upscaleOptions[0];
                                                 return (
