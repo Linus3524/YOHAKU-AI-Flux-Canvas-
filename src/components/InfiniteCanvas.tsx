@@ -515,12 +515,14 @@ interface InfiniteCanvasProps {
   onHarmonize: () => void;
   isGenerating: boolean;
   generatingElementIds?: string[];
+  generatingProgress?: number | null;
   croppingElementId: string | null;
   onCancelCrop: () => void;
   onApplyCrop: (cropRect: { x: number, y: number, width: number, height: number }) => void;
   interactionMode: 'select' | 'hand';
   activeShapeTool: ShapeType | null; 
   onUpscale: (factor: number) => void;
+  onLocalUpscale?: (modelKey: 'upscale_photo' | 'upscale_anime' | 'upscale_art') => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
   generationModel?: string;
@@ -680,12 +682,14 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onHarmonize,
   isGenerating,
   generatingElementIds = [],
+  generatingProgress = null,
   croppingElementId,
   onCancelCrop,
   onApplyCrop,
   interactionMode,
   activeShapeTool,
   onUpscale,
+  onLocalUpscale,
   onDragStart,
   onDragEnd,
   generationModel = 'gemini',
@@ -715,6 +719,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [upscaleFactor, setUpscaleFactor] = useState<number>(2);
   const [birefnetModel, setBirefnetModel] = useState<string>('Matting');
   const [birefnetOpen, setBirefnetOpen] = useState(false);
+  const [upscaleModel, setUpscaleModel] = useState<'upscale_photo' | 'upscale_anime' | 'upscale_art'>('upscale_photo');
+  const [upscaleOpen, setUpscaleOpen] = useState(false);
   const [ratioOpen, setRatioOpen] = useState(false);
   const ratioRef = useRef<HTMLDivElement>(null);
 
@@ -1330,10 +1336,23 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
               {/* Center badge — 多張時只顯示在最大元素 */}
               {el.id === badgeId && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="bg-white/90 backdrop-blur-md rounded-full px-2.5 py-1 flex items-center gap-1.5 shadow-lg">
-                    <Icon name="progress_activity" size={12} className="animate-spin flex-shrink-0" style={{ color: '#1f2937', animationDuration: '0.8s' }} />
-                    <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">AI 運算中</span>
-                  </div>
+                  {generatingProgress != null ? (
+                    // 確定進度（本機放大）：彩色進度條 + 百分比，不跳 toast
+                    <div className="bg-white/95 backdrop-blur-md rounded-2xl px-3.5 py-2.5 flex flex-col items-center gap-1.5 shadow-lg" style={{ minWidth: 132 }}>
+                      <div className="flex items-center gap-1.5">
+                        <Icon name="open_in_full" size={12} className="flex-shrink-0" style={{ color: '#6366f1' }} />
+                        <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">高清放大中 {generatingProgress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200/80 rounded-full h-1.5 overflow-hidden">
+                        <div className="h-1.5 rounded-full transition-all duration-200" style={{ width: `${generatingProgress}%`, background: 'linear-gradient(90deg,#6366f1,#a855f7)' }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white/90 backdrop-blur-md rounded-full px-2.5 py-1 flex items-center gap-1.5 shadow-lg">
+                      <Icon name="progress_activity" size={12} className="animate-spin flex-shrink-0" style={{ color: '#1f2937', animationDuration: '0.8s' }} />
+                      <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">AI 運算中</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1843,6 +1862,63 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                     智能放大
                                                 </button>
                                             </div>
+
+                                            {/* 本機高清放大（ONNX，4x，純像素超解析・免額度・結構不變） */}
+                                            {onLocalUpscale && (() => {
+                                                const upscaleOptions = [
+                                                    { key: 'upscale_photo', label: '相片', desc: '真實照片 / 人像 / 風景' },
+                                                    { key: 'upscale_anime', label: '動漫', desc: '動漫 / 賽璐璐 / 線稿' },
+                                                    { key: 'upscale_art',   label: '插畫', desc: '數位繪圖 / 插畫 / 平面風' },
+                                                ] as { key: 'upscale_photo' | 'upscale_anime' | 'upscale_art'; label: string; desc: string }[];
+                                                const currentUp = upscaleOptions.find(o => o.key === upscaleModel) ?? upscaleOptions[0];
+                                                return (
+                                                    <div className="relative w-full">
+                                                        <div className="flex w-full rounded-xl overflow-hidden border border-gray-200 bg-[#f8fafc]">
+                                                            <button
+                                                                onClick={() => onLocalUpscale(upscaleModel, upscaleFactor)}
+                                                                className="flex-1 flex items-center justify-center gap-2 bg-white text-gray-800 py-2.5 text-[13px] font-medium hover:bg-gray-50 transition-colors"
+                                                            >
+                                                                <Icon name="open_in_full" size={17} style={{ color: '#3b82f6' }} />
+                                                                本機高清放大 {upscaleFactor}x
+                                                            </button>
+                                                            <div className="w-px bg-gray-200 my-0"/>
+                                                            <button
+                                                                onClick={() => setUpscaleOpen(v => !v)}
+                                                                className="flex items-center gap-1 px-3 bg-[#f8fafc] text-gray-600 hover:bg-gray-100 transition-colors"
+                                                                aria-label="選擇放大模型"
+                                                            >
+                                                                <span className="text-[12px] font-medium whitespace-nowrap">{currentUp.label}</span>
+                                                                <Icon name="expand_more" size={10} />
+                                                            </button>
+                                                        </div>
+                                                        {upscaleOpen && (
+                                                            <>
+                                                                <div className="fixed inset-0 z-40" onClick={() => setUpscaleOpen(false)}/>
+                                                                <div className="absolute top-full mt-2 right-0 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-gray-100 overflow-hidden z-50 min-w-[160px]">
+                                                                    {upscaleOptions.map(opt => (
+                                                                        <button
+                                                                            key={opt.key}
+                                                                            onClick={() => { setUpscaleModel(opt.key); setUpscaleOpen(false); }}
+                                                                            className={`w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-indigo-50 transition-colors ${upscaleModel === opt.key ? 'bg-indigo-50' : ''}`}
+                                                                        >
+                                                                            <div>
+                                                                                <div className="text-xs font-semibold text-[#1D1D1F]">{opt.label}</div>
+                                                                                <div className="text-[10px] text-[#86868B]">{opt.desc}</div>
+                                                                            </div>
+                                                                            {upscaleModel === opt.key && (
+                                                                                <Icon name="check" size={12} style={{ color: '#6366f1' }} />
+                                                                            )}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                        <p className="mt-1.5 text-[10px] text-gray-400 leading-snug px-0.5">
+                                                            純像素放大・結構不變・免 API 額度。首次需於功能助手下載模型。
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     )}
 

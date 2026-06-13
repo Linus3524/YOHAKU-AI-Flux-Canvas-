@@ -11,7 +11,17 @@ ort.env.wasm.numThreads = 1;
 (ort.env.wasm as any).wasmPaths =
     'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/';
 
-export type OnnxModelKey = 'lama' | 'sam2_encoder' | 'sam2_decoder';
+export type OnnxModelKey =
+    | 'lama'
+    | 'sam2_encoder'
+    | 'sam2_decoder'
+    | 'upscale_photo'
+    | 'upscale_anime'
+    | 'upscale_art';
+
+/** 放大模型共用屬性：放大倍率 + 輸入張量名稱（推論時用） */
+export const UPSCALE_KEYS: OnnxModelKey[] = ['upscale_photo', 'upscale_anime', 'upscale_art'];
+export const UPSCALE_SCALE = 4; // 三個模型皆為 4x
 
 export interface ModelConfig {
     key: OnnxModelKey;
@@ -46,6 +56,31 @@ export const MODEL_CONFIGS: Record<OnnxModelKey, ModelConfig> = {
         url: 'https://huggingface.co/g-ronimo/sam2-tiny/resolve/main/sam2_hiera_tiny_decoder.onnx',
         cacheKey: 'onnx_sam2_decoder_tiny_ort_v1',  // 新 key，觸發重新下載
         sizeMB: 15,
+    },
+    // ── 本機高清放大（4x，純像素超解析，結構 100% 保留） ──
+    upscale_photo: {
+        key: 'upscale_photo',
+        name: '相片高清（ClearRealityV1）',
+        description: 'SPAN 架構，真實照片 4x 放大，體積極小、WebGPU 加速最快',
+        url: 'https://huggingface.co/yuvraj108c/ComfyUI-Upscaler-Onnx/resolve/main/4x-ClearRealityV1.onnx',
+        cacheKey: 'onnx_upscale_clearreality_v1',
+        sizeMB: 2,
+    },
+    upscale_anime: {
+        key: 'upscale_anime',
+        name: '動漫高清（AnimeSharp）',
+        description: '動漫 / 賽璐璐 / 線稿 4x 放大，邊緣銳利、色塊乾淨',
+        url: 'https://huggingface.co/yuvraj108c/ComfyUI-Upscaler-Onnx/resolve/main/4x-AnimeSharp.onnx',
+        cacheKey: 'onnx_upscale_animesharp_v1',
+        sizeMB: 72,
+    },
+    upscale_art: {
+        key: 'upscale_art',
+        name: '插畫高清（UltraSharpV2 Lite）',
+        description: '數位繪圖 / 插畫 / 平面風 4x 放大，質感與細節平衡',
+        url: 'https://huggingface.co/yuvraj108c/ComfyUI-Upscaler-Onnx/resolve/main/4x-UltraSharpV2_Lite.onnx',
+        cacheKey: 'onnx_upscale_ultrasharpv2lite_v1',
+        sizeMB: 35,
     },
 };
 
@@ -127,7 +162,7 @@ export async function deleteModel(key: OnnxModelKey): Promise<void> {
 
 /** 檢查所有模型的快取狀態 */
 export async function getAllModelStatuses(): Promise<Record<OnnxModelKey, ModelStatus>> {
-    const keys: OnnxModelKey[] = ['lama', 'sam2_encoder', 'sam2_decoder'];
+    const keys: OnnxModelKey[] = ['lama', 'sam2_encoder', 'sam2_decoder', 'upscale_photo', 'upscale_anime', 'upscale_art'];
     const results = await Promise.all(keys.map(k => getModelStatus(k)));
     return Object.fromEntries(keys.map((k, i) => [k, results[i]])) as Record<OnnxModelKey, ModelStatus>;
 }

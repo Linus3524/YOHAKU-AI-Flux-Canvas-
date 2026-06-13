@@ -433,6 +433,7 @@ const App: React.FC = () => {
       setIsGenerating,
       generatingElementIds,
       setGeneratingElementIds,
+      genProgress,
       generatedImages,
       setGeneratedImages,
       outpaintingState,
@@ -458,6 +459,7 @@ const App: React.FC = () => {
       handleOutpaintingGenerate,
       handleAutoPromptGenerate,
       handleAIUpscale,
+      handleLocalUpscale,
       handleGenerate,
       handleAskAI 
   } = useAI({
@@ -1794,12 +1796,14 @@ const App: React.FC = () => {
         onHarmonize={handleHarmonize}
         isGenerating={isGenerating}
         generatingElementIds={generatingElementIds}
+        generatingProgress={genProgress}
         croppingElementId={croppingElementId}
         onCancelCrop={handleCancelCrop}
         onApplyCrop={handleApplyCrop}
         interactionMode={interactionMode}
         activeShapeTool={activeShapeTool}
         onUpscale={handleAIUpscale}
+        onLocalUpscale={handleLocalUpscale}
         onDragStart={() => setIsDraggingOnCanvas(true)}
         onDragEnd={() => setIsDraggingOnCanvas(false)}
       />

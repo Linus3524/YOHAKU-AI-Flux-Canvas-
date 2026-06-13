@@ -18,6 +18,8 @@ import {
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
 import { callAtlasGenerate, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
+import { runUpscaleInWorker } from '../utils/upscaleWorkerClient';
+import { MODEL_CONFIGS, getModelStatus, type OnnxModelKey } from '../utils/onnxModelCache';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -119,6 +121,8 @@ function detectTransparentBgIntent(prompt: string): boolean {
 export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel = 'gemini', falApiKey }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
+    // 本機放大用的確定進度（0–100）；null = 不顯示進度條（一般生成走不確定 shimmer）
+    const [genProgress, setGenProgress] = useState<number | null>(null);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
     const [outpaintingState, setOutpaintingState] = useState<OutpaintingState | null>(null);
     const [copiedStyle, setCopiedStyle] = useState<{ analysis: import('../components/StylePasteModal').StyleAnalysisResult } | null>(null);
@@ -1173,6 +1177,53 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, preserveTransparency, prepareForGeneration, restoreTransparencyFn]);
 
+    // ── 本機 ONNX 高清放大（純像素超解析，結構 100% 保留，不走雲端、免額度） ──
+    const handleLocalUpscale = useCallback(async (modelKey: OnnxModelKey, factor: number = 4) => {
+        const element = elements.find(el => el.id === selectedElementIds[0]);
+        if (!element || element.type !== 'image') return;
+
+        const cfg = MODEL_CONFIGS[modelKey];
+        const status = await getModelStatus(modelKey);
+        if (status !== 'ready') {
+            showToast(`請先在「功能助手 → 本機 AI 模型」下載「${cfg.name}」(${cfg.sizeMB}MB)`);
+            return;
+        }
+
+        setGeneratingElementIds([element.id]);
+        setGenProgress(0);   // 在元素 badge 上顯示確定進度條（取代每幾趴跳 toast）
+        setIsGenerating(true);
+        try {
+            // 模型原生 4x；factor=2 時於 worker 內把 4x 結果降回 2x（仍享 4x 細節重構）
+            const resultSrc = await runUpscaleInWorker(
+                element.src,
+                cfg.cacheKey,
+                factor,
+                (pct) => setGenProgress(pct),
+            );
+
+            // 顯示尺寸放大 factor 倍（與「智能放大」一致），底層解析度同步 → 清晰不糊
+            const newElement: ImageElement = {
+                ...element,
+                id: `${Date.now()}-hires`,
+                src: resultSrc,
+                width: element.width * factor,
+                height: element.height * factor,
+                position: { x: element.position.x + 30, y: element.position.y + 30 },
+                zIndex: zIndexCounter.current++,
+                name: `${element.name}（高清 ${factor}x）`,
+                groupId: null,
+            };
+            setElements(prev => [...prev, newElement]);
+            showToast('高清放大完成！✨');
+        } catch (e: any) {
+            handleAIError(e, '高清放大');
+        } finally {
+            setGeneratingElementIds([]);
+            setGenProgress(null);
+            setIsGenerating(false);
+        }
+    }, [elements, selectedElementIds, setElements, showToast]);
+
     const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string) => {
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
         const noteElements = selectedElements.filter(el => el.type === 'note' || el.type === 'text') as (NoteElement | TextElement)[];
@@ -1539,6 +1590,8 @@ CONSTRAINTS:
         handleOutpaintingGenerate,
         handleAutoPromptGenerate,
         handleAIUpscale,
+        handleLocalUpscale,
+        genProgress,
         handleGenerate,
         handleAskAI 
     };
