@@ -3,3 +3,4 @@ out/
 *.pth
 *.safetensors
 *.onnx
+dl/
