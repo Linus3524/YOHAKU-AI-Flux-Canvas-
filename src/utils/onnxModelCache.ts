@@ -71,11 +71,11 @@ export const MODEL_CONFIGS: Record<OnnxModelKey, ModelConfig> = {
     },
     upscale_anime: {
         key: 'upscale_anime',
-        name: '動漫高清（AnimeSharp）',
-        description: '動漫 / 賽璐璐 / 線稿 4x 放大，邊緣銳利、色塊乾淨',
-        url: 'https://huggingface.co/yuvraj108c/ComfyUI-Upscaler-Onnx/resolve/main/4x-AnimeSharp.onnx',
-        cacheKey: 'onnx_upscale_animesharp_v1',
-        sizeMB: 72,
+        name: '動漫高清（RealESR Anime x4）',
+        description: '動漫 / 賽璐璐 / 線稿 4x 放大，動漫特化・極輕 1.2MB・WASM 友善',
+        url: 'https://huggingface.co/FuryTMP/RealESR_Animex4_fp16/resolve/main/RealESR_Animex4_fp16.onnx',
+        cacheKey: 'onnx_upscale_realesr_anime_x4_v1',
+        sizeMB: 1,
     },
     upscale_art: {
         key: 'upscale_art',
