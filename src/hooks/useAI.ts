@@ -16,7 +16,7 @@ import {
     processChromaKey
 } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
-import { callAtlasGenerate, callAtlasImg2Img, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
+import { callAtlasGenerate, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
 
 interface UseAIProps {
@@ -921,78 +921,144 @@ CONSTRAINTS:
         }
     }, [elements]);
 
-    const handleOutpaintingGenerate = useCallback(async (prompt: string) => {
+    const handleOutpaintingGenerate = useCallback(async (prompt: string, model: 'gemini' | 'gpt' = 'gemini') => {
         if (!outpaintingState) return;
-        setGeneratingElementIds([outpaintingState.element.id]); // Show badge on source image
+        const { element, frame } = outpaintingState;
+
+        if (model === 'gpt' && !atlasApiKey) {
+            showToast('GPT 擴圖需要 Atlas Cloud Key，請先於設定中輸入');
+            return;
+        }
+
+        setGeneratingElementIds([element.id]); // Show badge on source image
         setIsGenerating(true);
         try {
-            const { element, frame } = outpaintingState;
-            
-            const canvas = document.createElement('canvas');
-            canvas.width = frame.width;
-            canvas.height = frame.height;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) throw new Error("Canvas context failed");
-            
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
+            const img = await loadImage(element.src);
+
+            // scale: 1 顯示單位 = 多少原圖原生像素（用原生像素建圖，避免舊版用顯示尺寸壓縮 → 變糊/拉伸）
+            const scale = element.width > 0 ? img.naturalWidth / element.width : 1;
             const diffX = element.position.x - frame.position.x;
             const diffY = element.position.y - frame.position.y;
-            const imgX = Math.round(centerX + diffX - element.width / 2);
-            const imgY = Math.round(centerY + diffY - element.height / 2);
-            
-            const img = await loadImage(element.src);
-            ctx.drawImage(img, imgX, imgY, element.width, element.height);
-            
-            ctx.fillStyle = 'rgba(255, 59, 48, 0.4)'; 
-            ctx.beginPath();
-            ctx.rect(0, 0, canvas.width, canvas.height); 
-            ctx.rect(imgX, imgY, element.width, element.height); 
-            ctx.fill('evenodd'); 
-            
-            const base64Data = canvas.toDataURL('image/png');
-            const [header, data] = base64Data.split(',');
-            const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-            const imagePart = { inlineData: { data, mimeType } };
-  
-            const textPrompt = `The semi-transparent red area indicates the empty space that needs to be filled. Seamlessly outpaint. ${prompt}`;
-  
-            const genAI = createAiClient();
-            const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: imageModel,
-                contents: { parts: [imagePart, { text: textPrompt }] },
-                config: {
-                    imageConfig: {
-                        imageSize: "4K"
-                    }
-                }
-            }));
-  
-            const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-            if (part?.inlineData) {
-                const generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
-                
-                // Create new ID for the outpainted image
-                const newId = `${Date.now()}-outpainted`;
-                // Calculate max Z-index safely
-                const currentMaxZ = elements.length > 0 ? Math.max(...elements.map(e => e.zIndex)) : 0;
 
+            // 生成結果 → 新圖層。outputRatio = 結果圖實際寬高比（GPT 會吸附比例，需據此擺放避免拉伸）
+            const addResult = (generatedSrc: string, outputRatio?: number) => {
+                const ratio = outputRatio ?? (frame.width / frame.height);
+                const newW = frame.width;
+                const newH = newW / ratio;
+                const newId = `${Date.now()}-outpainted`;
+                const currentMaxZ = elements.length > 0 ? Math.max(...elements.map(e => e.zIndex)) : 0;
                 const newElement: ImageElement = {
                     ...element,
                     id: newId,
                     src: generatedSrc,
-                    width: frame.width,
-                    height: frame.height,
-                    position: frame.position, // Position matches the frame center
+                    width: newW,
+                    height: newH,
+                    position: frame.position,
                     name: `${element.name} (Expanded)`,
-                    zIndex: currentMaxZ + 1, // Place on top
-                    groupId: null
+                    zIndex: currentMaxZ + 1,
+                    groupId: null,
                 };
-
-                // Add as NEW element instead of replacing
                 setElements(prev => [...prev, newElement]);
                 setOutpaintingState(null);
-                showToast("擴圖完成！已新增為新圖層 ✨");
+                showToast('擴圖完成！已新增為新圖層 ✨');
+            };
+
+            if (model === 'gpt') {
+                // ── GPT Image 2 Edit 遮罩外擴 ──
+                // GPT edit 只支援三種輸出尺寸 → 把外框比例「吸附」到最接近的一種，
+                // 並把 size 帶進 API（不帶 size 它會輸出近似原圖比例 → 完全不擴）。
+                const GPT_EDIT_SIZES = [
+                    { w: 1024, h: 1024 }, // 1:1
+                    { w: 1536, h: 1024 }, // 3:2 橫
+                    { w: 1024, h: 1536 }, // 2:3 直
+                ];
+                const frameRatio = frame.width / frame.height;
+                const target = GPT_EDIT_SIZES.reduce((best, s) =>
+                    Math.abs((s.w / s.h) - frameRatio) < Math.abs((best.w / best.h) - frameRatio) ? s : best
+                );
+                const outW = target.w, outH = target.h;
+                const outRatio = outW / outH;
+
+                // 原圖等比置中（uniform scale，不變形）：整個外框 letterbox 進輸出畫布
+                const s = Math.min(outW / frame.width, outH / frame.height);
+                const dw = Math.round(element.width * s);
+                const dh = Math.round(element.height * s);
+                const imgX = Math.round(outW / 2 + diffX * s - dw / 2);
+                const imgY = Math.round(outH / 2 + diffY * s - dh / 2);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = outW; canvas.height = outH;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Canvas context failed');
+                ctx.drawImage(img, imgX, imgY, dw, dh);
+                const compositeB64 = canvas.toDataURL('image/png');
+
+                // 黑白遮罩：白=要生成的外圈、黑=保留的原圖
+                const mcanvas = document.createElement('canvas');
+                mcanvas.width = outW; mcanvas.height = outH;
+                const mctx = mcanvas.getContext('2d');
+                if (!mctx) throw new Error('Mask context failed');
+                mctx.fillStyle = '#ffffff';
+                mctx.fillRect(0, 0, outW, outH);
+                mctx.fillStyle = '#000000';
+                mctx.fillRect(imgX, imgY, dw, dh);
+                const maskB64 = mcanvas.toDataURL('image/png');
+
+                const outPrompt = prompt.trim()
+                    ? prompt.trim()
+                    : 'Naturally extend and continue the existing scene outward into the surrounding area — keep the same lighting, color palette, perspective, depth and artistic style so it looks like one continuous photograph.';
+                const resultSrc = await withAtlasWaitToast(() =>
+                    callAtlasInpaint(outPrompt, compositeB64, maskB64, atlasApiKey!, undefined, undefined, undefined, `${outW}x${outH}`));
+                addResult(resultSrc, outRatio);
+            } else {
+                // ── Gemini 路徑（整張重生，用原生解析度合成 + 強化「勿動原圖」指令） ──
+                const MAX_EDGE = 2048;
+                let fW = Math.round(frame.width * scale);
+                let fH = Math.round(frame.height * scale);
+                const longest = Math.max(fW, fH);
+                const capScale = longest > MAX_EDGE ? MAX_EDGE / longest : 1;
+                fW = Math.max(1, Math.round(fW * capScale));
+                fH = Math.max(1, Math.round(fH * capScale));
+                const drawScale = scale * capScale;
+                const dw = Math.round(element.width * drawScale);
+                const dh = Math.round(element.height * drawScale);
+                const imgX = Math.round(fW / 2 + diffX * drawScale - dw / 2);
+                const imgY = Math.round(fH / 2 + diffY * drawScale - dh / 2);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = fW; canvas.height = fH;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Canvas context failed');
+                ctx.drawImage(img, imgX, imgY, dw, dh);
+
+                ctx.fillStyle = 'rgba(255, 59, 48, 0.4)';
+                ctx.beginPath();
+                ctx.rect(0, 0, fW, fH);
+                ctx.rect(imgX, imgY, dw, dh);
+                ctx.fill('evenodd');
+
+                const base64Data = canvas.toDataURL('image/png');
+                const [header, data] = base64Data.split(',');
+                const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                const imagePart = { inlineData: { data, mimeType } };
+
+                const textPrompt = `The semi-transparent red area marks empty space to fill. Keep the existing (non-red) area pixel-for-pixel UNCHANGED — do not redraw, stretch, recolor, zoom, or shift it. Only paint into the red area, seamlessly extending the scene with matching lighting, perspective and style. ${prompt}`;
+
+                const genAI = createAiClient();
+                const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                    model: imageModel,
+                    contents: { parts: [imagePart, { text: textPrompt }] },
+                    config: {
+                        imageConfig: {
+                            imageSize: "4K"
+                        }
+                    }
+                }));
+
+                const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                if (part?.inlineData) {
+                    addResult(`data:image/png;base64,${part.inlineData.data}`);
+                }
             }
         } catch (e: any) {
             handleAIError(e, "擴圖");
@@ -1000,7 +1066,7 @@ CONSTRAINTS:
             setIsGenerating(false);
             setGeneratingElementIds([]);
         }
-    }, [outpaintingState, elements, setElements, showToast, setHasApiKey, apiKey]);
+    }, [outpaintingState, elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, imageModel, withAtlasWaitToast]);
   
     const handleAutoPromptGenerate = useCallback(async (state: OutpaintingState): Promise<string> => {
         try {

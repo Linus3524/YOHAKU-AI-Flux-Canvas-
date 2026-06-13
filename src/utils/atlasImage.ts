@@ -550,6 +550,7 @@ export async function callAtlasInpaint(
     referenceImages?: string[],
     surroundingContext?: string,
     signal?: AbortSignal,    // ← 傳入後可中止輪詢
+    size?: string,           // ← 指定輸出尺寸（外擴必填，e.g. '1024x1536'）；同尺寸 inpaint 可省略
 ): Promise<string> {
     // 透明遮罩圖：讓 GPT Image 2 Edit 知道哪裡需要重新生成
     const transparentImage = await createTransparentMaskedImage(imageBase64, maskBase64);
@@ -579,6 +580,7 @@ export async function callAtlasInpaint(
         images,
         enable_base64_output: true,
         output_format: 'png',
+        ...(size ? { size } : {}),
     };
     const predId = await postGeneration(body, atlasKey);
     const results = await pollPrediction(predId, atlasKey, signal);

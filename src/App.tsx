@@ -640,18 +640,24 @@ const App: React.FC = () => {
   const updateElements = useCallback((updatedElement: CanvasElement, dragDelta?: Point) => {
       originalUpdateElements(updatedElement, dragDelta);
 
-      // Sync outpainting frame position if the element being moved is the one being outpainted
+      // Sync outpainting frame position if the element being moved is the one being outpainted.
+      // 用「新位置 − 上次同步位置」自算真正增量，避免依賴可能累計/失準的 dragDelta，
+      // 否則拖曳時框會越跑越遠（圖片用絕對座標、框用 delta → 不同步）。
       if (outpaintingState && outpaintingState.element.id === updatedElement.id && dragDelta) {
           setOutpaintingState(prev => {
               if (!prev) return null;
+              const realDelta = {
+                  x: updatedElement.position.x - prev.element.position.x,
+                  y: updatedElement.position.y - prev.element.position.y,
+              };
               return {
                   ...prev,
                   element: updatedElement as ImageElement,
                   frame: {
                       ...prev.frame,
                       position: {
-                          x: prev.frame.position.x + dragDelta.x,
-                          y: prev.frame.position.y + dragDelta.y
+                          x: prev.frame.position.x + realDelta.x,
+                          y: prev.frame.position.y + realDelta.y
                       }
                   }
               };

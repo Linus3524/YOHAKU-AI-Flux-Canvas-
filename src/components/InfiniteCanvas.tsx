@@ -167,10 +167,13 @@ const DraggableOutpaintingPanel: React.FC<{
     handleAutoPrompt: () => void;
     onGenerate: () => void;
     onCancel: () => void;
+    model: 'gemini' | 'gpt';
+    setModel: (m: 'gemini' | 'gpt') => void;
+    hasAtlasKey: boolean;
     // Screen coordinates of the image's RIGHT edge and TOP edge, for initial placement
     frameScreenRight?: number;
     frameScreenTop?: number;
-}> = ({ outpaintingPrompt, setOutpaintingPrompt, isAutoPrompting, handleAutoPrompt, onGenerate, onCancel, frameScreenRight, frameScreenTop }) => {
+}> = ({ outpaintingPrompt, setOutpaintingPrompt, isAutoPrompting, handleAutoPrompt, onGenerate, onCancel, model, setModel, hasAtlasKey, frameScreenRight, frameScreenTop }) => {
     const PANEL_H_EST = 220;
     const GAP = 20;
     // Place panel to the right of the frame; fall back to right side of viewport
@@ -278,6 +281,31 @@ const DraggableOutpaintingPanel: React.FC<{
                         style={{ minHeight: 72, maxHeight: 200 }}
                         onMouseDown={(e) => e.stopPropagation()}
                     />
+
+                    {/* Model toggle row */}
+                    <div className="flex items-center gap-2 px-2.5 py-2 border-t border-gray-100">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">模型</span>
+                        <div className="flex bg-gray-100 rounded-lg p-0.5" onMouseDown={(e) => e.stopPropagation()}>
+                            <button
+                                onClick={() => setModel('gpt')}
+                                disabled={!hasAtlasKey}
+                                title={hasAtlasKey ? 'GPT Image 2 遮罩外擴：原圖保真、不變形（推薦）' : '需 Atlas Cloud Key'}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${model === 'gpt' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                GPT
+                            </button>
+                            <button
+                                onClick={() => setModel('gemini')}
+                                title="Gemini：整張重生，速度快、免 Atlas Key"
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${model === 'gemini' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Gemini
+                            </button>
+                        </div>
+                        <span className="text-[10px] text-gray-400 leading-tight">
+                            {model === 'gpt' ? '原圖保真・不變形' : '整張重生・快'}
+                        </span>
+                    </div>
 
                     {/* Action row */}
                     <div className="flex items-center justify-between px-2.5 py-2 border-t border-gray-100">
@@ -477,7 +505,7 @@ interface InfiniteCanvasProps {
   outpaintingState: OutpaintingState | null;
   onUpdateOutpaintingFrame: (newFrame: { position: Point; width: number; height: number; }) => void;
   onCancelOutpainting: () => void;
-  onOutpaintingGenerate: (prompt: string) => void;
+  onOutpaintingGenerate: (prompt: string, model: 'gemini' | 'gpt') => void;
   onAutoPromptGenerate: (state: OutpaintingState) => Promise<string>;
   stylePresets: { id: string, name: string, label: string }[];
   onCameraAngle: (prompt: string) => void;
@@ -673,6 +701,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
   const [outpaintingPrompt, setOutpaintingPrompt] = useState('');
   const [isAutoPrompting, setIsAutoPrompting] = useState(false);
+  const [outpaintModel, setOutpaintModel] = useState<'gemini' | 'gpt'>(hasAtlasKey ? 'gpt' : 'gemini');
   
   const [menuOffset, setMenuOffset] = useState<Point>({ x: 20, y: 0 }); 
   const [isDraggingMenu, setIsDraggingMenu] = useState(false);
@@ -1347,8 +1376,11 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
             setOutpaintingPrompt={setOutpaintingPrompt}
             isAutoPrompting={isAutoPrompting}
             handleAutoPrompt={handleAutoPrompt}
-            onGenerate={() => onOutpaintingGenerate(outpaintingPrompt)}
+            onGenerate={() => onOutpaintingGenerate(outpaintingPrompt, outpaintModel)}
             onCancel={onCancelOutpainting}
+            model={outpaintModel}
+            setModel={setOutpaintModel}
+            hasAtlasKey={hasAtlasKey}
             frameScreenRight={(() => {
               const r = canvasRef.current?.getBoundingClientRect();
               if (!r) return undefined;
