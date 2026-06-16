@@ -331,7 +331,7 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
 }`;
 
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-3.1-flash-lite',
+                model: 'gemini-3.1-flash',
                 contents: { parts: [imagePart, { text: prompt }] },
                 config: { responseMimeType: 'application/json' },
             }));
@@ -797,7 +797,7 @@ STRICT RULES:
                 const liteClient = createAiClient();
                 const analysisRes = await callGeminiWithRetry<GenerateContentResponse>(() =>
                     liteClient.models.generateContent({
-                        model: 'gemini-3.1-flash-lite',
+                        model: 'gemini-3.1-flash',
                         contents: {
                             parts: [
                                 baseImagePart,
