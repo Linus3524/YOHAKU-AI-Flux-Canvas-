@@ -1101,41 +1101,59 @@ CONSTRAINTS:
         setIsGenerating(true);
         // Request higher resolution depending on factor
         const requestedResolution = factor >= 4 ? '4K' : '2K';
-        showToast(`AI 正在運算中... 正在提升 ${factor} 倍解析度 (目標: ${requestedResolution})`);
-        
-        try {
-            const genAI = createAiClient();
-            const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
-            const [header, data] = flatSrc.split(',');
-            const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-            const imagePart = { inlineData: { data, mimeType } };
 
-            // 1. Calculate aspect ratio to enforce input shape
-            const targetAspectRatio = getClosestAspectRatio(element.width, element.height);
+        // 是否走 Atlas（非 Gemini 模型 + 有 key + 支援 img2img，如 GPT Image 2）
+        const useAtlas = generationModel !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModel as AtlasGenerationModel);
+
+        showToast(`AI 正在運算中... 正在提升 ${factor} 倍解析度 (目標: ${requestedResolution})`);
+
+        try {
+            const genAI = useAtlas ? null : createAiClient();
+            const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
 
             // UPDATED PROMPT: Strict instructions to prevent distortion
-            let prompt = `Task: High-fidelity image upscaling.
+            const prompt = `Task: High-fidelity image upscaling.
             Action: Upscale the image by ${factor}x.
             CRITICAL INSTRUCTION: Maintain the EXACT aspect ratio and geometry of the original subject content.
             Do NOT stretch, squeeze, or distort the image content to fit the aspect ratio container.
             If the container ratio differs slightly, extend the background naturally instead of distorting the subject.
             Enhance details and sharpness significantly while keeping the structure identical.`;
 
-            const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: imageModel,
-                contents: { parts: [imagePart, { text: prompt }] },
-                config: {
-                    imageConfig: {
-                        imageSize: requestedResolution,
-                        aspectRatio: targetAspectRatio
+            let resultSrc = '';
+
+            if (useAtlas) {
+                // ── Atlas img2img 放大路徑（GPT Image 2 等）──────────────
+                const atlasModel = generationModel as AtlasGenerationModel;
+                let refImage = flatSrc;
+                if (!refImage.startsWith('data:')) refImage = await downloadImageAsBase64(refImage);
+                const quality = factor >= 4 ? '4K' : '2K';
+                const images = await withAtlasWaitToast(() => callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, refImage, 1, { ratio: 'Original', quality }));
+                if (images.length > 0) resultSrc = images[0];
+            } else {
+                // ── Gemini 放大路徑 ─────────────────────────────────────
+                const [header, data] = flatSrc.split(',');
+                const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                const imagePart = { inlineData: { data, mimeType } };
+
+                // Calculate aspect ratio to enforce input shape
+                const targetAspectRatio = getClosestAspectRatio(element.width, element.height);
+
+                const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI!.models.generateContent({
+                    model: imageModel,
+                    contents: { parts: [imagePart, { text: prompt }] },
+                    config: {
+                        imageConfig: {
+                            imageSize: requestedResolution,
+                            aspectRatio: targetAspectRatio
+                        }
                     }
-                }
-            }));
+                }));
 
-            const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-            if (part?.inlineData) {
-                let resultSrc = `data:image/png;base64,${part.inlineData.data}`;
+                const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
+            }
 
+            if (resultSrc) {
                 if (hadTransparency) {
                     try {
                         showToast("正在為放大後的圖片還原透明背景...");
@@ -1175,7 +1193,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, preserveTransparency, prepareForGeneration, restoreTransparencyFn]);
+    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModel, atlasApiKey, preserveTransparency, prepareForGeneration, restoreTransparencyFn]);
 
     // ── 本機 ONNX 高清放大（純像素超解析，結構 100% 保留，不走雲端、免額度） ──
     const handleLocalUpscale = useCallback(async (modelKey: OnnxModelKey, factor: number = 4) => {
