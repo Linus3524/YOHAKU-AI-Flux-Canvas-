@@ -729,7 +729,10 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       if (context.type === 'remove') {
         if (lamaReady) {
           const result = await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
-          setPreviewImageSrc(result);
+          // LaMa 內部縮到 512×512 再放大回原尺寸，整張會糊；
+          // 只取遮罩區的填補結果貼回原圖，遮罩外維持原始像素不變。
+          const composited = await compositeImagesPixelPerfect(context.baseImageSrc, result, bwMaskBase64Url);
+          setPreviewImageSrc(composited);
           return;
         }
         // LaMa 未下載 → 用 Gemini 填補背景
@@ -738,7 +741,8 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       // ══ 路線 0b：手動選 LaMa 模式（直接移除，無論 action 為何）══════
       if (inpaintEngine === 'lama') {
         const result = await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
-        setPreviewImageSrc(result);
+        const composited = await compositeImagesPixelPerfect(context.baseImageSrc, result, bwMaskBase64Url);
+        setPreviewImageSrc(composited);
         return;
       }
 
@@ -869,9 +873,19 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
     const maskCanvas = maskCanvasRef.current;
     if (!maskCanvas) return;
 
-    // Check if mask is empty
+    // 遮罩為空（使用者未塗抹任何區域）→ 不送出，提示先塗抹
     const ctx = maskCanvas.getContext('2d');
-    // Basic check could go here, but relying on user to draw is okay for now.
+    if (ctx) {
+      const { data } = ctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+      let hasMask = false;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] > 0) { hasMask = true; break; }
+      }
+      if (!hasMask) {
+        alert('請先用筆刷塗抹要編輯或移除的區域。');
+        return;
+      }
+    }
 
     setIsLoading(true);
     setIsBaking(true);
