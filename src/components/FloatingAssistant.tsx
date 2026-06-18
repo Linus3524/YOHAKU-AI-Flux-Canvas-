@@ -606,6 +606,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <div className="space-y-4">
                         {[
                           { t: '圖層面板 / 群組', d: '拖曳排序、隱藏/鎖定。Ctrl+G 綁定多物件為群組。' },
+                          { t: '對齊與分佈', d: '選取 2 個以上物件，選取框上方浮現對齊列：靠左/置中/靠右、靠上/置中/靠下。3 個以上可水平/垂直等距分佈。鎖定物件與工作區域不受影響，可復原。' },
                           { t: '合併圖層', d: '選取多物件壓平為 PNG，自動裁切透明邊界，3x 高清渲染，保留陰影淡出效果。' },
                           { t: '保留透明背景', d: '風格轉換時先壓平為安全底色，完成後 BiRefNet → Gemini → ChromaKey 依序還原透明通道。' },
                         ].map((item, i) => (

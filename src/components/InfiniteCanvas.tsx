@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import type { Point, CanvasElement, ImageElement, ShapeType, ShapeElement } from '../types';
+import type { AlignMode } from '../hooks/useCanvas';
 import type { OutpaintingState } from '../types';
 import { TransformableElement } from './TransformableElement';
 import { AppearancePanel } from './AppearancePanel';
@@ -529,6 +530,7 @@ interface InfiniteCanvasProps {
   onSetGenerationModel?: (model: string) => void;
   hasAtlasKey?: boolean;
   onUpdateMultipleElements?: (elements: CanvasElement[]) => void;
+  onAlign?: (mode: AlignMode) => void;
 }
 
 // ... (MarqueeRect, CanvasApi, Constants, CameraIcons, SelectionMenuIcons, CAMERA_ANGLES, ASPECT_RATIOS) ...
@@ -696,6 +698,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onSetGenerationModel,
   hasAtlasKey = false,
   onUpdateMultipleElements,
+  onAlign,
 }, ref) => {
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -1124,6 +1127,18 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
       };
   }, [selectionBounds, worldToScreen, menuOffset]);
 
+  // 可對齊的元素數（排除鎖定與畫板）→ 決定對齊工具列是否顯示、分佈是否可用
+  const alignableCount = useMemo(() =>
+      elements.filter(el => selectedElementIds.includes(el.id) && !el.isLocked && el.type !== 'artboard').length
+  , [elements, selectedElementIds]);
+
+  // 對齊工具列定位：選取框頂部中央，浮在上方
+  const alignMenuPosition = useMemo(() => {
+      if (!selectionBounds) return null;
+      const anchor = worldToScreen({ x: (selectionBounds.minX + selectionBounds.maxX) / 2, y: selectionBounds.minY });
+      return { left: anchor.x, top: anchor.y };
+  }, [selectionBounds, worldToScreen]);
+
   const hasTextSelected = useMemo(() => {
       return elements.some(el => selectedElementIds.includes(el.id) && el.type === 'text');
   }, [elements, selectedElementIds]);
@@ -1453,6 +1468,68 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
               <Icon name="fit_screen" size={18} />
           </button>
       </div>
+
+      {/* ── 多物件對齊工具列（選取 2+ 可對齊元素時浮現於選取框上方）── */}
+      {!outpaintingState && !croppingElementId && alignableCount >= 2 && onAlign && alignMenuPosition && (() => {
+          const canDistribute = alignableCount >= 3;
+          const groups: { mode: AlignMode; icon: string; label: string; distribute?: boolean }[][] = [
+              [
+                  { mode: 'left',     icon: 'align_horizontal_left',   label: '靠左對齊' },
+                  { mode: 'h-center', icon: 'align_horizontal_center', label: '水平置中' },
+                  { mode: 'right',    icon: 'align_horizontal_right',  label: '靠右對齊' },
+              ],
+              [
+                  { mode: 'top',      icon: 'align_vertical_top',      label: '靠上對齊' },
+                  { mode: 'v-center', icon: 'align_vertical_center',   label: '垂直置中' },
+                  { mode: 'bottom',   icon: 'align_vertical_bottom',   label: '靠下對齊' },
+              ],
+              [
+                  { mode: 'distribute-h', icon: 'horizontal_distribute', label: '水平等距分佈', distribute: true },
+                  { mode: 'distribute-v', icon: 'vertical_distribute',   label: '垂直等距分佈', distribute: true },
+              ],
+          ];
+          return (
+              <div style={{
+                  position: 'absolute',
+                  left: alignMenuPosition.left,
+                  top: alignMenuPosition.top,
+                  transform: `translate(-50%, calc(-100% - 12px)) scale(${Math.max(0.7, Math.min(1, zoom))})`,
+                  transformOrigin: 'bottom center',
+                  zIndex: 50,
+              }}>
+                  <div
+                      className="flex items-center gap-0.5 px-1.5 py-1 animate-fade-in-up"
+                      style={{
+                          background: 'rgba(255,255,255,0.97)',
+                          backdropFilter: 'blur(20px)',
+                          border: '1px solid rgba(0,0,0,0.06)',
+                          boxShadow: '0 8px 30px -8px rgba(0,0,0,0.18)',
+                          borderRadius: '999px',
+                      }}
+                  >
+                      {groups.map((group, gi) => (
+                          <React.Fragment key={gi}>
+                              {gi > 0 && <span className="w-px h-4 bg-gray-200 mx-1" />}
+                              {group.map(btn => {
+                                  const disabled = !!btn.distribute && !canDistribute;
+                                  return (
+                                      <button
+                                          key={btn.mode}
+                                          onClick={() => !disabled && onAlign(btn.mode)}
+                                          disabled={disabled}
+                                          title={disabled ? `${btn.label}（需 3 個以上）` : btn.label}
+                                          className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${disabled ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:scale-95'}`}
+                                      >
+                                          <Icon name={btn.icon} size={19} />
+                                      </button>
+                                  );
+                              })}
+                          </React.Fragment>
+                      ))}
+                  </div>
+              </div>
+          );
+      })()}
 
       {!outpaintingState && !croppingElementId && selectedElementIds.length > 0 && !isArtboardSelected && !isOnlyArrowSelected && !shouldHideMenu && menuPosition && (
           <div style={{

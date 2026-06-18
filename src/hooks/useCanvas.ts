@@ -20,6 +20,8 @@ import { drawTextOnCanvas } from '../utils/textCanvas'; // ✅ 修改
 import type { CanvasApi } from '../components/InfiniteCanvas';
 import { saveFileHandle, loadFileHandle, clearFileHandle, verifyHandlePermission } from '../utils/fileHandleStore';
 
+export type AlignMode = 'left' | 'h-center' | 'right' | 'top' | 'v-center' | 'bottom' | 'distribute-h' | 'distribute-v';
+
 // LocalStorage
 const STORAGE_KEY = 'yohaku_canvas';
 const MAX_STORAGE_BYTES = 5 * 1024 * 1024; // 5MB
@@ -1534,6 +1536,68 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         setElements(prev => prev.map(el => selectedSet.has(el.id) ? { ...el, zIndex: newZIndex } : el));
     }, [selectedElementIds, elements, setElements]);
 
+    // --- 多物件對齊 / 分佈（靜態，一次到位，含歷史）---
+    // position 為中心點，故元素框 left = x - w/2、top = y - h/2（不考慮旋轉，採未旋轉 AABB）
+    const alignElements = useCallback((mode: AlignMode) => {
+        const selectedSet = new Set(selectedElementIds);
+        // 排除鎖定與畫板，避免動到不該動的元素
+        const targets = elements.filter(el => selectedSet.has(el.id) && !el.isLocked && el.type !== 'artboard');
+        if (targets.length < 2) return;
+
+        const isDistribute = mode === 'distribute-h' || mode === 'distribute-v';
+        if (isDistribute && targets.length < 3) return;
+
+        const minX = Math.min(...targets.map(el => el.position.x - el.width / 2));
+        const maxX = Math.max(...targets.map(el => el.position.x + el.width / 2));
+        const minY = Math.min(...targets.map(el => el.position.y - el.height / 2));
+        const maxY = Math.max(...targets.map(el => el.position.y + el.height / 2));
+
+        // 每個元素的新中心點
+        const newCenter = new Map<string, Point>();
+
+        if (mode === 'left') {
+            targets.forEach(el => newCenter.set(el.id, { x: minX + el.width / 2, y: el.position.y }));
+        } else if (mode === 'right') {
+            targets.forEach(el => newCenter.set(el.id, { x: maxX - el.width / 2, y: el.position.y }));
+        } else if (mode === 'h-center') {
+            const cx = (minX + maxX) / 2;
+            targets.forEach(el => newCenter.set(el.id, { x: cx, y: el.position.y }));
+        } else if (mode === 'top') {
+            targets.forEach(el => newCenter.set(el.id, { x: el.position.x, y: minY + el.height / 2 }));
+        } else if (mode === 'bottom') {
+            targets.forEach(el => newCenter.set(el.id, { x: el.position.x, y: maxY - el.height / 2 }));
+        } else if (mode === 'v-center') {
+            const cy = (minY + maxY) / 2;
+            targets.forEach(el => newCenter.set(el.id, { x: el.position.x, y: cy }));
+        } else if (mode === 'distribute-h') {
+            // 保持最左/最右不動，中間元素讓「邊緣間距」均等
+            const sorted = [...targets].sort((a, b) => (a.position.x - a.width / 2) - (b.position.x - b.width / 2));
+            const sumW = sorted.reduce((s, el) => s + el.width, 0);
+            const gap = (maxX - minX - sumW) / (sorted.length - 1);
+            let cursor = minX;
+            sorted.forEach(el => { newCenter.set(el.id, { x: cursor + el.width / 2, y: el.position.y }); cursor += el.width + gap; });
+        } else if (mode === 'distribute-v') {
+            const sorted = [...targets].sort((a, b) => (a.position.y - a.height / 2) - (b.position.y - b.height / 2));
+            const sumH = sorted.reduce((s, el) => s + el.height, 0);
+            const gap = (maxY - minY - sumH) / (sorted.length - 1);
+            let cursor = minY;
+            sorted.forEach(el => { newCenter.set(el.id, { x: el.position.x, y: cursor + el.height / 2 }); cursor += el.height + gap; });
+        }
+
+        setElements(prev => prev.map(el => {
+            const nc = newCenter.get(el.id);
+            if (!nc) return el;
+            const dx = nc.x - el.position.x;
+            const dy = nc.y - el.position.y;
+            if (dx === 0 && dy === 0) return el;
+            if (el.type === 'arrow') {
+                const a = el as ArrowElement;
+                return { ...a, position: nc, start: { x: a.start.x + dx, y: a.start.y + dy }, end: { x: a.end.x + dx, y: a.end.y + dy } };
+            }
+            return { ...el, position: nc };
+        }));
+    }, [selectedElementIds, elements, setElements]);
+
     // --- File System Access API Save/Open ---
     const isFileSystemSupported = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
 
@@ -1749,6 +1813,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         bringForward,
         sendBackward,
         sendToBack,
+        alignElements,
         handleRasterizeText,
         handleRasterizeShape,
         handleRasterizeArrow,

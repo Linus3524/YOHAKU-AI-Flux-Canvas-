@@ -330,7 +330,8 @@ const App: React.FC = () => {
       bringForward,
       sendBackward,
       sendToBack,
-      handleRasterizeText: originalRasterizeText, 
+      alignElements,
+      handleRasterizeText: originalRasterizeText,
       handleRasterizeShape,
       handleRasterizeArrow,
       handleExportCanvas: originalExportCanvas,
@@ -1798,6 +1799,7 @@ const App: React.FC = () => {
         onRemoveBackground={handleRemoveBackground}
 
         onUpdateMultipleElements={updateMultipleElements}
+        onAlign={alignElements}
         onHarmonize={handleHarmonize}
         isGenerating={isGenerating}
         generatingElementIds={generatingElementIds}
