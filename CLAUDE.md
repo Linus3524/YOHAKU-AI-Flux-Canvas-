@@ -2,14 +2,13 @@
 
 React + TypeScript + Vite 的無限畫布 AI 影像創作工具。畫布元件、AI 生成（Gemini / Atlas / fal.ai）、本機 ONNX（放大 / LaMa 去物）。
 
-## ⚠️ 程式碼真偽：先確認哪個檔案才是「活的」再動手
-
-這個 repo 有**新舊兩套同名檔案並存**，改錯地方改了不會生效（已踩過坑）：
+## 原始碼結構與死碼提醒
 
 - **進入點鏈**：`index.html` → `/index.tsx` → `import App from './src/App'`。
-- **唯一正本是 `src/` 底下的東西**：`src/App.tsx`、`src/components/*`、`src/hooks/*`、`src/utils/*`。
-- **根目錄的 `App.tsx`、`components/`、`types.ts`、`useHistoryState.ts` 是舊版殘留（死碼）**，沒有被 `src/` 引用，改它們完全沒效果。
-- 同一個檔案內也可能有**死碼陣列**：例如 `src/components/FloatingAssistant.tsx` 的 `FEATURE_DOCS`（從未被 `.map` 渲染）；功能指南實際畫面用的是 JSX 內嵌的 `t`/`d` 陣列。改文案要改後者。
+- **正本一律在 `src/` 底下**：`src/App.tsx`、`src/components/*`、`src/hooks/*`、`src/utils/*`。根目錄只保留 `index.tsx`（進入點）與 `vite.config.ts`（Vite 設定）。
+- 早期根目錄曾有一套舊版重複檔（`App.tsx`、`components/`、`types.ts`、`useHistoryState.ts`），已於清理時移除；別再新增根目錄版的元件/型別檔。
+- **檔案內仍可能有死碼陣列**：例如 `src/components/FloatingAssistant.tsx` 的 `FEATURE_DOCS`（從未被 `.map` 渲染）；功能指南實際畫面用的是 JSX 內嵌的 `t`/`d` 陣列，改文案要改後者。
+- `@` alias 指向**根目錄**（見 `tsconfig.json` / `vite.config.ts`），`@/x` 不等於 `src/x`，留意別誤用。
 - **動手前的習慣**：用 grep 確認目標符號/字串「真正被 import 或 render 的那一份」，再編輯。
 
 ## 指令
