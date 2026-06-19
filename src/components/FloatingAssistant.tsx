@@ -165,12 +165,20 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; purple?: b
 // ─── Component ────────────────────────────────────────────────────────────────
 export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, onCreateSticky, isHidden = false }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [logoIdx, setLogoIdx] = useState(0); // logo 自動輪播索引（0=英文、1=中文）
   const [activeSection, setActiveSection] = useState<Section>('about');
   const [position, setPosition] = useState({ x: 16, y: 16 });
   const [isDragging, setIsDragging] = useState(false);
   const hasMovedRef = useRef(false);
   const offsetRef = useRef({ x: 0, y: 0 });
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // logo 開啟面板時自動交疊淡入淡出切換（英文 ↔ 中文）：一張淡出同時另一張淡入，畫面不留白
+  useEffect(() => {
+    if (!isOpen) return;
+    const id = setInterval(() => setLogoIdx(i => (i === 0 ? 1 : 0)), 5000);
+    return () => clearInterval(id);
+  }, [isOpen]);
 
   // 本機模型狀態
   const [modelStatuses, setModelStatuses] = useState<Record<OnnxModelKey, ModelStatus>>({
@@ -333,9 +341,22 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
         >
           {/* ── Sidebar ─────────────────────────────────────────────────────── */}
           <div className="w-52 flex-shrink-0 border-r border-gray-200 bg-white/50 flex flex-col p-5">
-            {/* Logo */}
-            <div className="mb-6">
-              <img src="/yohaku-logo.png" alt="YOHAKU AI Flux Canvas" className="w-full h-auto opacity-90" />
+            {/* Logo（英文 ↔ 中文自動淡入淡出切換）*/}
+            <div className="relative mb-6 w-full">
+              {/* 透明佔位圖：用較高者固定容器高度，避免切換時版面跳動 */}
+              <img src="/yohaku-logo.png" alt="" aria-hidden className="w-full h-auto invisible" />
+              <img
+                src="/yohaku-logo.png"
+                alt="YOHAKU AI Flux Canvas"
+                className="absolute inset-0 w-full h-full object-contain transition-opacity duration-[2500ms]"
+                style={{ opacity: logoIdx === 0 ? 0.9 : 0, transitionTimingFunction: 'cubic-bezier(0.45, 0, 0.55, 1)' }}
+              />
+              <img
+                src="/yohaku-logo-zh.png"
+                alt="余白 AI Flux Canvas"
+                className="absolute inset-0 w-full h-full object-contain transition-opacity duration-[2500ms]"
+                style={{ opacity: logoIdx === 1 ? 0.9 : 0, transitionTimingFunction: 'cubic-bezier(0.45, 0, 0.55, 1)' }}
+              />
             </div>
 
             {/* Nav */}
