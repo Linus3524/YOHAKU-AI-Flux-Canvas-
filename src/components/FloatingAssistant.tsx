@@ -176,7 +176,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
   // logo 開啟面板時自動交疊淡入淡出切換（英文 ↔ 中文）：一張淡出同時另一張淡入，畫面不留白
   useEffect(() => {
     if (!isOpen) return;
-    const id = setInterval(() => setLogoIdx(i => (i === 0 ? 1 : 0)), 5000);
+    const id = setInterval(() => setLogoIdx(i => (i === 0 ? 1 : 0)), 7000);
     return () => clearInterval(id);
   }, [isOpen]);
 
@@ -348,14 +348,14 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
               <img
                 src="/yohaku-logo.png"
                 alt="YOHAKU AI Flux Canvas"
-                className="absolute inset-0 w-full h-full object-contain transition-opacity duration-[2500ms]"
-                style={{ opacity: logoIdx === 0 ? 0.9 : 0, transitionTimingFunction: 'cubic-bezier(0.45, 0, 0.55, 1)' }}
+                className="absolute inset-0 w-full h-full object-contain transition-opacity duration-[1300ms]"
+                style={{ opacity: logoIdx === 0 ? 0.9 : 0, transitionTimingFunction: 'cubic-bezier(0.45, 0, 0.55, 1)', transitionDelay: logoIdx === 0 ? '500ms' : '0ms' }}
               />
               <img
                 src="/yohaku-logo-zh.png"
                 alt="余白 AI Flux Canvas"
-                className="absolute inset-0 w-full h-full object-contain transition-opacity duration-[2500ms]"
-                style={{ opacity: logoIdx === 1 ? 0.9 : 0, transitionTimingFunction: 'cubic-bezier(0.45, 0, 0.55, 1)' }}
+                className="absolute inset-0 w-full h-full object-contain transition-opacity duration-[1300ms]"
+                style={{ opacity: logoIdx === 1 ? 0.9 : 0, transitionTimingFunction: 'cubic-bezier(0.45, 0, 0.55, 1)', transitionDelay: logoIdx === 1 ? '500ms' : '0ms' }}
               />
             </div>
 
