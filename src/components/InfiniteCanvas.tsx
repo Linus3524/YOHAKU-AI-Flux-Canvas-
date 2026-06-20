@@ -984,22 +984,39 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   }, [marqueeRect, elements, onMarqueeSelect]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
+    // 縮放手勢（Ctrl/⌘ + 滾輪）永遠作用於畫布，不管滑鼠停在哪
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       const zoomSensitivity = 0.001;
       const newZoom = Math.min(Math.max(MIN_ZOOM, zoom - e.deltaY * zoomSensitivity), MAX_ZOOM);
-      
+
       const mouseX = e.clientX - pan.x;
       const mouseY = e.clientY - pan.y;
-      
+
       const newPanX = e.clientX - (mouseX / zoom) * newZoom;
       const newPanY = e.clientY - (mouseY / zoom) * newZoom;
 
       setZoom(newZoom);
       setPan({ x: newPanX, y: newPanY });
-    } else {
-      setPan(prev => ({ x: prev.x - e.deltaX, y: prev.y - e.deltaY }));
+      return;
     }
+
+    // 平移前先讓位給內層可捲動元素（便利貼文字、選單捲軸等）：
+    // 若滑鼠所在元素還能往該滾動方向捲，就交給它原生捲動、不平移畫布；
+    // 捲到邊界後才換畫布接手。
+    const root = e.currentTarget as HTMLElement;
+    let node = e.target as HTMLElement | null;
+    while (node && node !== root) {
+      const oy = getComputedStyle(node).overflowY;
+      if (oy === 'auto' || oy === 'scroll') {
+        const canScrollDown = node.scrollHeight - node.clientHeight - node.scrollTop > 1;
+        const canScrollUp = node.scrollTop > 1;
+        if ((e.deltaY > 0 && canScrollDown) || (e.deltaY < 0 && canScrollUp)) return;
+      }
+      node = node.parentElement;
+    }
+
+    setPan(prev => ({ x: prev.x - e.deltaX, y: prev.y - e.deltaY }));
   }, [zoom, pan]);
 
   const handleMenuMouseDown = (e: React.MouseEvent) => {
