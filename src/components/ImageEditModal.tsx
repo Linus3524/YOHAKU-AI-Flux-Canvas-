@@ -789,9 +789,11 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       const maskMimeType = maskHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
       const maskImagePart = { inlineData: { data: maskData, mimeType: maskMimeType } };
 
+      // 與 GPT 模式同一套邏輯：整張重繪，遮罩區為主要編輯對象，遮罩外僅允許低幅度自然變動
+      // （不再強制「遮罩外逐像素 100% 相同」+ 後製裁切貼回，避免色調/紋理不連續造成的拼縫）
       const instructionPrefix = `You are provided with TWO images:
 - IMAGE 1: The original photo to edit.
-- IMAGE 2: A black-and-white mask. WHITE = region to change. BLACK = must remain pixel-perfect identical to IMAGE 1.`;
+- IMAGE 2: A black-and-white mask. WHITE = the primary region to change. BLACK = keep the scene essentially the same — only very subtle, low-magnitude adjustments are allowed there (e.g. minor lighting/color/grain consistency with the edited region), never a different subject or composition change.`;
 
       let textPrompt = '';
       if (context.type === 'remove') {
@@ -807,7 +809,7 @@ Step 2 – Analyze surroundings: Study the texture, color, pattern, lighting, an
 Step 3 – Heal: Fill the masked region by naturally extending those surrounding textures and structures inward — as if you are using a content-aware healing brush. The result must look like the masked object was never there.
 Step 4 – Blend: Ensure seamless transitions at the mask boundary. Match grain, perspective, and light direction of the surrounding area.${userHint}
 
-ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identical to IMAGE 1. Do not alter anything outside the white mask.`.trim();
+Render the full image. Outside the white mask, keep everything as close to IMAGE 1 as possible — only allow minor, low-magnitude adjustments needed for a seamless, natural result.`.trim();
       } else {
         textPrompt = `${instructionPrefix}
 
@@ -817,7 +819,7 @@ Step 1 – Identify: Use IMAGE 2 to locate the WHITE masked region in IMAGE 1.
 Step 2 – Edit: Within that region, apply this change: ${context.prompt}.
 Step 3 – Integrate: Match the surrounding image's lighting direction, color temperature, perspective, and texture so the edit feels native to the photo.
 
-ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identical to IMAGE 1. Do not alter anything outside the white mask.`.trim();
+Render the full image. Outside the white mask, keep everything as close to IMAGE 1 as possible — only allow minor, low-magnitude adjustments needed for a seamless, natural result.`.trim();
       }
 
       // Attach reference images if any (Gemini multi-image)
@@ -837,13 +839,10 @@ ABSOLUTE CONSTRAINT: Every pixel in BLACK areas of IMAGE 2 must be 100% identica
 
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) {
+          // 與 GPT 模式一致：直接採用模型回傳的整張重繪結果，不再強制裁切貼回原圖，
+          // 避免兩張圖色調/紋理細微差異造成的拼縫（理由同 GPT 路線）。
           const generatedBase64 = `data:image/png;base64,${part.inlineData.data}`;
-          const finalImageSrc = await compositeImagesPixelPerfect(
-            context.baseImageSrc,
-            generatedBase64,
-            bwMaskBase64Url
-          );
-          setPreviewImageSrc(finalImageSrc);
+          setPreviewImageSrc(generatedBase64);
           return;
         }
       }
