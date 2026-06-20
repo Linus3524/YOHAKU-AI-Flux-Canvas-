@@ -409,10 +409,16 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
         window.removeEventListener('mouseup', handleMouseUp);
     };
 
-    const renderHandle = (cursor: string, posClass: string, type: string) => (
-        <div 
-            className={`absolute w-3 h-3 bg-white border border-[#2997FF] rounded-full shadow-sm z-50 ${posClass}`}
-            style={{ cursor }}
+    // zoom 補償：與一般物件方點一致 — 縮小畫布時放大 handle、放大畫布時縮小，
+    // 讓圓點在不同 zoom 下的「螢幕大小」固定（base 6px，極小 zoom 上限 5.5×）
+    const hScale = Math.min(1 / zoom, 5.5);
+    const HS = 6 * hScale;          // 圓點直徑
+    const HO = -HS / 2;             // 置中於框邊的偏移
+    const HBW = Math.min(3, 1 * hScale); // 邊框寬度補償
+    const renderHandle = (cursor: string, posStyle: React.CSSProperties, type: string) => (
+        <div
+            className="absolute bg-white rounded-full shadow-sm z-50"
+            style={{ width: HS, height: HS, border: `${HBW}px solid #2997FF`, cursor, ...posStyle }}
             onMouseDown={(e) => handleMouseDown(e, type)}
         />
     );
@@ -445,14 +451,14 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
                     <div className="absolute top-1/3 left-0 w-full h-px bg-white/50 shadow-[0_0_2px_rgba(0,0,0,0.5)]" />
                     <div className="absolute top-2/3 left-0 w-full h-px bg-white/50 shadow-[0_0_2px_rgba(0,0,0,0.5)]" />
                 </div>
-                {renderHandle('nw-resize', '-top-1.5 -left-1.5', 'nw')}
-                {renderHandle('n-resize', '-top-1.5 left-1/2 -translate-x-1/2', 'n')}
-                {renderHandle('ne-resize', '-top-1.5 -right-1.5', 'ne')}
-                {renderHandle('e-resize', 'top-1/2 -translate-y-1/2 -right-1.5', 'e')}
-                {renderHandle('se-resize', '-bottom-1.5 -right-1.5', 'se')}
-                {renderHandle('s-resize', '-bottom-1.5 left-1/2 -translate-x-1/2', 's')}
-                {renderHandle('sw-resize', '-bottom-1.5 -left-1.5', 'sw')}
-                {renderHandle('w-resize', 'top-1/2 -translate-y-1/2 -left-1.5', 'w')}
+                {renderHandle('nw-resize', { top: HO, left: HO }, 'nw')}
+                {renderHandle('n-resize', { top: HO, left: '50%', transform: 'translateX(-50%)' }, 'n')}
+                {renderHandle('ne-resize', { top: HO, right: HO }, 'ne')}
+                {renderHandle('e-resize', { top: '50%', right: HO, transform: 'translateY(-50%)' }, 'e')}
+                {renderHandle('se-resize', { bottom: HO, right: HO }, 'se')}
+                {renderHandle('s-resize', { bottom: HO, left: '50%', transform: 'translateX(-50%)' }, 's')}
+                {renderHandle('sw-resize', { bottom: HO, left: HO }, 'sw')}
+                {renderHandle('w-resize', { top: '50%', left: HO, transform: 'translateY(-50%)' }, 'w')}
             </div>
 
             <div 
