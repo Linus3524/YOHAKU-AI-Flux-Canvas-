@@ -96,6 +96,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     const currentFileHandleRef = useRef<FileSystemFileHandle | null>(null);
     // Keep ref in sync so save callbacks don't capture stale state
     useEffect(() => { currentFileHandleRef.current = currentFileHandle; }, [currentFileHandle]);
+    // 自動寫回 .json 用：最新 elements 參照 + 上次寫回的內容（避免重複寫）
+    const elementsRef = useRef(elements);
+    elementsRef.current = elements;
+    const lastFileSaveRef = useRef<string>('');
 
     // On mount: restore persisted file handle only if localStorage has canvas data
     useEffect(() => {
@@ -133,6 +137,22 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     const [storageStatus, setStorageStatus] = useState<StorageStatus>('saved');
     const hasMountedRef = useRef(false);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastIDBSaveRef = useRef<string>(''); // 上次寫入 IndexedDB 的內容（內容沒變則略過）
+
+    // 實際寫入 IndexedDB（+ localStorage 降級備援）；內容未變則略過，避免重複寫大檔
+    const persistToIDB = useCallback(async () => {
+        const json = JSON.stringify(elementsRef.current);
+        if (json === lastIDBSaveRef.current) { setStorageStatus('saved'); return; }
+        try {
+            const { set } = await import('idb-keyval');
+            await set(STORAGE_KEY + '_idb', json);
+            lastIDBSaveRef.current = json;
+            setStorageStatus('saved');
+            try { localStorage.setItem(STORAGE_KEY, json); } catch {}
+        } catch {
+            setStorageStatus('error');
+        }
+    }, []);
 
     // Mount 時嘗試從 IndexedDB 讀取（優先於 localStorage）
     useEffect(() => {
@@ -150,22 +170,27 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         }
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         setStorageStatus('saving');
-        saveTimerRef.current = setTimeout(async () => {
-            try {
-                const json = JSON.stringify(elements);
-                const { set } = await import('idb-keyval');
-                await set(STORAGE_KEY + '_idb', json);
-                setStorageStatus('saved');
-                // 同步更新 localStorage 以防 IndexedDB 不可用（降級）
-                try { localStorage.setItem(STORAGE_KEY, json); } catch {}
-            } catch {
-                setStorageStatus('error');
-            }
-        }, 1000);
+        saveTimerRef.current = setTimeout(() => { persistToIDB(); }, 1000);
         return () => {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         };
-    }, [elements]);
+    }, [elements, persistToIDB]);
+
+    // 關閉前/切走前強制存：視窗失焦、分頁隱藏時立即寫一次 IndexedDB（取消 pending debounce），
+    // 解決「完全關閉瀏覽器只恢復到較早狀態」——最後一秒的編輯不再丟失
+    useEffect(() => {
+        const flushNow = () => {
+            if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+            persistToIDB();
+        };
+        const onVisibility = () => { if (document.visibilityState === 'hidden') flushNow(); };
+        window.addEventListener('blur', flushNow);
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => {
+            window.removeEventListener('blur', flushNow);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
+    }, [persistToIDB]);
 
     const clearStorage = useCallback(() => {
         if (saveTimerRef.current) {
@@ -1608,12 +1633,37 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         await writable.close();
     }, []);
 
+    // 自動寫回連結的 .json 檔：只在已連結、權限已 granted（不主動跳授權彈窗）、
+    // 且內容有變時才寫。觸發時機＝閒置 20 分鐘（停手 20 分鐘才寫一次最新）。
+    // 不在切換分頁/失焦時寫；短期安全由 IndexedDB 每秒自動存負責。
+    const flushToLinkedFile = useCallback(async () => {
+        const handle = currentFileHandleRef.current;
+        if (!handle) return;
+        const dataStr = JSON.stringify(elementsRef.current, null, 2);
+        if (dataStr === lastFileSaveRef.current) return; // 沒變動就不寫
+        try {
+            // @ts-ignore — 僅查詢、不請求，避免非使用者手勢下彈出授權視窗
+            const state = await handle.queryPermission({ mode: 'readwrite' });
+            if (state !== 'granted') return;
+            await writeToHandle(handle, dataStr);
+            lastFileSaveRef.current = dataStr;
+        } catch { /* 靜默失敗，IndexedDB 仍有備份 */ }
+    }, [writeToHandle]);
+
+    // 閒置 20 分鐘自動寫回（每次元素變動重設計時器 → 真正停手 20 分鐘才寫一次）
+    useEffect(() => {
+        if (!currentFileHandle) return;
+        const t = setTimeout(() => { flushToLinkedFile(); }, 20 * 60 * 1000);
+        return () => clearTimeout(t);
+    }, [elements, currentFileHandle, flushToLinkedFile]);
+
     const handleSaveFile = useCallback(async () => {
         const dataStr = JSON.stringify(elements, null, 2);
         const handle = currentFileHandleRef.current;
         if (handle) {
             try {
                 await writeToHandle(handle, dataStr);
+                lastFileSaveRef.current = dataStr;
                 showToast(`已儲存：${handle.name}`);
                 return;
             } catch (e: any) {
@@ -1652,6 +1702,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             });
             const dataStr = JSON.stringify(elements, null, 2);
             await writeToHandle(handle, dataStr);
+            lastFileSaveRef.current = dataStr;
             setCurrentFileHandle(handle);
             setCurrentFileName(handle.name);
             await saveFileHandle(handle);
