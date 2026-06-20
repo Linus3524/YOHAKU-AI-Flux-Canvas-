@@ -854,19 +854,31 @@ CONSTRAINTS:
             // 依底圖實際像素大小自動選擇輸出解析度
             const imageSize = (baseImg.naturalWidth >= 2000 || baseImg.naturalHeight >= 2000) ? '4K' : '2K';
 
-            const genAI = createAiClient();
-            const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: imageModel,
-                contents: { parts: [imagePart, { text: promptText }] },
-                config: {
-                    imageConfig: { aspectRatio: targetAspectRatio, imageSize }
-                },
-            }));
-    
-            const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-            if (part?.inlineData) {
-                const aiResultSrc = `data:image/png;base64,${part.inlineData.data}`;
-                
+            // 是否走 Atlas（非 Gemini 模型 + 有 key + 支援 img2img，如 GPT Image 2 / Seedream / Qwen）
+            const useAtlas = generationModel !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModel as AtlasGenerationModel);
+
+            let aiResultSrc = '';
+            if (useAtlas) {
+                // ── Atlas img2img 調和路徑 ──────────────────────────
+                const atlasModel = generationModel as AtlasGenerationModel;
+                const quality = imageSize === '4K' ? '4K' : '2K';
+                const images = await withAtlasWaitToast(() => callAtlasImg2Img(promptText, atlasModel, atlasApiKey!, base64, 1, { ratio: 'Original', quality }));
+                if (images.length > 0) aiResultSrc = images[0];
+            } else {
+                // ── Gemini 調和路徑 ─────────────────────────────────
+                const genAI = createAiClient();
+                const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                    model: imageModel,
+                    contents: { parts: [imagePart, { text: promptText }] },
+                    config: {
+                        imageConfig: { aspectRatio: targetAspectRatio, imageSize }
+                    },
+                }));
+                const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                if (part?.inlineData) aiResultSrc = `data:image/png;base64,${part.inlineData.data}`;
+            }
+
+            if (aiResultSrc) {
                 const finalCanvas = document.createElement('canvas');
                 finalCanvas.width = canvas.width;
                 finalCanvas.height = canvas.height;
@@ -909,7 +921,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey]);
+    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModel, atlasApiKey, withAtlasWaitToast]);
 
     const handleStartOutpainting = useCallback((elementId: string) => {
         const el = elements.find(e => e.id === elementId);
