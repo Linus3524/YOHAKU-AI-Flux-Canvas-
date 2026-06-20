@@ -638,6 +638,7 @@ const CAMERA_ANGLES = [
 const ASPECT_RATIOS = [
   { value: 'Original', label: '原圖比例 (Original)' },
   { value: '1:1', label: '1:1 正方形 (Instagram/Social)' },
+  { value: '4:5', label: '4:5 直式貼文 (Instagram Portrait)' },
   { value: '3:4', label: '3:4 傳統比例 (Portrait)' },
   { value: '4:3', label: '4:3 傳統比例 (Landscape)' },
   { value: '9:16', label: '9:16 手機全螢幕 (Reels/Shorts)' },
