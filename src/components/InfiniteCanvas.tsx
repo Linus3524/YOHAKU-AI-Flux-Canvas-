@@ -1177,7 +1177,17 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
       return elements.find(el => el.id === croppingElementId) as ImageElement | undefined;
   }, [croppingElementId, elements]);
 
-  const shouldHideMenu = (hasTextSelected && !hasImageOrDrawingOrShape); 
+  const shouldHideMenu = (hasTextSelected && !hasImageOrDrawingOrShape);
+
+  // 多圖時效能優化：選取查找用 Set（O(1)），排序清單 memoize（避免每次拖曳都對全部元素重新排序）
+  const selectedIdSet = useMemo(() => new Set(selectedElementIds), [selectedElementIds]);
+  const sortedElements = useMemo(() =>
+      [...elements].sort((a, b) => {
+          if (a.type === 'artboard' && b.type !== 'artboard') return -1;
+          if (a.type !== 'artboard' && b.type === 'artboard') return 1;
+          return a.zIndex - b.zIndex;
+      })
+  , [elements]);
 
   return (
     <div 
@@ -1201,20 +1211,16 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
         }}
       />
 
-      <div 
+      <div
         className="absolute inset-0 origin-top-left"
-        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, willChange: 'transform' }}
       >
         {
-          [...elements].sort((a, b) => {
-            if (a.type === 'artboard' && b.type !== 'artboard') return -1;
-            if (a.type !== 'artboard' && b.type === 'artboard') return 1;
-            return a.zIndex - b.zIndex;
-          }).map(el => (
+          sortedElements.map(el => (
           <TransformableElement
             key={el.id}
             element={el}
-            isSelected={selectedElementIds.includes(el.id) && croppingElementId !== el.id && !groupBounds}
+            isSelected={selectedIdSet.has(el.id) && croppingElementId !== el.id && !groupBounds}
             isOutpainting={!!outpaintingState && outpaintingState.element.id === el.id}
             zoom={zoom}
             onSelect={onSelectElement}

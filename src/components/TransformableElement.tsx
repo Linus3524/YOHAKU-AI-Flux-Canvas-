@@ -790,6 +790,9 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                 width: element.width,
                 height: element.height,
                 transform: `translate(-50%, -50%) rotate(${element.rotation}deg)`,
+                // 僅選取中（= 可能正被拖曳/縮放/旋轉）的元素才提示 GPU 合成；
+                // 全部元素常駐 will-change 在多圖時反而會增加合成層記憶體開銷
+                willChange: isSelected ? 'transform' : undefined,
                 cursor: isOutpainting ? 'move' : 'move',
                 zIndex: galleryHovered ? 99999 : element.zIndex,
                 overflow: element.type === 'note' ? 'visible' : undefined,
