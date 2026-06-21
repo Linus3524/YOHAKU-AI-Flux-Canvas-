@@ -906,6 +906,8 @@ const App: React.FC = () => {
   const [interactionMode, setInteractionMode] = useState<'select' | 'hand'>('select');
   // 便利貼「點擊放置」模式：true = 等待使用者在畫布點一下決定位置
   const [placingNote, setPlacingNote] = useState(false);
+  // 最近一次滑鼠螢幕座標 —— 供「在游標位置貼上」使用
+  const lastPointerScreenRef = useRef<Point | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -1453,8 +1455,20 @@ const App: React.FC = () => {
     };
   }, [addImagesToCanvas]);
 
-  // 剪貼簿貼上：外部圖片 / 外部文字 → 直接放進畫布
+  // 追蹤滑鼠螢幕座標（供貼上定位）
   useEffect(() => {
+    const onMove = (e: MouseEvent) => { lastPointerScreenRef.current = { x: e.clientX, y: e.clientY }; };
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
+  }, []);
+
+  // 剪貼簿貼上：外部圖片 / 外部文字 → 貼在游標位置
+  useEffect(() => {
+    // 游標所在的世界座標（無紀錄時退回畫面中心）
+    const getPasteWorldPoint = (): Point =>
+      (lastPointerScreenRef.current && canvasApiRef.current)
+        ? canvasApiRef.current.screenToWorld(lastPointerScreenRef.current)
+        : getCenterOfViewport();
     const handlePaste = (e: ClipboardEvent) => {
         const target = e.target as HTMLElement;
         // 正在編輯文字輸入框 → 讓瀏覽器正常處理
@@ -1473,7 +1487,7 @@ const App: React.FC = () => {
                     const file = item.getAsFile();
                     if (file) {
                         e.preventDefault();
-                        addImagesToCanvas([file], getCenterOfViewport());
+                        addImagesToCanvas([file], getPasteWorldPoint());
                         return;
                     }
                 }
@@ -1484,7 +1498,7 @@ const App: React.FC = () => {
         const text = e.clipboardData?.getData('text/plain')?.trim();
         if (text) {
             e.preventDefault();
-            addText(getCenterOfViewport(), text);
+            addText(getPasteWorldPoint(), text);
             return;
         }
 
