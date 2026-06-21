@@ -267,7 +267,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     }, [addElement]);
 
     const addNote = useCallback((position?: Point) => {
-        addElement({
+        return addElement({
           type: 'note',
           position: position || getCenterOfViewport(),
           width: 300,

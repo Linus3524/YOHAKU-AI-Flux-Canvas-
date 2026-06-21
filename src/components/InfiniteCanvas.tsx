@@ -527,7 +527,8 @@ interface InfiniteCanvasProps {
   onCancelCrop: () => void;
   onApplyCrop: (cropRect: { x: number, y: number, width: number, height: number }) => void;
   interactionMode: 'select' | 'hand';
-  activeShapeTool: ShapeType | null; 
+  activeShapeTool: ShapeType | null;
+  notePlacing?: boolean;
   onUpscale: (factor: number) => void;
   onLocalUpscale?: (modelKey: 'upscale_photo' | 'upscale_anime' | 'upscale_art') => void;
   onDragStart?: () => void;
@@ -697,6 +698,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onApplyCrop,
   interactionMode,
   activeShapeTool,
+  notePlacing,
   onUpscale,
   onLocalUpscale,
   onDragStart,
@@ -848,8 +850,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
         if (!isSpacebarPressed && e.button !== 1) return;
     }
 
-    if (activeShapeTool && e.button === 0) {
-        return; 
+    if ((activeShapeTool || notePlacing) && e.button === 0) {
+        return;
     }
 
     if (isSpacebarPressed || e.button === 1 || interactionMode === 'hand') {
@@ -864,7 +866,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
         setMarqueeRect({ start: point, end: point });
       }
     }
-  }, [isSpacebarPressed, pan, outpaintingState, onSelectElement, screenToWorld, croppingElementId, interactionMode, activeShapeTool]);
+  }, [isSpacebarPressed, pan, outpaintingState, onSelectElement, screenToWorld, croppingElementId, interactionMode, activeShapeTool, notePlacing]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     // ── 群組旋轉攔截 ──
@@ -1199,7 +1201,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
     <div 
       ref={canvasRef}
       className={`w-full h-full overflow-hidden relative 
-        ${isSpacebarPressed || interactionMode === 'hand' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : (activeShapeTool ? 'cursor-crosshair' : 'cursor-default')}
+        ${isSpacebarPressed || interactionMode === 'hand' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : (activeShapeTool || notePlacing ? 'cursor-crosshair' : 'cursor-default')}
       `}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}

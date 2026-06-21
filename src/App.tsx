@@ -904,6 +904,8 @@ const App: React.FC = () => {
   const [editingDrawing, setEditingDrawing] = useState<DrawingElement | null>(null);
   const [editingImage, setEditingImage] = useState<ImageElement | null>(null);
   const [interactionMode, setInteractionMode] = useState<'select' | 'hand'>('select');
+  // 便利貼「點擊放置」模式：true = 等待使用者在畫布點一下決定位置
+  const [placingNote, setPlacingNote] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -1025,6 +1027,15 @@ const App: React.FC = () => {
 
   const handleSelectShapeTool = useCallback((shapeType: ShapeType) => {
       setActiveShapeTool(shapeType);
+      setInteractionMode('select');
+      setSelectedElementIds([]);
+      setPlacingNote(false);
+  }, [setActiveShapeTool, setSelectedElementIds]);
+
+  // 進入/退出便利貼點擊放置模式（再按一次按鈕取消）
+  const handleStartPlaceNote = useCallback(() => {
+      setPlacingNote(prev => !prev);
+      setActiveShapeTool(null);
       setInteractionMode('select');
       setSelectedElementIds([]);
   }, [setActiveShapeTool, setSelectedElementIds]);
@@ -1268,6 +1279,15 @@ const App: React.FC = () => {
   }, [addImagesToCanvas, getCenterOfViewport]);
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
+      if (placingNote && canvasApiRef.current) {
+          if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.floating-menu') || (e.target as HTMLElement).closest('.fixed')) return;
+          e.stopPropagation();
+          const worldPoint = canvasApiRef.current.screenToWorld({ x: e.clientX, y: e.clientY });
+          const id = addNote(worldPoint);
+          if (id) setSelectedElementIds([id]);
+          setPlacingNote(false);
+          return;
+      }
       if (activeShapeTool && canvasApiRef.current) {
           if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.floating-menu') || (e.target as HTMLElement).closest('.fixed')) return;
           e.stopPropagation(); 
@@ -1287,7 +1307,7 @@ const App: React.FC = () => {
           });
           if (id) { setCreatingShapeId(id); setSelectedElementIds([id]); }
       }
-  }, [activeShapeTool, addElement, setCreatingShapeId, setSelectedElementIds, shapeStartPointRef]);
+  }, [placingNote, addNote, activeShapeTool, addElement, setCreatingShapeId, setSelectedElementIds, shapeStartPointRef]);
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
       if (creatingShapeId && canvasApiRef.current && shapeStartPointRef.current) {
@@ -1377,6 +1397,7 @@ const App: React.FC = () => {
           setCreatingShapeId(null);
           if (creatingShapeId) setElements(prev => prev.filter(el => el.id !== creatingShapeId));
       }
+      if (placingNote && e.key === 'Escape') setPlacingNote(false);
       const target = e.target as HTMLElement;
       const isEditingText = ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !(target as HTMLInputElement | HTMLTextAreaElement).readOnly) || target.isContentEditable;
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText) { e.preventDefault(); deleteElement(); return; }
@@ -1402,7 +1423,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [deleteElement, undo, redo, editingDrawing, editingImage, outpaintingState, copySelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
+  }, [deleteElement, undo, redo, editingDrawing, editingImage, outpaintingState, copySelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, placingNote, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
   
   useEffect(() => {
     const preventDefaults = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
@@ -1479,7 +1500,7 @@ const App: React.FC = () => {
   return (
     <>
     <main
-        className={`relative w-screen h-screen bg-[#F5F5F7] font-sans text-[#1D1D1F] ${activeShapeTool ? 'cursor-crosshair' : ''}`}
+        className={`relative w-screen h-screen bg-[#F5F5F7] font-sans text-[#1D1D1F] ${activeShapeTool || placingNote ? 'cursor-crosshair' : ''}`}
         onClick={() => { setContextMenu(null); setShowStyleLibrary(false); }}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleCanvasMouseMove}
@@ -1809,6 +1830,7 @@ const App: React.FC = () => {
         onApplyCrop={handleApplyCrop}
         interactionMode={interactionMode}
         activeShapeTool={activeShapeTool}
+        notePlacing={placingNote}
         onUpscale={handleAIUpscale}
         onLocalUpscale={handleLocalUpscale}
         onDragStart={() => setIsDraggingOnCanvas(true)}
@@ -1818,7 +1840,8 @@ const App: React.FC = () => {
       {!isFocusMode && !semanticEditorTarget && (
         <DraggableToolbar
             selectedElement={elements.find(e => e.id === selectedElementIds[0])}
-            onAddNote={() => addNote()}
+            onAddNote={handleStartPlaceNote}
+            notePlacing={placingNote}
             onAddText={() => addText()}
             onAddArrow={(config) => addArrow(config)}
             onAddDrawing={() => addDrawing()}
