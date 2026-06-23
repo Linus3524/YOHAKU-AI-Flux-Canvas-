@@ -441,10 +441,12 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
             <div className="absolute bg-black/50" style={{ left: 0, top: cropRect.y, width: cropRect.x, height: cropRect.height }} />
             <div className="absolute bg-black/50" style={{ left: cropRect.x + cropRect.width, top: cropRect.y, width: element.width - (cropRect.x + cropRect.width), height: cropRect.height }} />
 
-            <div 
-                className="absolute border border-white/80 shadow-[0_0_0_1px_rgba(41,151,255,1)]"
+            <div
+                className="absolute"
                 style={{ left: cropRect.x, top: cropRect.y, width: cropRect.width, height: cropRect.height, cursor: 'move' }}
             >
+                {/* 框線改用 inset-0 子層繪製，讓圓點以真正框邊為基準（騎在線上，與一般物件框一致）*/}
+                <div className="absolute inset-0 border border-white/80 shadow-[0_0_0_1px_rgba(41,151,255,1)] pointer-events-none" />
                 <div className="w-full h-full relative opacity-50 pointer-events-none">
                     <div className="absolute left-1/3 top-0 w-px h-full bg-white/50 shadow-[0_0_2px_rgba(0,0,0,0.5)]" />
                     <div className="absolute left-2/3 top-0 w-px h-full bg-white/50 shadow-[0_0_2px_rgba(0,0,0,0.5)]" />
