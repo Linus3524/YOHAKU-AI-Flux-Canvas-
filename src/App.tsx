@@ -1588,9 +1588,9 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 語意編輯器開啟時隱藏功能助手 */}
+      {/* 語意編輯器或設計大師開啟時隱藏功能助手 */}
       {!semanticEditorTarget && (
-        <FloatingAssistant onCreateSticky={handleAiCreateSticky} onAskAI={handleAskAI} isHidden={isFocusMode} />
+        <FloatingAssistant onCreateSticky={handleAiCreateSticky} onAskAI={handleAskAI} isHidden={isFocusMode || !!designMasterTargetId} />
       )}
 
       {showKeyModal && (
