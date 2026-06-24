@@ -53,6 +53,36 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   const [content, setContent] = useState(noteContent);
   const [model, setModel] = useState('gemini');
 
+  const navRef = React.useRef<HTMLDivElement>(null);
+  const activeTabRef = React.useRef<HTMLButtonElement>(null);
+
+  // 1. Auto-scroll the active tab into view
+  React.useEffect(() => {
+    if (activeTabRef.current) {
+      activeTabRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center',
+      });
+    }
+  }, [activeSkill]);
+
+  // 2. Map vertical scroll wheel gestures to horizontal scrolling on desktop mouse setups
+  React.useEffect(() => {
+    const navEl = navRef.current;
+    if (!navEl) return;
+    const handleNavWheel = (e: WheelEvent) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        navEl.scrollLeft += e.deltaY * 0.8;
+      }
+    };
+    navEl.addEventListener('wheel', handleNavWheel, { passive: false });
+    return () => {
+      navEl.removeEventListener('wheel', handleNavWheel);
+    };
+  }, []);
+
   const currentSkill = SKILL_LIST.find(s => s.id === activeSkill)!;
 
   const set = (key: string, id: string) => {
@@ -140,23 +170,32 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
 
         {/* Skill 分頁切換選單 (iOS Segmented Control 風格) */}
         <div className="px-6 py-3 border-b border-gray-100 bg-white flex-shrink-0">
-          <div className="flex gap-0.5 overflow-x-auto bg-[#F1F5F9] p-1 rounded-xl design-master-nav">
-            {SKILL_LIST.map(skill => {
-              const active = activeSkill === skill.id;
-              return (
-                <button
-                  key={skill.id}
-                  onClick={() => setActiveSkill(skill.id)}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold whitespace-nowrap transition-all duration-200 ${
-                    active
-                      ? 'bg-white text-[#1D1D1F] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.06)]'
-                      : 'text-[#64748B] hover:text-[#1D1D1F]'
-                  }`}
-                >
-                  {skill.name_zh}
-                </button>
-              );
-            })}
+          <div className="relative">
+            <div 
+              ref={navRef}
+              className="flex gap-0.5 overflow-x-auto bg-[#F1F5F9] p-1 rounded-xl design-master-nav scroll-smooth"
+            >
+              {SKILL_LIST.map(skill => {
+                const active = activeSkill === skill.id;
+                return (
+                  <button
+                    key={skill.id}
+                    ref={active ? activeTabRef : undefined}
+                    onClick={() => setActiveSkill(skill.id)}
+                    className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold whitespace-nowrap transition-all duration-200 ${
+                      active
+                        ? 'bg-white text-[#1D1D1F] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.06)]'
+                        : 'text-[#64748B] hover:text-[#1D1D1F]'
+                    }`}
+                  >
+                    {skill.name_zh}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Subtle fade masks to indicate scrolling */}
+            <div className="absolute right-1 top-1 bottom-1 w-6 bg-gradient-to-l from-[#F1F5F9] to-transparent pointer-events-none rounded-r-lg" />
+            <div className="absolute left-1 top-1 bottom-1 w-6 bg-gradient-to-r from-[#F1F5F9] to-transparent pointer-events-none rounded-l-lg" />
           </div>
         </div>
 
