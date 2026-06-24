@@ -81,7 +81,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'aged-academia',
         name: 'Aged Academia — Vintage Science',
-        name_zh: '古典學術 — 復古科學',
+        name_zh: '復古學術風',
         category: 'Warm',
         description: 'Vintage science aesthetic with sepia tones, aged paper textures, and classical scholarly atmosphere.',
         description_zh: 'Vintage science aesthetic with sepia tones, aged paper textures, and classical scholarly atmosphere.',
@@ -90,7 +90,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'blueprint',
         name: 'Blueprint — Technical Precision',
-        name_zh: '藍圖 — 技術精準',
+        name_zh: '工程藍圖風',
         category: 'Tech',
         description: 'Precise technical blueprint style with engineering precision, grid overlays, and analytical visual presentation.',
         description_zh: 'Precise technical blueprint style with engineering precision, grid overlays, and analytical visual presentation.',
@@ -99,7 +99,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'bold-editorial',
         name: 'Bold Editorial — Magazine Impact',
-        name_zh: '大膽編輯 — 雜誌衝擊力',
+        name_zh: '雜誌大標風',
         category: 'Artistic',
         description: 'High-impact magazine-style layouts with bold typography, dramatic contrast, and editorial authority.',
         description_zh: 'High-impact magazine-style layouts with bold typography, dramatic contrast, and editorial authority.',
@@ -108,7 +108,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'bold-graphic',
         name: 'Bold Graphic — Comic Halftone',
-        name_zh: '大膽圖形 — 漫畫半調',
+        name_zh: '漫畫半調風',
         category: 'Artistic',
         description: 'Comic halftone style with bold outlines, dot patterns, and graphic novel intensity.',
         description_zh: 'Comic halftone style with bold outlines, dot patterns, and graphic novel intensity.',
@@ -117,7 +117,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'chalkboard',
         name: 'Chalkboard — Educational Warmth',
-        name_zh: '黑板 — 教育溫暖',
+        name_zh: '黑板教學風',
         category: 'Specialized',
         description: 'Warm educational aesthetic with chalk-on-blackboard textures, colorful handwriting, and classroom atmosphere.',
         description_zh: 'Warm educational aesthetic with chalk-on-blackboard textures, colorful handwriting, and classroom atmosphere.',
@@ -126,7 +126,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'claymation',
         name: 'Claymation — 3D Craft Aesthetic',
-        name_zh: '黏土動畫 — 3D手工美學',
+        name_zh: '黏土動畫風',
         category: 'Playful',
         description: '3D clay figure aesthetic with stop-motion warmth, rounded organic forms, and playful tactile surfaces.',
         description_zh: '3D clay figure aesthetic with stop-motion warmth, rounded organic forms, and playful tactile surfaces.',
@@ -135,7 +135,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cm-chalk',
         name: 'Comic Chalk — Hand-drawn Educational',
-        name_zh: '漫畫粉筆 — 手繪教育',
+        name_zh: '手繪粉筆風',
         category: 'Playful',
         description: 'Educational comic style with chalkboard backgrounds, hand-drawn characters, and warm classroom vibes.',
         description_zh: 'Educational comic style with chalkboard backgrounds, hand-drawn characters, and warm classroom vibes.',
@@ -144,7 +144,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cm-ink-brush',
         name: 'Ink Brush — Chinese Watercolor',
-        name_zh: '水墨 — 中國水彩',
+        name_zh: '中國水墨風',
         category: 'Artistic',
         description: 'Chinese ink wash painting style with brush strokes, ink gradients, and traditional Eastern aesthetics.',
         description_zh: 'Chinese ink wash painting style with brush strokes, ink gradients, and traditional Eastern aesthetics.',
@@ -153,7 +153,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cm-ligne-claire',
         name: 'Ligne Claire — European Comic',
-        name_zh: '清線 — 歐洲漫畫',
+        name_zh: '歐式清線漫畫',
         category: 'Comic',
         description: 'European comic tradition with uniform lines, flat colors, and clean geometric storytelling.',
         description_zh: 'European comic tradition with uniform lines, flat colors, and clean geometric storytelling.',
@@ -162,7 +162,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cm-manga',
         name: 'Manga — Japanese Anime Style',
-        name_zh: '日漫 — 日本動漫風格',
+        name_zh: '日系漫畫風',
         category: 'Artistic',
         description: 'Japanese manga/anime aesthetic with expressive characters, dynamic poses, and vibrant energy.',
         description_zh: 'Japanese manga/anime aesthetic with expressive characters, dynamic poses, and vibrant energy.',
@@ -171,7 +171,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cm-realistic',
         name: 'Comic Realistic — Digital Painting',
-        name_zh: '寫實漫畫 — 數位繪畫',
+        name_zh: '寫實數位繪',
         category: 'Comic',
         description: 'Digital painting comic style with realistic proportions, sophisticated shading, and cinematic depth.',
         description_zh: 'Digital painting comic style with realistic proportions, sophisticated shading, and cinematic depth.',
@@ -180,7 +180,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'corporate',
         name: 'Corporate — Business Professional',
-        name_zh: '企業 — 商務專業',
+        name_zh: '商務專業風',
         category: 'Tech',
         description: 'Professional business style with navy/gold palette, structured layouts, and institutional reliability.',
         description_zh: 'Professional business style with navy/gold palette, structured layouts, and institutional reliability.',
@@ -189,7 +189,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'corporate-memphis',
         name: 'Corporate Memphis — Vibrant Geometry',
-        name_zh: '企業孟菲斯 — 活力幾何',
+        name_zh: '孟菲斯插畫風',
         category: 'Playful',
         description: 'Flat vector people with vibrant geometric fills, disproportionate figures, and playful business energy.',
         description_zh: 'Flat vector people with vibrant geometric fills, disproportionate figures, and playful business energy.',
@@ -198,7 +198,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'craft-handmade',
         name: 'Craft Handmade — Paper Art',
-        name_zh: '手工紙藝 — 紙質藝術',
+        name_zh: '手作紙藝風',
         category: 'Artistic',
         description: 'Hand-drawn paper craft aesthetic with warm pastels, cream backgrounds, and organic imperfect shapes.',
         description_zh: 'Hand-drawn paper craft aesthetic with warm pastels, cream backgrounds, and organic imperfect shapes.',
@@ -207,7 +207,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cv-cool',
         name: 'Cool Palette — Crisp & Refreshing',
-        name_zh: '冷色調 — 清爽現代',
+        name_zh: '冷色調',
         category: 'Cool',
         description: 'Crisp cool-toned palette with blues, teals, and silvers creating a refreshing, modern atmosphere.',
         description_zh: 'Crisp cool-toned palette with blues, teals, and silvers creating a refreshing, modern atmosphere.',
@@ -216,7 +216,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cv-dark',
         name: 'Dark Palette — Cinematic Depth',
-        name_zh: '暗色調 — 電影深度',
+        name_zh: '暗黑電影色',
         category: 'Dark',
         description: 'Cinematic dark palette with deep purples, electric accents, and atmospheric premium depth.',
         description_zh: 'Cinematic dark palette with deep purples, electric accents, and atmospheric premium depth.',
@@ -225,7 +225,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cv-earth',
         name: 'Earth Palette — Natural Warmth',
-        name_zh: '大地色 — 自然溫暖',
+        name_zh: '大地色系',
         category: 'Warm',
         description: 'Natural earth-toned palette with browns, ochres, and sage greens evoking organic warmth.',
         description_zh: 'Natural earth-toned palette with browns, ochres, and sage greens evoking organic warmth.',
@@ -234,7 +234,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cv-elegant',
         name: 'Elegant Palette — Refined Sophistication',
-        name_zh: '優雅色 — 精緻格調',
+        name_zh: '優雅質感色',
         category: 'Cool',
         description: 'Refined sophisticated palette with muted luxury tones, champagne golds, and understated class.',
         description_zh: 'Refined sophisticated palette with muted luxury tones, champagne golds, and understated class.',
@@ -243,7 +243,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cv-mono',
         name: 'Mono Palette — Pure Contrast',
-        name_zh: '單色 — 純粹對比',
+        name_zh: '黑白單色',
         category: 'Minimal',
         description: 'Pure monochrome palette with black, white, and grays for maximum contrast and timeless clarity.',
         description_zh: 'Pure monochrome palette with black, white, and grays for maximum contrast and timeless clarity.',
@@ -252,7 +252,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cv-pastel',
         name: 'Pastel Palette — Soft & Gentle',
-        name_zh: '粉彩色 — 柔和夢幻',
+        name_zh: '柔和粉彩',
         category: 'Minimal',
         description: 'Soft pastel palette with gentle pinks, lavenders, and mints creating a dreamy, delicate mood.',
         description_zh: 'Soft pastel palette with gentle pinks, lavenders, and mints creating a dreamy, delicate mood.',
@@ -261,7 +261,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cv-retro',
         name: 'Retro Palette — Nostalgic Tones',
-        name_zh: '復古色 — 懷舊色調',
+        name_zh: '復古色調',
         category: 'Artistic',
         description: 'Nostalgic retro palette with sepia tones, warm oranges, and vintage film aesthetics.',
         description_zh: 'Nostalgic retro palette with sepia tones, warm oranges, and vintage film aesthetics.',
@@ -270,7 +270,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cv-vivid',
         name: 'Vivid Palette — Bold & Energetic',
-        name_zh: '鮮豔色 — 大膽活力',
+        name_zh: '鮮豔活力色',
         category: 'Cool',
         description: 'Bold vivid palette with saturated primaries creating energetic, attention-grabbing compositions.',
         description_zh: 'Bold vivid palette with saturated primaries creating energetic, attention-grabbing compositions.',
@@ -279,7 +279,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cv-warm',
         name: 'Warm Palette — Friendly & Approachable',
-        name_zh: '暖色調 — 親切友好',
+        name_zh: '暖色調',
         category: 'Warm',
         description: 'Friendly warm palette with oranges, golds, and terracottas for approachable human-centered design.',
         description_zh: 'Friendly warm palette with oranges, golds, and terracottas for approachable human-centered design.',
@@ -288,7 +288,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'cyberpunk-neon',
         name: 'Cyberpunk Neon — Futuristic Glow',
-        name_zh: '賽博朋克霓虹 — 未來發光',
+        name_zh: '賽博龐克霓虹',
         category: 'Dark',
         description: 'Neon glow on dark backgrounds with futuristic aesthetic, circuit patterns, and digital glitch effects.',
         description_zh: 'Neon glow on dark backgrounds with futuristic aesthetic, circuit patterns, and digital glitch effects.',
@@ -297,7 +297,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'dark-atmospheric',
         name: 'Dark Atmospheric — Cinematic Mood',
-        name_zh: '暗色氛圍 — 電影情緒',
+        name_zh: '暗黑電影感',
         category: 'Dark',
         description: 'Cinematic dark mode with deep colors, glowing accents, and mysterious atmospheric depth.',
         description_zh: 'Cinematic dark mode with deep colors, glowing accents, and mysterious atmospheric depth.',
@@ -306,7 +306,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'editorial-infographic',
         name: 'Editorial Infographic — Data Storytelling',
-        name_zh: '編輯資訊圖 — 數據敘事',
+        name_zh: '雜誌資訊圖',
         category: 'Tech',
         description: 'Clean data storytelling with editorial precision, structured information, and publication-ready layouts.',
         description_zh: 'Clean data storytelling with editorial precision, structured information, and publication-ready layouts.',
@@ -315,7 +315,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'fantasy-animation',
         name: 'Fantasy Animation — Whimsical Magic',
-        name_zh: '奇幻動畫 — 魔幻 whimsical',
+        name_zh: '奇幻動畫風',
         category: 'Artistic',
         description: 'Whimsical magical aesthetic with soft glows, enchanted elements, and storybook wonder.',
         description_zh: 'Whimsical magical aesthetic with soft glows, enchanted elements, and storybook wonder.',
@@ -324,7 +324,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'ig-chalkboard',
         name: 'IG Chalkboard — Colorful Education',
-        name_zh: 'IG黑板 — 彩色教育',
+        name_zh: 'IG 彩色黑板',
         category: 'Specialized',
         description: 'Colorful chalkboard infographic style with educational diagrams and vibrant chalk markings.',
         description_zh: 'Colorful chalkboard infographic style with educational diagrams and vibrant chalk markings.',
@@ -333,7 +333,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'ig-pixel-art',
         name: 'IG Pixel Art — Retro 8-bit',
-        name_zh: 'IG像素 — 復古8位',
+        name_zh: 'IG 復古像素',
         category: 'Playful',
         description: 'Retro 8-bit pixel aesthetic with limited palettes, staircase edges, and nostalgic gaming feel.',
         description_zh: 'Retro 8-bit pixel aesthetic with limited palettes, staircase edges, and nostalgic gaming feel.',
@@ -351,7 +351,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'intuition-machine',
         name: 'Intuition Machine — Technical Dense',
-        name_zh: '直覺機器 — 技術密集',
+        name_zh: '密集技術圖解',
         category: 'Tech',
         description: 'Technical dense style with cool tones, precise data presentation, and academic rigor.',
         description_zh: 'Technical dense style with cool tones, precise data presentation, and academic rigor.',
@@ -360,7 +360,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'kawaii',
         name: 'Kawaii — Japanese Cute',
-        name_zh: '可愛 — 日式萌系',
+        name_zh: '日系可愛風',
         category: 'Playful',
         description: 'Japanese cute aesthetic with pastels, rounded forms, hearts, sparkles, and overwhelming adorableness.',
         description_zh: 'Japanese cute aesthetic with pastels, rounded forms, hearts, sparkles, and overwhelming adorableness.',
@@ -369,7 +369,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'knolling',
         name: 'Knolling — Organized Flat-lay',
-        name_zh: '平鋪排列 — 有序俯拍',
+        name_zh: '平鋪俯拍風',
         category: 'Specialized',
         description: 'Organized flat-lay photography style with aligned objects, top-down perspective, and systematic arrangement.',
         description_zh: 'Organized flat-lay photography style with aligned objects, top-down perspective, and systematic arrangement.',
@@ -378,7 +378,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'lego-brick',
         name: 'Lego Brick — Toy Construction',
-        name_zh: '樂高積木 — 玩具構造',
+        name_zh: '樂高積木風',
         category: 'Playful',
         description: 'Toy brick construction aesthetic with bright plastic colors, blocky forms, and playful assembly.',
         description_zh: 'Toy brick construction aesthetic with bright plastic colors, blocky forms, and playful assembly.',
@@ -387,7 +387,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'minimal',
         name: 'Minimal — Ultra Clean',
-        name_zh: '極簡 — 極致乾淨',
+        name_zh: '極簡乾淨風',
         category: 'Tech',
         description: 'Ultra-clean minimalism with generous whitespace, essential elements only, and maximum clarity.',
         description_zh: 'Ultra-clean minimalism with generous whitespace, essential elements only, and maximum clarity.',
@@ -396,7 +396,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'morandi-journal',
         name: 'Morandi Journal — Muted Elegance',
-        name_zh: '莫蘭迪日記 — 柔和優雅',
+        name_zh: '莫蘭迪手帳',
         category: 'Artistic',
         description: 'Muted Morandi tones with dusty pinks, sage greens, and warm grays in a diary-like intimate format.',
         description_zh: 'Muted Morandi tones with dusty pinks, sage greens, and warm grays in a diary-like intimate format.',
@@ -405,7 +405,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'notion',
         name: 'Notion — SaaS Dashboard',
-        name_zh: 'Notion — SaaS儀表板',
+        name_zh: 'Notion 文件風',
         category: 'Tech',
         description: 'SaaS dashboard aesthetic with clean data focus, card-based organization, and productivity tool styling.',
         description_zh: 'SaaS dashboard aesthetic with clean data focus, card-based organization, and productivity tool styling.',
@@ -414,7 +414,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'origami',
         name: 'Origami — Paper Folding Art',
-        name_zh: '摺紙 — 紙藝摺疊',
+        name_zh: '摺紙藝術風',
         category: 'Artistic',
         description: 'Paper folding art with geometric precision, shadow layers, and delicate Japanese craft aesthetics.',
         description_zh: 'Paper folding art with geometric precision, shadow layers, and delicate Japanese craft aesthetics.',
@@ -423,7 +423,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'pixel-art',
         name: 'Pixel Art — Retro Gaming',
-        name_zh: '像素藝術 — 復古遊戲',
+        name_zh: '復古像素風',
         category: 'Playful',
         description: 'Retro 8-bit pixel art with visible pixel grid, limited color palette, and nostalgic gaming atmosphere.',
         description_zh: 'Retro 8-bit pixel art with visible pixel grid, limited color palette, and nostalgic gaming atmosphere.',
@@ -432,7 +432,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'pop-laboratory',
         name: 'Pop Laboratory — Scientific Playful',
-        name_zh: '流行實驗室 — 科學俏皮',
+        name_zh: '科學趣味風',
         category: 'Artistic',
         description: 'Scientific playful style with blueprint grids, coordinate markers, and lab precision with personality.',
         description_zh: 'Scientific playful style with blueprint grids, coordinate markers, and lab precision with personality.',
@@ -441,7 +441,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'retro-pop-grid',
         name: 'Retro Pop Grid — 70s Swiss Style',
-        name_zh: '復古流行網格 — 70年代瑞士風',
+        name_zh: '復古瑞士網格',
         category: 'Artistic',
         description: '1970s retro pop art with Swiss grid discipline, thick outlines, and bold saturated colors.',
         description_zh: '1970s retro pop art with Swiss grid discipline, thick outlines, and bold saturated colors.',
@@ -450,7 +450,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'scientific',
         name: 'Scientific — Academic Precision',
-        name_zh: '科學 — 學術精準',
+        name_zh: '學術科學風',
         category: 'Tech',
         description: 'Academic precision with clean layouts, technical typography, and research-grade visual presentation.',
         description_zh: 'Academic precision with clean layouts, technical typography, and research-grade visual presentation.',
@@ -459,7 +459,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'sketch-notes',
         name: 'Sketch Notes — Hand-drawn Learning',
-        name_zh: '素描筆記 — 手繪學習',
+        name_zh: '手繪筆記風',
         category: 'Artistic',
         description: 'Hand-drawn learning aesthetic with doodle elements, annotation marks, and personal notebook warmth.',
         description_zh: 'Hand-drawn learning aesthetic with doodle elements, annotation marks, and personal notebook warmth.',
@@ -468,7 +468,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'storybook-watercolor',
         name: 'Storybook Watercolor — Soft Whimsy',
-        name_zh: '童話水彩 — 柔和 whimsical',
+        name_zh: '童話水彩風',
         category: 'Artistic',
         description: 'Soft painted watercolor with whimsical storytelling, gentle blends, and fairy-tale atmosphere.',
         description_zh: 'Soft painted watercolor with whimsical storytelling, gentle blends, and fairy-tale atmosphere.',
@@ -477,7 +477,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'subway-map',
         name: 'Subway Map — Transit Diagram',
-        name_zh: '地鐵圖 — 交通示意圖',
+        name_zh: '地鐵路線圖',
         category: 'Specialized',
         description: 'Transit diagram aesthetic with color-coded lines, node connections, and schematic route visualization.',
         description_zh: 'Transit diagram aesthetic with color-coded lines, node connections, and schematic route visualization.',
@@ -486,7 +486,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'technical-schematic',
         name: 'Technical Schematic — Engineering Blueprint',
-        name_zh: '技術示意圖 — 工程藍圖',
+        name_zh: '工程示意圖',
         category: 'Tech',
         description: 'Engineering blueprint style with geometric precision, grid patterns, and technical annotations.',
         description_zh: 'Engineering blueprint style with geometric precision, grid patterns, and technical annotations.',
@@ -495,7 +495,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'ui-wireframe',
         name: 'UI Wireframe — Prototype Gray',
-        name_zh: 'UI線框 — 原型灰度',
+        name_zh: 'UI 線框稿',
         category: 'Tech',
         description: 'Grayscale prototype aesthetic with placeholder boxes, connection lines, and low-fidelity clarity.',
         description_zh: 'Grayscale prototype aesthetic with placeholder boxes, connection lines, and low-fidelity clarity.',
@@ -504,7 +504,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'vector-illustration',
         name: 'Vector Illustration — Clean Graphics',
-        name_zh: '向量插畫 — 乾淨圖形',
+        name_zh: '向量插畫風',
         category: 'Tech',
         description: 'Clean vector graphics with bold outlines, flat fills, and modern editorial illustration.',
         description_zh: 'Clean vector graphics with bold outlines, flat fills, and modern editorial illustration.',
@@ -513,7 +513,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'vintage',
         name: 'Vintage — Retro Nostalgia',
-        name_zh: '復古 — 懷舊經典',
+        name_zh: '復古懷舊風',
         category: 'Artistic',
         description: 'Retro nostalgia with aged textures, warm sepia tones, and historical authenticity.',
         description_zh: 'Retro nostalgia with aged textures, warm sepia tones, and historical authenticity.',
@@ -522,7 +522,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'watercolor',
         name: 'Watercolor — Soft Painting',
-        name_zh: '水彩 — 柔和繪畫',
+        name_zh: '柔和水彩風',
         category: 'Artistic',
         description: 'Soft painting aesthetic with fluid washes, gentle color bleeds, and artistic spontaneity.',
         description_zh: 'Soft painting aesthetic with fluid washes, gentle color bleeds, and artistic spontaneity.',
@@ -531,7 +531,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'xhs-bold',
         name: 'XHS Bold — High Impact',
-        name_zh: '小紅書大膽 — 高衝擊',
+        name_zh: '小紅書大字風',
         category: 'Specialized',
         description: 'High-impact social media style with bold colors, strong contrasts, and attention-grabbing compositions.',
         description_zh: 'High-impact social media style with bold colors, strong contrasts, and attention-grabbing compositions.',
@@ -540,7 +540,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'xhs-cute',
         name: 'XHS Cute — Adorable Social',
-        name_zh: '小紅書可愛 — 萌系社交',
+        name_zh: '小紅書可愛風',
         category: 'Playful',
         description: 'Adorable social aesthetic with soft pastels, rounded elements, and universally appealing charm.',
         description_zh: 'Adorable social aesthetic with soft pastels, rounded elements, and universally appealing charm.',
@@ -549,7 +549,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'xhs-fresh',
         name: 'XHS Fresh — Clean & Natural',
-        name_zh: '小紅書清新 — 自然清爽',
+        name_zh: '小紅書清新風',
         category: 'Warm',
         description: 'Clean natural social style with refreshing greens, airy layouts, and organic vitality.',
         description_zh: 'Clean natural social style with refreshing greens, airy layouts, and organic vitality.',
@@ -558,7 +558,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'xhs-pop',
         name: 'XHS Pop — Vibrant Social',
-        name_zh: '小紅書流行 — 活力社交',
+        name_zh: '小紅書活力風',
         category: 'Playful',
         description: 'Vibrant social energy with saturated colors, dynamic layouts, and youthful exuberance.',
         description_zh: 'Vibrant social energy with saturated colors, dynamic layouts, and youthful exuberance.',
@@ -567,7 +567,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'xhs-study-notes',
         name: 'XHS Study Notes — Handwritten Academic',
-        name_zh: '小紅書學習筆記 — 手寫學術',
+        name_zh: '小紅書學習筆記',
         category: 'Warm',
         description: 'Handwritten academic style with blue pen, red annotations, yellow highlighters, and realistic notes.',
         description_zh: 'Handwritten academic style with blue pen, red annotations, yellow highlighters, and realistic notes.',
@@ -576,7 +576,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'playful-mascot-doodle',
         name: 'Playful Mascot Doodle — Cute & Energetic',
-        name_zh: '趣味吉祥物塗鴉 — 可愛活力',
+        name_zh: '吉祥物塗鴉風',
         category: 'Playful',
         description: 'Vibrant hand-drawn aesthetic with friendly mascot characters, bold typography, and playful doodle elements.',
         description_zh: '充滿活力的手繪風格，帶有友好吉祥物角色、大膽字體和趣味塗鴉元素。',
@@ -585,7 +585,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'teenage-skate-scribble',
         name: 'Teenage Skate Scribble — Raw Street Art',
-        name_zh: '滑板少年塗鴉 — 原始街頭藝術',
+        name_zh: '滑板街頭塗鴉',
         category: 'Artistic',
         description: 'Edgy rebellious street art aesthetic inspired by skate culture, graffiti, and DIY punk attitude.',
         description_zh: '受滑板文化、塗鴉和DIY朋克態度啟發的叛逆街頭藝術風格。',
@@ -594,7 +594,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'neon-kinetic-typographic',
         name: 'Neon Kinetic Typographic — Cyberpunk Glow',
-        name_zh: '霓虹動態字體 — 賽博朋克發光',
+        name_zh: '霓虹動態字體',
         category: 'Dark',
         description: 'High-energy futuristic typographic style with glowing neon text, motion blur, and kinetic energy.',
         description_zh: '高能未來主義字體風格，帶有發光霓虹文字、動態模糊和動能感。',
@@ -603,7 +603,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'soft-analog-future-editorial',
         name: 'Soft Analog Future Editorial — Dreamy Elegance',
-        name_zh: '柔和模擬未來編輯 — 夢幻優雅',
+        name_zh: '柔光未來雜誌風',
         category: 'Warm',
         description: 'Sophisticated editorial blending analog film warmth with futuristic minimalism and soft focus.',
         description_zh: '將模擬膠片溫暖與未來極簡主義和柔焦相結合的精緻編輯風格。',
@@ -612,7 +612,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'gothic-cat-doodle-collage',
         name: 'Gothic Cat Doodle Collage — Dark Whimsy',
-        name_zh: '哥特貓咪塗鴉拼貼 — 暗黑奇趣',
+        name_zh: '暗黑貓咪拼貼',
         category: 'Dark',
         description: 'Dark whimsical aesthetic combining gothic Victorian elements with cute cat illustrations and mystical doodles.',
         description_zh: '將哥特維多利亞元素與可愛貓咪插畫和神秘塗鴉相結合的暗黑奇趣風格。',
@@ -621,7 +621,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'pop-bubble-letter-photo',
         name: 'Pop Bubble Letter Photo — Y2K Celebration',
-        name_zh: '流行泡泡字母照片 — Y2K慶典',
+        name_zh: 'Y2K 泡泡字風',
         category: 'Playful',
         description: 'Vibrant 2000s-era aesthetic with bold bubble letters, photo cutouts, and playful decorative elements.',
         description_zh: '充滿活力的2000年代風格，帶有大膽泡泡字母、照片剪貼和趣味裝飾元素。',
@@ -630,7 +630,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'neubrutalism',
         name: 'Neubrutalism — Stark Anti-Design',
-        name_zh: '新粗野主義 — 高對比幾何',
+        name_zh: '新粗獷主義',
         category: 'Playful',
         description: 'High-contrast graphic layouts with thick outlines, offset pure black drop shadows, and flat pastel backgrounds.',
         description_zh: 'High-contrast graphic layouts with thick outlines, offset pure black drop shadows, and flat pastel backgrounds.',
@@ -639,7 +639,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'vaporwave',
         name: 'Vaporwave — Retro Nostalgia',
-        name_zh: '蒸汽波 — 80s科技懷舊',
+        name_zh: '蒸氣波',
         category: 'Playful',
         description: 'Dreamy retro-futurism with glowing pink/purple grids, Classical busts, palm trees, and VHS glitch aesthetics.',
         description_zh: 'Dreamy retro-futurism with glowing pink/purple grids, Classical busts, palm trees, and VHS glitch aesthetics.',
@@ -648,7 +648,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'risograph',
         name: 'Risograph — Tactile Print',
-        name_zh: '孔版印刷 — 顆粒感疊印',
+        name_zh: '孔版印刷風',
         category: 'Artistic',
         description: 'Organic grain and halftone dot print textures with fluorescent color overlaps and slight ink offsets.',
         description_zh: 'Organic grain and halftone dot print textures with fluorescent color overlaps and slight ink offsets.',
@@ -657,7 +657,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'duotone',
         name: 'Duotone — Contrast Gradient Map',
-        name_zh: '雙色調 — Spotify海報感',
+        name_zh: '雙色調海報風',
         category: 'Artistic',
         description: 'High-contrast dual-color mapping that transforms all shadows and highlights into two contrasting electric hues.',
         description_zh: 'High-contrast dual-color mapping that transforms all shadows and highlights into two contrasting electric hues.',
@@ -666,7 +666,7 @@ export const VISUAL_STYLE_TEMPLATES: VisualStyleTemplate[] = [
     {
         id: 'paper-cutout',
         name: 'Paper Cutout — Layered 3D Collage',
-        name_zh: '剪紙陰影 — 立體紙藝',
+        name_zh: '剪紙拼貼風',
         category: 'Artistic',
         description: 'Layered collage with realistic drop shadows between sheets of textured craft paper and clean laser-cut edges.',
         description_zh: 'Layered collage with realistic drop shadows between sheets of textured craft paper and clean laser-cut edges.',
