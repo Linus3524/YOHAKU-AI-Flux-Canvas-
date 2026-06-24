@@ -2,7 +2,6 @@
 // 設計大師 — 貼圖 Skill
 // 結構化選項 → 組裝成精準的貼圖生成 prompt。
 // 內容（content）來自便利貼文字；此模組只負責「怎麼呈現」。
-// 改寫自 MuseUI（MIT）的 sticker-design skill。
 // ============================================================
 
 export interface SkillOption {

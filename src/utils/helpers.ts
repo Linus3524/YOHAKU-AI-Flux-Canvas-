@@ -603,7 +603,7 @@ export const STYLE_PRESETS = [
     prompt: 'Transform using 70s Olympus analog SLR film camera feel: rich organic halation around light sources, vintage high contrast film rendering, mechanical shutter aesthetic, warm analog color depth.'
   },
   
-  // ── 新增 Muse 對標風格 ─────────────────────────────────────────
+  // ── 新增系統風格 ─────────────────────────────────────────
   {
     id: 'IKEA Manual', name: 'IKEA 說明書風', label: 'IKEA Manual',
     prompt: 'Transform into IKEA assembly manual style: minimal line art illustration, clean black outlines on flat white background, numbered step-by-step sequence, exploded views of components, directional action arrows showing assembly, wordless visual instructions, simplified stick figures for scale, no gradients or shadows.'

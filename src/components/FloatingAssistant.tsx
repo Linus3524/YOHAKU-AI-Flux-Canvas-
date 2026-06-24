@@ -570,7 +570,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           </div>
                         ))}
                       </div>
-                      <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 整合 YOHAKU 標誌風格（新粗野、蒸汽波、孔印等）與 61 個原始 Muse 規格書。支援 <code className="font-mono bg-purple-100 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 尺寸比例，能自動對接各生成模型之最佳解析度輸出。</div>
+                      <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 整合 YOHAKU 標誌風格（新粗野、蒸汽波、孔印等）與 61 個精選設計規格書。支援 <code className="font-mono bg-purple-100 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 尺寸比例，能自動對接各生成模型之最佳解析度輸出。</div>
                     </div>
                     {/* 魔法分層 */}
                     <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
