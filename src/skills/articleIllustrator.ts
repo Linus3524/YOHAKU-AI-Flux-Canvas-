@@ -5,12 +5,14 @@ export interface ArticleIllustratorSkillConfig {
   type: string;
   style: string;
   density: string;
+  aspect: string;
 }
 
 export const ILLUSTRATOR_DEFAULT_CONFIG: ArticleIllustratorSkillConfig = {
   type: 'infographic',
   style: 'vector-illustration',
   density: 'balanced',
+  aspect: '16:9',
 };
 
 export const ARTICLE_TYPES: SkillOption[] = [
@@ -20,6 +22,14 @@ export const ARTICLE_TYPES: SkillOption[] = [
   { id: 'comparison', name: 'Comparison', name_zh: '對比圖', desc: '左右或對角對比。適合優缺點、前後改變', promptModifier: 'Comparison type. Side-by-side layout, clear visual separation, highlighted differences, balanced contrast presentation.' },
   { id: 'framework', name: 'Framework', name_zh: '框架圖', desc: '架構與組成模型。適合系統架構、思維框架', promptModifier: 'Framework type. Hierarchical structure, component relationships, modular representation, structural focus.' },
   { id: 'timeline', name: 'Timeline', name_zh: '時間線', desc: '按時間排序的發展歷史。適合演進、歷程', promptModifier: 'Timeline type. Chronological progression, milestone markers, temporal relationships, evolution focus.' },
+];
+
+export const ILLUSTRATOR_ASPECTS: SkillOption[] = [
+  { id: '16:9', name: '16:9', name_zh: '寬螢幕 (16:9)', desc: '經典文章插畫比例', promptModifier: 'aspect ratio 16:9' },
+  { id: '4:3', name: '4:3', name_zh: '標準 (4:3)', desc: '標準橫向比例', promptModifier: 'aspect ratio 4:3' },
+  { id: '1:1', name: '1:1', name_zh: '正方形 (1:1)', desc: '正方形配圖', promptModifier: 'aspect ratio 1:1' },
+  { id: '3:4', name: '3:4', name_zh: '直向 (3:4)', desc: '直向配圖', promptModifier: 'aspect ratio 3:4' },
+  { id: '9:16', name: '9:16', name_zh: '直向 (9:16)', desc: '垂直長幅比例', promptModifier: 'aspect ratio 9:16' },
 ];
 
 export const ARTICLE_STYLES: SkillOption[] = [
@@ -46,6 +56,7 @@ export const ARTICLE_DENSITIES: SkillOption[] = [
 
 export const ILLUSTRATOR_OPTION_GROUPS = [
   { key: 'type' as const, label: '插畫類型', options: ARTICLE_TYPES },
+  { key: 'aspect' as const, label: '尺寸比例', options: ILLUSTRATOR_ASPECTS },
   { key: 'style' as const, label: '視覺風格', options: ARTICLE_STYLES },
   { key: 'density' as const, label: '配圖密度', options: ARTICLE_DENSITIES },
 ];
@@ -54,6 +65,7 @@ export function buildArticleIllustratorPrompt(content: string, config: ArticleIl
   const typeMod = ARTICLE_TYPES.find(o => o.id === config.type)?.promptModifier ?? '';
   const styleMod = ARTICLE_STYLES.find(o => o.id === config.style)?.promptModifier ?? '';
   const densityMod = ARTICLE_DENSITIES.find(o => o.id === config.density)?.promptModifier ?? '';
+  const aspectMod = ILLUSTRATOR_ASPECTS.find(o => o.id === config.aspect)?.promptModifier ?? 'aspect ratio 16:9';
 
   return `
 Create a single article illustration image.
@@ -66,6 +78,9 @@ ${styleMod}
 
 DENSITY: ${config.density}
 ${densityMod}
+
+ASPECT RATIO:
+${aspectMod}
 
 INSTRUCTION:
 This is a SINGLE image. Incorporate visual elements supporting the article structure.

@@ -6,6 +6,7 @@ export interface ComicSkillConfig {
   tone: string;
   layout: string;
   pageCount: number;
+  aspect: string;
 }
 
 export const COMIC_DEFAULT_CONFIG: ComicSkillConfig = {
@@ -13,6 +14,7 @@ export const COMIC_DEFAULT_CONFIG: ComicSkillConfig = {
   tone: 'neutral',
   layout: 'standard',
   pageCount: 4,
+  aspect: '4:3',
 };
 
 export const COMIC_ART_STYLES: SkillOption[] = [
@@ -21,6 +23,14 @@ export const COMIC_ART_STYLES: SkillOption[] = [
   { id: 'realistic', name: 'Realistic', name_zh: '寫實畫風', desc: '美式寫實、豐富厚塗與立體光影。適合深厚故事與專業感', promptModifier: 'Realistic digital painting style. Anatomically accurate proportions, soft shading gradients on skin and fabric, realistic environmental lighting.' },
   { id: 'ink-brush', name: 'Ink Brush', name_zh: '國風水墨', desc: '動態毛筆線條配墨暈。適合武俠、歷史、文藝內容', promptModifier: 'Traditional Chinese ink brush painting style. Callographic brush strokes (2-3px) with varying weight, ink wash textures, misty layered depth.' },
   { id: 'chalk', name: 'Chalk', name_zh: '黑板粉筆', desc: '黑板背景底配彩色粉筆手繪。充滿課堂講學感', promptModifier: 'Classroom chalkboard black background, sketchy chalk drawings, visible chalk texture, chalkboard eraser residue smudges.' },
+];
+
+export const COMIC_ASPECTS: SkillOption[] = [
+  { id: '16:9', name: '16:9', name_zh: '寬螢幕 (16:9)', desc: '適合寬屏漫畫分鏡', promptModifier: 'aspect ratio 16:9' },
+  { id: '4:3', name: '4:3', name_zh: '標準 (4:3)', desc: '經典漫畫單頁比例', promptModifier: 'aspect ratio 4:3' },
+  { id: '1:1', name: '1:1', name_zh: '正方形 (1:1)', desc: '正方形漫畫佈局', promptModifier: 'aspect ratio 1:1' },
+  { id: '3:4', name: '3:4', name_zh: '直向 (3:4)', desc: '直向漫畫佈局', promptModifier: 'aspect ratio 3:4' },
+  { id: '9:16', name: '9:16', name_zh: '直向 (9:16)', desc: '垂直長版條漫比例', promptModifier: 'aspect ratio 9:16' },
 ];
 
 export const COMIC_TONES: SkillOption[] = [
@@ -41,6 +51,7 @@ export const COMIC_LAYOUTS: SkillOption[] = [
 
 export const COMIC_OPTION_GROUPS = [
   { key: 'art' as const, label: '畫風', options: COMIC_ART_STYLES },
+  { key: 'aspect' as const, label: '尺寸比例', options: COMIC_ASPECTS },
   { key: 'tone' as const, label: '基調氛圍', options: COMIC_TONES },
   { key: 'layout' as const, label: '版面格數', options: COMIC_LAYOUTS },
 ];
@@ -49,6 +60,7 @@ export function buildComicPrompt(content: string, config: ComicSkillConfig): str
   const artMod = COMIC_ART_STYLES.find(o => o.id === config.art)?.promptModifier ?? '';
   const toneMod = COMIC_TONES.find(o => o.id === config.tone)?.promptModifier ?? '';
   const layoutMod = COMIC_LAYOUTS.find(o => o.id === config.layout)?.promptModifier ?? '';
+  const aspectMod = COMIC_ASPECTS.find(o => o.id === config.aspect)?.promptModifier ?? 'aspect ratio 4:3';
 
   return `
 Create a single knowledge comic image containing ${config.pageCount} panels.
@@ -61,6 +73,9 @@ ${toneMod}
 
 LAYOUT: ${config.layout} — ${config.pageCount} panels total
 ${layoutMod}
+
+ASPECT RATIO:
+${aspectMod}
 
 PANEL COUNT: ${config.pageCount} panels within this single image. All panels must share consistent character designs, colors, and perspective.
 

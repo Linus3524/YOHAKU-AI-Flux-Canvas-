@@ -4,11 +4,13 @@ import { SkillOption } from './sticker';
 export interface SlideDeckSkillConfig {
   preset: string;
   audience: string;
+  aspect: string;
 }
 
 export const SLIDE_DEFAULT_CONFIG: SlideDeckSkillConfig = {
   preset: 'blueprint',
   audience: 'general',
+  aspect: '16:9',
 };
 
 export const SLIDE_PRESETS: SkillOption[] = [
@@ -24,8 +26,16 @@ export const SLIDE_PRESETS: SkillOption[] = [
   { id: 'notion', name: 'Notion', name_zh: 'Notion 灰卡', desc: '淺灰背景配白色卡片、圓角細線。簡潔實用', promptModifier: 'Notion style. Light gray background, white content cards, light border dividers, blue links, tag chips, clean dashboard look.' },
   { id: 'pixel-art', name: 'Pixel Art', name_zh: '像素藝術', desc: '復古8位/16位像素圖表。適合極客、懷舊主題', promptModifier: 'Pixel Art style. Light blue background, visible pixel grid, blocky bitmap fonts, pixel progress bars.' },
   { id: 'scientific', name: 'Scientific', name_zh: '科學精準', desc: '教科書或期刊般精確的結構標示。適合學術報告', promptModifier: 'Scientific style. Off-white background,Times New Roman serif headlines, color-coded chemical/biology diagrams.' },
-  { id: 'sketch-notes', name: 'Sketch Notes', name_zh: '手繪筆記', desc: '泛黃筆記紙底配彩色麥克風手寫標註。溫暖好懂', promptModifier: 'Sketch Notes style. Warm paper background, hand-drawn marker calligraphy headlines, casual handwritten body text, wavy arrows.' },
+  { id: 'sketch-notes', name: 'Sketch Notes', name_zh: '手繪筆記', desc: '泛黃筆記紙底配彩色麥克風手寫標註。溫暖好懂', promptModifier: 'Charcut style. Warm paper background, hand-drawn marker calligraphy headlines, casual handwritten body text, wavy arrows.' },
   { id: 'vector-illustration', name: 'Vector Illustration', name_zh: '向量插畫', desc: '馬卡龍色塊拼接配粗黑描邊。扁平插畫質感', promptModifier: 'Vector Illustration style. Cream background, uniform black outlines, solid coral/mint/yellow blocks, lollipop trees.' },
+];
+
+export const SLIDE_ASPECTS: SkillOption[] = [
+  { id: '16:9', name: '16:9', name_zh: '寬螢幕 (16:9)', desc: '現代簡報標準比例', promptModifier: 'aspect ratio 16:9' },
+  { id: '4:3', name: '4:3', name_zh: '標準 (4:3)', desc: '傳統簡報比例', promptModifier: 'aspect ratio 4:3' },
+  { id: '1:1', name: '1:1', name_zh: '正方形 (1:1)', desc: '適合 Instagram 輪播卡片', promptModifier: 'aspect ratio 1:1' },
+  { id: '3:4', name: '3:4', name_zh: '直向 (3:4)', desc: '適合手機簡報分享', promptModifier: 'aspect ratio 3:4' },
+  { id: '9:16', name: '9:16', name_zh: '直向 (9:16)', desc: '適合手機限時動態簡報', promptModifier: 'aspect ratio 9:16' },
 ];
 
 export const SLIDE_AUDIENCES: SkillOption[] = [
@@ -37,12 +47,14 @@ export const SLIDE_AUDIENCES: SkillOption[] = [
 
 export const SLIDE_OPTION_GROUPS = [
   { key: 'preset' as const, label: '風格套裝', options: SLIDE_PRESETS },
+  { key: 'aspect' as const, label: '尺寸比例', options: SLIDE_ASPECTS },
   { key: 'audience' as const, label: '受眾定位', options: SLIDE_AUDIENCES },
 ];
 
 export function buildSlideDeckPrompt(content: string, config: SlideDeckSkillConfig): string {
   const presetMod = SLIDE_PRESETS.find(o => o.id === config.preset)?.promptModifier ?? '';
   const audienceMod = SLIDE_AUDIENCES.find(o => o.id === config.audience)?.promptModifier ?? '';
+  const aspectMod = SLIDE_ASPECTS.find(o => o.id === config.aspect)?.promptModifier ?? 'aspect ratio 16:9';
 
   return `
 Create a slide deck presentation image.
@@ -52,6 +64,9 @@ ${presetMod}
 
 AUDIENCE: ${config.audience}
 ${audienceMod}
+
+ASPECT RATIO:
+${aspectMod}
 
 DESIGN PHILOSOPHY:
 - Self-explanatory without verbal commentary

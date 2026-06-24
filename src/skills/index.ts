@@ -7,6 +7,19 @@ import { SocialCardSkillConfig, SOCIAL_DEFAULT_CONFIG, SOCIAL_OPTION_GROUPS, bui
 import { ArticleIllustratorSkillConfig, ILLUSTRATOR_DEFAULT_CONFIG, ILLUSTRATOR_OPTION_GROUPS, buildArticleIllustratorPrompt } from './articleIllustrator';
 import { ComicSkillConfig, COMIC_DEFAULT_CONFIG, COMIC_OPTION_GROUPS, buildComicPrompt } from './comic';
 import { SlideDeckSkillConfig, SLIDE_DEFAULT_CONFIG, SLIDE_OPTION_GROUPS, buildSlideDeckPrompt } from './slideDeck';
+import { STYLE_PRESETS } from '../utils/helpers';
+import { VISUAL_STYLE_TEMPLATES } from './styles';
+
+export const SKILL_STYLE_KEYS: Record<SkillType, string> = {
+  sticker: 'style',
+  cover: 'rendering',
+  logo: 'style',
+  infographic: 'style',
+  social: 'style',
+  illustrator: 'style',
+  comic: 'art',
+  slide: 'preset',
+};
 
 export type SkillType =
   | 'sticker'
@@ -123,6 +136,20 @@ export function buildSkillPrompt(type: SkillType, content: string, config: any):
       break;
     default:
       throw new Error(`Unsupported skill type: ${type}`);
+  }
+
+  const styleKey = SKILL_STYLE_KEYS[type];
+  if (styleKey && config && config[styleKey]) {
+    const selectedStyleId = config[styleKey];
+    const visualTemplate = VISUAL_STYLE_TEMPLATES.find(t => t.id === selectedStyleId);
+    if (visualTemplate) {
+      basePrompt = `${basePrompt}\n\n============================================================\n[MANDATORY DESIGN SYSTEM SPECIFICATION TO FOLLOW]\nAdhere strictly to this design spec for colors (Hex), typography rules, card/button styles, and layout:\n\n${visualTemplate.content}\n============================================================`;
+    } else {
+      const customStyle = STYLE_PRESETS.find(p => p.id === selectedStyleId);
+      if (customStyle) {
+        basePrompt = `${basePrompt}\n\nOVERRIDE VISUAL STYLE / ART DIRECTION:\nApply this visual style preset: ${customStyle.prompt}`;
+      }
+    }
   }
 
   return `${basePrompt}\n\nIMPORTANT LANGUAGE REQUIREMENT:\nIf this design contains any rendered text, labels, titles, sub-headings, paragraphs, bullet points or speech bubbles inside the image, you MUST write them in the SAME language as the provided content (e.g. if the user's content is in Traditional Chinese, use Traditional Chinese; if it is in English, use English; if it is in Japanese, use Japanese). Do not translate the user's text into another language, and do not use generic English text or English placeholders unless the user's content is in English.`.trim();

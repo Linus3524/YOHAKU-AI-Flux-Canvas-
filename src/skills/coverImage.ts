@@ -10,6 +10,7 @@ export interface CoverImageSkillConfig {
   font: string;
   title: string;
   subtitle: string;
+  aspect: string;
 }
 
 export const COVER_DEFAULT_CONFIG: CoverImageSkillConfig = {
@@ -21,6 +22,7 @@ export const COVER_DEFAULT_CONFIG: CoverImageSkillConfig = {
   font: 'clean',
   title: '',
   subtitle: '',
+  aspect: '16:9',
 };
 
 export const COVER_TYPES: SkillOption[] = [
@@ -51,6 +53,7 @@ export const COVER_RENDERINGS: SkillOption[] = [
   { id: 'digital', name: 'Digital', name_zh: '數字風', desc: '精緻、精確、現代', promptModifier: 'Clean digital illustration with polished finish, precise edges. Smooth surfaces, subtle gradients, frosted glass effects, card-based layouts.' },
   { id: 'pixel', name: 'Pixel', name_zh: '像素風', desc: '復古8位、懷舊、顆粒感', promptModifier: 'Pixel art aesthetic with visible pixel grid, limited color palette, NES/SNES retro gaming feel. Staircase edges on diagonals, pixelated bitmap fonts.' },
   { id: 'chalk', name: 'Chalk', name_zh: '粉筆', desc: '教育、真實、黑板粉筆感', promptModifier: 'Chalk on blackboard aesthetic with imperfect strokes, dust effects, and authentic classroom feel. Chalk board background, chalk smudges.' },
+  { id: 'photo-realistic', name: 'Photo Realistic', name_zh: '照片寫實', desc: '真實相機拍攝質感、自然光影', promptModifier: 'Professional realistic photography style. Natural sunlight/studio lighting, clean depth of field (f/2.8 focus), realistic textures, sharp details, organic shadow gradations, high dynamic range. The image should look like a genuine high-quality photograph, not an illustration or 3D render.' },
 ];
 
 export const COVER_TEXTS: SkillOption[] = [
@@ -73,8 +76,17 @@ export const COVER_FONTS: SkillOption[] = [
   { id: 'display', name: 'Display', name_zh: '展示', desc: '粗體、裝飾性強的標題字體', promptModifier: 'Bold decorative display typography, heavy expressive headlines, attention-grabbing character.' },
 ];
 
+export const COVER_ASPECTS: SkillOption[] = [
+  { id: '16:9', name: '16:9', name_zh: '寬螢幕 (16:9)', desc: '經典簡報/部落格首圖比例', promptModifier: 'aspect ratio 16:9' },
+  { id: '4:3', name: '4:3', name_zh: '標準 (4:3)', desc: '標準橫向比例', promptModifier: 'aspect ratio 4:3' },
+  { id: '1:1', name: '1:1', name_zh: '正方形 (1:1)', desc: '適合社群媒體首圖', promptModifier: 'aspect ratio 1:1' },
+  { id: '3:4', name: '3:4', name_zh: '直向 (3:4)', desc: '適合手機閱讀版面', promptModifier: 'aspect ratio 3:4' },
+  { id: '9:16', name: '9:16', name_zh: '直向 (9:16)', desc: '垂直全螢幕限動尺寸', promptModifier: 'aspect ratio 9:16' },
+];
+
 export const COVER_OPTION_GROUPS = [
   { key: 'type' as const, label: '類型', options: COVER_TYPES },
+  { key: 'aspect' as const, label: '比例', options: COVER_ASPECTS },
   { key: 'palette' as const, label: '色調', options: COVER_PALETTES },
   { key: 'rendering' as const, label: '渲染風格', options: COVER_RENDERINGS },
   { key: 'text' as const, label: '文字層級', options: COVER_TEXTS },
@@ -89,6 +101,7 @@ export function buildCoverImagePrompt(content: string, config: CoverImageSkillCo
   const textMod = COVER_TEXTS.find(o => o.id === config.text)?.promptModifier ?? '';
   const moodMod = COVER_MOODS.find(o => o.id === config.mood)?.promptModifier ?? '';
   const fontMod = COVER_FONTS.find(o => o.id === config.font)?.promptModifier ?? '';
+  const aspectMod = COVER_ASPECTS.find(o => o.id === config.aspect)?.promptModifier ?? 'aspect ratio 16:9';
 
   return `
 Create an elegant cover image for the following content.
@@ -111,10 +124,13 @@ ${moodMod}
 TYPOGRAPHY: ${config.font}
 ${fontMod}
 
+ASPECT RATIO:
+${aspectMod}
+
 COMPOSITION PRINCIPLES:
 - 40-60% whitespace breathing room
 - Visual anchor centered or offset left
-- Simplified silhouettes for characters, NO realistic humans
+- Simplified silhouettes for characters, NO realistic humans (unless rendering style is photo-realistic, in which case realistic lighting, textures, and details apply)
 
 CONTENT TO VISUALIZE:
 ${content}

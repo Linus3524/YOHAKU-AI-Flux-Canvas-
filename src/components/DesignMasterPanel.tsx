@@ -1,5 +1,7 @@
 // 設計大師面板 — 更加精緻的 iOS/macOS 玻璃質感介面，解決多重滾動條與按鈕沉重感
 import React, { useState } from 'react';
+import { STYLE_PRESETS } from '../utils/helpers';
+import { VISUAL_STYLE_TEMPLATES } from '../skills/styles';
 import { Icon } from './Icon';
 import {
   SKILL_LIST,
@@ -52,6 +54,25 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   const [count, setCount] = useState<1 | 2 | 3 | 4>(1);
   const [content, setContent] = useState(noteContent);
   const [model, setModel] = useState('gemini');
+
+  const DESIGN_STYLE_CATEGORIES = [
+    {
+      label: '📊 版面與結構圖解',
+      ids: ['notion', 'ikea-manual', 'scientific', 'subway-map', 'blueprint', 'ui-wireframe', 'corporate', 'corporate-memphis', 'technical-schematic', 'minimal', 'aged-academia', 'editorial-infographic', 'intuition-machine', 'knolling']
+    },
+    {
+      label: '📢 社群媒體美學',
+      ids: ['xhs-bold', 'xhs-cute', 'xhs-fresh', 'xhs-pop', 'xhs-study-notes', 'ig-chalkboard', 'ig-pixel-art', 'retro-pop-grid', 'morandi-journal', 'neon-kinetic-typographic', 'soft-analog-future-editorial', 'pop-bubble-letter-photo', 'pop-laboratory']
+    },
+    {
+      label: '🎨 藝術與手作材質',
+      ids: ['claymation', 'origami', 'lego-brick', 'watercolor', 'craft-handmade', 'neubrutalism', 'vaporwave', 'risograph', 'duotone', 'paper-cutout', 'pixel-art', 'bold-editorial', 'bold-graphic', 'chalkboard', 'cm-chalk', 'cm-ink-brush', 'cm-ligne-claire', 'cm-manga', 'cm-realistic', 'fantasy-animation', 'playful-mascot-doodle', 'teenage-skate-scribble', 'gothic-cat-doodle-collage', 'vector-illustration', 'vintage', 'storybook-watercolor', 'cyberpunk-neon', 'dark-atmospheric', 'kawaii', 'sketch-notes']
+    },
+    {
+      label: '🌈 品牌配色系列',
+      ids: ['cv-cool', 'cv-dark', 'cv-earth', 'cv-elegant', 'cv-mono', 'cv-pastel', 'cv-retro', 'cv-vivid', 'cv-warm']
+    }
+  ];
 
   const navRef = React.useRef<HTMLDivElement>(null);
   const activeTabRef = React.useRef<HTMLButtonElement>(null);
@@ -110,6 +131,14 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
       } else if (activeSkill === 'logo') {
         aspect = currentConfig.size;
       } else if (activeSkill === 'sticker') {
+        aspect = currentConfig.aspect;
+      } else if (activeSkill === 'cover') {
+        aspect = currentConfig.aspect;
+      } else if (activeSkill === 'illustrator') {
+        aspect = currentConfig.aspect;
+      } else if (activeSkill === 'comic') {
+        aspect = currentConfig.aspect;
+      } else if (activeSkill === 'slide') {
         aspect = currentConfig.aspect;
       } else if (activeSkill === 'infographic') {
         if (currentConfig.aspect === 'square') aspect = '1:1';
@@ -327,45 +356,124 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
 
           {/* 選項群組 */}
           <div className="space-y-6">
-            {currentSkill.optionGroups.map(group => (
-              <div key={group.key}>
-                <div className="flex items-center gap-2 mb-2.5">
-                  <span className="text-[11px] font-bold text-[#475569] tracking-wide">{group.label}</span>
-                  <div className="flex-1 h-px bg-gray-100" />
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {group.options.map((opt: any) => {
-                    const active = configs[activeSkill][group.key] === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        onClick={() => set(group.key, opt.id)}
-                        title={opt.desc}
-                        className={`flex flex-col gap-0.5 px-4 py-3 rounded-2xl border text-left transition-all duration-200 relative ${
-                          active
-                            ? 'bg-[#FAF5FF] border-[#AF52DE] text-[#AF52DE] shadow-[0_4px_12px_rgba(175,82,222,0.08)]'
-                            : 'bg-white border-[#E2E8F0] hover:border-[#cbd5e1] hover:shadow-[0_4px_12px_rgba(0,0,0,0.02)] text-[#1E293B]'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span className={`text-[13px] font-semibold leading-tight ${active ? 'text-[#7e22ce]' : 'text-[#1E293B]'}`}>
-                            {opt.name_zh}
+            {currentSkill.optionGroups
+              .filter(group => {
+                if (activeSkill === 'social') {
+                  const currentConfig = configs.social;
+                  if (currentConfig && currentConfig.type !== 'social-post') {
+                    return group.key !== 'layout' && group.key !== 'strategy';
+                  }
+                }
+                return true;
+              })
+              .map(group => {
+                const isStyleGroup = ['style', 'rendering', 'art', 'preset'].includes(group.key);
+                return (
+                <div key={group.key}>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <span className="text-[11px] font-bold text-[#475569] tracking-wide">{group.label}</span>
+                    <div className="flex-1 h-px bg-gray-100" />
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {group.options.map((opt: any) => {
+                      const active = configs[activeSkill][group.key] === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          onClick={() => set(group.key, opt.id)}
+                          title={opt.desc}
+                          className={`flex flex-col gap-0.5 px-4 py-3 rounded-2xl border text-left transition-all duration-200 relative ${
+                            active
+                              ? 'bg-[#FAF5FF] border-[#AF52DE] text-[#AF52DE] shadow-[0_4px_12px_rgba(175,82,222,0.08)]'
+                              : 'bg-white border-[#E2E8F0] hover:border-[#cbd5e1] hover:shadow-[0_4px_12px_rgba(0,0,0,0.02)] text-[#1E293B]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className={`text-[13px] font-semibold leading-tight ${active ? 'text-[#7e22ce]' : 'text-[#1E293B]'}`}>
+                              {opt.name_zh}
+                            </span>
+                            {active && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-[#AF52DE] flex-shrink-0">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`text-[10px] leading-snug mt-1 ${active ? 'text-[#AF52DE]/75' : 'text-[#64748B]'}`}>
+                            {opt.desc}
                           </span>
-                          {active && (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-[#AF52DE] flex-shrink-0">
-                              <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                          )}
+                        </button>
+                      );
+                    })}
+
+                    {isStyleGroup && (() => {
+                      const currentVal = configs[activeSkill][group.key];
+                      const selectedPreset = VISUAL_STYLE_TEMPLATES.find(p => p.id === currentVal);
+                      const active = !!selectedPreset;
+                      return (
+                        <div
+                          className={`flex flex-col gap-0.5 px-4 py-3 rounded-2xl border text-left transition-all duration-200 relative cursor-pointer min-h-[64px] ${
+                            active
+                              ? 'bg-[#FAF5FF] border-[#AF52DE] text-[#AF52DE] shadow-[0_4px_12px_rgba(175,82,222,0.08)]'
+                              : 'bg-white border-dashed border-[#cbd5e1] hover:border-[#AF52DE] hover:shadow-[0_4px_12px_rgba(175,82,222,0.02)] text-[#64748B]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full pointer-events-none">
+                            <span className={`text-[13px] font-bold leading-tight ${active ? 'text-[#7e22ce]' : 'text-[#475569]'}`}>
+                              {active ? `✨ ${selectedPreset.name_zh}` : '✨ 藝術風格庫...'}
+                            </span>
+                            {active ? (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-[#AF52DE] flex-shrink-0">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                            ) : (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`text-[10px] leading-snug mt-1 pointer-events-none ${active ? 'text-[#AF52DE]/75' : 'text-gray-400'}`}>
+                            {active ? `風格：${selectedPreset.name}` : '選擇 60+ 種系統預設風格'}
+                          </span>
+                          
+                          <select
+                            value={active ? currentVal : ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val) {
+                                set(group.key, val);
+                              } else {
+                                const defaultVal = SKILL_LIST.find(s => s.id === activeSkill)?.defaultConfig[group.key];
+                                if (defaultVal !== undefined) {
+                                  set(group.key, defaultVal);
+                                }
+                              }
+                            }}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                          >
+                            <option value="">✨ 選擇其他藝術風格 / 清除風格...</option>
+                            {DESIGN_STYLE_CATEGORIES.map(category => {
+                              const categoryPresets = category.ids
+                                .map(id => VISUAL_STYLE_TEMPLATES.find(p => p.id === id))
+                                .filter(Boolean) as typeof VISUAL_STYLE_TEMPLATES;
+                              if (categoryPresets.length === 0) return null;
+                              return (
+                                <optgroup key={category.label} label={category.label}>
+                                  {categoryPresets.map(preset => (
+                                    <option key={preset.id} value={preset.id}>
+                                      {preset.name_zh} ({preset.name})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              );
+                            })}
+                          </select>
                         </div>
-                        <span className={`text-[10px] leading-snug mt-1 ${active ? 'text-[#AF52DE]/75' : 'text-[#64748B]'}`}>
-                          {opt.desc}
-                        </span>
-                      </button>
-                    );
-                  })}
+                      );
+                    })()}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
         </div>

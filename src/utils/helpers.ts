@@ -269,8 +269,8 @@ export const STYLE_PRESETS = [
     prompt: 'Transform into Neubrutalism graphic design: thick black outlines (#000000), high-contrast stark drop shadows offset to bottom-right, flat vibrant pastel backgrounds with zero gradients, bold oversized typography elements, asymmetric raw layouts, anti-design web aesthetic.'
   },
   {
-    id: 'Claymorphism', name: '黏土玩具', label: 'Claymorphism',
-    prompt: 'Transform into claymorphism 3D illustration: soft inflated rounded 3D shapes as if sculpted from clay, matte clay surface texture, subtle inner shadows for depth illusion, glossy plastic toy highlights on rounded edges, playful cheerful character or object proportions, pastel color palette.'
+    id: 'Claymorphism', name: '黏土動畫', label: 'Claymation',
+    prompt: 'Transform into stop-motion Claymation 3D illustration: handcrafted clay figures with visible thumbprint and fingerprint textures, soft diffused lighting with clay depth shadows, rounded organic sculpted forms, playful tactile plasticine surfaces.'
   },
   {
     id: 'Acid Graphics', name: '酸性液態金屬', label: 'Acid Graphics',
@@ -601,6 +601,64 @@ export const STYLE_PRESETS = [
   {
     id: 'Olympus Film SLR', name: '奧林巴斯底片單眼', label: 'Olympus Analog SLR 70s',
     prompt: 'Transform using 70s Olympus analog SLR film camera feel: rich organic halation around light sources, vintage high contrast film rendering, mechanical shutter aesthetic, warm analog color depth.'
+  },
+  
+  // ── 新增 Muse 對標風格 ─────────────────────────────────────────
+  {
+    id: 'IKEA Manual', name: 'IKEA 說明書風', label: 'IKEA Manual',
+    prompt: 'Transform into IKEA assembly manual style: minimal line art illustration, clean black outlines on flat white background, numbered step-by-step sequence, exploded views of components, directional action arrows showing assembly, wordless visual instructions, simplified stick figures for scale, no gradients or shadows.'
+  },
+  {
+    id: 'Knolling', name: 'Knolling 俯拍整理', label: 'Knolling organized flat-lay',
+    prompt: 'Transform into knolling organized flat-lay style: clean top-down perspective, multiple objects arranged in a neat grid or at precise 90-degree angles, equal spacing between items, clean minimal background, flat lighting, organized and systematic layout.'
+  },
+  {
+    id: 'Lego Brick', name: '樂高積木風', label: 'Lego Brick',
+    prompt: 'Transform into Lego brick construction style: built from colorful plastic toy bricks, visible round studs on top, blocky geometric forms, vibrant primary colors, playful toy aesthetic, glossy plastic material finishes.'
+  },
+  {
+    id: 'Origami', name: '摺紙風', label: 'Origami',
+    prompt: 'Transform into origami paper folding art: geometric paper creases, folded paper layers, sharp folded edges, soft realistic drop shadows between layers, textured craft paper material, delicate Japanese paper craft aesthetic.'
+  },
+  {
+    id: 'Subway Map', name: '地鐵地圖圖解風', label: 'Transit Subway Map',
+    prompt: 'Transform into transit diagram subway map style: color-coded transit routes, bold lines meeting at 45 and 90 degree angles, clean node connection points representing stations, simplified geographical layout, schematic route visualization, iconic transit map typography.'
+  },
+  {
+    id: 'Scientific', name: '科學插畫風', label: 'Scientific Illustration',
+    prompt: 'Transform into scientific textbook illustration: clean diagram layout, precise academic labeling with leader lines, cross-section anatomical views, realistic details coupled with technical annotations, high educational clarity.'
+  },
+  {
+    id: 'Sketch Notes', name: '手寫筆記風', label: 'Sketch Notes',
+    prompt: 'Transform into hand-drawn sketch notes (sketchnotes) style: handwritten annotations, quick concept doodles, structural connecting arrows and boxes, personal notebook paper background, raw visual thinking drawings, casual ballpoint pen and marker strokes.'
+  },
+  {
+    id: 'Notion', name: 'Notion 文件風', label: 'Notion Document',
+    prompt: 'Transform into clean productivity app UI style: gray and white card layout, minimalist sans-serif typography, block-based structure, clean workspaces look, flat modern web layout, simple monochrome icon indicators.'
+  },
+  {
+    id: 'Kawaii', name: '卡哇伊', label: 'Kawaii Cute',
+    prompt: 'Transform into ultra-cute Japanese Kawaii aesthetic: pastel marshmallow colors, extremely rounded forms, floating hearts and sparkles, friendly smiling faces on all objects, overwhelming adorable chibi characteristics.'
+  },
+  {
+    id: 'XHS Bold', name: '小紅書大膽', label: 'XHS Bold High Impact',
+    prompt: 'Transform into high-impact Xiaohongshu social media post style: bold attention-grabbing titles, vibrant red and neon yellow accents, high-contrast layouts, graphic stickers, high click-through-rate visual aesthetics.'
+  },
+  {
+    id: 'XHS Cute', name: '小紅書可愛', label: 'XHS Cute Adorable',
+    prompt: 'Transform into adorable Xiaohongshu social media post style: pastel marshmallow colors, rounded stickers and frames, hand-drawn star and sparkle overlays, polaroid frame layouts, warm and cute girly aesthetic.'
+  },
+  {
+    id: 'XHS Fresh', name: '小紅書清新', label: 'XHS Fresh Clean',
+    prompt: 'Transform into clean and natural Xiaohongshu social media post style: refreshing mint green and soft white tones, botanical leaves and organic shapes, generous whitespace, airy and relaxing life-sharing aesthetic.'
+  },
+  {
+    id: 'XHS Pop', name: '小紅書活力', label: 'XHS Pop Vibrant',
+    prompt: 'Transform into vibrant Xiaohongshu social media post style: saturated primary colors, dynamic pop art geometric shapes, halftone dot grids, speech bubbles, energetic youth culture aesthetic.'
+  },
+  {
+    id: 'XHS Study Notes', name: '小紅書學習筆記', label: 'XHS Study Notes Handwritten',
+    prompt: 'Transform into realistic Xiaohongshu study notes style: top-down shot of a tidy wooden desk, dense handwritten notes on grid paper, blue and black pen ink, yellow highlighter overlays, red pen circle annotations.'
   },
 ];
 

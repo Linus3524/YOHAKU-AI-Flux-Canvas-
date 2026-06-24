@@ -2,6 +2,7 @@
 import { SkillOption } from './sticker';
 
 export interface SocialCardSkillConfig {
+  type: string;
   style: string;
   layout: string;
   strategy: string;
@@ -9,11 +10,20 @@ export interface SocialCardSkillConfig {
 }
 
 export const SOCIAL_DEFAULT_CONFIG: SocialCardSkillConfig = {
+  type: 'social-post',
   style: 'cute',
   layout: 'balanced',
   strategy: 'info-dense',
   aspect: '3:4', // 預設小紅書/Threads 直向比例
 };
+
+export const SOCIAL_TYPES: SkillOption[] = [
+  { id: 'social-post', name: 'Social Post', name_zh: '社群圖卡', desc: '適用於資訊圖卡與小紅書輪播圖', promptModifier: 'social media graphic optimized for engagement, vibrant colors, clear focal point' },
+  { id: 'video-cover', name: 'Video Cover', name_zh: '影片封面', desc: '醒目的影片縮圖，大字標題疊加，高對比度', promptModifier: 'Eye-catching video thumbnail with bold text overlay, high contrast, attention-grabbing composition' },
+  { id: 'poster', name: 'Poster', name_zh: '宣傳海報', desc: '專業海報設計，清晰視覺層次，宣傳美學', promptModifier: 'Professional poster design with clear visual hierarchy, balanced layout, promotional aesthetic' },
+  { id: 'book-page', name: 'Book Page', name_zh: '書頁排版', desc: '優雅排版，充足留白，可讀文本塊', promptModifier: 'Editorial book page layout with elegant typography, generous whitespace, readable text blocks' },
+  { id: 'banner', name: 'Banner', name_zh: '橫幅廣告', desc: '寬橫幅設計，水平強調，清晰行動號召，品牌焦點', promptModifier: 'Wide banner design with horizontal emphasis, clear call-to-action, brand-focused' },
+];
 
 export const SOCIAL_STYLES: SkillOption[] = [
   { id: 'cute', name: 'Cute', name_zh: '可愛風', desc: '粉嫩少女感、貼紙手帳風。小紅書與 IG 經典風格', promptModifier: 'girly cute aesthetic, pastel colors, soft stickers, ribbon details, polaroid frames, hand-drawn stars/sparkles.' },
@@ -46,12 +56,17 @@ export const SOCIAL_STRATEGIES: SkillOption[] = [
 ];
 
 export const SOCIAL_ASPECTS: SkillOption[] = [
-  { id: '1:1', name: '1:1', name_zh: '正方形 (1:1)', desc: '最適合 IG / FB 常規貼文', promptModifier: 'aspect ratio 1:1' },
+  { id: '1:1', name: '1:1', name_zh: '正方形 (1:1)', desc: '適合 IG / FB 常規貼文', promptModifier: 'aspect ratio 1:1' },
   { id: '3:4', name: '3:4', name_zh: '直向 (3:4)', desc: '小紅書 / Threads / IG 資訊流', promptModifier: 'aspect ratio 3:4' },
-  { id: '9:16', name: '9:16', name_zh: '垂直限動 (9:16)', desc: 'IG 限時動態 / Reels 封面', promptModifier: 'aspect ratio 9:16' },
+  { id: '4:3', name: '4:3', name_zh: '標準橫向 (4:3)', desc: '標準橫向圖形比例', promptModifier: 'aspect ratio 4:3' },
+  { id: '9:16', name: '9:16', name_zh: '垂直限動 (9:16)', desc: 'IG 限時動態 / 手機全螢幕限動', promptModifier: 'aspect ratio 9:16' },
+  { id: '16:9', name: '16:9', name_zh: '寬螢幕 (16:9)', desc: '適合影片封面或寬幅橫幅', promptModifier: 'aspect ratio 16:9' },
+  { id: '2:3', name: '2:3', name_zh: '縱向 (2:3)', desc: '海報常見縱向比例', promptModifier: 'aspect ratio 2:3' },
+  { id: '3:2', name: '3:2', name_zh: '橫向 (3:2)', desc: '橫向貼文或攝影比例', promptModifier: 'aspect ratio 3:2' },
 ];
 
 export const SOCIAL_OPTION_GROUPS = [
+  { key: 'type' as const, label: '類型', options: SOCIAL_TYPES },
   { key: 'style' as const, label: '卡片風格', options: SOCIAL_STYLES },
   { key: 'layout' as const, label: '排版布局', options: SOCIAL_LAYOUTS },
   { key: 'strategy' as const, label: '文案策略', options: SOCIAL_STRATEGIES },
@@ -59,30 +74,36 @@ export const SOCIAL_OPTION_GROUPS = [
 ];
 
 export function buildSocialCardPrompt(content: string, config: SocialCardSkillConfig): string {
+  const typeMod = SOCIAL_TYPES.find(o => o.id === config.type)?.promptModifier ?? '';
   const styleMod = SOCIAL_STYLES.find(o => o.id === config.style)?.promptModifier ?? '';
   const layoutMod = SOCIAL_LAYOUTS.find(o => o.id === config.layout)?.promptModifier ?? '';
   const strategyMod = SOCIAL_STRATEGIES.find(o => o.id === config.strategy)?.promptModifier ?? '';
   const aspectMod = SOCIAL_ASPECTS.find(o => o.id === config.aspect)?.promptModifier ?? '';
 
+  const isSocialPost = config.type === 'social-post';
+
   return `
-Create a professional social media infographic card (suitable for Instagram, Facebook, Threads, or Xiaohongshu).
+Create a professional ${config.type} graphic for the following content.
+
+MEDIA TYPE SPECIFICATION:
+${typeMod}
 
 STYLE: ${config.style}
 ${styleMod}
 
-LAYOUT: ${config.layout}
+${isSocialPost ? `LAYOUT: ${config.layout}
 ${layoutMod}
 
 STRATEGY: ${config.strategy}
-${strategyMod}
+${strategyMod}` : ''}
 
 ASPECT RATIO: ${config.aspect} (${aspectMod})
 
 VISUAL CONSISTENCY:
 - Establish a visual anchor with consistent color palettes, fonts, and illustration styles.
-- Maintain a clean, readable text layout optimized for mobile screens.
+- Maintain a clean, readable text layout optimized for mobile/desktop screens.
 
-CONTENT:
+CONTENT TO VISUALIZE:
 ${content}
   `.trim();
 }
