@@ -13,6 +13,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { InfiniteCanvas, CanvasApi } from './components/InfiniteCanvas';
 import { ContextMenu } from './components/ContextMenu';
 import { StylePasteModal } from './components/StylePasteModal';
+import { DesignMasterPanel } from './components/DesignMasterPanel';
 import { DrawingModal } from './components/DrawingModal';
 import { ImageEditModal } from './components/ImageEditModal';
 import { DraggableToolbar } from './components/DraggableToolbar';
@@ -236,6 +237,7 @@ const App: React.FC = () => {
   const [userApiKey, setUserApiKey] = useState<string | null>(() => localStorage.getItem('yohaku_api_key'));
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [designMasterTargetId, setDesignMasterTargetId] = useState<string | null>(null);
   const [showSVGExportModal, setShowSVGExportModal] = useState(false);
   const [showStoragePopover, setShowStoragePopover] = useState(false);
 
@@ -442,6 +444,8 @@ const App: React.FC = () => {
       genProgress,
       generatedImages,
       setGeneratedImages,
+      pendingAutoDebg,
+      restoreTransparencyFn,
       outpaintingState,
       setOutpaintingState,
       copiedStyle,
@@ -816,6 +820,43 @@ const App: React.FC = () => {
   }, [addElement, getCenterOfViewport, showToast]);
 
 
+  // --- 便利貼右鍵：AI 提示詞優化（取文字 → AI 擴寫 → 寫回） ---
+  const handleOptimizeNotePrompt = useCallback(async (elementId: string) => {
+      const element = elements.find(el => el.id === elementId);
+      if (!element || (element.type !== 'note' && element.type !== 'text')) return;
+      const current = element.type === 'note' ? (element as NoteElement).content : (element as TextElement).text;
+      if (!current || !current.trim()) { showToast("便利貼是空的，請先輸入內容 ✏️"); return; }
+      if (!effectiveApiKey) { setShowKeyModal(true); showToast("請先設定 API Key"); return; }
+
+      setIsGenerating(true);
+      setGeneratingElementIds([elementId]);
+      showToast("✨ AI 提示詞優化中...");
+      try {
+          const optimized = await handleAskAI(current);
+          if (optimized && optimized.trim()) {
+              setElements(prev => prev.map(e => {
+                  if (e.id !== elementId) return e;
+                  if (e.type === 'note') return { ...e, content: optimized } as NoteElement;
+                  if (e.type === 'text') return { ...e, text: optimized } as TextElement;
+                  return e;
+              }));
+              showToast("✅ 提示詞已優化！");
+          }
+      } finally {
+          setIsGenerating(false);
+          setGeneratingElementIds([]);
+      }
+  }, [elements, effectiveApiKey, handleAskAI, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+
+
+  // --- 便利貼右鍵：開啟設計大師面板（API Key 在生成時才檢查） ---
+  const handleOpenDesignMaster = useCallback((elementId: string) => {
+      const element = elements.find(el => el.id === elementId);
+      if (!element || (element.type !== 'note' && element.type !== 'text')) return;
+      setDesignMasterTargetId(elementId);
+  }, [elements]);
+
+
   // ✅ 刪除第 404~658 行 (drawTextOnCanvas 區域函數定義)
 
   // --- RASTERIZE TEXT OVERRIDE (Fix: Uses Correct Dimensions with High DPI Scaling) ---
@@ -1083,7 +1124,17 @@ const App: React.FC = () => {
   const addGeneratedImageToCanvas = useCallback(async (imageUrl: string) => {
     if (!imageUrl) return;
     // 確保存入畫布的一定是 base64（避免 Atlas CDN URL 過期後無法給 Gemini 使用）
-    const src = imageUrl.startsWith('data:') ? imageUrl : await downloadImageAsBase64(imageUrl);
+    let src = imageUrl.startsWith('data:') ? imageUrl : await downloadImageAsBase64(imageUrl);
+    // 設計大師「透明背景」：放入畫布前自動去背
+    if (pendingAutoDebg) {
+      try {
+        showToast('🪄 自動去背中，請稍候...');
+        src = await restoreTransparencyFn(src, '#FFFFFF');
+        showToast('✅ 已去背並放入畫布！');
+      } catch (e) {
+        showToast('去背失敗，已放入原圖');
+      }
+    }
     const img = new Image();
     img.referrerPolicy = 'no-referrer';
     img.onload = () => {
@@ -1100,7 +1151,7 @@ const App: React.FC = () => {
       }
     };
     img.src = src;
-  }, [addElement, getCenterOfViewport]);
+  }, [addElement, getCenterOfViewport, pendingAutoDebg, restoreTransparencyFn, showToast]);
 
   const downloadGeneratedImage = (imageUrl: string) => {
       if (!imageUrl) return;
@@ -2155,6 +2206,8 @@ const App: React.FC = () => {
             rasterizeArrow: handleRasterizeArrow,
             mergeLayers: handleMergeLayersOverride,
             extractPrompt: handleExtractPrompt,
+            optimizeNotePrompt: handleOptimizeNotePrompt,
+            designMaster: handleOpenDesignMaster,
             magicLayer: handleMagicLayer,
             semanticEditor: handleOpenSemanticEditor,
             ocrConvert: handleOCRConvert,
@@ -2183,6 +2236,25 @@ const App: React.FC = () => {
           onClose={() => setStylePasteModal(null)}
         />
       )}
+
+      {designMasterTargetId && (() => {
+        const el = elements.find(e => e.id === designMasterTargetId);
+        if (!el || (el.type !== 'note' && el.type !== 'text')) return null;
+        const content = el.type === 'note' ? (el as NoteElement).content : (el as TextElement).text;
+        return (
+          <DesignMasterPanel
+            noteContent={content || ''}
+            isGenerating={isGenerating}
+            generationModel={generationModel}
+            hasAtlasKey={!!atlasApiKey}
+            onClose={() => setDesignMasterTargetId(null)}
+            onGenerate={(prompt, count, model, autoRemoveBg) => {
+              setDesignMasterTargetId(null);
+              handleGenerate([el], count, prompt, model, autoRemoveBg);
+            }}
+          />
+        );
+      })()}
 
       {isDraggingOver && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none"

@@ -107,20 +107,11 @@ function buildStyledPrompt(userContent: string, stylePrompt: string, fallbackLab
     return styleDesc || `${fallbackLabel} style`;
 }
 
-function detectTransparentBgIntent(prompt: string): boolean {
-    const lower = prompt.toLowerCase();
-    const keywords = [
-        '透明背景', 'transparent background', 'transparent bg',
-        'no background', 'no-background', 'without background',
-        'remove background', '去背', '無背景', '背景透明',
-        'sticker', '貼圖', '貼紙', 'isolated', 'cutout', 'png transparent',
-    ];
-    return keywords.some(kw => lower.includes(kw));
-}
-
-export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel = 'gemini', falApiKey }: UseAIProps) => {
+export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel: generationModelGlobal = 'gemini', falApiKey }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
+    // 設計大師「透明背景」：本批生成的圖在放入畫布時自動去背
+    const [pendingAutoDebg, setPendingAutoDebg] = useState(false);
     // 本機放大用的確定進度（0–100）；null = 不顯示進度條（一般生成走不確定 shimmer）
     const [genProgress, setGenProgress] = useState<number | null>(null);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
@@ -130,11 +121,10 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [imageAspectRatio, setImageAspectRatio] = useState<string>('Original');
     const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('1K');
     const [preserveTransparency, setPreserveTransparency] = useState(true);
-    // 只有 gpt-image-2 支援 background: transparent
-    // preserveTransparency 改用 post-process 處理，不再透過 API 參數觸發
-    // 根據 prompt 關鍵字自動偵測透明背景需求（僅 GPT Image 2）
-    const isGpt2 = generationModel === 'gpt-image-2';
-    const getTransparentBg = (prompt: string) => isGpt2 && detectTransparentBgIntent(prompt);
+    // 透明背景一律改用「生成後去背」流程處理。
+    // Atlas 的 gpt-image-2 端點不接受 background:transparent 參數（會直接打回失敗），
+    // 故所有模型都不再透過 API 參數要求透明背景。
+    const getTransparentBg = (_prompt: string) => false;
     const [showStyleLibrary, setShowStyleLibrary] = useState(false);
     const zIndexCounter = useRef(Math.max(0, ...elements.map(e => e.zIndex)) + 1);
 
@@ -474,12 +464,12 @@ ALWAYS PRESERVE:
         setShowStyleLibrary(false);
 
         // 判斷走 Atlas 還是 Gemini
-        const useAtlas = generationModel !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModel as AtlasGenerationModel);
+        const useAtlas = generationModelGlobal !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModelGlobal as AtlasGenerationModel);
 
         try {
             if (useAtlas) {
                 // ── Atlas img2img 風格套用 ──────────────────────────────
-                const atlasModel = generationModel as AtlasGenerationModel;
+                const atlasModel = generationModelGlobal as AtlasGenerationModel;
                 const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
                 const stylePrompt = presetMatch?.prompt
                     ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
@@ -573,7 +563,7 @@ ALWAYS PRESERVE:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModel, atlasApiKey, imageSize, prepareForGeneration, restoreTransparencyFn]);
+    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModelGlobal, atlasApiKey, imageSize, prepareForGeneration, restoreTransparencyFn]);
 
     const handleCameraAngle = useCallback(async (anglePrompt: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
@@ -637,7 +627,7 @@ STRICT RULES:
         };
 
         // 是否走 Atlas（非 Gemini 模型 + 有 key + 支援 img2img）
-        const useAtlas = generationModel !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModel as AtlasGenerationModel);
+        const useAtlas = generationModelGlobal !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModelGlobal as AtlasGenerationModel);
 
         try {
             const genAI = useAtlas ? null : createAiClient();
@@ -652,7 +642,7 @@ STRICT RULES:
 
                 if (useAtlas) {
                     // ── Atlas img2img 路徑 ──────────────────────────────
-                    const atlasModel = generationModel as AtlasGenerationModel;
+                    const atlasModel = generationModelGlobal as AtlasGenerationModel;
                     let refImage = flatSrc;
                     if (!refImage.startsWith('data:')) refImage = await downloadImageAsBase64(refImage);
                     const ratio = imageAspectRatio || 'Original';
@@ -692,7 +682,7 @@ STRICT RULES:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [selectedElementIds, elements, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModel, atlasApiKey, imageAspectRatio, imageSize, prepareForGeneration, restoreTransparencyFn]);
+    }, [selectedElementIds, elements, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, imageAspectRatio, imageSize, prepareForGeneration, restoreTransparencyFn]);
 
     const handleRemoveBackground = useCallback(async (mode: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
@@ -855,12 +845,12 @@ CONSTRAINTS:
             const imageSize = (baseImg.naturalWidth >= 2000 || baseImg.naturalHeight >= 2000) ? '4K' : '2K';
 
             // 是否走 Atlas（非 Gemini 模型 + 有 key + 支援 img2img，如 GPT Image 2 / Seedream / Qwen）
-            const useAtlas = generationModel !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModel as AtlasGenerationModel);
+            const useAtlas = generationModelGlobal !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModelGlobal as AtlasGenerationModel);
 
             let aiResultSrc = '';
             if (useAtlas) {
                 // ── Atlas img2img 調和路徑 ──────────────────────────
-                const atlasModel = generationModel as AtlasGenerationModel;
+                const atlasModel = generationModelGlobal as AtlasGenerationModel;
                 const quality = imageSize === '4K' ? '4K' : '2K';
                 const images = await withAtlasWaitToast(() => callAtlasImg2Img(promptText, atlasModel, atlasApiKey!, base64, 1, { ratio: 'Original', quality }));
                 if (images.length > 0) aiResultSrc = images[0];
@@ -921,7 +911,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModel, atlasApiKey, withAtlasWaitToast]);
+    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, withAtlasWaitToast]);
 
     const handleStartOutpainting = useCallback((elementId: string) => {
         const el = elements.find(e => e.id === elementId);
@@ -1115,7 +1105,7 @@ CONSTRAINTS:
         const requestedResolution = factor >= 4 ? '4K' : '2K';
 
         // 是否走 Atlas（非 Gemini 模型 + 有 key + 支援 img2img，如 GPT Image 2）
-        const useAtlas = generationModel !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModel as AtlasGenerationModel);
+        const useAtlas = generationModelGlobal !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModelGlobal as AtlasGenerationModel);
 
         showToast(`AI 正在運算中... 正在提升 ${factor} 倍解析度 (目標: ${requestedResolution})`);
 
@@ -1135,7 +1125,7 @@ CONSTRAINTS:
 
             if (useAtlas) {
                 // ── Atlas img2img 放大路徑（GPT Image 2 等）──────────────
-                const atlasModel = generationModel as AtlasGenerationModel;
+                const atlasModel = generationModelGlobal as AtlasGenerationModel;
                 let refImage = flatSrc;
                 if (!refImage.startsWith('data:')) refImage = await downloadImageAsBase64(refImage);
                 const quality = factor >= 4 ? '4K' : '2K';
@@ -1205,7 +1195,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModel, atlasApiKey, preserveTransparency, prepareForGeneration, restoreTransparencyFn]);
+    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, preserveTransparency, prepareForGeneration, restoreTransparencyFn]);
 
     // ── 本機 ONNX 高清放大（純像素超解析，結構 100% 保留，不走雲端、免額度） ──
     const handleLocalUpscale = useCallback(async (modelKey: OnnxModelKey, factor: number = 4) => {
@@ -1262,7 +1252,9 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast]);
 
-    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string) => {
+    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false) => {
+        const generationModel = modelOverride || generationModelGlobal;
+        setPendingAutoDebg(autoRemoveBg);
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
         const noteElements = selectedElements.filter(el => el.type === 'note' || el.type === 'text') as (NoteElement | TextElement)[];
         const frameElements = selectedElements.filter(el => el.type === 'frame') as FrameElement[];
@@ -1595,7 +1587,7 @@ CONSTRAINTS:
           setGeneratingElementIds([]);
           setIsGenerating(false);
         }
-      }, [imageStyle, imageAspectRatio, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModel, prepareForGeneration, restoreTransparencyFn]);
+      }, [imageStyle, imageAspectRatio, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, prepareForGeneration, restoreTransparencyFn]);
 
     return {
         createAiClient,
@@ -1605,6 +1597,9 @@ CONSTRAINTS:
         setGeneratingElementIds,
         generatedImages,
         setGeneratedImages,
+        pendingAutoDebg,
+        setPendingAutoDebg,
+        restoreTransparencyFn,
         outpaintingState,
         setOutpaintingState,
         copiedStyle,
