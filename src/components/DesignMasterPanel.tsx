@@ -2,18 +2,31 @@
 import React, { useState } from 'react';
 import { STYLE_PRESETS } from '../utils/helpers';
 import { VISUAL_STYLE_TEMPLATES } from '../skills/styles';
+import { DESIGN_MD_TEMPLATES } from '../skills/designs';
 import { Icon } from './Icon';
 import {
   SKILL_LIST,
   SkillType,
   buildSkillPrompt,
 } from '../skills';
+import { UI_PLATFORMS, UI_RESOLUTIONS, resolveAspectFromResolution } from '../skills/uiWebpage';
+import { optimizePrompt } from '../skills/promptOptimizer';
+import { Smartphone, Tablet, Monitor, Globe } from 'lucide-react';
+
+const PLATFORM_LUCIDE_ICONS: Record<string, React.ComponentType<any>> = {
+  mobile: Smartphone,
+  tablet: Tablet,
+  pc: Monitor,
+  browser: Globe,
+};
 
 interface DesignMasterPanelProps {
   noteContent: string;
   isGenerating: boolean;
   generationModel: string;
   hasAtlasKey: boolean;
+  apiKey: string;
+  showToast: (msg: string) => void;
   onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string) => void;
   onClose: () => void;
 }
@@ -30,10 +43,33 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   noteContent,
   isGenerating,
   hasAtlasKey,
+  apiKey,
+  showToast,
   onGenerate,
   onClose,
 }) => {
   const [activeSkill, setActiveSkill] = useState<SkillType>('sticker');
+  const [isOptimizing, setIsOptimizing] = useState(false);
+
+  const handleOptimizePrompt = async () => {
+    if (!content.trim()) return;
+    if (!apiKey) {
+      showToast('⚠️ 請先在設定中配置 Gemini API Key 才能使用 AI 優化');
+      return;
+    }
+    setIsOptimizing(true);
+    showToast('AI 正在為您深度優化提示詞...');
+    try {
+      const optimized = await optimizePrompt(activeSkill, content, configs[activeSkill], apiKey);
+      setContent(optimized);
+      showToast('提示詞優化完成！');
+    } catch (err: any) {
+      console.error(err);
+      showToast(`優化失敗: ${err.message || err}`);
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
   const [configs, setConfigs] = useState<Record<SkillType, any>>(() => {
     const firstLine = noteContent.split('\n')[0]?.trim() || '';
     const remainingText = noteContent.split('\n').slice(1).join('\n')?.trim() || '';
@@ -57,20 +93,39 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
 
   const DESIGN_STYLE_CATEGORIES = [
     {
-      label: '📊 版面與結構圖解',
+      label: '版面與結構圖解',
       ids: ['notion', 'ikea-manual', 'scientific', 'subway-map', 'blueprint', 'ui-wireframe', 'corporate', 'corporate-memphis', 'technical-schematic', 'minimal', 'aged-academia', 'editorial-infographic', 'intuition-machine', 'knolling']
     },
     {
-      label: '📢 社群媒體美學',
+      label: '社群媒體美學',
       ids: ['xhs-bold', 'xhs-cute', 'xhs-fresh', 'xhs-pop', 'xhs-study-notes', 'ig-chalkboard', 'ig-pixel-art', 'retro-pop-grid', 'morandi-journal', 'neon-kinetic-typographic', 'soft-analog-future-editorial', 'pop-bubble-letter-photo', 'pop-laboratory']
     },
     {
-      label: '🎨 藝術與手作材質',
+      label: '藝術與手作材質',
       ids: ['claymation', 'origami', 'lego-brick', 'watercolor', 'craft-handmade', 'neubrutalism', 'vaporwave', 'risograph', 'duotone', 'paper-cutout', 'pixel-art', 'bold-editorial', 'bold-graphic', 'chalkboard', 'cm-chalk', 'cm-ink-brush', 'cm-ligne-claire', 'cm-manga', 'cm-realistic', 'fantasy-animation', 'playful-mascot-doodle', 'teenage-skate-scribble', 'gothic-cat-doodle-collage', 'vector-illustration', 'vintage', 'storybook-watercolor', 'cyberpunk-neon', 'dark-atmospheric', 'kawaii', 'sketch-notes']
     },
     {
-      label: '🌈 品牌配色系列',
+      label: '品牌配色系列',
       ids: ['cv-cool', 'cv-dark', 'cv-earth', 'cv-elegant', 'cv-mono', 'cv-pastel', 'cv-retro', 'cv-vivid', 'cv-warm']
+    }
+  ];
+
+  const BRAND_CATEGORIES = [
+    {
+      label: '矽谷與人工智慧',
+      ids: DESIGN_MD_TEMPLATES.filter(t => t.category === 'Tech').map(t => t.id)
+    },
+    {
+      label: '金融與數位支付',
+      ids: DESIGN_MD_TEMPLATES.filter(t => t.category === 'Finance').map(t => t.id)
+    },
+    {
+      label: '創意設計與工具',
+      ids: DESIGN_MD_TEMPLATES.filter(t => t.category === 'Creative').map(t => t.id)
+    },
+    {
+      label: '極簡與大膽美學',
+      ids: DESIGN_MD_TEMPLATES.filter(t => ['Minimal', 'Bold'].includes(t.category)).map(t => t.id)
     }
   ];
 
@@ -140,6 +195,8 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
         aspect = currentConfig.aspect;
       } else if (activeSkill === 'slide') {
         aspect = currentConfig.aspect;
+      } else if (activeSkill === 'uiWebpage') {
+        aspect = resolveAspectFromResolution(currentConfig.resolution);
       } else if (activeSkill === 'infographic') {
         if (currentConfig.aspect === 'square') aspect = '1:1';
         else if (currentConfig.aspect === 'landscape') aspect = '16:9';
@@ -235,8 +292,19 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
           
           {/* 內容素材 */}
           <div>
-            <div className="text-[12px] font-bold text-[#475569] mb-2 flex items-center gap-1.5">
-              內容素材 <span className="font-normal text-gray-400 text-[11px]">(將提供給 AI 繪圖參考)</span>
+            <div className="text-[12px] font-bold text-[#475569] mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                內容素材 <span className="font-normal text-gray-400 text-[11px]">(將提供給 AI 繪圖參考)</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleOptimizePrompt}
+                disabled={isOptimizing || !content.trim()}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-[#AF52DE] bg-purple-50 hover:bg-purple-100 disabled:opacity-40 disabled:hover:bg-purple-50 transition-all border border-purple-100/50 cursor-pointer"
+              >
+                <Icon name="auto_awesome" size={11} className={isOptimizing ? "animate-spin" : ""} />
+                {isOptimizing ? '優化中...' : 'AI 優化'}
+              </button>
             </div>
             <textarea
               value={content}
@@ -354,6 +422,77 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
             </div>
           )}
 
+          {activeSkill === 'uiWebpage' && (
+            <div className="flex flex-col gap-4 bg-purple-50/20 p-4 rounded-2xl border border-purple-100/30">
+              {/* 平台選擇 */}
+              <div>
+                <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">設計平台</div>
+                <div className="grid grid-cols-4 gap-1.5 bg-[#F1F5F9] p-0.5 rounded-xl">
+                  {UI_PLATFORMS.map(p => {
+                    const isSelected = configs.uiWebpage.platform === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          // Find default resolution for the selected platform
+                          const resList = UI_RESOLUTIONS.filter(r => r.platform === p.id);
+                          const defaultRes = resList[0]?.id || '';
+                          setConfigs(prev => ({
+                            ...prev,
+                            uiWebpage: {
+                              ...prev.uiWebpage,
+                              platform: p.id,
+                              resolution: defaultRes
+                            }
+                          }));
+                        }}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                          isSelected
+                            ? 'bg-white text-[#AF52DE] shadow-[0_2px_4px_rgba(0,0,0,0.05)]'
+                            : 'text-[#64748B] hover:text-[#1E293B]'
+                        }`}
+                      >
+                        {(() => {
+                          const LucideIcon = PLATFORM_LUCIDE_ICONS[p.id];
+                          return LucideIcon ? <LucideIcon size={16} className={isSelected ? 'text-[#AF52DE]' : 'text-[#64748B]'} /> : null;
+                        })()}
+                        <span>{p.name_zh}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 解析度預設 */}
+              <div>
+                <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">裝置與解析度</div>
+                <select
+                  value={configs.uiWebpage.resolution}
+                  onChange={e => setConfigs(prev => ({
+                    ...prev,
+                    uiWebpage: {
+                      ...prev.uiWebpage,
+                      resolution: e.target.value
+                    }
+                  }))}
+                  className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2 text-[13px] text-[#1E293B] cursor-pointer appearance-none focus:outline-none focus:border-[#AF52DE] focus:ring-4 focus:ring-[#AF52DE]/10 transition-all font-semibold"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 16px center'
+                  }}
+                >
+                  {UI_RESOLUTIONS.filter(r => r.platform === configs.uiWebpage.platform).map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.name_zh} - {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* 選項群組 */}
           <div className="space-y-6">
             {currentSkill.optionGroups
@@ -367,7 +506,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                 return true;
               })
               .map(group => {
-                const isStyleGroup = ['style', 'rendering', 'art', 'preset'].includes(group.key);
+                const isStyleGroup = ['style', 'rendering', 'art', 'preset', 'brand'].includes(group.key);
                 return (
                 <div key={group.key}>
                   <div className="flex items-center gap-2 mb-2.5">
@@ -407,7 +546,8 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
 
                     {isStyleGroup && (() => {
                       const currentVal = configs[activeSkill][group.key];
-                      const selectedPreset = VISUAL_STYLE_TEMPLATES.find(p => p.id === currentVal);
+                      const selectedPreset = VISUAL_STYLE_TEMPLATES.find(p => p.id === currentVal)
+                        || DESIGN_MD_TEMPLATES.find(p => p.id === currentVal);
                       const active = !!selectedPreset;
                       return (
                         <div
@@ -418,8 +558,9 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                           }`}
                         >
                           <div className="flex items-center justify-between w-full pointer-events-none">
-                            <span className={`text-[13px] font-bold leading-tight ${active ? 'text-[#7e22ce]' : 'text-[#475569]'}`}>
-                              {active ? `✨ ${selectedPreset.name_zh}` : '✨ 藝術風格庫...'}
+                            <span className={`text-[13px] font-bold leading-tight flex items-center gap-1.5 ${active ? 'text-[#7e22ce]' : 'text-[#475569]'}`}>
+                              <Icon name="palette" size={15} className={active ? 'text-[#AF52DE]' : 'text-gray-400'} />
+                              {active ? selectedPreset.name_zh : (group.key === 'brand' ? '設計規格書...' : '藝術風格庫...')}
                             </span>
                             {active ? (
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-[#AF52DE] flex-shrink-0">
@@ -432,7 +573,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                             )}
                           </div>
                           <span className={`text-[10px] leading-snug mt-1 pointer-events-none ${active ? 'text-[#AF52DE]/75' : 'text-gray-400'}`}>
-                            {active ? `風格：${selectedPreset.name}` : '選擇 60+ 種系統預設風格'}
+                            {active ? `風格：${selectedPreset.name}` : (group.key === 'brand' ? '選擇 50+ 種系統內建品牌規格書' : '選擇 60+ 種系統預設風格')}
                           </span>
                           
                           <select
@@ -450,22 +591,39 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                             }}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                           >
-                            <option value="">✨ 選擇其他藝術風格 / 清除風格...</option>
-                            {DESIGN_STYLE_CATEGORIES.map(category => {
-                              const categoryPresets = category.ids
-                                .map(id => VISUAL_STYLE_TEMPLATES.find(p => p.id === id))
-                                .filter(Boolean) as typeof VISUAL_STYLE_TEMPLATES;
-                              if (categoryPresets.length === 0) return null;
-                              return (
-                                <optgroup key={category.label} label={category.label}>
-                                  {categoryPresets.map(preset => (
-                                    <option key={preset.id} value={preset.id}>
-                                      {preset.name_zh} ({preset.name})
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              );
-                            })}
+                            <option value="">{group.key === 'brand' ? '選擇其他品牌規格書 / 清除品牌...' : '選擇其他藝術風格 / 清除風格...'}</option>
+                            {group.key === 'brand'
+                              ? BRAND_CATEGORIES.map(category => {
+                                  const categoryPresets = category.ids
+                                    .map(id => DESIGN_MD_TEMPLATES.find(p => p.id === id))
+                                    .filter(Boolean) as typeof DESIGN_MD_TEMPLATES;
+                                  if (categoryPresets.length === 0) return null;
+                                  return (
+                                    <optgroup key={category.label} label={category.label}>
+                                      {categoryPresets.map(preset => (
+                                        <option key={preset.id} value={preset.id}>
+                                          {preset.name_zh} ({preset.name})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  );
+                                })
+                              : DESIGN_STYLE_CATEGORIES.map(category => {
+                                  const categoryPresets = category.ids
+                                    .map(id => VISUAL_STYLE_TEMPLATES.find(p => p.id === id))
+                                    .filter(Boolean) as typeof VISUAL_STYLE_TEMPLATES;
+                                  if (categoryPresets.length === 0) return null;
+                                  return (
+                                    <optgroup key={category.label} label={category.label}>
+                                      {categoryPresets.map(preset => (
+                                        <option key={preset.id} value={preset.id}>
+                                          {preset.name_zh} ({preset.name})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  );
+                                })
+                            }
                           </select>
                         </div>
                       );

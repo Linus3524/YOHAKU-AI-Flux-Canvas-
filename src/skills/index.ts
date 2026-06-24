@@ -7,8 +7,10 @@ import { SocialCardSkillConfig, SOCIAL_DEFAULT_CONFIG, SOCIAL_OPTION_GROUPS, bui
 import { ArticleIllustratorSkillConfig, ILLUSTRATOR_DEFAULT_CONFIG, ILLUSTRATOR_OPTION_GROUPS, buildArticleIllustratorPrompt } from './articleIllustrator';
 import { ComicSkillConfig, COMIC_DEFAULT_CONFIG, COMIC_OPTION_GROUPS, buildComicPrompt } from './comic';
 import { SlideDeckSkillConfig, SLIDE_DEFAULT_CONFIG, SLIDE_OPTION_GROUPS, buildSlideDeckPrompt } from './slideDeck';
+import { UiWebpageSkillConfig, UI_WEBPAGE_DEFAULT_CONFIG, UI_WEBPAGE_OPTION_GROUPS, buildUiWebpagePrompt } from './uiWebpage';
 import { STYLE_PRESETS } from '../utils/helpers';
 import { VISUAL_STYLE_TEMPLATES } from './styles';
+import { DESIGN_MD_TEMPLATES } from './designs';
 
 export const SKILL_STYLE_KEYS: Record<SkillType, string> = {
   sticker: 'style',
@@ -19,6 +21,7 @@ export const SKILL_STYLE_KEYS: Record<SkillType, string> = {
   illustrator: 'style',
   comic: 'art',
   slide: 'preset',
+  uiWebpage: 'brand',
 };
 
 export type SkillType =
@@ -29,7 +32,8 @@ export type SkillType =
   | 'social'
   | 'illustrator'
   | 'comic'
-  | 'slide';
+  | 'slide'
+  | 'uiWebpage';
 
 export interface SkillMetadata {
   id: SkillType;
@@ -105,6 +109,14 @@ export const SKILL_LIST: SkillMetadata[] = [
     defaultConfig: SLIDE_DEFAULT_CONFIG,
     optionGroups: SLIDE_OPTION_GROUPS,
   },
+  {
+    id: 'uiWebpage',
+    name: 'UI Webpage',
+    name_zh: '網頁 UI',
+    desc: '網頁設計、SaaS 介面、Landing Page 等 UI 版面設計',
+    defaultConfig: UI_WEBPAGE_DEFAULT_CONFIG,
+    optionGroups: UI_WEBPAGE_OPTION_GROUPS,
+  },
 ];
 
 export function buildSkillPrompt(type: SkillType, content: string, config: any): string {
@@ -134,6 +146,9 @@ export function buildSkillPrompt(type: SkillType, content: string, config: any):
     case 'slide':
       basePrompt = buildSlideDeckPrompt(content, config as SlideDeckSkillConfig);
       break;
+    case 'uiWebpage':
+      basePrompt = buildUiWebpagePrompt(content, config as UiWebpageSkillConfig);
+      break;
     default:
       throw new Error(`Unsupported skill type: ${type}`);
   }
@@ -141,7 +156,9 @@ export function buildSkillPrompt(type: SkillType, content: string, config: any):
   const styleKey = SKILL_STYLE_KEYS[type];
   if (styleKey && config && config[styleKey]) {
     const selectedStyleId = config[styleKey];
-    const visualTemplate = VISUAL_STYLE_TEMPLATES.find(t => t.id === selectedStyleId);
+    const visualTemplate = VISUAL_STYLE_TEMPLATES.find(t => t.id === selectedStyleId)
+      || DESIGN_MD_TEMPLATES.find(t => t.id === selectedStyleId);
+      
     if (visualTemplate) {
       basePrompt = `${basePrompt}\n\n============================================================\n[MANDATORY DESIGN SYSTEM SPECIFICATION TO FOLLOW]\nAdhere strictly to this design spec for colors (Hex), typography rules, card/button styles, and layout:\n\n${visualTemplate.content}\n============================================================`;
     } else {

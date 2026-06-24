@@ -45,7 +45,7 @@ const FEATURE_DOCS = [
     category: "4. AI 生成 (GENERATIVE AI)",
     color: "text-yohaku-text-main",
     items: [
-      { title: "設計大師", desc: "專為排版圖卡與插圖設計，內建 60+ 種精緻藝術風格。涵蓋模切貼圖、精緻封面、標誌設計、資訊圖表、社群圖卡、文章插畫、知識漫畫與簡報投影片等 8 大專業技能，支援多種常用尺寸比例，並可針對不同模型自動輸出最佳解析度。" },
+      { title: "設計大師", desc: "專為排版圖卡與插圖設計，內建 60+ 種精緻藝術風格與 50+ 套品牌設計規格書。涵蓋模切貼圖、精緻封面、標誌設計、資訊圖表、社群圖卡、文章插畫、知識漫畫、簡報投影片與網頁 UI 等 9 大專業技能，支援多種常用尺寸與裝置解析度預設，並提供「✨ AI 提示詞優化」按鈕重寫最佳提示詞。" },
       { title: "一鍵生成圖片", desc: "框選圖片、手繪或便利貼，AI 根據內容生成高品質圖片。生成期間畫布不鎖定，可繼續操作其他物件。" },
       { title: "圖片逆向分析", desc: "右鍵點擊圖片選「提取提示詞」，AI 生成中英對照的詠唱咒語。" },
       { title: "Magic Style 風格庫", desc: "內建 150+ 種藝術風格，涵蓋 12 大分類：繪畫插畫、動漫漫畫、攝影底片、數位藝術、特殊材質、次文化少女暗黑、新世代潮流、節慶限定、歷史宗教、稀有新趨勢、經典數位相機與CCD模擬、光學硬體與AI氛圍。一鍵套用至選取圖片，生成設定面板也可預設參考風格。" },
@@ -443,7 +443,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                 <div className="grid grid-cols-1 gap-4">
                   {[
                     { color: 'bg-indigo-50 text-indigo-600', emoji: '✨', title: 'Gemini AI 全程輔助', desc: '懸浮「靈感助手」隨時待命，從提示詞優化到 AI 生圖，所有過程都在畫布上直接完成。' },
-                    { color: 'bg-purple-50 text-purple-600', emoji: '🎨', title: '設計大師 (Design Master)', desc: '整合 60+ 種 Markdown 設計系統規格書與 8 大排版創作技能，支持 16:9/4:3/9:16 等多種比例及客製化受眾，生成極具設計感的排版圖卡。' },
+                    { color: 'bg-purple-50 text-purple-600', emoji: '🎨', title: '設計大師 (Design Master)', desc: '整合 60+ 種 Markdown 設計系統規格書、50+ 套品牌規格書與 9 大排版創作技能，支援常用比例、裝置解析度選擇及客製化受眾，並提供 AI 提示詞優化以生成極具設計感的排版圖卡。' },
                     { color: 'bg-amber-50 text-amber-600', emoji: '📐', title: '專業工作區域系統', desc: '建立多個獨立設計版面，內建 IG、A4、名片等預設尺寸，一鍵同時匯出多個工作區域。' },
                     { color: 'bg-emerald-50 text-emerald-600', emoji: '📸', title: '設計師級影像處理', desc: '風格複製、圖片調和、AI 去背、高畫質放大、外擴繪圖、局部重繪，Moodboard 製作效率倍增。' },
                     { color: 'bg-rose-50 text-rose-600', emoji: '📝', title: '便利貼即是 AI 指令', desc: '便利貼不只是記事，更是生圖的起點。支援上傳最多 4 張參考圖，想法直接轉化為視覺素材。' },
@@ -552,7 +552,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     {/* 設計大師 */}
                     <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-purple-900 text-[13px] mb-1">✦ 設計大師 (Design Master)</h4>
-                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">整合 60+ 種 Markdown 設計系統規格書，專為高排版性圖卡與插圖設計。支援 8 種專業創作技能，可自訂版面、密度、比例與受眾定位。</p>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">整合 60+ 種 Markdown 設計系統規格書與 50+ 品牌設計規格書，專為高排版性圖卡與插圖設計。支援 9 種專業創作技能，可自訂版面、裝置解析度、比例與受眾定位。</p>
                       <div className="grid grid-cols-2 gap-1.5 mb-2">
                         {[
                           { label: '模切貼圖', desc: '自動生成帶白邊與透明底的印刷質感貼紙' },
@@ -563,6 +563,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           { label: '文章插畫', desc: '文章主要章節的風格一致概念插圖' },
                           { label: '知識漫畫', desc: '多格漫畫分鏡，生動講解故事或教學知識點' },
                           { label: '簡報投影片', desc: '排版完整、適合社群分享的單頁簡報底圖' },
+                          { label: '網頁 UI', desc: '首頁、後台、App 等 UI 介面視覺排版' },
                         ].map((m, i) => (
                           <div key={i} className="bg-white/80 border border-purple-100 rounded-lg px-2.5 py-2">
                             <div className="font-bold text-purple-700 text-[11px] mb-0.5">{m.label}</div>
@@ -570,7 +571,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           </div>
                         ))}
                       </div>
-                      <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 內建 60+ 種精緻藝術風格。支援 <code className="font-mono bg-purple-100 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等常用比例，並可針對不同生成模型自動對接最佳解析度。</div>
+                      <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 內建 60+ 種藝術風格與 50+ 品牌預設。支援 <code className="font-mono bg-purple-100 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等比例與多種手機/平板/桌面/瀏覽器解析度。各模式均支援「✨ AI 提示詞優化」重寫最佳指令。</div>
                     </div>
                     {/* 魔法分層 */}
                     <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
