@@ -570,7 +570,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           </div>
                         ))}
                       </div>
-                      <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 內建新粗野主義、蒸汽波、孔版印刷等 60+ 種精緻藝術風格。支援 <code className="font-mono bg-purple-100 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等常用比例，並可針對不同生成模型自動對接最佳解析度。</div>
+                      <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 內建 60+ 種精緻藝術風格。支援 <code className="font-mono bg-purple-100 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等常用比例，並可針對不同生成模型自動對接最佳解析度。</div>
                     </div>
                     {/* 魔法分層 */}
                     <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
