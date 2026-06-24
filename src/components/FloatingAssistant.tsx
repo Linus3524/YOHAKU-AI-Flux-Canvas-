@@ -45,7 +45,7 @@ const FEATURE_DOCS = [
     category: "4. AI 生成 (GENERATIVE AI)",
     color: "text-yohaku-text-main",
     items: [
-      { title: "設計大師", desc: "專為高排版性圖卡設計，整合 60+ 種 Markdown 設計系統規格書。包含模切貼圖、精緻封面、標誌設計、資訊圖表、社群圖卡、文章插畫、知識漫畫、簡報投影片等 8 大專業創作技能，支援 16:9/4:3/1:1/3:4/9:16 等尺寸比例，能自動對接各生成模型之最佳解析度輸出。" },
+      { title: "設計大師", desc: "專為排版圖卡與插圖設計，內建 60+ 種精緻藝術風格。涵蓋模切貼圖、精緻封面、標誌設計、資訊圖表、社群圖卡、文章插畫、知識漫畫與簡報投影片等 8 大專業技能，支援多種常用尺寸比例，並可針對不同模型自動輸出最佳解析度。" },
       { title: "一鍵生成圖片", desc: "框選圖片、手繪或便利貼，AI 根據內容生成高品質圖片。生成期間畫布不鎖定，可繼續操作其他物件。" },
       { title: "圖片逆向分析", desc: "右鍵點擊圖片選「提取提示詞」，AI 生成中英對照的詠唱咒語。" },
       { title: "Magic Style 風格庫", desc: "內建 150+ 種藝術風格，涵蓋 12 大分類：繪畫插畫、動漫漫畫、攝影底片、數位藝術、特殊材質、次文化少女暗黑、新世代潮流、節慶限定、歷史宗教、稀有新趨勢、經典數位相機與CCD模擬、光學硬體與AI氛圍。一鍵套用至選取圖片，生成設定面板也可預設參考風格。" },
@@ -570,7 +570,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           </div>
                         ))}
                       </div>
-                      <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 整合 YOHAKU 標誌風格（新粗野、蒸汽波、孔印等）與 61 個精選設計規格書。支援 <code className="font-mono bg-purple-100 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 尺寸比例，能自動對接各生成模型之最佳解析度輸出。</div>
+                      <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 內建新粗野主義、蒸汽波、孔版印刷等 60+ 種精緻藝術風格。支援 <code className="font-mono bg-purple-100 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等常用比例，並可針對不同生成模型自動對接最佳解析度。</div>
                     </div>
                     {/* 魔法分層 */}
                     <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
