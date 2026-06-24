@@ -125,5 +125,5 @@ export function buildSkillPrompt(type: SkillType, content: string, config: any):
       throw new Error(`Unsupported skill type: ${type}`);
   }
 
-  return `${basePrompt}\n\nIMPORTANT LANGUAGE REQUIREMENT:\nIf this design contains any rendered text, labels, titles, sub-headings, paragraphs, bullet points or speech bubbles inside the image, you MUST write them in Traditional Chinese (繁體中文), matching the language of the provided content. Do not translate the user's Chinese text into English, and do not use English text or English placeholders for titles, labels or subtitles on the final graphic design layout.`.trim();
+  return `${basePrompt}\n\nIMPORTANT LANGUAGE REQUIREMENT:\nIf this design contains any rendered text, labels, titles, sub-headings, paragraphs, bullet points or speech bubbles inside the image, you MUST write them in the SAME language as the provided content (e.g. if the user's content is in Traditional Chinese, use Traditional Chinese; if it is in English, use English; if it is in Japanese, use Japanese). Do not translate the user's text into another language, and do not use generic English text or English placeholders unless the user's content is in English.`.trim();
 }
