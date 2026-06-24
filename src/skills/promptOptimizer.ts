@@ -109,14 +109,14 @@ const SKILL_SYSTEM_PROMPTS: Record<SkillType, string> = {
 保持使用者原始的品牌/產品主題方向。`,
 };
 
-const USER_INSTRUCTION = `請根據以上角色設定，優化以下使用者的提示詞。
+const USER_INSTRUCTION = `請根據以上角色設定，將使用者的模糊輸入優化成細節豐富、適合繪圖模型生成高品質影像的專業提示詞。
 
 規則：
 1. 用使用者的原始語言回應（繁體中文用繁體中文、英文用英文、日文用日文）
-2. 保留使用者的核心意圖，在此基礎上豐富描述
-3. 輸出內容為純提示詞文字，不需要任何標題、前綴或解釋
-4. 長度控制在 100-300 字之間
-5. 不要加 markdown 格式`;
+2. 保留並深入挖掘使用者的核心意圖，在此基礎上大幅豐富描述，補充具體的構圖、色彩、材質、光影氛圍及畫面細節，使其具有專業設計質感。
+3. 輸出內容為純提示詞文字，不需要任何標題、前綴、標籤或解釋，也不要加上引號（直接輸出優化後的內容本身，不要含有引號如「"」或「'」）。
+4. 盡可能詳盡描述，不要限制字數，確保提供充足的視覺細節給生圖模型。
+5. 不要加 markdown 格式。`;
 
 /**
  * 使用 Gemini 純文字模型優化使用者的提示詞。
@@ -138,13 +138,9 @@ export async function optimizePrompt(
 
   const response = await genAI.models.generateContent({
     model: 'gemini-2.5-flash',
-    contents: [
-      {
-        role: 'user',
-        parts: [{ text: `${systemPrompt}\n\n${USER_INSTRUCTION}\n\n使用者原始提示詞：\n${rawContent}` }],
-      },
-    ],
+    contents: rawContent,
     config: {
+      systemInstruction: `${systemPrompt}\n\n${USER_INSTRUCTION}`,
       temperature: 0.7,
       maxOutputTokens: 1024,
     },
