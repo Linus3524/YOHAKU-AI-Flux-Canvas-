@@ -302,7 +302,11 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                 disabled={isOptimizing || !content.trim()}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-[#AF52DE] bg-purple-50 hover:bg-purple-100 disabled:opacity-40 disabled:hover:bg-purple-50 transition-all border border-purple-100/50 cursor-pointer"
               >
-                <Icon name="auto_awesome" size={11} className={isOptimizing ? "animate-spin" : ""} />
+                {isOptimizing ? (
+                  <Icon name="progress_activity" size={11} className="animate-spin" style={{ animationDuration: '0.8s' }} />
+                ) : (
+                  <Icon name="auto_awesome" size={11} />
+                )}
                 {isOptimizing ? '優化中...' : 'AI 優化'}
               </button>
             </div>
