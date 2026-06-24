@@ -19,6 +19,7 @@ export interface StickerSkillConfig {
   theme: string;
   size: string;
   background: string;
+  aspect: string;
 }
 
 export const STICKER_DEFAULT_CONFIG: StickerSkillConfig = {
@@ -27,6 +28,7 @@ export const STICKER_DEFAULT_CONFIG: StickerSkillConfig = {
   theme: 'character',
   size: 'medium',
   background: 'transparent',
+  aspect: '1:1',
 };
 
 // ── 風格 ──────────────────────────────────────────────────────
@@ -126,12 +128,21 @@ export const STICKER_BACKGROUNDS: SkillOption[] = [
     promptModifier: 'Background: Decorative pattern background (dots, stripes, or subtle geometric pattern) for presentation purposes, not part of the sticker itself.' },
 ];
 
+export const STICKER_ASPECTS: SkillOption[] = [
+  { id: '1:1', name: '1:1', name_zh: '正方形 (1:1)', desc: '貼紙與圖章最常見比例', promptModifier: 'aspect ratio 1:1' },
+  { id: '3:4', name: '3:4', name_zh: '直向 (3:4)', desc: '適合直立貼紙設計', promptModifier: 'aspect ratio 3:4' },
+  { id: '4:3', name: '4:3', name_zh: '橫向 (4:3)', desc: '適合橫向貼紙設計', promptModifier: 'aspect ratio 4:3' },
+  { id: '9:16', name: '9:16', name_zh: '直向 (9:16)', desc: '極窄垂直貼紙設計', promptModifier: 'aspect ratio 9:16' },
+  { id: '16:9', name: '16:9', name_zh: '橫向 (16:9)', desc: '極寬橫向貼紙設計', promptModifier: 'aspect ratio 16:9' },
+];
+
 export const STICKER_OPTION_GROUPS: { key: keyof StickerSkillConfig; label: string; options: SkillOption[] }[] = [
   { key: 'style', label: '風格', options: STICKER_STYLES },
   { key: 'theme', label: '主題', options: STICKER_THEMES },
   { key: 'shape', label: '形狀', options: STICKER_SHAPES },
   { key: 'size', label: '尺寸', options: STICKER_SIZES },
   { key: 'background', label: '背景', options: STICKER_BACKGROUNDS },
+  { key: 'aspect', label: '比例', options: STICKER_ASPECTS },
 ];
 
 // ── 組裝 prompt ───────────────────────────────────────────────
@@ -155,6 +166,7 @@ function borderInstruction(style: string): string {
 export function buildStickerPrompt(content: string, config: StickerSkillConfig): string {
   const isSheet = config.size === 'sheet';
   const subject = (content || '').trim() || 'A cute, eye-catching design suitable for sticker merchandise';
+  const aspectMod = STICKER_ASPECTS.find(o => o.id === config.aspect)?.promptModifier ?? 'aspect ratio 1:1';
 
   return `
 You are a professional sticker designer. Create a ${isSheet ? 'sticker sheet' : 'single die-cut sticker'} following EVERY specification precisely.
@@ -179,12 +191,15 @@ ${isSheet ? 'Include 6-12 individual stickers in a clean uniform grid (equal 20-
 6. BACKGROUND TREATMENT
 ${modOf(STICKER_BACKGROUNDS, config.background)}
 
-7. UNIVERSAL REQUIREMENTS (STRICT)
+7. ASPECT RATIO
+${aspectMod}
+
+8. UNIVERSAL REQUIREMENTS (STRICT)
 - Self-contained design with a clear focal point, centered with generous margin.
 - Clean, crisp, die-cuttable edges; high contrast against the background for easy isolation.
 - Vibrant, well-separated colors; consistent top-left lighting; print-ready detail.
 
-8. NEGATIVE CONSTRAINTS (DO NOT INCLUDE)
+9. NEGATIVE CONSTRAINTS (DO NOT INCLUDE)
 - NO complex scene backgrounds (landscapes, rooms, environments).
 - NO photographic realistic human faces (stylized/illustrated only).
 - NO text overlapping the main subject; NO watermarks or signatures.

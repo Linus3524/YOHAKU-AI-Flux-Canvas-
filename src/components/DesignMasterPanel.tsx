@@ -110,7 +110,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
       } else if (activeSkill === 'logo') {
         aspect = currentConfig.size;
       } else if (activeSkill === 'sticker') {
-        aspect = '1:1';
+        aspect = currentConfig.aspect;
       } else if (activeSkill === 'infographic') {
         if (currentConfig.aspect === 'square') aspect = '1:1';
         else if (currentConfig.aspect === 'landscape') aspect = '16:9';
