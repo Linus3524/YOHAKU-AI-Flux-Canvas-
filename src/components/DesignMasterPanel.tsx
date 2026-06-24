@@ -12,7 +12,7 @@ interface DesignMasterPanelProps {
   isGenerating: boolean;
   generationModel: string;
   hasAtlasKey: boolean;
-  onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean) => void;
+  onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string) => void;
   onClose: () => void;
 }
 
@@ -70,7 +70,23 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
     const prompt = buildSkillPrompt(activeSkill, content, configs[activeSkill]);
     const isSticker = activeSkill === 'sticker';
     const autoRemoveBg = isSticker && configs.sticker.background === 'transparent';
-    onGenerate(prompt, count, model, autoRemoveBg);
+    
+    // Resolve aspect ratio for the generation call
+    let aspect: string | undefined;
+    const currentConfig = configs[activeSkill];
+    if (currentConfig) {
+      if (activeSkill === 'social') {
+        aspect = currentConfig.aspect;
+      } else if (activeSkill === 'logo') {
+        aspect = currentConfig.size;
+      } else if (activeSkill === 'infographic') {
+        if (currentConfig.aspect === 'square') aspect = '1:1';
+        else if (currentConfig.aspect === 'landscape') aspect = '16:9';
+        else if (currentConfig.aspect === 'portrait') aspect = '3:4';
+      }
+    }
+    
+    onGenerate(prompt, count, model, autoRemoveBg, aspect);
   };
 
   return (

@@ -2248,9 +2248,9 @@ const App: React.FC = () => {
             generationModel={generationModel}
             hasAtlasKey={!!atlasApiKey}
             onClose={() => setDesignMasterTargetId(null)}
-            onGenerate={(prompt, count, model, autoRemoveBg) => {
+            onGenerate={(prompt, count, model, autoRemoveBg, aspect) => {
               setDesignMasterTargetId(null);
-              handleGenerate([el], count, prompt, model, autoRemoveBg);
+              handleGenerate([el], count, prompt, model, autoRemoveBg, aspect);
             }}
           />
         );

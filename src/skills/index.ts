@@ -95,24 +95,35 @@ export const SKILL_LIST: SkillMetadata[] = [
 ];
 
 export function buildSkillPrompt(type: SkillType, content: string, config: any): string {
+  let basePrompt = '';
   switch (type) {
     case 'sticker':
-      return buildStickerPrompt(content, config as StickerSkillConfig);
+      basePrompt = buildStickerPrompt(content, config as StickerSkillConfig);
+      break;
     case 'cover':
-      return buildCoverImagePrompt(content, config as CoverImageSkillConfig);
+      basePrompt = buildCoverImagePrompt(content, config as CoverImageSkillConfig);
+      break;
     case 'logo':
-      return buildLogoPrompt(content, config as LogoSkillConfig);
+      basePrompt = buildLogoPrompt(content, config as LogoSkillConfig);
+      break;
     case 'infographic':
-      return buildInfographicPrompt(content, config as InfographicSkillConfig);
+      basePrompt = buildInfographicPrompt(content, config as InfographicSkillConfig);
+      break;
     case 'social':
-      return buildSocialCardPrompt(content, config as SocialCardSkillConfig);
+      basePrompt = buildSocialCardPrompt(content, config as SocialCardSkillConfig);
+      break;
     case 'illustrator':
-      return buildArticleIllustratorPrompt(content, config as ArticleIllustratorSkillConfig);
+      basePrompt = buildArticleIllustratorPrompt(content, config as ArticleIllustratorSkillConfig);
+      break;
     case 'comic':
-      return buildComicPrompt(content, config as ComicSkillConfig);
+      basePrompt = buildComicPrompt(content, config as ComicSkillConfig);
+      break;
     case 'slide':
-      return buildSlideDeckPrompt(content, config as SlideDeckSkillConfig);
+      basePrompt = buildSlideDeckPrompt(content, config as SlideDeckSkillConfig);
+      break;
     default:
       throw new Error(`Unsupported skill type: ${type}`);
   }
+
+  return `${basePrompt}\n\nIMPORTANT LANGUAGE REQUIREMENT:\nIf this design contains any rendered text, labels, titles, sub-headings, paragraphs, bullet points or speech bubbles inside the image, you MUST write them in Traditional Chinese (繁體中文), matching the language of the provided content. Do not translate the user's Chinese text into English, and do not use English text or English placeholders for titles, labels or subtitles on the final graphic design layout.`.trim();
 }

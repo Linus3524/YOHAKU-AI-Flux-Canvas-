@@ -1252,7 +1252,7 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast]);
 
-    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false) => {
+    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string) => {
         const generationModel = modelOverride || generationModelGlobal;
         setPendingAutoDebg(autoRemoveBg);
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
@@ -1275,6 +1275,7 @@ CONSTRAINTS:
             }
 
             const atlasModel = generationModel as AtlasGenerationModel;
+            const resolvedAtlasRatio = aspectRatioOverride || imageAspectRatio || 'Original';
             const hasImages = imageElements.length > 0;
 
             // 組合 prompt：便利貼內容 + 參考風格（兩者皆選填）
@@ -1361,7 +1362,7 @@ CONSTRAINTS:
                 setIsGenerating(true);
                 setGeneratedImages(null);
                 const atlasQuality = imageSize === '4K' ? '4K' : '2K';
-                const atlasRatio = imageAspectRatio || 'Original';
+                const atlasRatio = resolvedAtlasRatio;
                 try {
                     // 便利貼參考圖追加在畫布圖片之後
                     const rawImages = await withAtlasWaitToast(() => callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, count, { ratio: atlasRatio, quality: atlasQuality, transparentBg: getTransparentBg(atlasPrompt || '') }, hasNoteRefs ? noteRefImgs : undefined));
@@ -1390,7 +1391,7 @@ CONSTRAINTS:
                 setIsGenerating(true);
                 setGeneratedImages(null);
                 const atlasQualityR = imageSize === '4K' ? '4K' : '2K';
-                const atlasRatioR = imageAspectRatio || 'Original';
+                const atlasRatioR = resolvedAtlasRatio;
                 try {
                     const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], count, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: getTransparentBg(atlasPrompt || '') }, noteRefImgs.slice(1)));
                     if (images.length === 0) throw new Error('未收到任何圖片');
@@ -1413,7 +1414,7 @@ CONSTRAINTS:
             setIsGenerating(true);
             setGeneratedImages(null);
             const atlasQuality2 = imageSize === '4K' ? '4K' : '2K';
-            const atlasRatio2 = (imageAspectRatio === 'Original' || !imageAspectRatio) ? '1:1' : imageAspectRatio;
+            const atlasRatio2 = (resolvedAtlasRatio === 'Original' || !resolvedAtlasRatio) ? '1:1' : resolvedAtlasRatio;
             try {
                 const images = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, count, { ratio: atlasRatio2, quality: atlasQuality2, transparentBg: getTransparentBg(atlasPrompt || '') }));
                 if (images.length === 0) throw new Error('未收到任何圖片');
@@ -1505,12 +1506,19 @@ CONSTRAINTS:
           setGeneratingElementIds(imageElements.length > 0 ? imageElements.map(el => el.id) : []);
 
           let parts: ({ inlineData: { data: string; mimeType: string; }; } | { text: string; })[];
-          let targetAspectRatio = imageAspectRatio;
-          if (imageAspectRatio === 'Original' && imageElements.length > 0) {
+          let targetAspectRatio = aspectRatioOverride || imageAspectRatio;
+          if (targetAspectRatio === 'Original' && imageElements.length > 0) {
               const firstImage = imageElements[0];
               targetAspectRatio = getClosestAspectRatio(firstImage.width, firstImage.height);
-          } else if (imageAspectRatio === 'Original') {
+          } else if (targetAspectRatio === 'Original') {
               targetAspectRatio = '1:1';
+          }
+          // Coerce to supported Gemini aspect ratios
+          if (!['1:1', '3:4', '4:3', '9:16', '16:9'].includes(targetAspectRatio)) {
+              if (targetAspectRatio === '4:5' || targetAspectRatio === '2:3') targetAspectRatio = '3:4';
+              else if (targetAspectRatio === '3:2') targetAspectRatio = '4:3';
+              else if (targetAspectRatio === '21:9') targetAspectRatio = '16:9';
+              else targetAspectRatio = '1:1';
           }
           
           // 生成前：對所有 image element 做透明壓平（記錄第一張的透明狀態用於還原）
