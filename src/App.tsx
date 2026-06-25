@@ -36,6 +36,7 @@ import { gptLayerSegment } from './utils/gptLayerSplit';
 import { detectTextBlocks } from './utils/ocrService';
 import { SVGExportModal } from './components/SVGExportModal';
 import { SemanticEditorView } from './components/SemanticEditor';
+import { splitStickerCollectionDetailed } from './utils/imageProcessing';
 import type {
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -647,6 +648,95 @@ const App: React.FC = () => {
           setGeneratingElementIds([]);
       }
   }, [effectiveApiKey, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+
+  // --- 貼紙套組一鍵切分 ---
+  const handleSplitSticker = useCallback(async (elementId: string) => {
+      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
+      if (!el) return;
+
+      setIsGenerating(true);
+      setGeneratingElementIds([elementId]);
+      showToast('🪄 正在自動切分貼圖，請稍候...');
+
+      try {
+          // 下載圖片為 base64（若為 URL）
+          let src = el.src;
+          if (!src.startsWith('data:')) {
+              src = await downloadImageAsBase64(src);
+              if (!src.startsWith('data:')) {
+                  showToast('⚠️ 無法讀取貼紙圖片');
+                  return;
+              }
+          }
+
+          // 呼叫 StickerCraft 演算法做一鍵切分
+          const result = await splitStickerCollectionDetailed(src);
+          if (result.pieces.length === 0) {
+              showToast('⚠️ 未偵測到任何獨立貼紙碎片');
+              return;
+          }
+
+          const pieces = result.pieces;
+          const maxZ = elements.length > 0 ? Math.max(...elements.map(e => e.zIndex)) : 0;
+
+          // 規劃切分後的貼圖擺放位置（依 3 列網格排列於原圖右側）
+          const cols = 3;
+          const gap = 20;
+          const startX = el.position.x + el.width / 2 + 50;
+          const startY = el.position.y - el.height / 2;
+
+          const newEls: ImageElement[] = pieces.map((piece, idx) => {
+              const row = Math.floor(idx / cols);
+              const col = idx % cols;
+              const boxWidth = piece.box.maxX - piece.box.minX + 1;
+              const boxHeight = piece.box.maxY - piece.box.minY + 1;
+              const MAX_DIM = 180;
+              
+              let w = boxWidth;
+              let h = boxHeight;
+              if (w > MAX_DIM || h > MAX_DIM) {
+                  if (w > h) { h = (h / w) * MAX_DIM; w = MAX_DIM; }
+                  else { w = (w / h) * MAX_DIM; h = MAX_DIM; }
+              }
+
+              // 新貼圖中心點座標
+              const x = startX + col * (MAX_DIM + gap) + w / 2;
+              const y = startY + row * (MAX_DIM + gap) + h / 2;
+              const newId = `split_piece_${Date.now()}_${idx}`;
+
+              return {
+                  id: newId,
+                  type: 'image' as const,
+                  src: piece.dataUrl,
+                  name: `${el.name} (拆分 ${idx + 1})`,
+                  position: { x, y },
+                  width: w,
+                  height: h,
+                  rotation: 0,
+                  zIndex: maxZ + 1 + idx,
+                  isVisible: true,
+                  isLocked: false,
+                  groupId: null,
+              };
+          });
+
+          // 置入畫布
+          setElements(prev => [...prev, ...newEls]);
+          // 緩存至 IndexedDB 確保存檔完整
+          newEls.forEach(item => {
+              if (item.src.startsWith('data:')) {
+                  cacheImage(item.id, item.src);
+              }
+          });
+
+          showToast(`✅ 拆分完成！成功新增 ${pieces.length} 張獨立去背貼圖`);
+      } catch (e: any) {
+          showToast(`❌ 拆分失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
+      } finally {
+          setIsGenerating(false);
+          setGeneratingElementIds([]);
+      }
+  }, [elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
   // --- WRAPPED updateElements to Sync Outpainting Frame ---
   const updateElements = useCallback((updatedElement: CanvasElement, dragDelta?: Point) => {
@@ -2211,6 +2301,7 @@ const App: React.FC = () => {
             magicLayer: handleMagicLayer,
             semanticEditor: handleOpenSemanticEditor,
             ocrConvert: handleOCRConvert,
+            splitSticker: handleSplitSticker,
             clearStorage: () => setShowClearConfirm(true),
           }}
           canChangeColor={canChangeColor}
@@ -2250,9 +2341,9 @@ const App: React.FC = () => {
             apiKey={effectiveApiKey}
             showToast={showToast}
             onClose={() => setDesignMasterTargetId(null)}
-            onGenerate={(prompt, count, model, autoRemoveBg, aspect) => {
+            onGenerate={(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride) => {
               setDesignMasterTargetId(null);
-              handleGenerate([el], count, prompt, model, autoRemoveBg, aspect);
+              handleGenerate([el], count, prompt, model, autoRemoveBg, aspect, imageSizeOverride);
             }}
             referenceImages={el.type === 'note' ? (el as NoteElement).referenceImages : undefined}
             onUpdateReferenceImages={el.type === 'note' ? (refs) => updateElements({ ...(el as NoteElement), referenceImages: refs }) : undefined}

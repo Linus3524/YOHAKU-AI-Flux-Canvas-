@@ -19,15 +19,43 @@ export interface StickerSkillConfig {
   size: string;
   background: string;
   aspect: string;
+  layoutMode: 'single' | 'threeViews' | 'collection';
+  stickerCollectionCount: number;
+  collectionItemPrompts: string[];
+  useStickerBorder: boolean;
+  useFacialFeatures: boolean;
+  textEnabled: boolean;
+  textContent: string;
+  textFont: string;
+  textBorder: boolean;
 }
 
 export const STICKER_DEFAULT_CONFIG: StickerSkillConfig = {
   style: 'flat',
-  shape: 'custom',
+  shape: 'custom',          // 固定隨形貼紙（die-cut 隨外輪廓）
   theme: 'character',
-  size: 'medium',
-  background: 'transparent',
-  aspect: '1:1',
+  size: 'medium',           // 不再使用（實體尺寸已移除）
+  background: 'transparent', // 固定：生成乾淨純色底 → 自動去背 → 透明
+  aspect: '1:1',            // LINE 貼圖近似比例（370×320 ≈ 接近方形）；高解析輸出
+  layoutMode: 'single',
+  stickerCollectionCount: 8, // LINE 一套最小 8 張
+  collectionItemPrompts: [],
+  useStickerBorder: true,
+  useFacialFeatures: true,
+  textEnabled: false,
+  textContent: '',
+  textFont: 'Fredoka, sans-serif',
+  textBorder: true,
+};
+
+// ── 字型視覺 Prompt 對照表 ──────────────────────────────────────
+const FONT_STYLE_MAP: Record<string, string> = {
+  'Fredoka, sans-serif': 'friendly, rounded, bubble-style sans-serif font, thick and clean curves',
+  'Bangers, cursive': 'bold comic book style font, explosive action-bubble lettering, thick outline, high energy',
+  'Pacifico, cursive': 'elegant handwriting script font, flowing cursive letters, brush stroke style',
+  'Orbitron, sans-serif': 'futuristic geometric tech font, sci-fi mechanical style, sharp lines',
+  'Yomogi, cursive': 'Japanese kawaii handwriting style font, cute hand-drawn marker lettering, friendly and neat Japanese script aesthetic',
+  'Abril Fatface, cursive': 'elegant high-contrast serif fashion font, bold stems with thin serifs, classy editorial style'
 };
 
 // ── 風格 ──────────────────────────────────────────────────────
@@ -50,7 +78,7 @@ export const STICKER_STYLES: SkillOption[] = [
   {
     id: 'enamel-pin', name: 'Enamel Pin', name_zh: '琺瑯別針', desc: '金屬描邊、珠寶感',
     promptModifier:
-      'Style: Hard enamel pin aesthetic with raised metallic gold/silver outlines, glossy smooth color fills, jewelry-like polished finish, small clutch back visible, collectible pin design. Colors should be vibrant and separated by clean metal lines.',
+      'Style: Hard enamel pin aesthetic with raised metallic gold/silver outlines, glossy smooth color fills, jewelry-like polished finish, small collectible pin design. Colors should be vibrant and separated by clean metal lines.',
   },
   {
     id: 'chrome-badge', name: 'Chrome Badge', name_zh: '鍍鉻徽章', desc: '鏡面金屬、未來感',
@@ -135,13 +163,11 @@ export const STICKER_ASPECTS: SkillOption[] = [
   { id: '16:9', name: '16:9', name_zh: '橫向 (16:9)', desc: '極寬橫向貼紙設計', promptModifier: 'aspect ratio 16:9' },
 ];
 
+// LINE 貼圖專用：只保留風格與主題；形狀固定隨形、背景固定去背白底、
+// 比例固定 LINE 規格（皆在預設值與 prompt 內鎖定，不開放使用者選）
 export const STICKER_OPTION_GROUPS: { key: keyof StickerSkillConfig; label: string; options: SkillOption[] }[] = [
   { key: 'style', label: '風格', options: STICKER_STYLES },
   { key: 'theme', label: '主題', options: STICKER_THEMES },
-  { key: 'shape', label: '形狀', options: STICKER_SHAPES },
-  { key: 'size', label: '尺寸', options: STICKER_SIZES },
-  { key: 'background', label: '背景', options: STICKER_BACKGROUNDS },
-  { key: 'aspect', label: '比例', options: STICKER_ASPECTS },
 ];
 
 // ── 組裝 prompt ───────────────────────────────────────────────
@@ -163,12 +189,69 @@ function borderInstruction(style: string): string {
 }
 
 export function buildStickerPrompt(content: string, config: StickerSkillConfig): string {
-  const isSheet = config.size === 'sheet';
+  const isSheet = config.layoutMode === 'collection';
+  const isThreeViews = config.layoutMode === 'threeViews';
   const subject = (content || '').trim() || 'A cute, eye-catching design suitable for sticker merchandise';
   const aspectMod = STICKER_ASPECTS.find(o => o.id === config.aspect)?.promptModifier ?? 'aspect ratio 1:1';
 
+  // Build the text instructions
+  let textInstruction = "";
+  const fontStyleDescription = FONT_STYLE_MAP[config.textFont] || `${config.textFont} font style`;
+  if (config.textEnabled && config.textContent?.trim()) {
+    const borderText = config.textBorder ? "with a thick white outline/border" : "without an outline";
+    textInstruction = `Important: The image MUST include the text "${config.textContent.trim()}" written prominently in a ${fontStyleDescription}. Text style: ${borderText}.`;
+  } else if (config.textEnabled) {
+    const borderText = config.textBorder ? "with a thick white outline/border" : "without an outline";
+    textInstruction = `Important: Include short, relevant sticker text chosen by you. The text should fit the subject and be written prominently in a ${fontStyleDescription}. Text style: ${borderText}.`;
+  } else {
+    textInstruction = "Strictly NO text, NO letters, NO numbers, and NO typography in the image. The image must be purely visual.";
+  }
+
+  // Build Facial Feature Instruction
+  let faceInstruction = "";
+  if (config.useFacialFeatures) {
+    faceInstruction = "Facial features (eyes, mouth, expressions) are permitted and encouraged to convey character/emotion.";
+  } else {
+    faceInstruction = "STRICTLY NO FACES. Do NOT generate any facial features (eyes, nose, mouth). The subject must be faceless, shown from behind, or obscured. If the subject is an object, do not anthropomorphize it with a face.";
+  }
+
+  // Build View/Border/Composition Instruction
+  let viewInstruction = "";
+  if (isSheet) {
+    const itemCount = Math.max(2, Math.min(20, config.stickerCollectionCount || 8));
+    const items = (config.collectionItemPrompts || []).filter(Boolean);
+    
+    viewInstruction = `Sticker Collection Sheet: Generate exactly ${itemCount} distinct small stickers on one single canvas. They must feel like one coherent series with a unified character language, consistent color palette, matching line weight, and related poses/expressions/objects. Arrange the stickers in a clean grid or loose sticker-sheet layout with generous spacing between each mini sticker, no overlap, and no cropped edges. Each mini sticker should be complete and individually usable.`;
+    
+    if (items.length > 0) {
+      viewInstruction += ` The mini stickers must follow this exact subject list, one mini sticker per item, in reading order: ${items.map((item, index) => `${index + 1}. ${item}`).join("; ")}. Do not omit listed items.`;
+      if (items.length < itemCount) {
+        viewInstruction += ` Add ${itemCount - items.length} additional related mini stickers to reach the requested count.`;
+      }
+    }
+    
+    if (config.useStickerBorder) {
+      viewInstruction += " Give every mini sticker its own die-cut white border/outline.";
+    } else {
+      viewInstruction += " Keep every mini sticker borderless with no white outline.";
+    }
+  } else if (isThreeViews) {
+    viewInstruction = "Character Reference Sheet: Generate a formal three-view orthographic drawing (Three Divisions/Three Views). The image must display the SUBJECT from three distinct angles: Front View, Side View, and Back View. Arrange them horizontally in a clean, professional layout. Maintain consistent character details, proportions, and style across all views.";
+    if (!config.useStickerBorder) {
+      viewInstruction += " Do not add white sticker outlines around the characters.";
+    }
+  } else {
+    // Single sticker logic
+    viewInstruction = "sticker design, high quality vector graphics, centered composition";
+    if (config.useStickerBorder) {
+      viewInstruction += `, die-cut sticker with a thick white border/outline surrounding the subject`;
+    } else {
+      viewInstruction += `, borderless, strictly NO white outline, NO die-cut border, edge-to-edge design`;
+    }
+  }
+
   return `
-You are a professional sticker designer. Create a ${isSheet ? 'sticker sheet' : 'single die-cut sticker'} following EVERY specification precisely.
+You are a professional LINE messaging sticker designer. Create a ${isSheet ? 'LINE sticker set sheet' : isThreeViews ? 'three-view character reference sheet' : 'single LINE die-cut sticker'} following EVERY specification precisely. Output must be HIGH RESOLUTION, crisp and clean at large scale (the user will downscale later).
 
 1. SUBJECT & CONTENT
 ${subject}
@@ -179,13 +262,13 @@ ${borderInstruction(config.style)}
 
 3. SHAPE & COMPOSITION
 ${modOf(STICKER_SHAPES, config.shape)}
+${viewInstruction}
 
 4. THEME DIRECTION
 ${modOf(STICKER_THEMES, config.theme)}
 
-5. SIZE / FORMAT
-${modOf(STICKER_SIZES, config.size)}
-${isSheet ? 'Include 6-12 individual stickers in a clean uniform grid (equal 20-30px gaps), all sharing the EXACT same art style and palette, varying poses/expressions, with subtle dashed cut lines between them. Do NOT overlap or resize stickers.' : ''}
+5. FORMAT (LINE STICKER)
+Design as a digital LINE messaging sticker. Each individual sticker should fit a near-square / slightly landscape proportion (LINE official ~370x320). Render at high resolution with rich crisp detail; do NOT output a small or low-resolution image.
 
 6. BACKGROUND TREATMENT
 ${modOf(STICKER_BACKGROUNDS, config.background)}
@@ -193,15 +276,19 @@ ${modOf(STICKER_BACKGROUNDS, config.background)}
 7. ASPECT RATIO
 ${aspectMod}
 
-8. UNIVERSAL REQUIREMENTS (STRICT)
+8. DETAILS & TEXT CONFIG
+${faceInstruction}
+${textInstruction}
+
+9. UNIVERSAL REQUIREMENTS (STRICT)
 - Self-contained design with a clear focal point, centered with generous margin.
 - Clean, crisp, die-cuttable edges; high contrast against the background for easy isolation.
 - Vibrant, well-separated colors; consistent top-left lighting; print-ready detail.
 
-9. NEGATIVE CONSTRAINTS (DO NOT INCLUDE)
+10. NEGATIVE CONSTRAINTS (DO NOT INCLUDE)
 - NO complex scene backgrounds (landscapes, rooms, environments).
 - NO photographic realistic human faces (stylized/illustrated only).
-- NO text overlapping the main subject; NO watermarks or signatures.
+- NO text overlapping the main subject (unless specified in TEXT CONFIG above); NO watermarks or signatures.
 - NO floating drop shadows; NO blurry edges or anti-aliasing artifacts.
 `.trim();
 }

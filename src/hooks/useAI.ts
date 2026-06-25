@@ -18,6 +18,7 @@ import {
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
 import { callAtlasGenerate, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
+import { repairStickerTransparency } from '../utils/imageProcessing';
 import { runUpscaleInWorker } from '../utils/upscaleWorkerClient';
 import { MODEL_CONFIGS, getModelStatus, type OnnxModelKey } from '../utils/onnxModelCache';
 
@@ -188,8 +189,13 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
                 console.warn('[restoreTransparency] Gemini removal failed, fallback chroma key', e);
             }
         }
-        // 3. Chroma Key（最後備用）
-        return processChromaKey(resultSrc, bgColor);
+        // 3. Chroma Key / Flood-fill 去背（本機最後備用，品質比一般 chroma key 更好）
+        try {
+            return await repairStickerTransparency(resultSrc, { backgroundColor: bgColor });
+        } catch (e) {
+            console.warn('[restoreTransparency] Flood-fill repair failed, fallback basic chroma key', e);
+            return processChromaKey(resultSrc, bgColor);
+        }
     }, [falApiKey, apiKey, imageModel]);
 
     // Helper to create client or throw error immediately
@@ -1252,8 +1258,10 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast]);
 
-    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string) => {
+    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K') => {
         const generationModel = modelOverride || generationModelGlobal;
+        // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定
+        const effImageSize = imageSizeOverride || imageSize;
         setPendingAutoDebg(autoRemoveBg);
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
         const noteElements = selectedElements.filter(el => el.type === 'note' || el.type === 'text') as (NoteElement | TextElement)[];
@@ -1305,7 +1313,7 @@ CONSTRAINTS:
                 setGeneratingElementIds(frameElements.map(f => f.id));
                 setIsGenerating(true);
                 setGeneratedImages(null);
-                const atlasQualityFrame = imageSize === '4K' ? '4K' : '2K';
+                const atlasQualityFrame = effImageSize === '4K' ? '4K' : '2K';
                 try {
                     const generatePromises = frameElements.map(async (frame) => {
                         let frameRatio = frame.aspectRatioLabel;
@@ -1361,7 +1369,7 @@ CONSTRAINTS:
                 setGeneratingElementIds(firstImg ? [firstImg.id] : []);
                 setIsGenerating(true);
                 setGeneratedImages(null);
-                const atlasQuality = imageSize === '4K' ? '4K' : '2K';
+                const atlasQuality = effImageSize === '4K' ? '4K' : '2K';
                 const atlasRatio = resolvedAtlasRatio;
                 try {
                     // 便利貼參考圖追加在畫布圖片之後
@@ -1390,7 +1398,7 @@ CONSTRAINTS:
                 setGeneratingElementIds([]);
                 setIsGenerating(true);
                 setGeneratedImages(null);
-                const atlasQualityR = imageSize === '4K' ? '4K' : '2K';
+                const atlasQualityR = effImageSize === '4K' ? '4K' : '2K';
                 const atlasRatioR = resolvedAtlasRatio;
                 try {
                     const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], count, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: getTransparentBg(atlasPrompt || '') }, noteRefImgs.slice(1)));
@@ -1413,7 +1421,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(true);
             setGeneratedImages(null);
-            const atlasQuality2 = imageSize === '4K' ? '4K' : '2K';
+            const atlasQuality2 = effImageSize === '4K' ? '4K' : '2K';
             const atlasRatio2 = (resolvedAtlasRatio === 'Original' || !resolvedAtlasRatio) ? '1:1' : resolvedAtlasRatio;
             try {
                 const images = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, count, { ratio: atlasRatio2, quality: atlasQuality2, transparentBg: getTransparentBg(atlasPrompt || '') }));
@@ -1478,7 +1486,7 @@ CONSTRAINTS:
                   const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                     model: imageModel,
                     contents: { parts: [...refParts, textPart] },
-                    config: { imageConfig: { aspectRatio: targetRatio, imageSize } },
+                    config: { imageConfig: { aspectRatio: targetRatio, imageSize: effImageSize } },
                   }));
                   const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                   if (part?.inlineData) {
@@ -1564,7 +1572,7 @@ CONSTRAINTS:
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                 model: imageModel,
                 contents: { parts },
-                config: { imageConfig: { aspectRatio: targetAspectRatio, imageSize } },
+                config: { imageConfig: { aspectRatio: targetAspectRatio, imageSize: effImageSize } },
             }));
             for (const part of response.candidates?.[0]?.content?.parts || []) {
                 if (part.inlineData) {
@@ -1595,7 +1603,7 @@ CONSTRAINTS:
           setGeneratingElementIds([]);
           setIsGenerating(false);
         }
-      }, [imageStyle, imageAspectRatio, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, prepareForGeneration, restoreTransparencyFn]);
+      }, [imageStyle, imageAspectRatio, imageSize, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, prepareForGeneration, restoreTransparencyFn]);
 
     return {
         createAiClient,

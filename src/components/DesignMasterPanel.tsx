@@ -1,5 +1,6 @@
 // 設計大師面板 — 更加精緻的 iOS/macOS 玻璃質感介面，解決多重滾動條與按鈕沉重感
 import React, { useState } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { STYLE_PRESETS } from '../utils/helpers';
 import { VISUAL_STYLE_TEMPLATES } from '../skills/styles';
 import { DESIGN_MD_TEMPLATES } from '../skills/designs';
@@ -13,6 +14,27 @@ import {
 import { UI_PLATFORMS, UI_RESOLUTIONS, resolveAspectFromResolution } from '../skills/uiWebpage';
 import { optimizePrompt } from '../skills/promptOptimizer';
 import { Smartphone, Tablet, Monitor, Globe } from 'lucide-react';
+
+const generateCollectionItemPrompts = async (theme: string, count: number, apiKey: string): Promise<string[]> => {
+  if (!apiKey) throw new Error('需要 API Key');
+  const genAI = new GoogleGenAI({ apiKey });
+  const prompt = `Generate exactly ${count} concise mini sticker subject ideas for one coherent sticker collection.
+Theme: "${theme}".
+Each line should describe one distinct mini sticker in 3-8 words.
+Keep them visually related, concrete, and easy to draw.
+Return ONLY the list of subjects, one per line. No numbering, no bullets, no extra text.`;
+
+  const response = await genAI.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+  });
+
+  return (response.text || '')
+    .split('\n')
+    .map(line => line.replace(/^[-*\d.\s]+/, '').trim())
+    .filter(Boolean)
+    .slice(0, count);
+};
 
 const PLATFORM_LUCIDE_ICONS: Record<string, React.ComponentType<any>> = {
   mobile: Smartphone,
@@ -28,7 +50,7 @@ interface DesignMasterPanelProps {
   hasAtlasKey: boolean;
   apiKey: string;
   showToast: (msg: string) => void;
-  onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string) => void;
+  onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string, imageSize?: '1K' | '2K' | '4K') => void;
   onClose: () => void;
   /** 便利貼本身的參考圖插槽（最多4張），讓所有 skill 模式都能用同一份參考圖生成 */
   referenceImages?: (string | null)[];
@@ -216,7 +238,9 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
       }
     }
     
-    onGenerate(prompt, count, model, autoRemoveBg, aspect);
+    // LINE 貼圖固定高解析輸出（4K），不出低清
+    const imageSizeOverride: '4K' | undefined = isSticker ? '4K' : undefined;
+    onGenerate(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride);
   };
 
   return (
@@ -572,6 +596,283 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
               </div>
             </div>
           )}
+          {activeSkill === 'sticker' && (
+            <div className="flex flex-col gap-4 bg-purple-50/20 p-4 rounded-2xl border border-purple-100/30">
+              {/* 版面模式 */}
+              <div>
+                <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">生成類型 (版面)</div>
+                <div className="grid grid-cols-3 gap-1.5 bg-[#F1F5F9] p-0.5 rounded-xl">
+                  {[
+                    { id: 'single', name: '普通輸出' },
+                    { id: 'threeViews', name: '生成設定圖' },
+                    { id: 'collection', name: '貼圖集合' },
+                  ].map(mode => {
+                    const isSelected = configs.sticker.layoutMode === mode.id;
+                    return (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => {
+                          setConfigs(prev => ({
+                            ...prev,
+                            sticker: {
+                              ...prev.sticker,
+                              layoutMode: mode.id,
+                            }
+                          }));
+                        }}
+                        className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-white text-[#AF52DE] shadow-[0_2px_4px_rgba(0,0,0,0.05)]'
+                            : 'text-[#64748B] hover:text-[#1E293B]'
+                        }`}
+                      >
+                        {mode.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 貼圖表情快捷鍵 (Emoji Chips) */}
+              <div>
+                <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">快捷表情短語 (點擊附加到提示詞)</div>
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                  {['好的/收到', '謝謝', '哈哈大笑', '哭哭', '生氣', 'OK', '早安', '晚安', '加油', '辛苦了', '抱歉', '愛你', '驚訝', '疑問', '讚', '掰掰'].map(expr => (
+                    <button
+                      key={expr}
+                      type="button"
+                      onClick={() => {
+                        setContent(prev => {
+                          const val = prev.trim();
+                          return val ? `${val}\n${expr}` : expr;
+                        });
+                      }}
+                      className="text-[10px] font-semibold bg-white border border-gray-200 text-gray-700 hover:border-purple-300 hover:text-[#AF52DE] px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                    >
+                      {expr}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 貼貼套組額外設定 */}
+              {configs.sticker.layoutMode === 'collection' && (
+                <div className="flex flex-col gap-3 bg-white/60 p-3 rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-gray-600">LINE 貼圖張數</span>
+                    <div className="flex items-center gap-1.5">
+                      {[2, 4, 8, 16, 20].map(n => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => {
+                            setConfigs(prev => ({
+                              ...prev,
+                              sticker: {
+                                ...prev.sticker,
+                                stickerCollectionCount: n,
+                                collectionItemPrompts: Array.from({ length: n }, (_, i) => prev.sticker.collectionItemPrompts[i] || '')
+                              }
+                            }));
+                          }}
+                          className={`min-w-[28px] h-7 px-1.5 rounded-lg text-xs font-bold transition-all ${
+                            configs.sticker.stickerCollectionCount === n
+                              ? 'bg-purple-100 text-[#AF52DE]'
+                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-[#86868B]">子貼圖主題內容 (選填)</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!apiKey) {
+                            showToast('⚠️ 請先配置 Gemini API Key');
+                            return;
+                          }
+                          if (!content.trim()) {
+                            showToast('⚠️ 請先在內容素材輸入套組大主題，例如「可愛小貓」');
+                            return;
+                          }
+                          showToast('AI 正在發想子主題中...');
+                          try {
+                            const count = configs.sticker.stickerCollectionCount;
+                            const items = await generateCollectionItemPrompts(content, count, apiKey);
+                            setConfigs(prev => ({
+                              ...prev,
+                              sticker: {
+                                ...prev.sticker,
+                                collectionItemPrompts: items
+                              }
+                            }));
+                            showToast('子主題生成完成！✨');
+                          } catch (e: any) {
+                            showToast(`生成子主題失敗: ${e.message || e}`);
+                          }
+                        }}
+                        className="text-[10px] font-bold text-[#AF52DE] hover:underline flex items-center gap-0.5"
+                      >
+                        ⚡ AI 發想子主題
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+                      {Array.from({ length: configs.sticker.stickerCollectionCount }).map((_, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="text-[10px] font-semibold text-gray-400 w-4">{idx + 1}</span>
+                          <input
+                            type="text"
+                            value={configs.sticker.collectionItemPrompts[idx] || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setConfigs(prev => {
+                                const list = [...prev.sticker.collectionItemPrompts];
+                                list[idx] = val;
+                                return {
+                                  ...prev,
+                                  sticker: {
+                                    ...prev.sticker,
+                                    collectionItemPrompts: list
+                                  }
+                                };
+                              });
+                            }}
+                            placeholder={`子貼圖 ${idx + 1} 畫面內容...`}
+                            className="flex-1 text-[11px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-lg px-2.5 py-1 focus:outline-none focus:border-[#AF52DE]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 細節微調開關 */}
+              <div className="flex flex-col gap-2">
+                <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1">細節微調</div>
+                <div className="grid grid-cols-2 gap-4 bg-white/40 p-2.5 rounded-xl border border-gray-100">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={configs.sticker.useStickerBorder}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setConfigs(prev => ({
+                          ...prev,
+                          sticker: { ...prev.sticker, useStickerBorder: checked }
+                        }));
+                      }}
+                      className="rounded border-[#cbd5e1] text-purple-600 focus:ring-purple-500"
+                    />
+                    <span className="text-[12px] font-semibold text-gray-700">白邊輪廓 (描邊)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={configs.sticker.useFacialFeatures}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setConfigs(prev => ({
+                          ...prev,
+                          sticker: { ...prev.sticker, useFacialFeatures: checked }
+                        }));
+                      }}
+                      className="rounded border-[#cbd5e1] text-purple-600 focus:ring-purple-500"
+                    />
+                    <span className="text-[12px] font-semibold text-gray-700">產生五官與表情</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* 貼圖壓字選項 */}
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={configs.sticker.textEnabled}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      setConfigs(prev => ({
+                        ...prev,
+                        sticker: { ...prev.sticker, textEnabled: checked }
+                      }));
+                    }}
+                    className="rounded border-[#cbd5e1] text-purple-600 focus:ring-purple-500"
+                  />
+                  <span className="text-[12px] font-bold text-gray-700">在貼圖內添加文字</span>
+                </label>
+
+                {configs.sticker.textEnabled && (
+                  <div className="flex flex-col gap-3 bg-white/60 p-3 rounded-xl border border-gray-100 mt-0.5">
+                    <div>
+                      <div className="text-[10px] font-bold text-[#86868B] mb-1">文字內容</div>
+                      <input
+                        type="text"
+                        value={configs.sticker.textContent}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setConfigs(prev => ({
+                            ...prev,
+                            sticker: { ...prev.sticker, textContent: val }
+                          }));
+                        }}
+                        placeholder="請輸入文字，留空則由 AI 自由發揮..."
+                        className="w-full text-[12px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#AF52DE]"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-[10px] font-bold text-[#86868B] mb-1">字型風格</div>
+                        <select
+                          value={configs.sticker.textFont}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setConfigs(prev => ({
+                              ...prev,
+                              sticker: { ...prev.sticker, textFont: val }
+                            }));
+                          }}
+                          className="w-full bg-white border border-[#E2E8F0] rounded-xl px-2.5 py-1.5 text-[11px] text-[#1E293B]"
+                        >
+                          <option value="Fredoka, sans-serif">標準 — 圓潤無襯線 (Sans-Serif)</option>
+                          <option value="Bangers, cursive">漫畫 — 粗黑爆炸感 (Comic)</option>
+                          <option value="Pacifico, cursive">手寫 — 流暢草寫 (Script)</option>
+                          <option value="Orbitron, sans-serif">科技 — 未來幾何感 (Sci-Fi)</option>
+                          <option value="Yomogi, cursive">日系 — 可愛手書感 (Kawaii JP)</option>
+                          <option value="Abril Fatface, cursive">優雅 — 粗襯線時尚 (Elegant)</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col justify-end">
+                        <label className="flex items-center gap-2 cursor-pointer select-none pb-2">
+                          <input
+                            type="checkbox"
+                            checked={configs.sticker.textBorder}
+                            onChange={e => {
+                              const checked = e.target.checked;
+                              setConfigs(prev => ({
+                                ...prev,
+                                sticker: { ...prev.sticker, textBorder: checked }
+                              }));
+                            }}
+                            className="rounded border-[#cbd5e1] text-purple-600 focus:ring-purple-500"
+                          />
+                          <span className="text-[11px] font-semibold text-gray-700">添加文字白描邊</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
 
           {/* 選項群組 */}
           <div className="space-y-6">

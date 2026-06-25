@@ -63,6 +63,7 @@ interface ContextMenuProps {
     semanticEditor: (elementId: string) => void;
     ocrConvert: (elementId: string) => void;
     clearStorage: () => void;
+    splitSticker?: (elementId: string) => void;
   };
   canChangeColor: boolean;
   elementType: ElementType | null;
@@ -392,6 +393,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                 <MenuItem icon={<MenuIcons.Expand />} onClick={() => handleAction(() => actions.startOutpainting(menuData.elementId!))}>
                                     擴展圖片 (Outpainting)
                                 </MenuItem>
+                                {actions.splitSticker && (
+                                    <MenuItem icon={<Icon name="call_split" size={15} />} onClick={() => handleAction(() => actions.splitSticker!(menuData.elementId!))}>
+                                        🪄 一鍵拆分貼紙套組
+                                    </MenuItem>
+                                )}
                                  <div className="border-t my-0.5 border-gray-100/50" />
                             </>
                         )}

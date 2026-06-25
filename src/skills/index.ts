@@ -58,9 +58,9 @@ export interface SkillMetadata {
 export const SKILL_LIST: SkillMetadata[] = [
   {
     id: 'sticker',
-    name: 'Sticker Design',
-    name_zh: '模切貼圖',
-    desc: '自動生成帶白邊與透明底的印刷質感貼圖',
+    name: 'LINE Sticker',
+    name_zh: 'LINE 貼圖',
+    desc: '專為 LINE 貼圖設計：隨形白邊、自動去背透明、可一鍵生成整套（2~20 張）',
     defaultConfig: STICKER_DEFAULT_CONFIG,
     optionGroups: STICKER_OPTION_GROUPS,
   },
