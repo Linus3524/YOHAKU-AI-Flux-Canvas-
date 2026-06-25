@@ -1282,16 +1282,15 @@ export function SemanticEditorView({
     }, [inpaintEngine, atlasApiKey, geminiApiKey, falApiKey, applyLayerRegen, showToast]);
 
     // 文字編輯 Apply（文字模式專用：只換框內文字）
+    // 與物件重繪一致，跟隨使用者的引擎切換鈕（inpaintEngine）：選 GPT 用 GPT、選 Gemini 用 Gemini。
     const handleApplyText = useCallback((layer: SmartLayer, newText: string) => {
         if (!newText.trim()) { showToast('⚠️ 請輸入文字內容'); return; }
-        // 文字編輯優先用 Gemini（gemini-3.x-flash-image，最擅長只改文字、其餘不動且會自然
-        // reflow）；文字偵測本來就需要 Gemini key，所以幾乎都有。沒有才退回 GPT/Atlas。
-        const textEngine: 'gpt' | 'gemini' = geminiApiKey ? 'gemini' : 'gpt';
-        if (textEngine === 'gpt' && !atlasApiKey) { showToast('⚠️ 文字編輯需要 Gemini 或 Atlas API Key'); return; }
-        applyTextLayerEdit(layer, newText, textEngine).catch(e => {
+        if (inpaintEngine === 'gpt'    && !atlasApiKey)  { showToast('⚠️ GPT 重繪需要 Atlas API Key'); return; }
+        if (inpaintEngine === 'gemini' && !geminiApiKey) { showToast('⚠️ Gemini 重繪需要 Gemini API Key'); return; }
+        applyTextLayerEdit(layer, newText, inpaintEngine).catch(e => {
             showToast(`❌ 文字重繪失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
         });
-    }, [atlasApiKey, geminiApiKey, applyTextLayerEdit, showToast]);
+    }, [inpaintEngine, atlasApiKey, geminiApiKey, applyTextLayerEdit, showToast]);
 
     // Apply All（批次）
     const handleApplyAll = useCallback(() => {
