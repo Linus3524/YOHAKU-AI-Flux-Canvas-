@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { STYLE_PRESETS } from '../utils/helpers';
 import { VISUAL_STYLE_TEMPLATES } from '../skills/styles';
 import { DESIGN_MD_TEMPLATES } from '../skills/designs';
+import { LAYOUT_DENSITY_TEMPLATES } from '../skills/layouts';
 import { Icon } from './Icon';
 import {
   SKILL_LIST,
@@ -29,6 +30,9 @@ interface DesignMasterPanelProps {
   showToast: (msg: string) => void;
   onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string) => void;
   onClose: () => void;
+  /** 便利貼本身的參考圖插槽（最多4張），讓所有 skill 模式都能用同一份參考圖生成 */
+  referenceImages?: (string | null)[];
+  onUpdateReferenceImages?: (refs: (string | null)[]) => void;
 }
 
 const MODEL_OPTIONS: { id: string; label: string; needsAtlas: boolean }[] = [
@@ -47,6 +51,8 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   showToast,
   onGenerate,
   onClose,
+  referenceImages,
+  onUpdateReferenceImages,
 }) => {
   const [activeSkill, setActiveSkill] = useState<SkillType>('sticker');
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -127,6 +133,12 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
       label: '極簡與大膽美學',
       ids: DESIGN_MD_TEMPLATES.filter(t => ['Minimal', 'Bold'].includes(t.category)).map(t => t.id)
     }
+  ];
+
+  const LAYOUT_CATEGORIES = [
+    { label: '密度策略', ids: LAYOUT_DENSITY_TEMPLATES.filter(t => t.category === 'Density').map(t => t.id) },
+    { label: '結構版型', ids: LAYOUT_DENSITY_TEMPLATES.filter(t => t.category === 'Structure').map(t => t.id) },
+    { label: '流程引導', ids: LAYOUT_DENSITY_TEMPLATES.filter(t => t.category === 'Flow').map(t => t.id) },
   ];
 
   const navRef = React.useRef<HTMLDivElement>(null);
@@ -317,6 +329,70 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
               className="w-full text-[13px] text-[#1E293B] bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-4 py-3 h-20 resize-none overflow-y-auto transition-all focus:outline-none focus:bg-white focus:border-[#AF52DE] focus:ring-4 focus:ring-[#AF52DE]/10 leading-relaxed"
             />
           </div>
+
+          {/* 參考圖（與便利貼上的參考圖插槽同步，所有 skill 模式共用） */}
+          {onUpdateReferenceImages && (() => {
+            const refs = referenceImages ?? [null, null, null, null];
+            const handleRefUpload = (idx: number, file: File) => {
+              const reader = new FileReader();
+              reader.onload = ev => {
+                const src = ev.target?.result as string;
+                const newRefs = [...refs];
+                newRefs[idx] = src;
+                onUpdateReferenceImages(newRefs);
+              };
+              reader.readAsDataURL(file);
+            };
+            const handleRefRemove = (idx: number) => {
+              const newRefs = [...refs];
+              newRefs[idx] = null;
+              onUpdateReferenceImages(newRefs);
+            };
+            return (
+              <div>
+                <div className="text-[12px] font-bold text-[#475569] mb-2 flex items-center gap-1.5">
+                  參考圖 <span className="font-normal text-gray-400 text-[11px]">(選填，最多 4 張，AI 生成時會參考)</span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {refs.map((src, idx) => (
+                    <label
+                      key={idx}
+                      className={`relative aspect-square rounded-xl border overflow-hidden cursor-pointer transition-all ${
+                        src ? 'border-[#AF52DE]' : 'border-dashed border-[#cbd5e1] hover:border-[#AF52DE] bg-[#F8FAFC]'
+                      }`}
+                    >
+                      {src ? (
+                        <>
+                          <img src={src} alt={`參考圖 ${idx + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={e => { e.preventDefault(); e.stopPropagation(); handleRefRemove(idx); }}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center"
+                          >
+                            <Icon name="close" size={11} />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <Icon name="add_photo_alternate" size={18} />
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file) handleRefUpload(idx, file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 生圖模型 */}
           <div>
@@ -510,7 +586,13 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                 return true;
               })
               .map(group => {
-                const isStyleGroup = ['style', 'rendering', 'art', 'preset', 'brand'].includes(group.key);
+                const isStyleGroup = ['style', 'rendering', 'art', 'preset', 'brand', 'visualStyle', 'layout'].includes(group.key);
+                // 三種獨立疊加層的素材來源：品牌規格書 / 佈局密度策略 / 藝術風格庫
+                const groupMeta = group.key === 'brand'
+                  ? { templates: DESIGN_MD_TEMPLATES, categories: BRAND_CATEGORIES, placeholder: '設計規格書...', emptyOption: '選擇其他品牌規格書 / 清除品牌...', libraryDesc: '選擇 50+ 種系統內建品牌規格書', icon: 'book' }
+                  : group.key === 'layout'
+                  ? { templates: LAYOUT_DENSITY_TEMPLATES, categories: LAYOUT_CATEGORIES, placeholder: '佈局密度策略...', emptyOption: '選擇其他佈局密度 / 清除版面...', libraryDesc: '選擇 8 種版面結構與密度策略', icon: 'mobile_layout' }
+                  : { templates: VISUAL_STYLE_TEMPLATES, categories: DESIGN_STYLE_CATEGORIES, placeholder: '藝術風格庫...', emptyOption: '選擇其他藝術風格 / 清除風格...', libraryDesc: '選擇 60+ 種系統預設風格', icon: 'palette' };
                 return (
                 <div key={group.key}>
                   <div className="flex items-center gap-2 mb-2.5">
@@ -550,8 +632,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
 
                     {isStyleGroup && (() => {
                       const currentVal = configs[activeSkill][group.key];
-                      const selectedPreset = VISUAL_STYLE_TEMPLATES.find(p => p.id === currentVal)
-                        || DESIGN_MD_TEMPLATES.find(p => p.id === currentVal);
+                      const selectedPreset = groupMeta.templates.find((p: any) => p.id === currentVal);
                       const active = !!selectedPreset;
                       return (
                         <div
@@ -563,8 +644,8 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                         >
                           <div className="flex items-center justify-between w-full pointer-events-none">
                             <span className={`text-[13px] font-bold leading-tight flex items-center gap-1.5 ${active ? 'text-[#7e22ce]' : 'text-[#475569]'}`}>
-                              <Icon name="palette" size={15} className={active ? 'text-[#AF52DE]' : 'text-gray-400'} />
-                              {active ? selectedPreset.name_zh : (group.key === 'brand' ? '設計規格書...' : '藝術風格庫...')}
+                              <Icon name={groupMeta.icon} size={15} className={active ? 'text-[#AF52DE]' : 'text-gray-400'} />
+                              {active ? selectedPreset.name_zh : groupMeta.placeholder}
                             </span>
                             {active ? (
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-[#AF52DE] flex-shrink-0">
@@ -577,7 +658,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                             )}
                           </div>
                           <span className={`text-[10px] leading-snug mt-1 pointer-events-none ${active ? 'text-[#AF52DE]/75' : 'text-gray-400'}`}>
-                            {active ? `風格：${selectedPreset.name}` : (group.key === 'brand' ? '選擇 50+ 種系統內建品牌規格書' : '選擇 60+ 種系統預設風格')}
+                            {active ? `風格：${selectedPreset.name}` : groupMeta.libraryDesc}
                           </span>
                           
                           <select
@@ -595,39 +676,22 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                             }}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                           >
-                            <option value="">{group.key === 'brand' ? '選擇其他品牌規格書 / 清除品牌...' : '選擇其他藝術風格 / 清除風格...'}</option>
-                            {group.key === 'brand'
-                              ? BRAND_CATEGORIES.map(category => {
-                                  const categoryPresets = category.ids
-                                    .map(id => DESIGN_MD_TEMPLATES.find(p => p.id === id))
-                                    .filter(Boolean) as typeof DESIGN_MD_TEMPLATES;
-                                  if (categoryPresets.length === 0) return null;
-                                  return (
-                                    <optgroup key={category.label} label={category.label}>
-                                      {categoryPresets.map(preset => (
-                                        <option key={preset.id} value={preset.id}>
-                                          {preset.name_zh} ({preset.name})
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  );
-                                })
-                              : DESIGN_STYLE_CATEGORIES.map(category => {
-                                  const categoryPresets = category.ids
-                                    .map(id => VISUAL_STYLE_TEMPLATES.find(p => p.id === id))
-                                    .filter(Boolean) as typeof VISUAL_STYLE_TEMPLATES;
-                                  if (categoryPresets.length === 0) return null;
-                                  return (
-                                    <optgroup key={category.label} label={category.label}>
-                                      {categoryPresets.map(preset => (
-                                        <option key={preset.id} value={preset.id}>
-                                          {preset.name_zh} ({preset.name})
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  );
-                                })
-                            }
+                            <option value="">{groupMeta.emptyOption}</option>
+                            {groupMeta.categories.map((category: { label: string; ids: string[] }) => {
+                              const categoryPresets = category.ids
+                                .map(id => groupMeta.templates.find((p: any) => p.id === id))
+                                .filter(Boolean) as any[];
+                              if (categoryPresets.length === 0) return null;
+                              return (
+                                <optgroup key={category.label} label={category.label}>
+                                  {categoryPresets.map(preset => (
+                                    <option key={preset.id} value={preset.id}>
+                                      {preset.name_zh} ({preset.name})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              );
+                            })}
                           </select>
                         </div>
                       );

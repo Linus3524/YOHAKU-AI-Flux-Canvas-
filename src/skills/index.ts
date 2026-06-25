@@ -11,6 +11,7 @@ import { UiWebpageSkillConfig, UI_WEBPAGE_DEFAULT_CONFIG, UI_WEBPAGE_OPTION_GROU
 import { STYLE_PRESETS } from '../utils/helpers';
 import { VISUAL_STYLE_TEMPLATES } from './styles';
 import { DESIGN_MD_TEMPLATES } from './designs';
+import { LAYOUT_DENSITY_TEMPLATES } from './layouts';
 
 export const SKILL_STYLE_KEYS: Record<SkillType, string> = {
   sticker: 'style',
@@ -22,6 +23,16 @@ export const SKILL_STYLE_KEYS: Record<SkillType, string> = {
   comic: 'art',
   slide: 'preset',
   uiWebpage: 'brand',
+};
+
+// 第二層獨立疊加：視覺風格（氛圍/質感/色彩情緒），與品牌規格書分開注入
+export const SKILL_VISUAL_KEYS: Partial<Record<SkillType, string>> = {
+  uiWebpage: 'visualStyle',
+};
+
+// 第三層獨立疊加：只管版面結構/留白密度，與色彩字體、視覺氛圍分開注入、互不衝突
+export const SKILL_LAYOUT_KEYS: Partial<Record<SkillType, string>> = {
+  uiWebpage: 'layout',
 };
 
 export type SkillType =
@@ -166,6 +177,22 @@ export function buildSkillPrompt(type: SkillType, content: string, config: any):
       if (customStyle) {
         basePrompt = `${basePrompt}\n\nOVERRIDE VISUAL STYLE / ART DIRECTION:\nApply this visual style preset: ${customStyle.prompt}`;
       }
+    }
+  }
+
+  const visualKey = SKILL_VISUAL_KEYS[type];
+  if (visualKey && config && config[visualKey]) {
+    const vt = VISUAL_STYLE_TEMPLATES.find(t => t.id === config[visualKey]);
+    if (vt) {
+      basePrompt = `${basePrompt}\n\n============================================================\n[VISUAL STYLE REFERENCE]\nApply this visual style aesthetic to the overall mood, artistic treatment, texture and color character (this governs AESTHETIC MOOD ONLY — the brand design system and layout structure are governed by their own sections):\n\n${vt.content}\n============================================================`;
+    }
+  }
+
+  const layoutKey = SKILL_LAYOUT_KEYS[type];
+  if (layoutKey && config && config[layoutKey]) {
+    const layoutTemplate = LAYOUT_DENSITY_TEMPLATES.find(t => t.id === config[layoutKey]);
+    if (layoutTemplate) {
+      basePrompt = `${basePrompt}\n\n============================================================\n[LAYOUT DENSITY STRATEGY TO FOLLOW]\nApply this layout density and structural strategy for element spacing, grid, and information hierarchy (this governs SPACING/STRUCTURE ONLY — colors and typography are governed separately above):\n\n${layoutTemplate.content}\n============================================================`;
     }
   }
 

@@ -4,13 +4,17 @@ import { SkillOption } from './sticker';
 export interface UiWebpageSkillConfig {
   type: string;
   brand: string;
+  visualStyle: string;
+  layout: string;
   platform: string;
   resolution: string;
 }
 
 export const UI_WEBPAGE_DEFAULT_CONFIG: UiWebpageSkillConfig = {
   type: 'landing-page',
-  brand: 'vercel',
+  brand: '',         // 三層皆選填，預設未選擇（留空則不注入對應指令，交由 AI 自由決定）
+  visualStyle: '',
+  layout: '',
   platform: 'pc',
   resolution: 'desktop-hd',
 };
@@ -100,6 +104,8 @@ export function resolveAspectFromResolution(resId: string): string {
 export const UI_WEBPAGE_OPTION_GROUPS = [
   { key: 'type' as const, label: '介面類型', options: UI_TYPES },
   { key: 'brand' as const, label: '品牌規格書', options: [] as SkillOption[] },
+  { key: 'visualStyle' as const, label: '視覺風格', options: [] as SkillOption[] },
+  { key: 'layout' as const, label: '佈局密度策略', options: [] as SkillOption[] },
   // platform & resolution are rendered as custom UI, not standard option grids
 ];
 

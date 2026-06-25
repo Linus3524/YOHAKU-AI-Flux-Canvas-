@@ -2254,6 +2254,8 @@ const App: React.FC = () => {
               setDesignMasterTargetId(null);
               handleGenerate([el], count, prompt, model, autoRemoveBg, aspect);
             }}
+            referenceImages={el.type === 'note' ? (el as NoteElement).referenceImages : undefined}
+            onUpdateReferenceImages={el.type === 'note' ? (refs) => updateElements({ ...(el as NoteElement), referenceImages: refs }) : undefined}
           />
         );
       })()}
