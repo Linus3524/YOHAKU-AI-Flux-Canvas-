@@ -31,6 +31,8 @@ interface DetectedObject {
     category: SmartLayerCategory;
     edgeComplexity: 'simple' | 'complex';
     description: string;
+    /** TEXT 類專用：框內辨識出的原始文字（OCR），其他類別留空 */
+    text?: string;
     bbox: { x: number; y: number; w: number; h: number }; // 0–1
 }
 
@@ -233,6 +235,9 @@ Tightest rectangle. x,y = top-left corner (0.0–1.0 fraction of image). w,h = s
 ━━━ DESCRIPTION ━━━
 15-35 word English visual description for image generation prompt.
 
+━━━ TEXT TRANSCRIPTION (OCR) ━━━
+For category "TEXT" ONLY: also fill a "text" field with the EXACT readable text inside the bbox, transcribed verbatim (keep original language, punctuation, casing, and line breaks as "\n"). For all other categories, omit "text" or set it to "".
+
 ━━━ LANGUAGE RULES (CRITICAL) ━━━
 The "label" field MUST use Traditional Chinese (繁體中文), English, or Japanese ONLY.
 NEVER use Simplified Chinese characters (简体字).
@@ -240,7 +245,8 @@ Examples of correct Traditional Chinese: 人物, 罐頭, 魚, 背景, 產品
 Examples of FORBIDDEN Simplified Chinese: 人物→OK, 罐头→WRONG(use 罐頭), 鱼→WRONG(use 魚)
 
 Return ONLY valid JSON array:
-[{"label":"人物","labelEn":"person","category":"SUBJECT","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman in white shirt, smiling at camera, with long dark hair"}]`,
+[{"label":"人物","labelEn":"person","category":"SUBJECT","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman in white shirt, smiling at camera, with long dark hair"},
+{"label":"標題","labelEn":"headline","category":"TEXT","edgeComplexity":"simple","bbox":{"x":0.05,"y":0.02,"w":0.6,"h":0.1},"description":"Large bold headline in dark green serif font","text":"大型傳統中文標題區域"}]`,
                 },
             ],
         },
@@ -356,6 +362,7 @@ async function buildSmartLayer(
         name: string;
         category: SmartLayerCategory;
         description: string;
+        text?: string;
         bbox: DetectedObject['bbox'];
         zIndex: number;
     },
@@ -369,6 +376,7 @@ async function buildSmartLayer(
         originalBase64: trimmed.base64,
         prompt:         meta.description,
         appliedPrompt:  meta.description,   // 初始時 prompt = appliedPrompt
+        text:           meta.text,
         bbox:           meta.bbox,
         cropRatio: {
             x: trimmed.cropRatioX,
@@ -566,6 +574,7 @@ export async function segmentSemanticLayers({
                     name:        obj.label,
                     category:    obj.category,
                     description: obj.description ?? obj.label,
+                    text:        obj.text,
                     bbox:        obj.bbox,
                     zIndex:      objects.length - i,
                 });
@@ -580,6 +589,7 @@ export async function segmentSemanticLayers({
                         name:        `${obj.label}（未去背）`,
                         category:    obj.category,
                         description: obj.description ?? obj.label,
+                        text:        obj.text,
                         bbox:        obj.bbox,
                         zIndex:      objects.length - i,
                     });
@@ -592,6 +602,129 @@ export async function segmentSemanticLayers({
 
     const layers = results.filter((l): l is SmartLayer => l !== null);
     if (layers.length === 0) throw new Error('所有物件分割均失敗，請重試或檢查 API Key');
+    return layers;
+}
+
+// ─── 純文字掃描：專用「逐塊文字偵測」prompt（不重用物件偵測）─────────────────────
+
+interface TextBlock {
+    label: string;
+    text: string;
+    bbox: { x: number; y: number; w: number; h: number }; // 0–1
+    description?: string;
+}
+
+/**
+ * 文字編輯模式專用的偵測器——和物件偵測完全脫鉤。
+ * 物件偵測會合併鄰近文字、上限 8 層、bbox 偏大；這裡相反：
+ * 一行/一塊文字各一個框、不合併、不設上限、框貼緊字、含逐字 OCR。
+ */
+async function detectTextBlocks(
+    imageBase64: string,
+    geminiApiKey: string,
+): Promise<TextBlock[]> {
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+    const mimeType    = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: {
+            parts: [
+                { inlineData: { mimeType, data: cleanBase64 } },
+                {
+                    text: `You are a precise OCR + text-block localizer for a design editor.
+Find EVERY distinct block of text in the image. Return a TIGHT bounding box and the exact transcription for each.
+
+━━━ WHAT IS ONE TEXT BLOCK ━━━
+- A visually contiguous run of text sharing ONE font, size, and color.
+- One headline LINE = one block. If a title spans two lines with different size/weight/color, output TWO separate blocks.
+- A paragraph of body text = one block.
+- Each label, page number, caption, footer, corner tag, small footnote = its OWN block.
+- Readable words inside a logo: only if clearly legible; otherwise skip the logo.
+
+━━━ STRICT RULES ━━━
+- ONE box per block. NEVER merge separate blocks into a single box, even if they are close together or stacked.
+- NEVER group a logo, icon, or graphic together with nearby text.
+- Do NOT skip small or edge text (page numbers, footers, corner labels). Include them ALL.
+- bbox = the TIGHTEST rectangle around the visible glyphs ONLY — no surrounding empty margin, no background padding. x,y = top-left corner (0.0–1.0 fraction). w,h = size fraction.
+- Transcribe verbatim: keep the original language, punctuation, casing. Use "\\n" for line breaks inside one block.
+- Return up to 30 blocks. Order them top-to-bottom, left-to-right.
+
+━━━ LANGUAGE OF "label" ━━━
+Traditional Chinese (繁體中文), English, or Japanese ONLY. NEVER Simplified Chinese.
+
+Return ONLY a valid JSON array (no markdown):
+[{"label":"主標題","text":"2026年の日本","bbox":{"x":0.30,"y":0.18,"w":0.40,"h":0.06},"description":"large white serif headline line"}]`,
+                },
+            ],
+        },
+    });
+
+    const raw      = response.text ?? '';
+    const stripped = raw.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+    const match    = stripped.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+
+    let blocks: TextBlock[];
+    try { blocks = JSON.parse(match[0]); }
+    catch { return []; }
+    if (!Array.isArray(blocks)) return [];
+
+    // 僅清理 bbox 範圍，不做任何合併/去重（保留逐塊粒度）
+    return blocks
+        .filter(b => b && b.bbox && (b.text ?? '').toString().trim().length > 0)
+        .map(b => ({
+            label: (b.label ?? '文字').toString().trim() || '文字',
+            text:  b.text.toString(),
+            description: (b.description ?? b.label ?? '').toString(),
+            bbox: {
+                x: Math.max(0, Math.min(0.99, b.bbox.x ?? 0)),
+                y: Math.max(0, Math.min(0.99, b.bbox.y ?? 0)),
+                w: Math.max(0.005, Math.min(1, b.bbox.w ?? 0.1)),
+                h: Math.max(0.005, Math.min(1, b.bbox.h ?? 0.05)),
+            },
+        }))
+        .slice(0, 30);
+}
+
+/**
+ * 文字編輯模式入口：掃出每塊文字 → bbox 直接建層（矩形含背景，inpaint 重繪時需要底色）。
+ * 不跑 SAM2，只需 Gemini Key。每層標 fromTextScan，與物件分析的 TEXT 層區分。
+ */
+export async function detectTextRegions({
+    imageBase64,
+    geminiApiKey,
+    onProgress,
+}: {
+    imageBase64: string;
+    geminiApiKey: string;
+    onProgress?: (msg: string) => void;
+}): Promise<SmartLayer[]> {
+    onProgress?.('Gemini 逐塊掃描文字中...');
+    const blocks = await detectTextBlocks(imageBase64, geminiApiKey);
+    if (blocks.length === 0) return [];
+
+    const dims = await getImageDims(imageBase64);
+    const layers: SmartLayer[] = [];
+    for (let i = 0; i < blocks.length; i++) {
+        const b = blocks[i];
+        try {
+            const crop = await cropToBBox(imageBase64, b.bbox);
+            const full = await placeInFullCanvas(crop, dims.w, dims.h, b.bbox);
+            const layer = await buildSmartLayer(full, {
+                name:        b.label,
+                category:    'TEXT',
+                description: b.description || b.label,
+                text:        b.text,
+                bbox:        b.bbox,
+                zIndex:      100 + i,   // 文字疊在物件之上
+            });
+            layers.push({ ...layer, fromTextScan: true });
+        } catch (e) {
+            console.warn(`[detectTextRegions] skip "${b.label}":`, e);
+        }
+    }
     return layers;
 }
 
@@ -640,6 +773,7 @@ export async function segmentSemanticLayersOnnx({
                 originalBase64: trimmed.base64,
                 prompt:         obj.description ?? obj.label,
                 appliedPrompt:  obj.description ?? obj.label,
+                text:           obj.text,
                 bbox:           cropRatio,
                 cropRatio,
                 pixelWidth:     trimmed.pixelWidth,
@@ -1125,6 +1259,102 @@ export interface RegenerateLayerOptions {
     onProgress?: (msg: string) => void;
     /** 使用者上傳的參考圖（已壓縮 base64） */
     referenceImage?: string;
+    /**
+     * 文字編輯模式：整張圖重繪、輸出直接當結果（不遮罩貼回）。
+     * 因為改文字會改字數/長度，遮罩貼回會把長字壓進舊框 → 變形/切字/露舊字；
+     * 整張交給模型重新排版才能自然處理字數變化（對標競品作法）。
+     */
+    textEdit?: boolean;
+}
+
+/**
+ * 文字編輯：整張圖重繪，模型輸出直接當結果（不遮罩、不貼回）。
+ * Gemini 用 gemini-3.x-flash-image（最擅長只改文字、其餘不動、且會自然 reflow）。
+ */
+async function regenerateTextFullImageGemini({
+    originalBase64,
+    newPrompt,
+    geminiApiKey,
+    imageModel,
+    referenceImage,
+    layerName,
+    onProgress,
+}: {
+    originalBase64: string;
+    newPrompt: string;
+    geminiApiKey: string;
+    imageModel?: string;
+    referenceImage?: string;
+    layerName: string;
+    onProgress?: (msg: string) => void;
+}): Promise<string> {
+    onProgress?.(`Gemini 重繪文字「${layerName}」...`);
+    const { callGeminiWithRetry } = await import('../../utils/helpers');
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+    const [header, data] = originalBase64.split(',');
+    const mime = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+    const parts: any[] = [{ inlineData: { data, mimeType: mime } }];
+    if (referenceImage) {
+        const [rh, rd] = referenceImage.split(',');
+        const rmime = rh.match(/data:(.*);base64/)?.[1] || 'image/png';
+        parts.push({ inlineData: { data: rd, mimeType: rmime } });
+    }
+    parts.push({ text: newPrompt });
+
+    const response = await callGeminiWithRetry(() => ai.models.generateContent({
+        model: imageModel || 'gemini-3.1-flash-image-preview',
+        contents: { parts },
+    }));
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+        if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+    }
+    throw new Error('Gemini 未回傳圖片');
+}
+
+/**
+ * 文字編輯（GPT 後備）：整張圖編輯，輸出直接當結果（不貼回）。
+ * 透明遮罩稍微外擴，讓較長的新字有空間，避免被舊框卡住。
+ */
+async function regenerateTextFullImageGpt({
+    layer,
+    originalBase64,
+    newPrompt,
+    atlasApiKey,
+    referenceImage,
+    signal,
+    onProgress,
+}: {
+    layer: SmartLayer;
+    originalBase64: string;
+    newPrompt: string;
+    atlasApiKey: string;
+    referenceImage?: string;
+    signal?: AbortSignal;
+    onProgress?: (msg: string) => void;
+}): Promise<string> {
+    const { callAtlasInpaint, compressForAtlas, gptSizeForImage } = await import('../../utils/atlasImage');
+    const dims = await getImageDims(originalBase64);
+    const fullLayerPng = await layerToFullCanvas(layer, dims.w, dims.h);
+    const maskBase64   = await transparentPngToInpaintMask(fullLayerPng);
+    const gptSize      = await gptSizeForImage(originalBase64);
+
+    onProgress?.(`GPT Image 2 重繪文字「${layer.name}」...`);
+    const [compOrig, compMask] = await Promise.all([
+        compressForAtlas(originalBase64, 1536, 0.95, false),
+        compressForAtlas(maskBase64,     1536, 1.0,  true),
+    ]);
+    // 整張輸出直接當結果（不 pasteInpaintRegion）→ 無接縫、可重新排版
+    return callAtlasInpaint(
+        newPrompt,
+        compOrig,
+        compMask,
+        atlasApiKey,
+        referenceImage ? [referenceImage] : undefined,
+        undefined,
+        signal,
+        gptSize,
+    );
 }
 
 /**
@@ -1152,6 +1382,7 @@ export async function regenerateLayer({
     signal,
     onProgress,
     referenceImage,
+    textEdit,
 }: RegenerateLayerOptions): Promise<{
     newLayerBase64: string;
     newCropRatio: SmartLayer['cropRatio'];
@@ -1160,6 +1391,31 @@ export async function regenerateLayer({
     pixelWidth?: number;
     pixelHeight?: number;
 }> {
+
+    // ══ 文字編輯路線（對標競品）：整張圖重繪 → 輸出直接當結果，不遮罩貼回 ══════════
+    if (textEdit) {
+        let newCompositeBase64: string;
+        if (engine === 'gemini') {
+            if (!geminiApiKey) throw new Error('Gemini 重繪需要 Gemini API Key');
+            newCompositeBase64 = await regenerateTextFullImageGemini({
+                originalBase64, newPrompt, geminiApiKey, imageModel,
+                referenceImage, layerName: layer.name, onProgress,
+            });
+        } else {
+            if (!atlasApiKey) throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
+            newCompositeBase64 = await regenerateTextFullImageGpt({
+                layer, originalBase64, newPrompt, atlasApiKey, referenceImage, signal, onProgress,
+            });
+        }
+        // 文字不重新分割：沿用原圖層形狀/位置，只更新合成圖
+        return {
+            newLayerBase64: layer.base64,
+            newCropRatio:   layer.cropRatio,
+            newCompositeBase64,
+            pixelWidth:     layer.pixelWidth,
+            pixelHeight:    layer.pixelHeight,
+        };
+    }
 
     // ══ Gemini crop 路線：crop → img2img → SAM2 切邊 → composite ══════════════
     if (engine === 'gemini') {
@@ -1244,8 +1500,10 @@ export async function regenerateLayer({
 
     // ══ GPT / Atlas 路線（原有，完全不動）══════════════════════════════════════
     if (!atlasApiKey) throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
-    const { callAtlasInpaint, compressForAtlas } = await import('../../utils/atlasImage');
+    const { callAtlasInpaint, compressForAtlas, gptSizeForImage } = await import('../../utils/atlasImage');
     const dims = await getImageDims(originalBase64);
+    // 指定輸出尺寸 = 原圖最接近的 GPT 比例，避免 gpt-image-2 預設方形導致比例不符、貼回錯位
+    const gptSize = await gptSizeForImage(originalBase64);
 
     // ── Step 1：SmartLayer → 全圖遮罩（白=重繪，稍微 dilate 讓 GPT 有重疊區）
     onProgress?.(`🎭 建立遮罩「${layer.name}」...`);
@@ -1277,6 +1535,7 @@ export async function regenerateLayer({
         referenceImage ? [referenceImage] : undefined,
         undefined,   // surroundingContext
         signal,      // AbortSignal → 取消後立即停止輪詢
+        gptSize,     // 輸出尺寸 = 原圖比例，避免方形錯位
     );
 
     // 只取遮罩區的重繪像素貼回全解析度原圖，其餘維持原始畫質（避免多次 Apply 畫質遞減）

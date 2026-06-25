@@ -393,6 +393,17 @@ export async function detectClosestRatio(base64: string): Promise<string> {
 }
 
 /**
+ * 取得最接近某圖片比例的 GPT Image 2 尺寸字串（像素，如 '1024x1536'）。
+ * gpt-image-2/edit 未指定 size 時預設輸出 1024x1024 方形；若原圖為直/橫式，
+ * 輸出方形會導致 inpaint 結果與原圖比例不符、貼回時錯位。指定 size 修正此問題。
+ */
+export async function gptSizeForImage(base64: string): Promise<string> {
+    const ratio = await detectClosestRatio(base64);
+    const match = GPT_SIZES.find(s => s.ratio === ratio) ?? GPT_SIZES[0];
+    return match.w2k;
+}
+
+/**
  * 送給 Atlas 前壓縮圖片：最長邊縮到 1024px，轉 JPEG 85%
  * 大幅減少傳輸量（原圖可能 3-5MB → 壓縮後約 200-400KB），加快 API 處理速度
  */

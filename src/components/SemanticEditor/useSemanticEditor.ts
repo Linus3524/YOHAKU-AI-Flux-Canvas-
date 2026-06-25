@@ -12,7 +12,7 @@ import type {
     EditorVersion,
 } from '../../types';
 import {
-    segmentSemanticLayers, segmentSemanticLayersOnnx, compositeSmartLayers, regenerateLayer,
+    segmentSemanticLayers, segmentSemanticLayersOnnx, detectTextRegions, compositeSmartLayers, regenerateLayer,
     addLayerByClick, addLayerByBox, addLayerByPoints,
     describeLayerWithGemini, buildSmartLayerFromMask,
     layerToFullCanvas, transparentPngToInpaintMask,
@@ -152,6 +152,34 @@ export function useSemanticEditor({
         analyzingRef.current = false;
     }, [originalBase64, geminiApiKey, falApiKey, useLocalSAM2, setStatus]);
 
+    // ── 純文字掃描（進入文字模式時自動呼叫；只需 Gemini，跳過 SAM2）──────────────
+    const analyzeTextRegions = useCallback(async () => {
+        if (!geminiApiKey) throw new Error('需要設定 Gemini API Key');
+        if (analyzingRef.current) return;
+
+        setStatus('analyzing', 'Gemini 掃描文字中...');
+        try {
+            // 掃當前版本的合成圖（含先前編輯結果）
+            const baseImage = state.compositeBase64;
+            const textLayers = await detectTextRegions({
+                imageBase64: baseImage,
+                geminiApiKey,
+                onProgress: msg => setStatus('analyzing', msg),
+            });
+            // 文字層是原圖在原位的矩形切片，疊回同一張圖視覺上不變 → 不需重新合成背景。
+            // 用逐塊文字層「取代」舊的 TEXT 層（含物件分析合併出的大框），避免重複/粒度錯誤。
+            setState(s => {
+                if (textLayers.length === 0) return { ...s, status: 'idle', statusMessage: '' };
+                const nonText = s.layers.filter(l => l.category !== 'TEXT');
+                const updated = [...nonText, ...textLayers];
+                return { ...s, ...withLayerSync(s, updated), status: 'idle', statusMessage: '' };
+            });
+        } catch (e) {
+            setStatus('idle', '');
+            throw e;
+        }
+    }, [state.compositeBase64, geminiApiKey, setStatus]);
+
     // ── LaMa 純背景圖層生成（手動觸發，與 SAM2 分析分開）────────────────────────
     const generateLamaBackground = useCallback(async () => {
         const fgLayers = state.layers.filter(l => l.category !== 'BACKGROUND');
@@ -247,14 +275,27 @@ export function useSemanticEditor({
     }, []);
 
     // ── 單層 Apply（inpaint → 全部重新切割）────────────────────────────────
-    const applyLayerRegen = useCallback(async (layer: SmartLayer, engine: 'gpt' | 'gemini' = 'gpt') => {
+    const applyLayerRegen = useCallback(async (
+        layer: SmartLayer,
+        engine: 'gpt' | 'gemini' = 'gpt',
+        opts: {
+            /** 覆蓋 layer.prompt 作為重繪指令（文字編輯模式用，不污染圖層 prompt 欄位） */
+            promptOverride?: string;
+            /** 重繪後寫回圖層的新文字（文字編輯模式用） */
+            textUpdate?: string;
+            /** 文字編輯：整張圖重繪、輸出直接當結果（對標競品，能處理字數變化） */
+            textEdit?: boolean;
+        } = {},
+    ) => {
         if (engine === 'gpt'    && !atlasApiKey)  throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
         if (engine === 'gemini' && !geminiApiKey) throw new Error('Gemini 重繪需要 Gemini API Key');
+
+        const effectivePrompt = opts.promptOverride ?? layer.prompt;
 
         cancelledRef.current = false;
         const ctrl = new AbortController();
         abortCtrlRef.current = ctrl;
-        setStatus('regenerating', `重新生成「${layer.name}」...`);
+        setStatus('regenerating', opts.textUpdate !== undefined ? `重新生成文字「${layer.name}」...` : `重新生成「${layer.name}」...`);
 
         try {
             // Gemini 路線：用 LaMa 填補舊物件區域，讓它真正消失
@@ -299,7 +340,7 @@ export function useSemanticEditor({
             const result = await regenerateLayer({
                 layer,
                 originalBase64: state.compositeBase64,
-                newPrompt: layer.prompt,
+                newPrompt: effectivePrompt,
                 engine,
                 atlasApiKey,
                 geminiApiKey,
@@ -309,6 +350,7 @@ export function useSemanticEditor({
                 signal:    ctrl.signal,
                 onProgress: msg => { if (!cancelledRef.current) setStatus('regenerating', msg); },
                 referenceImage: layer.referenceImage,
+                textEdit:  opts.textEdit,
             });
 
             // 使用者已按取消，忽略結果
@@ -325,7 +367,8 @@ export function useSemanticEditor({
                 l.id === layer.id
                     ? { ...l, base64: result.newLayerBase64, cropRatio: result.newCropRatio,
                         pixelWidth: result.pixelWidth, pixelHeight: result.pixelHeight,
-                        appliedPrompt: layer.prompt, history: [...l.history, layerVersion] }
+                        appliedPrompt: layer.prompt, history: [...l.history, layerVersion],
+                        ...(opts.textUpdate !== undefined && { text: opts.textUpdate }) }
                     : l
             );
 
@@ -334,8 +377,8 @@ export function useSemanticEditor({
             const newVersion: EditorVersion = {
                 id:               `ev_${Date.now()}`,
                 timestamp:        Date.now(),
-                changedLayerName: layer.name,
-                prompt:           layer.prompt,
+                changedLayerName: opts.textUpdate !== undefined ? `文字：${layer.name}` : layer.name,
+                prompt:           effectivePrompt,
                 compositeBase64:  result.newCompositeBase64,
                 backgroundBase64: result.newCompositeBase64,
                 layers:           freshLayers,
@@ -362,6 +405,34 @@ export function useSemanticEditor({
             throw e;
         }
     }, [state.compositeBase64, state.layers, state.versions.length, geminiApiKey, atlasApiKey, falApiKey, imageModel, setStatus]);
+
+    // ── 文字編輯 Apply（只換框內文字、保留字體/排版）────────────────────────────
+    // 走與 applyLayerRegen 相同的 mask + inpaint 路線，只是自動構造「替換文字」prompt，
+    // 並把新文字寫回 layer.text。不污染 layer.prompt（物件模式仍可用原描述重繪）。
+    const applyTextLayerEdit = useCallback(async (
+        layer: SmartLayer,
+        newText: string,
+        engine: 'gpt' | 'gemini' = 'gpt',
+    ) => {
+        const original = (layer.text ?? '').trim();
+        const target   = newText.trim();
+        // 整張圖重繪指令（對標競品）：換文字 + 字數不同就自然調整大小/間距、其餘嚴格不動。
+        const prompt = [
+            original
+                ? `In this image, replace the text "${original}" with "${target}".`
+                : `In this image, set the indicated text to "${target}".`,
+            'Render the new text at the same location, in the same font family, weight, color and visual style as the original text it replaces.',
+            'If the new text has more or fewer characters than the original, adjust its font size, letter spacing and line breaks naturally so it fits the available area cleanly — like a designer would — do NOT squeeze, stretch, clip, or overlap it.',
+            'Keep EVERY other element — all other text, icons, tables, lines, photos, colors and background — exactly identical to the original image.',
+            'Output the full edited image at the same dimensions and overall layout.',
+        ].join(' ');
+        // 文字編輯走「整張圖重繪 → 輸出直接當結果」，能自然處理字數變化、無接縫。
+        return applyLayerRegen(layer, engine, {
+            promptOverride: prompt,
+            textUpdate: target,
+            textEdit: true,
+        });
+    }, [applyLayerRegen]);
 
     // ── 批次 Apply（所有 prompt 已修改但未套用的圖層）────────────────────────
     const applyAllDirtyLayers = useCallback(async (engine: 'gpt' | 'gemini' = 'gpt') => {
@@ -734,10 +805,12 @@ export function useSemanticEditor({
         isLoading,
         dirtyCount,
         analyzeImage,
+        analyzeTextRegions,
         selectLayer,
         updatePrompt,
         updateReferenceImage,
         applyLayerRegen,
+        applyTextLayerEdit,
         applyAllDirtyLayers,
         switchVersion,
         switchToOriginal,

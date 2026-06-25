@@ -143,19 +143,75 @@ function FloatingPromptBox({
     onApply,
     isRegenerating,
     onReferenceImageChange,
+    textMode = false,
+    onApplyText,
 }: {
     layer: SmartLayer;
     onPromptChange: (id: string, v: string) => void;
     onApply: (layer: SmartLayer) => void;
     isRegenerating: boolean;
     onReferenceImageChange: (id: string, img: string | undefined) => void;
+    /** 文字編輯模式：顯示「文字內容」編輯框，套用時只換文字 */
+    textMode?: boolean;
+    onApplyText?: (layer: SmartLayer, newText: string) => void;
 }) {
+    // 文字模式的本地編輯值（切換圖層時重置為該層的原始文字）
+    const [textVal, setTextVal] = React.useState(layer.text ?? '');
+    React.useEffect(() => { setTextVal(layer.text ?? ''); }, [layer.id, layer.text]);
+
     // 浮動 Prompt 框定位：用 cropRatio（緊貼物件邊緣）
     const cr = layer.cropRatio;
     const toRight = cr.x + cr.w < 0.70;
     const posStyle: React.CSSProperties = toRight
         ? { left: `calc(${(cr.x + cr.w) * 100}% + 12px)`, top: `${cr.y * 100}%` }
         : { right: `calc(${(1 - cr.x) * 100}% + 12px)`, top: `${cr.y * 100}%` };
+
+    // ── 文字編輯模式：簡化彈窗（原文 → 可編輯文字 → 套用）──────────────────────
+    if (textMode) {
+        return (
+            <div
+                style={{
+                    position: 'absolute', ...posStyle,
+                    background: 'white', borderRadius: 16,
+                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.10), 0 0 1px rgba(0,0,0,0.10)',
+                    padding: '16px 16px 14px', width: 260, zIndex: 20,
+                }}
+                onClick={e => e.stopPropagation()}
+            >
+                <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 10px 0', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    文字內容
+                </p>
+                <textarea
+                    rows={3}
+                    value={textVal}
+                    onChange={e => setTextVal(e.target.value)}
+                    autoFocus
+                    style={{
+                        width: '100%', fontSize: 14, color: '#1f2937',
+                        border: '1px solid #e5e7eb', borderRadius: 12, outline: 'none',
+                        resize: 'none', background: '#f9fafb', lineHeight: 1.6,
+                        fontFamily: 'inherit', boxSizing: 'border-box', padding: '10px 12px',
+                    }}
+                    placeholder="輸入要替換成的文字..."
+                />
+                <button
+                    onClick={() => onApplyText?.(layer, textVal)}
+                    disabled={isRegenerating || !textVal.trim()}
+                    style={{
+                        marginTop: 12, width: '100%', height: 36, borderRadius: 10,
+                        fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', gap: 5, border: 'none',
+                        cursor: (isRegenerating || !textVal.trim()) ? 'not-allowed' : 'pointer',
+                        background: (isRegenerating || !textVal.trim()) ? '#e5e7eb' : '#111827',
+                        color: (isRegenerating || !textVal.trim()) ? '#9ca3af' : '#ffffff',
+                        transition: 'all 0.15s',
+                    }}
+                >
+                    {isRegenerating ? <><Ic.Spinner /> 生成中...</> : <><Ic.Wand /> 套用文字</>}
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div
@@ -776,6 +832,7 @@ function PillToolbar({
 }) {
     const tools = [
         { id: 'select',  icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12.586 12.586 19 19"/><path d="M3.688 3.037a.497.497 0 0 0-.651.651l6.5 15.999a.501.501 0 0 0 .947-.062l1.569-6.083a2 2 0 0 1 1.448-1.479l6.124-1.579a.5.5 0 0 0 .063-.947z"/></svg>, label: '選取圖層 (Select Layer)',     onClick: () => onTool('select'), disabled: false },
+        { id: 'text',    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>, label: '文字編輯 (Text Edit)',         onClick: () => onTool('text'),   disabled: false },
         { id: 'refresh', icon: isAnalyzing ? <Ic.Spinner /> : <Icon name="split_scene_2" size={20} />, label: '全圖分析 (Analyze)',           onClick: onReanalyze, disabled: false },
         { id: 'sam2',    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12.034 12.681a.498.498 0 0 1 .647-.647l9 3.5a.5.5 0 0 1-.033.943l-3.444 1.068a1 1 0 0 0-.66.66l-1.067 3.443a.5.5 0 0 1-.943.033z"/><path d="M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/></svg>, label: '智能點選 (Auto Segment)',      onClick: () => onTool('sam2'),   disabled: false },
         { id: 'rect',    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg>, label: '矩形框選 (Bounding Box)',      onClick: () => onTool('rect'),   disabled: false },
@@ -920,10 +977,12 @@ export function SemanticEditorView({
         selectedLayer,
         isLoading,
         analyzeImage,
+        analyzeTextRegions,
         selectLayer,
         updatePrompt,
         updateReferenceImage,
         applyLayerRegen,
+        applyTextLayerEdit,
         cancelOperation,
         switchVersion,
         switchToOriginal,
@@ -1222,6 +1281,18 @@ export function SemanticEditorView({
         });
     }, [inpaintEngine, atlasApiKey, geminiApiKey, falApiKey, applyLayerRegen, showToast]);
 
+    // 文字編輯 Apply（文字模式專用：只換框內文字）
+    const handleApplyText = useCallback((layer: SmartLayer, newText: string) => {
+        if (!newText.trim()) { showToast('⚠️ 請輸入文字內容'); return; }
+        // 文字編輯優先用 Gemini（gemini-3.x-flash-image，最擅長只改文字、其餘不動且會自然
+        // reflow）；文字偵測本來就需要 Gemini key，所以幾乎都有。沒有才退回 GPT/Atlas。
+        const textEngine: 'gpt' | 'gemini' = geminiApiKey ? 'gemini' : 'gpt';
+        if (textEngine === 'gpt' && !atlasApiKey) { showToast('⚠️ 文字編輯需要 Gemini 或 Atlas API Key'); return; }
+        applyTextLayerEdit(layer, newText, textEngine).catch(e => {
+            showToast(`❌ 文字重繪失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
+        });
+    }, [atlasApiKey, geminiApiKey, applyTextLayerEdit, showToast]);
+
     // Apply All（批次）
     const handleApplyAll = useCallback(() => {
         if (inpaintEngine === 'gpt'    && !atlasApiKey)  { showToast('⚠️ GPT 重繪需要 Atlas API Key'); return; }
@@ -1290,6 +1361,20 @@ export function SemanticEditorView({
         // 找所有可見圖層中包含該點的，取 zIndex 最高的
         const hit = [...state.layers]
             .filter(l => l.isVisible && !l.isLocked)
+            .filter(l => relX >= l.cropRatio.x && relX <= l.cropRatio.x + l.cropRatio.w
+                      && relY >= l.cropRatio.y && relY <= l.cropRatio.y + l.cropRatio.h)
+            .sort((a, b) => b.zIndex - a.zIndex)[0];
+        selectLayer(hit?.id ?? null);
+    }, [state.layers, getImgCoords, selectLayer]);
+
+    // 文字模式：點擊畫布只選中 TEXT 類圖層（取 zIndex 最高的）
+    const handleTextSelectClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        e.stopPropagation();
+        const c = getImgCoords(e);
+        if (!c) return;
+        const { relX, relY } = c;
+        const hit = [...state.layers]
+            .filter(l => l.category === 'TEXT' && l.isVisible && !l.isLocked)
             .filter(l => relX >= l.cropRatio.x && relX <= l.cropRatio.x + l.cropRatio.w
                       && relY >= l.cropRatio.y && relY <= l.cropRatio.y + l.cropRatio.h)
             .sort((a, b) => b.zIndex - a.zIndex)[0];
@@ -1443,6 +1528,14 @@ export function SemanticEditorView({
     }, [multiPoints, useOnnxSAM2, addPointsLayer, runOnnxAndAddLayer, showToast]);
 
     // 工具切換
+    // 文字掃描（進入文字模式時自動觸發；只需 Gemini，跳過 SAM2）
+    const handleScanText = useCallback(() => {
+        if (!geminiApiKey) { showToast('⚠️ 文字掃描需要 Gemini API Key'); return; }
+        analyzeTextRegions().catch(e => {
+            showToast(`❌ 文字掃描失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
+        });
+    }, [geminiApiKey, analyzeTextRegions, showToast]);
+
     const handleToolChange = useCallback((tool: string) => {
         setActiveTool(tool);
         setSam2Mode(tool === 'sam2');
@@ -1460,7 +1553,12 @@ export function SemanticEditorView({
             ctx?.clearRect(0, 0, brushCanvasRef.current.width, brushCanvasRef.current.height);
         }
         if (!['sam2', 'rect', 'points', 'brush'].includes(tool)) selectLayer(null);
-    }, [selectLayer]);
+        // 進入文字模式且尚未做過逐塊文字掃描 → 自動掃描全圖文字
+        // （物件分析的 TEXT 層粒度不對，不算數，仍要重新逐塊掃）
+        if (tool === 'text' && !isLoading && !state.layers.some(l => l.fromTextScan)) {
+            handleScanText();
+        }
+    }, [selectLayer, isLoading, state.layers, handleScanText]);
 
     // C：筆塗 handlers
     const getBrushPos = useCallback((e: React.MouseEvent | MouseEvent) => {
@@ -1902,11 +2000,13 @@ export function SemanticEditorView({
                                 : activeTool === 'rect' ? 'crosshair'
                                 : activeTool === 'points' ? 'cell'
                                 : activeTool === 'select' ? 'pointer'
+                                : activeTool === 'text' ? 'pointer'
                                 : 'default',
                         }}
                         onClick={activeTool === 'sam2'    ? handleCanvasClick
                                : activeTool === 'points'  ? handlePointsClick
                                : activeTool === 'select'  ? handleSelectClick
+                               : activeTool === 'text'    ? handleTextSelectClick
                                : (e => e.stopPropagation())}
                         onMouseDown={activeTool === 'rect'  ? handleRectMouseDown
                                    : activeTool === 'brush' ? handleBrushMouseDown : undefined}
@@ -1932,6 +2032,28 @@ export function SemanticEditorView({
                             }}>
                                 {activeTool === 'sam2' && '點擊任意物件新增圖層'}
                                 {activeTool === 'rect' && '拖曳畫框選取物件範圍'}
+                            </div>
+                        )}
+
+                        {/* 文字模式提示條 */}
+                        {activeTool === 'text' && !isLoading && !selectedLayer && (
+                            <div style={{
+                                position: 'absolute', top: 12, left: '50%',
+                                transform: 'translateX(-50%)',
+                                zIndex: 20,
+                                background: 'rgba(5,150,105,0.82)',
+                                backdropFilter: 'blur(10px)',
+                                color: '#fff', fontSize: 11, fontWeight: 500,
+                                letterSpacing: '0.02em',
+                                padding: '5px 16px', borderRadius: 9999,
+                                lineHeight: '1',
+                                pointerEvents: 'none', whiteSpace: 'nowrap',
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+                            }}>
+                                {state.layers.some(l => l.category === 'TEXT')
+                                    ? '點選文字方塊以編輯文字'
+                                    : '未偵測到文字（再次點擊「文字編輯」可重掃）'}
                             </div>
                         )}
 
@@ -2376,15 +2498,34 @@ export function SemanticEditorView({
                             />
                         )}
 
-                        {/* 未選取：所有圖層的 hover 可點擊區域 */}
-                        {!selectedLayer && state.layers.filter(l => l.isVisible && !l.isLocked).map(l => (
+                        {/* 未選取（非文字模式）：所有圖層的 hover 可點擊區域 */}
+                        {!selectedLayer && activeTool !== 'text' && state.layers.filter(l => l.isVisible && !l.isLocked).map(l => (
                             <React.Fragment key={l.id}><HoverHitArea layer={l} onSelect={() => selectLayer(l.id)} /></React.Fragment>
                         ))}
+
+                        {/* 文字模式：把所有 TEXT 圖層用虛線框標示（點擊由 canvas 處理） */}
+                        {activeTool === 'text' && !selectedLayer && state.layers
+                            .filter(l => l.category === 'TEXT' && l.isVisible && !l.isLocked)
+                            .map(l => (
+                                <div key={l.id} style={{
+                                    position: 'absolute',
+                                    left:   `${l.cropRatio.x * 100}%`,
+                                    top:    `${l.cropRatio.y * 100}%`,
+                                    width:  `${l.cropRatio.w * 100}%`,
+                                    height: `${l.cropRatio.h * 100}%`,
+                                    border: '2px dashed #059669',
+                                    borderRadius: 4,
+                                    background: 'rgba(5,150,105,0.06)',
+                                    pointerEvents: 'none',
+                                    boxSizing: 'border-box',
+                                }} />
+                            ))
+                        }
 
                         {/* BBox 選取框 */}
                         {selectedLayer && <BBoxOverlay layer={selectedLayer} />}
 
-                        {/* 浮動 Prompt 框 */}
+                        {/* 浮動 Prompt 框（文字模式顯示文字編輯框） */}
                         {selectedLayer && (
                             <FloatingPromptBox
                                 layer={selectedLayer}
@@ -2392,6 +2533,8 @@ export function SemanticEditorView({
                                 onApply={handleApply}
                                 isRegenerating={isRegenerating}
                                 onReferenceImageChange={updateReferenceImage}
+                                textMode={activeTool === 'text'}
+                                onApplyText={handleApplyText}
                             />
                         )}
                     </div>

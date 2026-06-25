@@ -206,6 +206,11 @@ export interface SmartLayer {
   pixelWidth?: number;
   pixelHeight?: number;
 
+  /** OCR 出的原始文字內容（僅 TEXT 類圖層有值；文字編輯模式用） */
+  text?: string;
+  /** 由「文字編輯」模式的逐塊文字偵測產生（與物件分析的 TEXT 層區分） */
+  fromTextScan?: boolean;
+
   /** 使用者上傳的參考圖（壓縮後 base64，傳給 Atlas inpaint） */
   referenceImage?: string;
   /** 歷次重生成的快照（最新在最後） */
