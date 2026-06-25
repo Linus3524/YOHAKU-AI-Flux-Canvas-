@@ -186,10 +186,12 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
   const [modelStatuses, setModelStatuses] = useState<Record<OnnxModelKey, ModelStatus>>({
       lama: 'not_downloaded', sam2_encoder: 'not_downloaded', sam2_decoder: 'not_downloaded',
       upscale_photo: 'not_downloaded', upscale_anime: 'not_downloaded', upscale_art: 'not_downloaded',
+      ocr_det: 'not_downloaded', ocr_rec: 'not_downloaded', ocr_dict: 'not_downloaded',
   });
   const [modelProgress, setModelProgress] = useState<Record<OnnxModelKey, number>>({
       lama: 0, sam2_encoder: 0, sam2_decoder: 0,
       upscale_photo: 0, upscale_anime: 0, upscale_art: 0,
+      ocr_det: 0, ocr_rec: 0, ocr_dict: 0,
   });
 
   // 開啟本機模型分頁時初始化狀態
@@ -1060,6 +1062,121 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                             重試
                           </button>
                         )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 本機 OCR 文字辨識 (PaddleOCR) */}
+                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[13px] font-bold text-gray-900">本機 OCR 文字辨識 (PaddleOCR)</span>
+                        {modelStatuses.ocr_det === 'ready' && modelStatuses.ocr_rec === 'ready' && modelStatuses.ocr_dict === 'ready' && (
+                          <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">已安裝</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-500">本機執行 OCR 文字檢測與辨識，無須上傳雲端，零延遲且保護隱私。共 ~15.4MB。下載後自動啟用。</p>
+                    </div>
+                    {/* 一鍵下載 / 一鍵刪除 */}
+                    <div className="flex-shrink-0">
+                      {!(modelStatuses.ocr_det === 'ready' && modelStatuses.ocr_rec === 'ready' && modelStatuses.ocr_dict === 'ready') ? (
+                        (modelStatuses.ocr_det === 'downloading' || modelStatuses.ocr_rec === 'downloading' || modelStatuses.ocr_dict === 'downloading') ? (
+                          <span className="text-[11px] text-blue-500 font-medium">下載中...</span>
+                        ) : (
+                          <button onClick={async () => {
+                            try {
+                              // 一鍵下載
+                              await downloadModel('ocr_dict', (pct) => {
+                                setModelStatuses(s => ({ ...s, ocr_dict: 'downloading' }));
+                                setModelProgress(p => ({ ...p, ocr_dict: pct }));
+                              });
+                              setModelStatuses(s => ({ ...s, ocr_dict: 'ready' }));
+
+                              await downloadModel('ocr_det', (pct) => {
+                                setModelStatuses(s => ({ ...s, ocr_det: 'downloading' }));
+                                setModelProgress(p => ({ ...p, ocr_det: pct }));
+                              });
+                              setModelStatuses(s => ({ ...s, ocr_det: 'ready' }));
+
+                              await downloadModel('ocr_rec', (pct) => {
+                                setModelStatuses(s => ({ ...s, ocr_rec: 'downloading' }));
+                                setModelProgress(p => ({ ...p, ocr_rec: pct }));
+                              });
+                              setModelStatuses(s => ({ ...s, ocr_rec: 'ready' }));
+                            } catch (e) {
+                              console.error('OCR 下載失敗', e);
+                              setModelStatuses(s => {
+                                const next = { ...s };
+                                if (next.ocr_dict === 'downloading') next.ocr_dict = 'error';
+                                if (next.ocr_det === 'downloading') next.ocr_det = 'error';
+                                if (next.ocr_rec === 'downloading') next.ocr_rec = 'error';
+                                return next;
+                              });
+                            }
+                          }}
+                            className="text-[11px] font-semibold px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors">
+                            下載
+                          </button>
+                        )
+                      ) : (
+                        <button onClick={async () => {
+                          await deleteModel('ocr_dict');
+                          await deleteModel('ocr_det');
+                          await deleteModel('ocr_rec');
+                          setModelStatuses(s => ({
+                            ...s,
+                            ocr_dict: 'not_downloaded',
+                            ocr_det: 'not_downloaded',
+                            ocr_rec: 'not_downloaded',
+                          }));
+                          setModelProgress(p => ({
+                            ...p,
+                            ocr_dict: 0,
+                            ocr_det: 0,
+                            ocr_rec: 0,
+                          }));
+                        }}
+                          className="text-[11px] text-gray-400 hover:text-red-500 transition-colors">
+                          刪除
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 列出三個資源的各自狀態與進度條 */}
+                  {(['ocr_dict', 'ocr_det', 'ocr_rec'] as OnnxModelKey[]).map(key => {
+                    const cfg = MODEL_CONFIGS[key];
+                    const status = modelStatuses[key];
+                    const progress = modelProgress[key];
+                    return (
+                      <div key={key} className="flex items-center gap-3 pl-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between text-[11px] mb-1">
+                            <span className="text-gray-600 font-medium">{cfg.name}</span>
+                            <span className="text-gray-400">{cfg.sizeMB}MB</span>
+                          </div>
+                          {status === 'downloading' && (
+                            <div className="w-full bg-gray-100 rounded-full h-1.5">
+                              <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="w-12 text-right flex-shrink-0">
+                          {status === 'not_downloaded' && (
+                            <span className="text-[10px] text-gray-400">未下載</span>
+                          )}
+                          {status === 'downloading' && (
+                            <span className="text-[10px] text-blue-500 font-medium">{progress}%</span>
+                          )}
+                          {status === 'ready' && (
+                            <span className="text-[10px] text-green-600 font-medium">就緒</span>
+                          )}
+                          {status === 'error' && (
+                            <span className="text-[10px] text-red-500 font-medium">失敗</span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

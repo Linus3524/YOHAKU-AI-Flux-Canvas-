@@ -162,9 +162,16 @@ function FloatingPromptBox({
     // 浮動 Prompt 框定位：用 cropRatio（緊貼物件邊緣）
     const cr = layer.cropRatio;
     const toRight = cr.x + cr.w < 0.70;
-    const posStyle: React.CSSProperties = toRight
-        ? { left: `calc(${(cr.x + cr.w) * 100}% + 12px)`, top: `${cr.y * 100}%` }
-        : { right: `calc(${(1 - cr.x) * 100}% + 12px)`, top: `${cr.y * 100}%` };
+    const isLowerHalf = (cr.y + cr.h / 2) > 0.5;
+    const posStyle: React.CSSProperties = {
+        position: 'absolute',
+        ...(toRight
+            ? { left: `calc(${(cr.x + cr.w) * 100}% + 12px)` }
+            : { right: `calc(${(1 - cr.x) * 100}% + 12px)` }),
+        ...(isLowerHalf
+            ? { bottom: `${(1 - cr.y - cr.h) * 100}%` }
+            : { top: `${cr.y * 100}%` }),
+    };
 
     // ── 文字編輯模式：簡化彈窗（原文 → 可編輯文字 → 套用）──────────────────────
     if (textMode) {
@@ -1552,12 +1559,14 @@ export function SemanticEditorView({
             ctx?.clearRect(0, 0, brushCanvasRef.current.width, brushCanvasRef.current.height);
         }
         if (!['sam2', 'rect', 'points', 'brush'].includes(tool)) selectLayer(null);
-        // 進入文字模式且尚未做過逐塊文字掃描 → 自動掃描全圖文字
-        // （物件分析的 TEXT 層粒度不對，不算數，仍要重新逐塊掃）
-        if (tool === 'text' && !isLoading && !state.layers.some(l => l.fromTextScan)) {
-            handleScanText();
+        // 進入文字模式且尚未做過逐塊文字掃描，或已在文字模式再次點擊 → 自動/重新掃描全圖文字
+        if (tool === 'text' && !isLoading) {
+            const hasTextScan = state.layers.some(l => l.fromTextScan);
+            if (activeTool === 'text' || !hasTextScan) {
+                handleScanText();
+            }
         }
-    }, [selectLayer, isLoading, state.layers, handleScanText]);
+    }, [selectLayer, isLoading, state.layers, handleScanText, activeTool]);
 
     // C：筆塗 handlers
     const getBrushPos = useCallback((e: React.MouseEvent | MouseEvent) => {
@@ -1995,6 +2004,8 @@ export function SemanticEditorView({
                             boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
                             lineHeight: 0,
                             maxWidth: '100%',
+                            width: 'fit-content',
+                            height: 'fit-content',
                             cursor: activeTool === 'sam2' ? 'crosshair'
                                 : activeTool === 'rect' ? 'crosshair'
                                 : activeTool === 'points' ? 'cell'
@@ -2341,9 +2352,10 @@ export function SemanticEditorView({
                             onDragStart={e => e.preventDefault()}
                             style={{
                                 display: 'block',
+                                width: 'auto',
+                                height: 'auto',
                                 maxWidth: '100%',
                                 maxHeight: 'calc(100vh - 180px)',
-                                objectFit: 'contain',
                                 userSelect: 'none',
                                 WebkitUserDrag: 'none',
                                 opacity: selectedLayer ? 0.5 : 1,
@@ -2489,7 +2501,6 @@ export function SemanticEditorView({
                                     inset: 0,
                                     width: '100%',
                                     height: '100%',
-                                    objectFit: 'contain',
                                     pointerEvents: 'none',
                                     // clip-path 也用 cropRatio，讓高亮區域與選取框一致
                                     clipPath: `inset(${selectedLayer.cropRatio.y * 100}% ${(1 - selectedLayer.cropRatio.x - selectedLayer.cropRatio.w) * 100}% ${(1 - selectedLayer.cropRatio.y - selectedLayer.cropRatio.h) * 100}% ${selectedLayer.cropRatio.x * 100}%)`,

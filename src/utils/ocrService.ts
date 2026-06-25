@@ -19,6 +19,33 @@ export async function detectTextBlocks(
     imageBase64: string,
     apiKey: string,
 ): Promise<OcrBlock[]> {
+    // 優先檢查並使用本機 WASM/ONNX OCR 推論
+    try {
+        const { getModelStatus } = await import('./onnxModelCache');
+        const [det, rec, dict] = await Promise.all([
+            getModelStatus('ocr_det'),
+            getModelStatus('ocr_rec'),
+            getModelStatus('ocr_dict'),
+        ]);
+
+        if (det === 'ready' && rec === 'ready' && dict === 'ready') {
+            console.log('[OCR] 本機 OCR 模型已就緒，使用本機 WebAssembly/ONNX 推論...');
+            const { runOcrInWorker } = await import('./ocrWorkerClient');
+            const localBlocks = await runOcrInWorker(imageBase64);
+            if (localBlocks && localBlocks.length > 0) {
+                console.log(`[OCR] 本機推論成功，偵測到 ${localBlocks.length} 個文字區塊`);
+                return localBlocks;
+            }
+            console.log('[OCR] 本機推論未偵測到任何文字，將嘗試使用 Gemini 進行二次比對...');
+        }
+    } catch (e) {
+        console.warn('[OCR] 本機 OCR 推論失敗，將自動降級使用 Gemini API:', e);
+    }
+
+    if (!apiKey) {
+        throw new Error('本地 OCR 尚未安裝且未提供 Gemini API Key，無法進行文字辨識。');
+    }
+
     const ai = new GoogleGenAI({ apiKey });
     const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
     const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';

@@ -684,7 +684,7 @@ Return ONLY a valid JSON array (no markdown):
         if (Array.isArray(b.box_2d) && b.box_2d.length === 4) {
             let [ymin, xmin, ymax, xmax] = b.box_2d.map((n: number) => Number(n) / 1000);
             if (xmax < xmin) [xmin, xmax] = [xmax, xmin];
-            if (ymax < ymin) [ymin, ymax] = [ymax, ymin];
+            if (ymax < ymin) [ymin, ymax] = [ymin, ymax];
             return { x: xmin, y: ymin, w: xmax - xmin, h: ymax - ymin };
         }
         if (b.bbox && typeof b.bbox.x === 'number') {
@@ -715,6 +715,126 @@ Return ONLY a valid JSON array (no markdown):
 }
 
 /**
+ * 使用 binarization-based text contour finder 演算法精確優化 Gemini 的文字 BBox 坐標
+ */
+async function refineTextBBox(
+    img: HTMLImageElement,
+    bbox: { x: number; y: number; w: number; h: number }
+): Promise<{ x: number; y: number; w: number; h: number }> {
+    const W = img.naturalWidth;
+    const H = img.naturalHeight;
+    if (!W || !H) return bbox;
+
+    // 1) 垂直與水平方向適度外擴，建立足夠的背景取樣緩衝區
+    // 垂直方向外擴 60% 高度以包容 y 軸漂移，水平外擴 15% 寬度
+    const padY = Math.max(0.02, bbox.h * 0.6);
+    const padX = Math.max(0.015, bbox.w * 0.15);
+
+    const ex = {
+        x: Math.max(0, bbox.x - padX),
+        y: Math.max(0, bbox.y - padY),
+        w: 0,
+        h: 0,
+    };
+    ex.w = Math.min(1 - ex.x, bbox.w + padX * 2);
+    ex.h = Math.min(1 - ex.y, bbox.h + padY * 2);
+
+    const cropW = Math.round(ex.w * W);
+    const cropH = Math.round(ex.h * H);
+    if (cropW <= 2 || cropH <= 2) return bbox;
+
+    // 2) 繪製至記憶體 canvas 以讀取像素
+    const canvas = document.createElement('canvas');
+    canvas.width = cropW;
+    canvas.height = cropH;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, Math.round(ex.x * W), Math.round(ex.y * H), cropW, cropH, 0, 0, cropW, cropH);
+
+    let pixels: Uint8ClampedArray;
+    try {
+        pixels = ctx.getImageData(0, 0, cropW, cropH).data;
+    } catch (err) {
+        console.warn('[refineTextBBox] getImageData failed:', err);
+        return bbox;
+    }
+
+    // 3) 計算水平與垂直梯度投影（X/Y 邊緣投影）
+    const rowGrads = new Float32Array(cropH);
+    const colGrads = new Float32Array(cropW);
+
+    for (let y = 0; y < cropH; y++) {
+        for (let x = 0; x < cropW; x++) {
+            const idx = (y * cropW + x) * 4;
+            const r = pixels[idx];
+            const g = pixels[idx + 1];
+            const b = pixels[idx + 2];
+
+            // 與右側像素的差值
+            if (x < cropW - 1) {
+                const idxR = idx + 4;
+                const rR = pixels[idxR];
+                const gR = pixels[idxR + 1];
+                const bR = pixels[idxR + 2];
+                const diff = Math.abs(r - rR) + Math.abs(g - gR) + Math.abs(b - bR);
+                rowGrads[y] += diff;
+                colGrads[x] += diff;
+            }
+
+            // 與下方像素的差值
+            if (y < cropH - 1) {
+                const idxB = idx + cropW * 4;
+                const rB = pixels[idxB];
+                const gB = pixels[idxB + 1];
+                const bB = pixels[idxB + 2];
+                const diff = Math.abs(r - rB) + Math.abs(g - gB) + Math.abs(b - bB);
+                rowGrads[y] += diff;
+                colGrads[x] += diff;
+            }
+        }
+    }
+
+    // 4) 尋找有效的邊緣邊界（過濾掉空白/背景雜訊）
+    let maxRowGrad = 0;
+    for (let y = 0; y < cropH; y++) {
+        if (rowGrads[y] > maxRowGrad) maxRowGrad = rowGrads[y];
+    }
+    let maxColGrad = 0;
+    for (let x = 0; x < cropW; x++) {
+        if (colGrads[x] > maxColGrad) maxColGrad = colGrads[x];
+    }
+
+    // 門檻值設定為最大邊緣強度的 8%，防止小噪點干擾，同時能抓到邊緣
+    const rowThresh = maxRowGrad * 0.08;
+    const colThresh = maxColGrad * 0.08;
+
+    let ymin = 0, ymax = cropH - 1;
+    while (ymin < cropH && rowGrads[ymin] < rowThresh) ymin++;
+    while (ymax > ymin && rowGrads[ymax] < rowThresh) ymax--;
+
+    let xmin = 0, xmax = cropW - 1;
+    while (xmin < cropW && colGrads[xmin] < colThresh) xmin++;
+    while (xmax > xmin && colGrads[xmax] < colThresh) xmax--;
+
+    // 確保範圍有效，否則 fallback
+    if (ymin >= ymax || xmin >= xmax) return bbox;
+
+    // 向外微調 3px 作為安全內襯 padding
+    const padding = 3;
+    ymin = Math.max(0, ymin - padding);
+    ymax = Math.min(cropH - 1, ymax + padding);
+    xmin = Math.max(0, xmin - padding);
+    xmax = Math.min(cropW - 1, xmax + padding);
+
+    // 5) 對應回原始圖片比例 0~1
+    return {
+        x: ex.x + (xmin / cropW) * ex.w,
+        y: ex.y + (ymin / cropH) * ex.h,
+        w: ((xmax - xmin + 1) / cropW) * ex.w,
+        h: ((ymax - ymin + 1) / cropH) * ex.h,
+    };
+}
+
+/**
  * 文字編輯模式入口：掃出每塊文字 → bbox 直接建層（矩形含背景，inpaint 重繪時需要底色）。
  * 不跑 SAM2，只需 Gemini Key。每層標 fromTextScan，與物件分析的 TEXT 層區分。
  */
@@ -733,17 +853,21 @@ export async function detectTextRegions({
 
     const dims = await getImageDims(imageBase64);
     const layers: SmartLayer[] = [];
+    const img = await loadImg(imageBase64);
+
     for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];
         try {
-            const crop = await cropToBBox(imageBase64, b.bbox);
-            const full = await placeInFullCanvas(crop, dims.w, dims.h, b.bbox);
+            // 使用投影演算法精細修正 BBox
+            const refinedBBox = await refineTextBBox(img, b.bbox);
+            const crop = await cropToBBox(imageBase64, refinedBBox);
+            const full = await placeInFullCanvas(crop, dims.w, dims.h, refinedBBox);
             const layer = await buildSmartLayer(full, {
                 name:        b.label,
                 category:    'TEXT',
                 description: b.description || b.label,
                 text:        b.text,
-                bbox:        b.bbox,
+                bbox:        refinedBBox,
                 zIndex:      100 + i,   // 文字疊在物件之上
             });
             layers.push({ ...layer, fromTextScan: true });

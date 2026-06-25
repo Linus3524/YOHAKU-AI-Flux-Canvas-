@@ -17,7 +17,10 @@ export type OnnxModelKey =
     | 'sam2_decoder'
     | 'upscale_photo'
     | 'upscale_anime'
-    | 'upscale_art';
+    | 'upscale_art'
+    | 'ocr_det'
+    | 'ocr_rec'
+    | 'ocr_dict';
 
 /** 放大模型共用屬性：放大倍率 + 輸入張量名稱（推論時用） */
 export const UPSCALE_KEYS: OnnxModelKey[] = ['upscale_photo', 'upscale_anime', 'upscale_art'];
@@ -85,6 +88,30 @@ export const MODEL_CONFIGS: Record<OnnxModelKey, ModelConfig> = {
         cacheKey: 'onnx_upscale_purephoto_span_v1',
         sizeMB: 2,
     },
+    ocr_det: {
+        key: 'ocr_det',
+        name: '本機 OCR 文字偵測 (DBNet)',
+        description: '輕量級文字檢測模型，精確定位圖中所有文字區塊',
+        url: 'https://huggingface.co/SWHL/RapidOCR/resolve/main/PP-OCRv4/ch_PP-OCRv4_det_infer.onnx',
+        cacheKey: 'onnx_ocr_det_v4_1',
+        sizeMB: 4.6,
+    },
+    ocr_rec: {
+        key: 'ocr_rec',
+        name: '本機 OCR 文字辨識 (SVTR)',
+        description: '輕量級文字辨識與解碼模型，支援中、英、日等多語言',
+        url: 'https://huggingface.co/SWHL/RapidOCR/resolve/main/PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx',
+        cacheKey: 'onnx_ocr_rec_v4_1',
+        sizeMB: 10.5,
+    },
+    ocr_dict: {
+        key: 'ocr_dict',
+        name: '本機 OCR 字形字典',
+        description: '繁中/簡中/英文/數字共用字元字典檔',
+        url: 'https://huggingface.co/SWHL/RapidOCR/resolve/main/ppocr_keys_v1.txt',
+        cacheKey: 'onnx_ocr_dict_v4_1',
+        sizeMB: 0.3,
+    },
 };
 
 // 模型狀態
@@ -140,13 +167,17 @@ export async function downloadModel(
 
 /** 從 IndexedDB 載入 ONNX Session（需先下載） */
 export async function loadModel(key: OnnxModelKey): Promise<ort.InferenceSession> {
+    if (key === 'ocr_dict') {
+        throw new Error('ocr_dict 屬於字元字典文字檔，非 ONNX 模型，請使用 get 讀取 ArrayBuffer');
+    }
     const config = MODEL_CONFIGS[key];
     const cached = await get<ArrayBuffer>(config.cacheKey);
     if (!cached) throw new Error(`模型 ${config.name} 尚未下載，請先在「本機 AI 模型」下載`);
 
     // LaMa 的 FFC（Fast Fourier Convolution）包含 WebGPU 不支援的算子，強制 WASM
     // SAM2 正常走 WebGPU → WASM fallback
-    const providers: string[] = key === 'lama' ? ['wasm'] : ['webgpu', 'wasm'];
+    // OCR 模型為求穩定與極小尺寸，強制跑 WASM
+    const providers: string[] = (key === 'lama' || key === 'ocr_det' || key === 'ocr_rec') ? ['wasm'] : ['webgpu', 'wasm'];
 
     try {
         return await ort.InferenceSession.create(cached, {
@@ -167,6 +198,8 @@ export async function deleteModel(key: OnnxModelKey): Promise<void> {
  * 清除「孤兒」模型快取：IndexedDB 裡所有 onnx_ 開頭、但已不在現行 MODEL_CONFIGS 的快取。
  * 用於換模型後自動回收舊檔（如舊版相片/動漫模型），對所有使用者自動生效。
  * 回傳被清掉的 key 數量。
+ *
+ * (因字典為文字格式亦使用 onnx_ 前綴快取，會一同列入有效檢驗)
  */
 export async function cleanOrphanModelCaches(): Promise<number> {
     try {
@@ -189,7 +222,11 @@ export async function cleanOrphanModelCaches(): Promise<number> {
 
 /** 檢查所有模型的快取狀態 */
 export async function getAllModelStatuses(): Promise<Record<OnnxModelKey, ModelStatus>> {
-    const keys: OnnxModelKey[] = ['lama', 'sam2_encoder', 'sam2_decoder', 'upscale_photo', 'upscale_anime', 'upscale_art'];
+    const keys: OnnxModelKey[] = [
+        'lama', 'sam2_encoder', 'sam2_decoder',
+        'upscale_photo', 'upscale_anime', 'upscale_art',
+        'ocr_det', 'ocr_rec', 'ocr_dict'
+    ];
     const results = await Promise.all(keys.map(k => getModelStatus(k)));
     return Object.fromEntries(keys.map((k, i) => [k, results[i]])) as Record<OnnxModelKey, ModelStatus>;
 }
