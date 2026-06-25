@@ -354,14 +354,29 @@ const App: React.FC = () => {
     const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
     if (!el) return;
     // 優先從 ImageElement.semanticState 讀取（跨電腦/檔案）
-    if (el.semanticState && !savedSemanticStates[el.src.slice(0, 80)]) {
-      setSavedSemanticStates(prev => ({ ...prev, [el.src.slice(0, 80)]: el.semanticState! }));
+    const seedKey = semanticStateKey({ elementId: el.id, src: el.src });
+    if (el.semanticState && !savedSemanticStates[seedKey]) {
+      setSavedSemanticStates(prev => ({ ...prev, [seedKey]: el.semanticState! }));
     }
     setSemanticEditorTarget({ src: el.src, name: el.name || '圖片', elementId });
   }, [elements, savedSemanticStates]);
 
-  /** key 用 src 前 80 字元（避免太長） */
-  const semanticStateKey = (src: string) => src.slice(0, 80);
+  /** 狀態鍵：優先用畫布元素的唯一 id。
+   *  （不可用 src 前 80 字元：不同圖片的 base64 前綴常相同 → key 碰撞 → 不同圖片互相污染狀態）
+   *  無 elementId 時退回「完整 src」的 cyrb53 雜湊，仍能區分不同內容。 */
+  const hashStr = (s: string) => {
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+  };
+  const semanticStateKey = (t: { elementId?: string; src: string }) =>
+    t.elementId ? `el:${t.elementId}` : `src:${hashStr(t.src)}`;
 
   /** 把語意狀態同步寫回 ImageElement（方向 C：跟著圖片走，JSON/檔案都能帶走） */
   const syncSemanticStateToElement = useCallback((
@@ -388,12 +403,12 @@ const App: React.FC = () => {
     savedState?: { compositeBase64: string; backgroundBase64?: string; layers: import('./types').SmartLayer[]; originalLayers?: import('./types').SmartLayer[]; versions: import('./types').EditorVersion[] }
   ) => {
     if (save && savedState && semanticEditorTarget) {
-      const key = semanticStateKey(semanticEditorTarget.src);
+      const key = semanticStateKey(semanticEditorTarget);
       setSavedSemanticStates(prev => ({ ...prev, [key]: savedState }));
       // 同時寫回 ImageElement（持久化）
       syncSemanticStateToElement(semanticEditorTarget.elementId, savedState);
     } else if (!save && semanticEditorTarget) {
-      const key = semanticStateKey(semanticEditorTarget.src);
+      const key = semanticStateKey(semanticEditorTarget);
       setSavedSemanticStates(prev => {
         const next = { ...prev };
         delete next[key];
@@ -2432,7 +2447,7 @@ const App: React.FC = () => {
         originalBase64={semanticEditorTarget.src}
         imageName={semanticEditorTarget.name}
         onClose={handleCloseSemanticEditor}
-        initialState={savedSemanticStates[semanticStateKey(semanticEditorTarget.src)]}
+        initialState={savedSemanticStates[semanticStateKey(semanticEditorTarget)]}
         onImportToCanvas={(compositeBase64, currentState) => {
           // 新增到畫布（原圖右側）
           const origEl = elements.find(
@@ -2462,7 +2477,7 @@ const App: React.FC = () => {
 
           // 儲存當前編輯狀態（記憶體 + ImageElement 持久化）
           if (currentState && semanticEditorTarget) {
-            const key = semanticStateKey(semanticEditorTarget.src);
+            const key = semanticStateKey(semanticEditorTarget);
             setSavedSemanticStates(prev => ({ ...prev, [key]: currentState }));
             syncSemanticStateToElement(semanticEditorTarget.elementId, currentState);
           }

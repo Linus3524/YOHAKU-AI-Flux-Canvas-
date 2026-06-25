@@ -647,15 +647,22 @@ Find EVERY distinct block of text in the image. Return a TIGHT bounding box and 
 - ONE box per block. NEVER merge separate blocks into a single box, even if they are close together or stacked.
 - NEVER group a logo, icon, or graphic together with nearby text.
 - Do NOT skip small or edge text (page numbers, footers, corner labels). Include them ALL.
-- bbox = the TIGHTEST rectangle around the visible glyphs ONLY — no surrounding empty margin, no background padding. x,y = top-left corner (0.0–1.0 fraction). w,h = size fraction.
 - Transcribe verbatim: keep the original language, punctuation, casing. Use "\\n" for line breaks inside one block.
 - Return up to 30 blocks. Order them top-to-bottom, left-to-right.
+
+━━━ BOUNDING BOX (CRITICAL — READ CAREFULLY) ━━━
+- Provide "box_2d" as [ymin, xmin, ymax, xmax], each an INTEGER normalized to 0–1000
+  (ymin/ymax = vertical, xmin/xmax = horizontal; 0 = top/left edge, 1000 = bottom/right edge).
+- The box must hug the visible GLYPHS as tightly as possible: the top edge touches the
+  tallest glyph's top, the bottom edge touches the lowest descender, left edge touches the
+  first glyph, right edge touches the last glyph. NO surrounding margin, NO background padding,
+  NO empty space. If unsure, err on the side of TIGHTER, not looser.
 
 ━━━ LANGUAGE OF "label" ━━━
 Traditional Chinese (繁體中文), English, or Japanese ONLY. NEVER Simplified Chinese.
 
 Return ONLY a valid JSON array (no markdown):
-[{"label":"主標題","text":"2026年の日本","bbox":{"x":0.30,"y":0.18,"w":0.40,"h":0.06},"description":"large white serif headline line"}]`,
+[{"label":"主標題","text":"2026年の日本","box_2d":[180,300,235,700],"description":"large white serif headline line"}]`,
                 },
             ],
         },
@@ -666,25 +673,44 @@ Return ONLY a valid JSON array (no markdown):
     const match    = stripped.match(/\[[\s\S]*\]/);
     if (!match) return [];
 
-    let blocks: TextBlock[];
+    let blocks: any[];
     try { blocks = JSON.parse(match[0]); }
     catch { return []; }
     if (!Array.isArray(blocks)) return [];
 
+    // 把 Gemini 原生 box_2d [ymin,xmin,ymax,xmax]（0–1000 整數）轉成內部 {x,y,w,h}（0–1 小數）。
+    // 若模型仍回舊的 {x,y,w,h} 格式則沿用，確保不會整批失敗。
+    const toBbox = (b: any): { x: number; y: number; w: number; h: number } | null => {
+        if (Array.isArray(b.box_2d) && b.box_2d.length === 4) {
+            let [ymin, xmin, ymax, xmax] = b.box_2d.map((n: number) => Number(n) / 1000);
+            if (xmax < xmin) [xmin, xmax] = [xmax, xmin];
+            if (ymax < ymin) [ymin, ymax] = [ymax, ymin];
+            return { x: xmin, y: ymin, w: xmax - xmin, h: ymax - ymin };
+        }
+        if (b.bbox && typeof b.bbox.x === 'number') {
+            return { x: b.bbox.x, y: b.bbox.y, w: b.bbox.w, h: b.bbox.h };
+        }
+        return null;
+    };
+
     // 僅清理 bbox 範圍，不做任何合併/去重（保留逐塊粒度）
     return blocks
-        .filter(b => b && b.bbox && (b.text ?? '').toString().trim().length > 0)
-        .map(b => ({
-            label: (b.label ?? '文字').toString().trim() || '文字',
-            text:  b.text.toString(),
-            description: (b.description ?? b.label ?? '').toString(),
-            bbox: {
-                x: Math.max(0, Math.min(0.99, b.bbox.x ?? 0)),
-                y: Math.max(0, Math.min(0.99, b.bbox.y ?? 0)),
-                w: Math.max(0.005, Math.min(1, b.bbox.w ?? 0.1)),
-                h: Math.max(0.005, Math.min(1, b.bbox.h ?? 0.05)),
-            },
-        }))
+        .map(b => {
+            const raw = toBbox(b);
+            if (!raw || !(b.text ?? '').toString().trim()) return null;
+            return {
+                label: (b.label ?? '文字').toString().trim() || '文字',
+                text:  b.text.toString(),
+                description: (b.description ?? b.label ?? '').toString(),
+                bbox: {
+                    x: Math.max(0, Math.min(0.99, raw.x)),
+                    y: Math.max(0, Math.min(0.99, raw.y)),
+                    w: Math.max(0.005, Math.min(1, raw.w)),
+                    h: Math.max(0.005, Math.min(1, raw.h)),
+                },
+            } as TextBlock;
+        })
+        .filter((b): b is TextBlock => b !== null)
         .slice(0, 30);
 }
 
@@ -1312,9 +1338,41 @@ async function regenerateTextFullImageGemini({
     throw new Error('Gemini 未回傳圖片');
 }
 
+/** bbox 外擴（橫向給較多、縱向較少；文字主要往水平方向長），clamp 到 [0,1] */
+function expandBboxForText(
+    b: { x: number; y: number; w: number; h: number },
+    padX = 0.35,
+    padY = 0.15,
+): { x: number; y: number; w: number; h: number } {
+    const x = Math.max(0, b.x - b.w * padX);
+    const y = Math.max(0, b.y - b.h * padY);
+    return {
+        x, y,
+        w: Math.min(1 - x, b.w * (1 + padX * 2)),
+        h: Math.min(1 - y, b.h * (1 + padY * 2)),
+    };
+}
+
+/** 產生整圖黑底、bbox 處填白的矩形遮罩（白=inpaint 重繪區） */
+function solidRectMask(fullW: number, fullH: number, bbox: { x: number; y: number; w: number; h: number }): string {
+    const c = document.createElement('canvas');
+    c.width = fullW; c.height = fullH;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, fullW, fullH);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(
+        Math.round(bbox.x * fullW), Math.round(bbox.y * fullH),
+        Math.round(bbox.w * fullW), Math.round(bbox.h * fullH),
+    );
+    return c.toDataURL('image/png');
+}
+
 /**
- * 文字編輯（GPT 後備）：整張圖編輯，輸出直接當結果（不貼回）。
- * 透明遮罩稍微外擴，讓較長的新字有空間，避免被舊框卡住。
+ * 文字編輯（GPT 路徑）— 高保真局部重繪：
+ *  1. 遮罩 = 放大的「矩形」文字框（給較長新字 reflow 空間，非貼緊字的 glyph mask）
+ *  2. 舊字裁切 → 當「樣式參考圖」送入（GPT 看不到遮罩底下的舊字，靠這張對齊字體/顏色/風格）
+ *  3. 只把放大框那塊貼回原圖 → 框外像素 pixel 級不動，漂移侷限在文字框內
+ *  （不需 LaMa：遮罩區本來就被模型重新生成，舊字會被自然蓋掉）
  */
 async function regenerateTextFullImageGpt({
     layer,
@@ -1335,26 +1393,33 @@ async function regenerateTextFullImageGpt({
 }): Promise<string> {
     const { callAtlasInpaint, compressForAtlas, gptSizeForImage } = await import('../../utils/atlasImage');
     const dims = await getImageDims(originalBase64);
-    const fullLayerPng = await layerToFullCanvas(layer, dims.w, dims.h);
-    const maskBase64   = await transparentPngToInpaintMask(fullLayerPng);
-    const gptSize      = await gptSizeForImage(originalBase64);
+
+    // 1) 放大的矩形遮罩（reflow 空間）
+    const exBbox     = expandBboxForText(layer.bbox);
+    const maskFull   = solidRectMask(dims.w, dims.h, exBbox);
+    const gptSize    = await gptSizeForImage(originalBase64);
+
+    // 2) 舊字裁切（緊框）→ 當樣式參考圖
+    const oldTextCrop = await cropToBBox(originalBase64, layer.bbox);
+
+    // 3) 明確告知參考圖只是「樣式樣本」，不要照抄原字
+    const refPrompt = `${newPrompt} IMPORTANT: The attached reference image is ONLY a visual sample of the ORIGINAL text's font, weight, color and styling — do NOT reproduce its words. Render the NEW text described above in that exact same visual style, sized and spaced to fit the area cleanly.`;
 
     onProgress?.(`GPT Image 2 重繪文字「${layer.name}」...`);
-    const [compOrig, compMask] = await Promise.all([
+    const [compOrig, compMask, compRef] = await Promise.all([
         compressForAtlas(originalBase64, 1536, 0.95, false),
-        compressForAtlas(maskBase64,     1536, 1.0,  true),
+        compressForAtlas(maskFull,       1536, 1.0,  true),
+        compressForAtlas(oldTextCrop,    1024, 0.95, false),
     ]);
-    // 整張輸出直接當結果（不 pasteInpaintRegion）→ 無接縫、可重新排版
-    return callAtlasInpaint(
-        newPrompt,
-        compOrig,
-        compMask,
-        atlasApiKey,
-        referenceImage ? [referenceImage] : undefined,
-        undefined,
-        signal,
-        gptSize,
+    const refs = referenceImage ? [compRef, referenceImage] : [compRef];
+
+    const inpainted = await callAtlasInpaint(
+        refPrompt, compOrig, compMask, atlasApiKey, refs, undefined, signal, gptSize,
     );
+
+    // 4) 只貼回放大框那塊 → 框外維持原圖像素，漂移侷限框內
+    const maskFullRes = solidRectMask(dims.w, dims.h, exBbox);
+    return pasteInpaintRegion(originalBase64, inpainted, maskFullRes);
 }
 
 /**

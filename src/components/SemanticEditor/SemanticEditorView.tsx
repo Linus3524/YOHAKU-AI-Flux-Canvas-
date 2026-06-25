@@ -2551,8 +2551,9 @@ export function SemanticEditorView({
                         zIndex: 20, cursor: 'grab', userSelect: 'none',
                     } : {
                         // 初始：absolute 定位（相對畫布容器，維持在圖片下方置中）
+                        // 版本列永遠固定在底部（z35），工具列固定抬高到版本列上方，避免被蓋住
                         position: 'absolute',
-                        bottom: state.versions.length > 0 ? 104 : 32,
+                        bottom: 104,
                         left: '50%', transform: 'translateX(-50%)',
                         zIndex: 20, cursor: 'grab', userSelect: 'none',
                     }}
@@ -2595,8 +2596,8 @@ export function SemanticEditorView({
                 } : undefined}
             />
 
-            {/* ── 版本分頁列（有版本時才顯示，固定在底部） ── */}
-            {state.versions.length > 0 && (
+            {/* ── 版本分頁列（永遠固定在底部；至少顯示「原始」，刪到沒版本也不消失） ── */}
+            {(
                 <div style={{
                     position: 'fixed',
                     bottom: 0,
