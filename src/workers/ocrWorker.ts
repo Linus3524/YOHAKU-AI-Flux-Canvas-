@@ -171,13 +171,13 @@ async function detectTextBoxes(bmp: ImageBitmap): Promise<{ boxes: Box[]; detW: 
         }
     }
 
-    // Unclip 擴展公式 (DBNet 輸出會略偏窄，進行 1.6 倍擴張)
+    // Unclip 擴展公式 (DBNet 輸出會略偏窄，進行 0.8 倍小幅度擴張以防過度膨脹造成重疊)
     const refinedBoxes = rawBoxes.map(b => {
         const w = b.xmax - b.xmin + 1;
         const h = b.ymax - b.ymin + 1;
         const area = w * h;
         const perimeter = 2 * (w + h);
-        const distance = Math.round((area * 1.6) / perimeter);
+        const distance = Math.round((area * 0.8) / perimeter);
 
         return {
             xmin: Math.max(0, b.xmin - distance),

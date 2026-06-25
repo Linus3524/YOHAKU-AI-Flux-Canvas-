@@ -818,8 +818,8 @@ async function refineTextBBox(
     // 確保範圍有效，否則 fallback
     if (ymin >= ymax || xmin >= xmax) return bbox;
 
-    // 向外微調 3px 作為安全內襯 padding
-    const padding = 3;
+    // 向外微調 1px 作為安全內襯 padding (避免邊框向外過度擴張重疊)
+    const padding = 1;
     ymin = Math.max(0, ymin - padding);
     ymax = Math.min(cropH - 1, ymax + padding);
     xmin = Math.max(0, xmin - padding);
