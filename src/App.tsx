@@ -435,6 +435,7 @@ const App: React.FC = () => {
     handleDeleteLayer(id);
   }, [elements, handleDeleteLayer]);
 
+  const [generatingLabels, setGeneratingLabels] = useState<Record<string, string>>({});
   const [isDraggingOnCanvas, setIsDraggingOnCanvas] = useState(false);
   // --- AI State Hooks ---
   const {
@@ -654,6 +655,20 @@ const App: React.FC = () => {
       const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
       if (!el) return;
 
+      const input = window.prompt(
+          "請輸入此大圖中所含的貼圖數量（例如：4, 9, 12, 16 等），以進行精準網格切分。\n\n若不確定請留空進行「自動偵測」：",
+          ""
+      );
+      if (input === null) return; // 使用者按取消
+
+      let expectedCount: number | undefined = undefined;
+      if (input.trim()) {
+          const parsed = parseInt(input.trim(), 10);
+          if (!isNaN(parsed) && parsed > 0) {
+              expectedCount = parsed;
+          }
+      }
+
       setIsGenerating(true);
       setGeneratingElementIds([elementId]);
       showToast('🪄 正在自動切分貼圖，請稍候...');
@@ -670,7 +685,18 @@ const App: React.FC = () => {
           }
 
           // 呼叫 StickerCraft 演算法做一鍵切分
-          const result = await splitStickerCollectionDetailed(src);
+          const result = await splitStickerCollectionDetailed(src, { expectedCount });
+
+          // 快速防呆二次確認：若透明像素比例低於 5%，通常代表此為複雜背景的一般相片，進行二次詢問
+          if (result.transparentRatio !== undefined && result.transparentRatio < 0.05 && result.pieces.length > 0) {
+              const confirm = window.confirm(
+                  "⚠️ 偵測到此圖片可能是一般相片（無透明背景或單一純底背景）。\n\n一鍵拆分貼圖功能主要為貼紙套組設計，強行切分只會以均分網格（如四宮格/九宮格）方式裁切。\n\n您確定要繼續執行拆分嗎？"
+              );
+              if (!confirm) {
+                  return;
+              }
+          }
+
           if (result.pieces.length === 0) {
               showToast('⚠️ 未偵測到任何獨立貼紙碎片');
               return;
@@ -1214,17 +1240,7 @@ const App: React.FC = () => {
   const addGeneratedImageToCanvas = useCallback(async (imageUrl: string) => {
     if (!imageUrl) return;
     // 確保存入畫布的一定是 base64（避免 Atlas CDN URL 過期後無法給 Gemini 使用）
-    let src = imageUrl.startsWith('data:') ? imageUrl : await downloadImageAsBase64(imageUrl);
-    // 設計大師「透明背景」：放入畫布前自動去背
-    if (pendingAutoDebg) {
-      try {
-        showToast('🪄 自動去背中，請稍候...');
-        src = await restoreTransparencyFn(src, '#FFFFFF');
-        showToast('✅ 已去背並放入畫布！');
-      } catch (e) {
-        showToast('去背失敗，已放入原圖');
-      }
-    }
+    const originalSrc = imageUrl.startsWith('data:') ? imageUrl : await downloadImageAsBase64(imageUrl);
     const img = new Image();
     img.referrerPolicy = 'no-referrer';
     img.onload = () => {
@@ -1234,14 +1250,42 @@ const App: React.FC = () => {
         if (width > height) { height = (height / width) * MAX_DIMENSION; width = MAX_DIMENSION; }
         else { width = (width / height) * MAX_DIMENSION; height = MAX_DIMENSION; }
       }
-      const elementId = addElement({ type: 'image', position: getCenterOfViewport(), src, width, height, rotation: 0, });
+      const elementId = addElement({ type: 'image', position: getCenterOfViewport(), src: originalSrc, width, height, rotation: 0, });
+      if (!elementId) return;
+
       // Cache the base64 image in IndexedDB so it survives page reload even if Atlas CDN URL expires
-      if (src.startsWith('data:') && elementId) {
-        cacheImage(elementId, src);
+      if (originalSrc.startsWith('data:')) {
+        cacheImage(elementId, originalSrc);
+      }
+
+      // 設計大師「透明背景」：放入畫布後自動非同步去背
+      if (pendingAutoDebg) {
+        setGeneratingElementIds(prev => [...prev, elementId]);
+        setGeneratingLabels(prev => ({ ...prev, [elementId]: '🪄 去背中' }));
+
+        (async () => {
+          try {
+            const debgSrc = await restoreTransparencyFn(originalSrc, '#FFFFFF');
+            setElements(prev => prev.map(el => el.id === elementId && el.type === 'image' ? { ...el, src: debgSrc } : el));
+            if (debgSrc.startsWith('data:')) {
+              cacheImage(elementId, debgSrc);
+            }
+            showToast('✅ 自動去背完成！');
+          } catch (e) {
+            showToast('去背失敗，已保留原圖');
+          } finally {
+            setGeneratingElementIds(prev => prev.filter(id => id !== elementId));
+            setGeneratingLabels(prev => {
+              const next = { ...prev };
+              delete next[elementId];
+              return next;
+            });
+          }
+        })();
       }
     };
-    img.src = src;
-  }, [addElement, getCenterOfViewport, pendingAutoDebg, restoreTransparencyFn, showToast]);
+    img.src = originalSrc;
+  }, [addElement, getCenterOfViewport, pendingAutoDebg, restoreTransparencyFn, showToast, setGeneratingElementIds, setGeneratingLabels, setElements]);
 
   const downloadGeneratedImage = (imageUrl: string) => {
       if (!imageUrl) return;
@@ -1979,6 +2023,7 @@ const App: React.FC = () => {
         onHarmonize={handleHarmonize}
         isGenerating={isGenerating}
         generatingElementIds={generatingElementIds}
+        generatingLabels={generatingLabels}
         generatingProgress={genProgress}
         croppingElementId={croppingElementId}
         onCancelCrop={handleCancelCrop}

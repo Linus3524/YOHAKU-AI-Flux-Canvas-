@@ -524,6 +524,7 @@ interface InfiniteCanvasProps {
   onHarmonize: () => void;
   isGenerating: boolean;
   generatingElementIds?: string[];
+  generatingLabels?: Record<string, string>;
   generatingProgress?: number | null;
   croppingElementId: string | null;
   onCancelCrop: () => void;
@@ -694,6 +695,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onHarmonize,
   isGenerating,
   generatingElementIds = [],
+  generatingLabels = {},
   generatingProgress = null,
   croppingElementId,
   onCancelCrop,
@@ -1406,7 +1408,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                   ) : (
                     <div className="bg-white/90 backdrop-blur-md rounded-full px-2.5 py-1 flex items-center gap-1.5 shadow-lg">
                       <Icon name="progress_activity" size={12} className="animate-spin flex-shrink-0" style={{ color: '#1f2937', animationDuration: '0.8s' }} />
-                      <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">AI 運算中</span>
+                      <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">{generatingLabels[el.id] || "AI 運算中"}</span>
                     </div>
                   )}
                 </div>

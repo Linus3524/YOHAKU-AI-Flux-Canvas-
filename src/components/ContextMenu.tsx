@@ -3,7 +3,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import type { Point, ElementType } from '../types';
 import { COLORS } from '../utils/helpers';
 import { Icon } from './Icon';
-import { SaveAll, PencilRuler } from 'lucide-react';
+import { SaveAll, PencilRuler, SquareBottomDashedScissors } from 'lucide-react';
 
 interface ContextMenuData {
     x: number;
@@ -394,10 +394,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                     擴展圖片 (Outpainting)
                                 </MenuItem>
                                 {actions.splitSticker && (
-                                    <MenuItem icon={<Icon name="call_split" size={15} />} onClick={() => handleAction(() => actions.splitSticker!(menuData.elementId!))}>
-                                        🪄 一鍵拆分貼紙套組
-                                    </MenuItem>
-                                )}
+                                     <MenuItem icon={<SquareBottomDashedScissors size={14} strokeWidth={1.8} style={{ display: 'block' }} />} onClick={() => handleAction(() => actions.splitSticker!(menuData.elementId!))}>
+                                         一鍵拆分貼圖
+                                     </MenuItem>
+                                 )}
                                  <div className="border-t my-0.5 border-gray-100/50" />
                             </>
                         )}

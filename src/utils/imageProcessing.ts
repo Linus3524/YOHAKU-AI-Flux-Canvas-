@@ -49,6 +49,7 @@ export interface SplitStickerPiece {
 export interface SplitStickerCollectionResult {
   sourceDataUrl: string;
   pieces: SplitStickerPiece[];
+  transparentRatio?: number;
 }
 
 type RGB = { r: number; g: number; b: number };
@@ -376,7 +377,7 @@ const findOpaqueComponents = (snapshot: CanvasSnapshot): ComponentBox[] => {
   const minArea = Math.max(48, Math.floor(width * height * 0.0002));
   const components: ComponentBox[] = [];
 
-  const isOpaque = (position: number) => data[position * 4 + 3] > 24;
+  const isOpaque = (position: number) => data[position * 4 + 3] > 50;
 
   for (let position = 0; position < width * height; position += 1) {
     if (visited[position] || !isOpaque(position)) continue;
@@ -451,7 +452,7 @@ const findOpaqueComponentsInRegion = (
   const queue = new Int32Array(width * height);
   const minArea = Math.max(24, Math.floor((maxXBound - minXBound + 1) * (maxYBound - minYBound + 1) * 0.0003));
   const components: ComponentCluster[] = [];
-  const isOpaque = (position: number) => data[position * 4 + 3] > 24;
+  const isOpaque = (position: number) => data[position * 4 + 3] > 50;
   const isInsideRegion = (position: number) => {
     const x = position % width;
     const y = Math.floor(position / width);
@@ -729,7 +730,7 @@ const getOpaqueBoundsInRegion = (
   for (let y = region.minY; y <= region.maxY; y += 1) {
     for (let x = region.minX; x <= region.maxX; x += 1) {
       const idx = (y * snapshot.width + x) * 4;
-      if (data[idx + 3] <= 24) continue;
+      if (data[idx + 3] <= 50) continue;
 
       area += 1;
       minX = Math.min(minX, x);
@@ -751,7 +752,7 @@ const getAlphaProjections = (snapshot: CanvasSnapshot) => {
   for (let y = 0; y < snapshot.height; y += 1) {
     for (let x = 0; x < snapshot.width; x += 1) {
       const alpha = data[(y * snapshot.width + x) * 4 + 3];
-      if (alpha <= 24) continue;
+      if (alpha <= 50) continue;
       columns[x] += 1;
       rows[y] += 1;
     }
@@ -791,7 +792,7 @@ const findTransparentValley = (
 };
 
 const splitByTransparentGutters = (snapshot: CanvasSnapshot, expectedCount: number) => {
-  const count = Math.max(2, Math.min(12, expectedCount));
+  const count = Math.max(2, Math.min(36, expectedCount));
   const columns = Math.ceil(Math.sqrt(count));
   const rows = Math.ceil(count / columns);
   const { columns: columnProjection, rows: rowProjection } = getAlphaProjections(snapshot);
@@ -840,12 +841,24 @@ export const splitStickerCollectionDetailed = async (
 ): Promise<SplitStickerCollectionResult> => {
   const repairedDataUrl = await repairStickerTransparency(dataUrl, options);
   const snapshot = await loadImageSnapshot(repairedDataUrl);
-  const expectedCount = options.expectedCount ? Math.max(2, Math.min(12, options.expectedCount)) : undefined;
+  const expectedCount = options.expectedCount ? Math.max(2, Math.min(36, options.expectedCount)) : undefined;
   const imageArea = snapshot.width * snapshot.height;
-  const mergeGap = Math.max(18, Math.round(Math.min(snapshot.width, snapshot.height) * 0.045));
+  const mergeGap = Math.max(8, Math.min(16, Math.round(Math.min(snapshot.width, snapshot.height) * 0.012)));
   const minBoxArea = Math.max(256, imageArea * 0.0012);
   const componentBoxes = mergeBoxes(findOpaqueComponents(snapshot), mergeGap)
     .filter(box => (box.maxX - box.minX + 1) * (box.maxY - box.minY + 1) >= minBoxArea);
+
+  // 計算透明像素佔比 (alpha <= 50)
+  const totalPixels = snapshot.width * snapshot.height;
+  const data = snapshot.imageData.data;
+  let transparentPixels = 0;
+  for (let i = 0; i < totalPixels; i += 1) {
+    if (data[i * 4 + 3] <= 50) {
+      transparentPixels += 1;
+    }
+  }
+  const transparentRatio = transparentPixels / totalPixels;
+
   let boxes = expectedCount ? splitByTransparentGutters(snapshot, expectedCount) : componentBoxes;
 
   if (expectedCount && boxes.length === 0) {
@@ -856,14 +869,20 @@ export const splitStickerCollectionDetailed = async (
     boxes = mergeClosestBoxesUntilCount(boxes, expectedCount);
   }
 
-  if (!expectedCount && boxes.length <= 1) {
-    const gutterBoxes = splitByTransparentGutters(snapshot, 6);
-    if (gutterBoxes.length > boxes.length) boxes = gutterBoxes;
+  // 只有在具備基本透明度（透明像素大於 5%）時才進行自動偵測或降級切割，避免誤切一般相片
+  if (!expectedCount) {
+    if (transparentRatio < 0.05) {
+      boxes = []; // 自動偵測下，如果是複雜背景的一般相片，直接拒絕拆分
+    } else if (boxes.length <= 1) {
+      const gutterBoxes = splitByTransparentGutters(snapshot, 6);
+      if (gutterBoxes.length > boxes.length) boxes = gutterBoxes;
+    }
   }
 
   return {
     sourceDataUrl: repairedDataUrl,
     pieces: sortBoxesReadingOrder(boxes).map((box) => createSplitPiece(snapshot, box)),
+    transparentRatio,
   };
 };
 

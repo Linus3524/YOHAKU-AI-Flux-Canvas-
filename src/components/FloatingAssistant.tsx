@@ -45,7 +45,7 @@ const FEATURE_DOCS = [
     category: "4. AI 生成 (GENERATIVE AI)",
     color: "text-yohaku-text-main",
     items: [
-      { title: "設計大師", desc: "專為排版圖卡與插圖設計，內建 60+ 種精緻藝術風格與 50+ 套品牌設計規格書。涵蓋模切貼圖、精緻封面、標誌設計、資訊圖表、社群圖卡、文章插畫、知識漫畫、簡報投影片與網頁 UI 等 9 大專業技能，支援多種常用尺寸與裝置解析度預設，並提供「✨ AI 提示詞優化」按鈕重寫最佳提示詞。" },
+      { title: "設計大師", desc: "專為排版圖卡與插圖設計，內建 60+ 種精緻藝術風格與 50+ 套品牌設計規格書。涵蓋模切貼圖（支援單圖/三視圖/貼紙套組版面、一鍵表情包快捷 Chip 與自訂壓字效果）、精緻封面、標誌設計、資訊圖表、社群圖卡、文章插畫、知識漫畫、簡報投影片與網頁 UI 等 9 大專業技能，支援多種常用尺寸與裝置解析度預設，並提供「✨ AI 提示詞優化」按鈕重寫最佳提示詞。" },
       { title: "一鍵生成圖片", desc: "框選圖片、手繪或便利貼，AI 根據內容生成高品質圖片。生成期間畫布不鎖定，可繼續操作其他物件。" },
       { title: "圖片逆向分析", desc: "右鍵點擊圖片選「提取提示詞」，AI 生成中英對照的詠唱咒語。" },
       { title: "Magic Style 風格庫", desc: "內建 150+ 種藝術風格，涵蓋 12 大分類：繪畫插畫、動漫漫畫、攝影底片、數位藝術、特殊材質、次文化少女暗黑、新世代潮流、節慶限定、歷史宗教、稀有新趨勢、經典數位相機與CCD模擬、光學硬體與AI氛圍。一鍵套用至選取圖片，生成設定面板也可預設參考風格。" },
@@ -53,6 +53,7 @@ const FEATURE_DOCS = [
       { title: "擴展圖片", desc: "拖曳外框定義擴展區域，AI 無縫填補空白處（支援自動發想提示詞）。" },
       { title: "智慧去背", desc: "右鍵「智慧去背」，由 Gemini AI 分析並去除背景，不需額外 API Key。" },
       { title: "快速去背（BiRefNet）", desc: "右鍵「快速去背」，需 fal.ai Key，精度優於智慧去背。6 種模式：輕量（Logo / 純色）、重量級（產品 / 漸層）、人像（人物 / 髮型）、髮絲（毛髮 / 婚紗 / 玻璃）、輕量 2K（高解析大圖）、動態（尺寸不固定）。" },
+      { title: "一鍵拆分貼圖", desc: "右鍵選單點擊「一鍵拆分貼圖」，可自動將貼圖套組中的個別子貼紙分割。支援彈出對話框手動輸入預估數量（進行高精度網格谷底均分），或留空使用優化後的自動偵測拆分，拆分後的貼圖將自動去背並個別存入本地快取。" },
       { title: "魔法分層", desc: "右鍵點擊圖片選「魔法分層」，AI 自動識別圖中人物、產品、文字、裝飾等語意元素，各自去背後以獨立圖層排列於原圖右側，並同步補全背景。最多拆出 10 個物件層。需要 Atlas Key（GPT Image 2 隔離）與 fal.ai Key（BiRefNet 去背）以獲得最佳品質；未設定時自動降級為 Gemini 模式。" },
       { title: "保留透明背景", desc: "開啟後，透明背景圖片進行風格轉換時會先壓平為安全底色再生成，完成後自動透過 BiRefNet→Gemini→ChromaKey 依序還原透明通道，支援所有生成模型。" },
       { title: "原圖比例輸出", desc: "生成設定選「原圖比例」，AI 依據參考圖的寬高比輸出，結果更貼合原始構圖。" },
@@ -555,7 +556,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <p className="text-[11px] text-gray-700 leading-relaxed mb-2">整合 60+ 種 Markdown 設計系統規格書與 50+ 品牌設計規格書，專為高排版性圖卡與插圖設計。支援 9 種專業創作技能，可自訂版面、裝置解析度、比例與受眾定位。</p>
                       <div className="grid grid-cols-2 gap-1.5 mb-2">
                         {[
-                          { label: '模切貼圖', desc: '自動生成帶白邊與透明底的印刷質感貼紙' },
+                          { label: '模切貼圖', desc: '可切換「單圖、三視圖、貼貼套組」版面，支援一鍵表情與自訂壓字效果。' },
                           { label: '精緻封面', desc: '適用於部落格、簡報或社群網站首圖封面' },
                           { label: '標誌設計', desc: '品牌標準字、徽章與商標 LOGO 設計' },
                           { label: '資訊圖表', desc: '便當網格、流程圖、對比圖等數據視覺化' },
@@ -622,6 +623,11 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         ))}
                       </div>
                       <div className="text-[11px] text-orange-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 需 <code className="font-mono bg-orange-100 px-1 rounded">fal.ai Key</code>；未設定時右鍵選單不顯示此功能。</div>
+                    </div>
+                    {/* 一鍵拆分貼圖 */}
+                    <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-purple-900 text-[13px] mb-1">✦ 一鍵拆分貼圖</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed">右鍵點擊圖片選「一鍵拆分貼圖」，可自動將套組中相鄰的多張貼圖獨立分割。支援彈出對話框手動輸入預估數量（進行高精度的網格谷底均分），或直接點擊確定進行智慧自動偵測。拆分後會自動為每張子貼圖去背並個別存入本地快取。</p>
                     </div>
                     {/* Magic Style */}
                     <div className="bg-emerald-50/30 border border-emerald-100 rounded-xl p-4">
