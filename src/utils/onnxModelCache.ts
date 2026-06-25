@@ -108,7 +108,7 @@ export const MODEL_CONFIGS: Record<OnnxModelKey, ModelConfig> = {
         key: 'ocr_dict',
         name: '本機 OCR 字形字典',
         description: '繁中/簡中/英文/數字共用字元字典檔',
-        url: 'https://huggingface.co/SWHL/RapidOCR/resolve/main/ppocr_keys_v1.txt',
+        url: 'https://huggingface.co/karmueo/PaddleOcr/resolve/main/ppocr_keys_v1.txt',
         cacheKey: 'onnx_ocr_dict_v4_1',
         sizeMB: 0.3,
     },
