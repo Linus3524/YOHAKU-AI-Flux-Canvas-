@@ -43,15 +43,10 @@ const DEFAULT_WELCOME_NOTE: CanvasElement = {
 };
 
 const loadInitialElements = (): CanvasElement[] => {
-    // 優先嘗試 localStorage（舊版資料遷移用，之後由 IndexedDB 接管）
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            const parsed = JSON.parse(saved) as CanvasElement[];
-            if (parsed.length > 0) return parsed;
-        }
-    } catch {}
-    return [DEFAULT_WELCOME_NOTE];
+    // 首幀一律空白：localStorage 可能是「配額寫入失敗殘留的舊檔」，直接拿來畫會在重新整理時
+    // 閃現一個舊版畫面。真正的資料在 mount 後由 IndexedDB（權威來源）載入，
+    // IDB 沒有才退回 localStorage 遷移 / 全新使用者的歡迎便利貼。見下方 hydrate effect。
+    return [];
 };
 
 // IndexedDB 非同步讀取，會在 mount 後觸發 setElements 更新
@@ -154,11 +149,26 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         }
     }, []);
 
-    // Mount 時嘗試從 IndexedDB 讀取（優先於 localStorage）
+    // Mount 時 hydrate：IndexedDB（權威）→ 舊版 localStorage 遷移 → 全新使用者歡迎便利貼。
     useEffect(() => {
-        loadFromIndexedDB().then(parsed => {
-            if (parsed) setElements(parsed);
-        });
+        (async () => {
+            const fromIDB = await loadFromIndexedDB();
+            if (fromIDB) { setElements(fromIDB); return; }
+            // IDB 無資料 → 嘗試從舊版 localStorage 遷移（只取有真實內容的）
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved) as CanvasElement[];
+                    if (Array.isArray(parsed) && parsed.length > 0 &&
+                        !(parsed.length === 1 && parsed[0].id === 'welcome-note')) {
+                        setElements(parsed);
+                        return;
+                    }
+                }
+            } catch {}
+            // 全新使用者 → 歡迎便利貼
+            setElements([DEFAULT_WELCOME_NOTE]);
+        })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -1743,6 +1753,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             setCurrentFileHandle(handle);
             setCurrentFileName(handle.name);
             await saveFileHandle(handle);
+            // 開檔自動 fit：新檔內容位置可能跟上次視野差很多，等 render 後對齊畫面
+            setTimeout(() => canvasApiRef.current?.fitToScreen(), 60);
             showToast(`已開啟：${handle.name}`);
             return true;
         } catch (e: any) {
@@ -1795,7 +1807,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 setElements(normalizedElements);
                 const maxZ = Math.max(0, ...normalizedElements.map(el => el.zIndex || 0));
                 zIndexCounter.current = maxZ + 1;
-                
+                // 匯入自動 fit：對齊畫面，避免停在跟舊視野不符的空白處
+                setTimeout(() => canvasApiRef.current?.fitToScreen(), 60);
                 showToast('畫布匯入成功！');
             } catch (error) {
                 console.error("Error importing canvas:", error);

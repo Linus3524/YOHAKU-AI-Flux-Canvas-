@@ -658,7 +658,22 @@ const ASPECT_RATIOS = [
   { value: '21:9', label: '21:9 電影感 (Cinematic)' },
 ];
 
-export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({ 
+// ── 畫布視野（zoom + pan）持久化：重新整理後記住上次的縮放/位置，而非每次重置 100% ──
+const VIEWPORT_KEY = 'yohaku_viewport';
+const loadSavedViewport = (): { pan: Point; zoom: number } | null => {
+  try {
+    const raw = localStorage.getItem(VIEWPORT_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    if (v && typeof v.zoom === 'number' && v.pan &&
+        typeof v.pan.x === 'number' && typeof v.pan.y === 'number') {
+      return { pan: v.pan, zoom: v.zoom };
+    }
+  } catch {}
+  return null;
+};
+
+export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   elements, 
   selectedElementIds, 
   onSelectElement,
@@ -713,8 +728,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onUpdateMultipleElements,
   onAlign,
 }, ref) => {
-  const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState<Point>(() => loadSavedViewport()?.pan ?? { x: 0, y: 0 });
+  const [zoom, setZoom] = useState(() => loadSavedViewport()?.zoom ?? 1);
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState<Point>({ x: 0, y: 0 });
   const [isSpacebarPressed, setIsSpacebarPressed] = useState(false);
@@ -1048,9 +1063,24 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   }, [setResetViewCallback]);
   
   useEffect(() => {
-      setPan({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-      setZoom(1);
+      // 有上次存的視野就還原（記住 zoom/位置）；沒有才置中、100%。
+      const saved = loadSavedViewport();
+      if (saved) {
+          setPan(saved.pan);
+          setZoom(saved.zoom);
+      } else {
+          setPan({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+          setZoom(1);
+      }
   }, []);
+
+  // pan/zoom 變動後存回 localStorage（debounce，避免拖曳時狂寫）
+  useEffect(() => {
+      const t = setTimeout(() => {
+          try { localStorage.setItem(VIEWPORT_KEY, JSON.stringify({ pan, zoom })); } catch {}
+      }, 300);
+      return () => clearTimeout(t);
+  }, [pan, zoom]);
 
   const handleContextMenu = (e: React.MouseEvent, elementId: string | null) => {
       e.preventDefault();
