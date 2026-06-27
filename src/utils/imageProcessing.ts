@@ -292,6 +292,23 @@ const getBackgroundCandidates = (
   return candidates;
 };
 
+/**
+ * 偵測一張圖「實際的背景色」——取邊緣最主要的顏色回傳 hex。
+ * 用於去背前確定 chroma key 該扣哪個色（生成圖的底色由 AI 自選，不能假設是白）。
+ * 偵測失敗（全透明邊緣 / 載入錯誤）時回傳 '#FFFFFF'。
+ */
+export const detectBackgroundColor = async (dataUrl: string): Promise<string> => {
+  try {
+    const { imageData, width, height } = await loadImageSnapshot(dataUrl);
+    const colors = getDominantEdgeColors(imageData.data, width, height);
+    if (colors.length === 0) return '#FFFFFF';
+    const { r, g, b } = colors[0];
+    return '#' + [r, g, b].map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join('').toUpperCase();
+  } catch {
+    return '#FFFFFF';
+  }
+};
+
 export const repairStickerTransparency = async (
   dataUrl: string,
   options: TransparencyRepairOptions = {},

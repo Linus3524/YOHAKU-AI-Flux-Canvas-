@@ -36,7 +36,7 @@ import { gptLayerSegment } from './utils/gptLayerSplit';
 import { detectTextBlocks } from './utils/ocrService';
 import { SVGExportModal } from './components/SVGExportModal';
 import { SemanticEditorView } from './components/SemanticEditor';
-import { splitStickerCollectionDetailed } from './utils/imageProcessing';
+import { splitStickerCollectionDetailed, detectBackgroundColor } from './utils/imageProcessing';
 import type {
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -1280,7 +1280,11 @@ const App: React.FC = () => {
 
         (async () => {
           try {
-            const debgSrc = await restoreTransparencyFn(originalSrc, '#FFFFFF');
+            // 生成圖的底色由 AI 自選（綠/洋紅/青…），不能假設是白。
+            // 先量出實際邊緣背景色，再交給去背流程——BiRefNet 路線會忽略它，
+            // 但沒 fal key 走本機 chroma key / flood-fill 時，扣色才會跟對。
+            const detectedBg = await detectBackgroundColor(originalSrc);
+            const debgSrc = await restoreTransparencyFn(originalSrc, detectedBg);
             setElements(prev => prev.map(el => el.id === elementId && el.type === 'image' ? { ...el, src: debgSrc } : el));
             if (debgSrc.startsWith('data:')) {
               cacheImage(elementId, debgSrc);
@@ -1324,19 +1328,28 @@ const App: React.FC = () => {
       img.onload = () => {
         // Calculate position: slightly offset from original if provided, else center
         let position = getCenterOfViewport();
+        // 預設用結果自身像素尺寸；但生成結果常是 1024/1536px，直接當畫布寬高會「特別大」。
+        let width = img.width;
+        let height = img.height;
         if (originalElement) {
           position = {
             x: originalElement.position.x + 20,
             y: originalElement.position.y + 20
           };
+          // 跟來源在畫布上的顯示比例一致：寬度對齊原圖，高度依「結果自身長寬比」換算，
+          // 既不會放大成原始像素尺寸，也保留重繪結果真正的長寬比。
+          if (originalElement.width > 0 && img.width > 0) {
+            width = originalElement.width;
+            height = Math.round(originalElement.width * (img.height / img.width));
+          }
         }
-        
+
         addElement({
           type: 'image',
           position,
           src: dataUrl,
-          width: img.width,
-          height: img.height,
+          width,
+          height,
           rotation: 0,
         });
       };

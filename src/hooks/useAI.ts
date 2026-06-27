@@ -173,9 +173,11 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
      */
     const restoreTransparencyFn = useCallback(async (resultSrc: string, bgColor: string): Promise<string> => {
         // 1. BiRefNet（品質最佳）
+        // 貼圖是硬邊+實心+白模切框，用 General Use (Heavy)：最高精度的一般分割，
+        // 邊緣乾淨有把握；Matting 偏軟 alpha 是給毛髮/半透明用的，反而會羽化白框、挖淺色洞。
         if (falApiKey) {
             try {
-                return await birefnetRemoveBg(resultSrc, falApiKey);
+                return await birefnetRemoveBg(resultSrc, falApiKey, 'General Use (Heavy)');
             } catch (e) {
                 console.warn('[restoreTransparency] BiRefNet failed, trying Gemini...', e);
             }

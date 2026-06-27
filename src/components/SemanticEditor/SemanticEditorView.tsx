@@ -1024,14 +1024,21 @@ export function SemanticEditorView({
 
     // 開啟時檢查 ONNX 模型是否已下載
     const [lamaReady, setLamaReady] = useState(false);
+    // 文字辨識引擎：預設 Gemini（設計字較準）；裝了本機 OCR 才能切到 'local'
+    const [ocrReady, setOcrReady] = useState(false);
+    const [ocrEngine, setOcrEngine] = useState<'gemini' | 'local'>('gemini');
     useEffect(() => {
         Promise.all([
             getModelStatus('sam2_encoder'),
             getModelStatus('sam2_decoder'),
             getModelStatus('lama'),
-        ]).then(([enc, dec, lama]) => {
+            getModelStatus('ocr_det'),
+            getModelStatus('ocr_rec'),
+            getModelStatus('ocr_dict'),
+        ]).then(([enc, dec, lama, det, rec, dict]) => {
             setOnnxSAM2Ready(enc === 'ready' && dec === 'ready');
             setLamaReady(lama === 'ready');
+            setOcrReady(det === 'ready' && rec === 'ready' && dict === 'ready');
         });
     }, []);
 
@@ -1536,11 +1543,12 @@ export function SemanticEditorView({
     // 工具切換
     // 文字掃描（進入文字模式時自動觸發；只需 Gemini，跳過 SAM2）
     const handleScanText = useCallback(() => {
-        if (!geminiApiKey) { showToast('⚠️ 文字掃描需要 Gemini API Key'); return; }
-        analyzeTextRegions().catch(e => {
+        // 本機 OCR 不需 Gemini key；只有用 Gemini 引擎才需要
+        if (ocrEngine === 'gemini' && !geminiApiKey) { showToast('⚠️ 文字掃描需要 Gemini API Key'); return; }
+        analyzeTextRegions(ocrEngine).catch(e => {
             showToast(`❌ 文字掃描失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
         });
-    }, [geminiApiKey, analyzeTextRegions, showToast]);
+    }, [geminiApiKey, ocrEngine, analyzeTextRegions, showToast]);
 
     const handleToolChange = useCallback((tool: string) => {
         setActiveTool(tool);
@@ -1870,6 +1878,41 @@ export function SemanticEditorView({
                                 }} />
                                 {useOnnxSAM2 ? '本機 SAM2' : 'fal.ai SAM2'}
                                 {onnxEmbeddingLoading && <span style={{ opacity: 0.6 }}>計算中...</span>}
+                            </button>
+                        )}
+                        {/* 文字辨識引擎切換（在文字模式、且已安裝本機 OCR 才顯示） */}
+                        {ocrReady && activeTool === 'text' && (
+                            <button
+                                onClick={() => {
+                                    const next = ocrEngine === 'gemini' ? 'local' : 'gemini';
+                                    setOcrEngine(next);
+                                    showToast(next === 'local' ? '文字辨識：本機 OCR（免費離線）' : '文字辨識：Gemini（設計字較準）');
+                                    // 立即用新引擎重掃，結果即時更新
+                                    if (!isLoading) {
+                                        analyzeTextRegions(next).catch(e =>
+                                            showToast(`❌ 文字掃描失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`)
+                                        );
+                                    }
+                                }}
+                                title={ocrEngine === 'local'
+                                    ? '文字辨識：本機 OCR（免費離線）— 點選切換至 Gemini'
+                                    : '文字辨識：Gemini（雲端，設計字較準）— 點選切換至本機 OCR'}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 5,
+                                    padding: '4px 10px', borderRadius: 9999,
+                                    border: `1px solid ${ocrEngine === 'local' ? '#10b981' : '#d1d5db'}`,
+                                    background: ocrEngine === 'local' ? '#ecfdf5' : '#f9fafb',
+                                    color: ocrEngine === 'local' ? '#059669' : '#6b7280',
+                                    fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                    transition: 'all 0.15s',
+                                }}
+                            >
+                                <span style={{
+                                    width: 6, height: 6, borderRadius: '50%',
+                                    background: ocrEngine === 'local' ? '#10b981' : '#9ca3af',
+                                    flexShrink: 0,
+                                }} />
+                                {ocrEngine === 'local' ? '本機 OCR' : 'Gemini OCR'}
                             </button>
                         )}
                         {/* 重繪模型切換（與 SAM2 切換同款） */}

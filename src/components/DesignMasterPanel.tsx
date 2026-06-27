@@ -118,6 +118,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   const [count, setCount] = useState<1 | 2 | 3 | 4>(1);
   const [content, setContent] = useState(noteContent);
   const [model, setModel] = useState('gemini');
+  const [isBrainstorming, setIsBrainstorming] = useState(false); // AI 發想子主題進行中（驅動輸入框動畫）
 
   const DESIGN_STYLE_CATEGORIES = [
     {
@@ -603,15 +604,16 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                 <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">生成類型 (版面)</div>
                 <div className="grid grid-cols-3 gap-1.5 bg-[#F1F5F9] p-0.5 rounded-xl">
                   {[
-                    { id: 'single', name: '普通輸出' },
-                    { id: 'threeViews', name: '生成設定圖' },
-                    { id: 'collection', name: '貼圖集合' },
+                    { id: 'single', name: '普通輸出', tip: '單張貼圖：一張置中、可模切的貼圖設計。' },
+                    { id: 'threeViews', name: '生成設定圖', tip: '角色三視圖：同一角色的「正面 / 側面 / 背面」設定參考圖，水平排列、比例與風格一致，適合做角色設計稿。' },
+                    { id: 'collection', name: '貼圖集合', tip: 'LINE 貼圖套組：一張畫布生成多張成系列的小貼圖（可設張數、用「AI 發想子主題」逐張指定內容）。' },
                   ].map(mode => {
                     const isSelected = configs.sticker.layoutMode === mode.id;
                     return (
                       <button
                         key={mode.id}
                         type="button"
+                        title={mode.tip}
                         onClick={() => {
                           setConfigs(prev => ({
                             ...prev,
@@ -693,7 +695,9 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                       <span className="text-[10px] font-bold text-[#86868B]">子貼圖主題內容 (選填)</span>
                       <button
                         type="button"
+                        disabled={isBrainstorming}
                         onClick={async () => {
+                          if (isBrainstorming) return;
                           if (!apiKey) {
                             showToast('⚠️ 請先配置 Gemini API Key');
                             return;
@@ -702,6 +706,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                             showToast('⚠️ 請先在內容素材輸入套組大主題，例如「可愛小貓」');
                             return;
                           }
+                          setIsBrainstorming(true);
                           showToast('AI 正在發想子主題中...');
                           try {
                             const count = configs.sticker.stickerCollectionCount;
@@ -716,11 +721,20 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                             showToast('子主題生成完成！✨');
                           } catch (e: any) {
                             showToast(`生成子主題失敗: ${e.message || e}`);
+                          } finally {
+                            setIsBrainstorming(false);
                           }
                         }}
-                        className="text-[10px] font-bold text-[#AF52DE] hover:underline flex items-center gap-0.5"
+                        className="text-[10px] font-bold text-[#AF52DE] hover:underline flex items-center gap-0.5 disabled:opacity-60 disabled:cursor-wait"
                       >
-                        ⚡ AI 發想子主題
+                        {isBrainstorming ? (
+                          <>
+                            <span className="inline-block w-3 h-3 border-[1.5px] border-[#AF52DE] border-t-transparent rounded-full animate-spin" />
+                            發想中…
+                          </>
+                        ) : (
+                          <>⚡ AI 發想子主題</>
+                        )}
                       </button>
                     </div>
                     <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
@@ -729,7 +743,10 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                           <span className="text-[10px] font-semibold text-gray-400 w-4">{idx + 1}</span>
                           <input
                             type="text"
+                            disabled={isBrainstorming}
                             value={configs.sticker.collectionItemPrompts[idx] || ''}
+                            style={isBrainstorming ? { animationDelay: `${idx * 90}ms` } : undefined}
+                            placeholder={isBrainstorming ? 'AI 發想中…' : `子貼圖 ${idx + 1} 畫面內容...`}
                             onChange={e => {
                               const val = e.target.value;
                               setConfigs(prev => {
@@ -744,8 +761,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                                 };
                               });
                             }}
-                            placeholder={`子貼圖 ${idx + 1} 畫面內容...`}
-                            className="flex-1 text-[11px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-lg px-2.5 py-1 focus:outline-none focus:border-[#AF52DE]"
+                            className={`flex-1 text-[11px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-lg px-2.5 py-1 focus:outline-none focus:border-[#AF52DE] ${isBrainstorming ? 'dm-brainstorm-pulse border-[#AF52DE]/40' : ''}`}
                           />
                         </div>
                       ))}

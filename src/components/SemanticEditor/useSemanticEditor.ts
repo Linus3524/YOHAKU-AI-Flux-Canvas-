@@ -153,17 +153,19 @@ export function useSemanticEditor({
     }, [originalBase64, geminiApiKey, falApiKey, useLocalSAM2, setStatus]);
 
     // ── 純文字掃描（進入文字模式時自動呼叫；只需 Gemini，跳過 SAM2）──────────────
-    const analyzeTextRegions = useCallback(async () => {
-        if (!geminiApiKey) throw new Error('需要設定 Gemini API Key');
+    const analyzeTextRegions = useCallback(async (ocrEngine: 'gemini' | 'local' = 'gemini') => {
+        // 本機 OCR 不需要 Gemini key；只有用 Gemini 引擎才強制要 key
+        if (ocrEngine === 'gemini' && !geminiApiKey) throw new Error('需要設定 Gemini API Key');
         if (analyzingRef.current) return;
 
-        setStatus('analyzing', 'Gemini 掃描文字中...');
+        setStatus('analyzing', ocrEngine === 'local' ? '本機 OCR 掃描文字中...' : 'Gemini 掃描文字中...');
         try {
             // 掃當前版本的合成圖（含先前編輯結果）
             const baseImage = state.compositeBase64;
             const textLayers = await detectTextRegions({
                 imageBase64: baseImage,
-                geminiApiKey,
+                geminiApiKey: geminiApiKey ?? '',
+                engine: ocrEngine,
                 onProgress: msg => setStatus('analyzing', msg),
             });
             // 文字層是原圖在原位的矩形切片，疊回同一張圖視覺上不變 → 不需重新合成背景。

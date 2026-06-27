@@ -838,17 +838,59 @@ async function refineTextBBox(
  * 文字編輯模式入口：掃出每塊文字 → bbox 直接建層（矩形含背景，inpaint 重繪時需要底色）。
  * 不跑 SAM2，只需 Gemini Key。每層標 fromTextScan，與物件分析的 TEXT 層區分。
  */
+/**
+ * 文字編輯模式：本機 ONNX OCR（PaddleOCR-v4）偵測器。
+ * 把 ocrService 的 OcrBlock（x/y/w/h + 樣式）轉成本檔下游吃的 TextBlock。
+ * 模型未安裝 / Worker 失敗時丟錯，由 detectTextRegions 負責降級 Gemini。
+ */
+async function detectTextBlocksLocal(imageBase64: string): Promise<TextBlock[]> {
+    const { runOcrInWorker } = await import('../../utils/ocrWorkerClient');
+    const blocks = await runOcrInWorker(imageBase64);
+    return (blocks || [])
+        .filter(b => (b.text ?? '').toString().trim())
+        .map(b => ({
+            label: ((b.text.split('\n')[0] || '文字').trim().slice(0, 14)) || '文字',
+            text:  b.text.toString(),
+            description: '',
+            bbox: {
+                x: Math.max(0, Math.min(0.99, b.bbox?.x ?? 0)),
+                y: Math.max(0, Math.min(0.99, b.bbox?.y ?? 0)),
+                w: Math.max(0.005, Math.min(1, b.bbox?.w ?? 0.05)),
+                h: Math.max(0.005, Math.min(1, b.bbox?.h ?? 0.03)),
+            },
+        } as TextBlock))
+        .slice(0, 60); // 本機逐行偵測通常較多框，放寬上限
+}
+
 export async function detectTextRegions({
     imageBase64,
     geminiApiKey,
+    engine = 'gemini',
     onProgress,
 }: {
     imageBase64: string;
     geminiApiKey: string;
+    /** 文字辨識引擎：'gemini'（雲端，設計字較準）或 'local'（本機 ONNX，免費離線） */
+    engine?: 'gemini' | 'local';
     onProgress?: (msg: string) => void;
 }): Promise<SmartLayer[]> {
-    onProgress?.('Gemini 逐塊掃描文字中...');
-    const blocks = await detectTextBlocks(imageBase64, geminiApiKey);
+    let blocks: TextBlock[] = [];
+    if (engine === 'local') {
+        onProgress?.('本機 OCR 掃描文字中...');
+        try {
+            blocks = await detectTextBlocksLocal(imageBase64);
+        } catch (e) {
+            console.warn('[detectTextRegions] 本機 OCR 失敗，將嘗試降級 Gemini:', e);
+        }
+        // 本機沒裝好 / 沒抓到 → 有 Gemini key 就降級
+        if (blocks.length === 0 && geminiApiKey) {
+            onProgress?.('本機未偵測到文字，改用 Gemini 掃描...');
+            blocks = await detectTextBlocks(imageBase64, geminiApiKey);
+        }
+    } else {
+        onProgress?.('Gemini 逐塊掃描文字中...');
+        blocks = await detectTextBlocks(imageBase64, geminiApiKey);
+    }
     if (blocks.length === 0) return [];
 
     const dims = await getImageDims(imageBase64);
