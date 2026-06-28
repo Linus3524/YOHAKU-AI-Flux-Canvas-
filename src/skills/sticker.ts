@@ -271,7 +271,16 @@ ${modOf(STICKER_THEMES, config.theme)}
 Design as a digital LINE messaging sticker. Each individual sticker should fit a near-square / slightly landscape proportion (LINE official ~370x320). Render at high resolution with rich crisp detail; do NOT output a small or low-resolution image.
 
 6. BACKGROUND TREATMENT
-${modOf(STICKER_BACKGROUNDS, config.background)}
+${(() => {
+  if (config.background === 'transparent') {
+    if (config.useStickerBorder) {
+      return "Background: Isolated on a solid black background. Pure flat solid black (#000000) background to protect the white sticker outline/border and maximize contrast. The background must be pure black: no scenery, gradients, patterns, texture, or shading. The subject (including its white outline) must be clearly distinct from the black background.";
+    } else {
+      return "Background: Isolated on a solid white background. Pure flat solid white (#FFFFFF) background. The background must be pure white: no scenery, gradients, patterns, texture, or shading. The subject must be clearly distinct from the white background.";
+    }
+  }
+  return modOf(STICKER_BACKGROUNDS, config.background);
+})()}
 
 7. ASPECT RATIO
 ${aspectMod}
