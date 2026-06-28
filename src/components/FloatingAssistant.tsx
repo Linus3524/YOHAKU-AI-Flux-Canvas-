@@ -979,6 +979,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <li>・ <span className="font-bold text-gray-600">Gemini API（Google）：</span>提示詞、上傳影像將傳送至 Google 伺服器處理，遵循 <a href="https://ai.google.dev/terms" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">Google AI Studio 服務條款</a>。</li>
                       <li>・ <span className="font-bold text-gray-600">Atlas Cloud API：</span>提示詞與影像將傳送至 Atlas Cloud 伺服器，並轉發至對應模型供應商（OpenAI / ByteDance / Alibaba）處理，遵循各供應商之使用政策。生成結果以 base64 格式直接回傳至您的裝置，不永久儲存於 Atlas 伺服器（CDN 連結僅保留 1–7 天）。</li>
                       <li>・ <span className="font-bold text-gray-600">fal.ai API：</span>影像將傳送至 fal.ai 伺服器進行推理（去背、智慧放大、BiRefNet 等功能），遵循 <a href="https://fal.ai/policies/privacy" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">fal.ai 隱私政策</a>。推理結果直接回傳至您的裝置，fal.ai 不永久儲存上傳影像。</li>
+                      <li>・ <span className="font-bold text-gray-600">本機 AI 推論 (Local AI)：</span>使用者下載之本機 ONNX 模型（包括 SAM 2 Tiny 物件分割、PaddleOCR 文字辨識、LaMa 橡皮擦、ISNet 去背等）的所有推論過程均完全在您裝置的本機瀏覽器執行（利用 WASM / WebGPU 技術），不會傳送任何圖片、文字或語音資料至外部網路，完全離線且保護隱私。</li>
                       <li>・ <span className="font-bold text-gray-600">本機儲存：</span>所有畫布資料、API Key、生成圖片均僅儲存於您的裝置本機（localStorage / IndexedDB），本軟體伺服器不收集任何個人資料。</li>
                       <li>・ <span className="font-bold text-gray-600">版權責任：</span>用戶應確保上傳圖片擁有合法使用權，侵權糾紛由用戶自負法律責任。</li>
                       <li>・ <span className="font-bold text-gray-600">機密資訊：</span>請勿上傳含有個人識別資訊、商業機密或敏感資料之影像。</li>
