@@ -971,7 +971,9 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   <div>
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-1">2. 費用責任與損害賠償免責</h3>
                     <p className="leading-relaxed text-gray-600 text-xs mb-2">所有因 API 使用產生之費用均由用戶自行負擔。開發者對任何非預期扣款、超額費用或計費糾紛概不負賠償責任。</p>
-                    <p className="leading-relaxed text-gray-600 text-xs">對於因使用本軟體導致之數據丟失、業務中斷或 API 費用損失，開發者不負賠償責任。</p>
+                    <p className="leading-relaxed text-gray-600 text-xs mb-2">【API 金鑰保管】用戶需妥善保管自行輸入之 API 金鑰。本軟體雖不收集亦不上傳金鑰至任何外部伺服器，但若因用戶本機設備安全性受損、遭惡意軟體竊取而導致金鑰外洩或產生超額計費，開發者概不負責。</p>
+                    <p className="leading-relaxed text-gray-600 text-xs mb-2">【瀏覽器快取與資料遺失】本軟體採用瀏覽器本地儲存（LocalStorage & IndexedDB）記錄設計進度與圖片快取。若用戶清除瀏覽器快取、Cookies，或使用私密/無痕瀏覽模式，可能導致畫布資料永久遺失。請務必定期使用「另存新檔 (Cmd+Shift+S)」將專案匯出成實體 json 檔案備份。</p>
+                    <p className="leading-relaxed text-gray-600 text-xs">對於因使用本軟體或任何第三方 API 延遲、中斷而導致之數據丟失、業務中斷，開發者不負賠償責任。</p>
                   </div>
                   <div>
                     <h3 className="font-bold text-yohaku-text-main text-sm mb-2">3. 數據與隱私保護</h3>
@@ -991,6 +993,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <li>・ <span className="font-bold text-gray-600">本軟體主權：</span>YOHAKU 之程式碼邏輯、UI 設計及品牌版權歸開發者 LINUS Nice Day Japan (CHANG CHIN WEI) @linus3524 所有。</li>
                       <li>・ <span className="font-bold text-gray-600">開源致敬：</span>本軟體衍生自 @prompt_case 之 Nano Banana Infinite Canvas，並獲授權重製發佈。</li>
                       <li>・ <span className="font-bold text-gray-600">生成內容：</span>AI 生成內容之權利歸屬依各國法律及各供應商條款（Google、OpenAI、ByteDance、Alibaba）判定，商用前請諮詢法律意見。</li>
+                      <li>・ <span className="font-bold text-gray-600">非獨佔性與相似性：</span>由於生成式 AI 的演算法特徵，當不同用戶輸入相同或極其類似之提示詞時，AI 可能輸出相同、相似或重疊之圖像成果。用戶理解並同意，AI 生成之結果不具備排他性的獨佔權利，且開發者對生成內容是否侵害第三方的商標或智慧財產權概不作任何明示或暗示之保證。</li>
                     </ul>
                   </div>
                   <div>
