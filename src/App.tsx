@@ -464,6 +464,7 @@ const App: React.FC = () => {
       generatedImages,
       setGeneratedImages,
       pendingAutoDebg,
+      pendingForceLocalFloodFill,
       restoreTransparencyFn,
       outpaintingState,
       setOutpaintingState,
@@ -1285,8 +1286,8 @@ const App: React.FC = () => {
             // 生成圖的底色由 AI 自選（綠/洋紅/青…），不能假設是白。
             // 先量出實際邊緣背景色，再交給去背流程——BiRefNet 路線會忽略它，
             // 但沒 fal key 走本機 chroma key / flood-fill 時，扣色才會跟對。
-            const detectedBg = await detectBackgroundColor(originalSrc);
-            const debgSrc = await restoreTransparencyFn(originalSrc, detectedBg);
+             const detectedBg = await detectBackgroundColor(originalSrc);
+            const debgSrc = await restoreTransparencyFn(originalSrc, detectedBg, pendingForceLocalFloodFill);
             setElements(prev => prev.map(el => el.id === elementId && el.type === 'image' ? { ...el, src: debgSrc } : el));
             if (debgSrc.startsWith('data:')) {
               cacheImage(elementId, debgSrc);
@@ -1306,7 +1307,7 @@ const App: React.FC = () => {
       }
     };
     img.src = originalSrc;
-  }, [addElement, getCenterOfViewport, pendingAutoDebg, restoreTransparencyFn, showToast, setGeneratingElementIds, setGeneratingLabels, setElements]);
+  }, [addElement, getCenterOfViewport, pendingAutoDebg, pendingForceLocalFloodFill, restoreTransparencyFn, showToast, setGeneratingElementIds, setGeneratingLabels, setElements]);
 
   const downloadGeneratedImage = (imageUrl: string) => {
       if (!imageUrl) return;

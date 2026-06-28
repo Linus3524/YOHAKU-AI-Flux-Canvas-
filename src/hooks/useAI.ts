@@ -113,6 +113,8 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
     // 設計大師「透明背景」：本批生成的圖在放入畫布時自動去背
     const [pendingAutoDebg, setPendingAutoDebg] = useState(false);
+    // 設計大師「透明背景」：是否強制使用本機 Flood-fill 進行去背
+    const [pendingForceLocalFloodFill, setPendingForceLocalFloodFill] = useState(false);
     // 本機放大用的確定進度（0–100）；null = 不顯示進度條（一般生成走不確定 shimmer）
     const [genProgress, setGenProgress] = useState<number | null>(null);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
@@ -143,6 +145,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
             '🎨 Atlas 快完成了，請再等一下...',
             '⏳ 仍在生成中，Atlas 後台已收到任務...',
             '🌐 遠端生成中，網路正常，請繼續等候...',
+            '⏳ 仍在生成中，Atlas 後台已收到任務...',
         ];
         const timer = setInterval(() => {
             elapsed += INTERVAL;
@@ -171,7 +174,16 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     /** 生成後還原透明背景
      *  優先順序：1) BiRefNet（fal key）→ 2) Gemini AI 去背（executeDynamicRemoval）→ 3) Chroma Key（基本備用）
      */
-    const restoreTransparencyFn = useCallback(async (resultSrc: string, bgColor: string): Promise<string> => {
+    const restoreTransparencyFn = useCallback(async (resultSrc: string, bgColor: string, forceLocalFloodFill: boolean = false): Promise<string> => {
+        if (forceLocalFloodFill) {
+            try {
+                return await repairStickerTransparency(resultSrc, { backgroundColor: bgColor });
+            } catch (e) {
+                console.warn('[restoreTransparency] Force local flood-fill failed, fallback basic chroma key', e);
+                return processChromaKey(resultSrc, bgColor);
+            }
+        }
+
         // 1. BiRefNet（品質最佳）
         // 貼圖是硬邊+實心+白模切框，用 General Use (Heavy)：最高精度的一般分割，
         // 邊緣乾淨有把握；Matting 偏軟 alpha 是給毛髮/半透明用的，反而會羽化白框、挖淺色洞。
@@ -1260,11 +1272,12 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast]);
 
-    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number) => {
+    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', forceLocalFloodFill: boolean = false) => {
         const generationModel = modelOverride || generationModelGlobal;
         // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定
         const effImageSize = imageSizeOverride || imageSize;
         setPendingAutoDebg(autoRemoveBg);
+        setPendingForceLocalFloodFill(forceLocalFloodFill);
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
         const noteElements = selectedElements.filter(el => el.type === 'note' || el.type === 'text') as (NoteElement | TextElement)[];
         const frameElements = selectedElements.filter(el => el.type === 'frame') as FrameElement[];
@@ -1640,6 +1653,8 @@ CONSTRAINTS:
         setGeneratedImages,
         pendingAutoDebg,
         setPendingAutoDebg,
+        pendingForceLocalFloodFill,
+        setPendingForceLocalFloodFill,
         restoreTransparencyFn,
         outpaintingState,
         setOutpaintingState,
