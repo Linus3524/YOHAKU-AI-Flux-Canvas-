@@ -67,14 +67,14 @@ async function runRmbg(imageBase64: string, cacheKey: string): Promise<string> {
     const N = MODEL_SIZE * MODEL_SIZE;
     const inputTensor = new Float32Array(3 * N);
     
-    // ImageNet 標準化常數
-    const mean = [0.485, 0.456, 0.406];
-    const std = [0.229, 0.224, 0.225];
+    // ISNet/DIS 量化模型標準化常數（對標 Hugging Face preprocessor_config 規格）
+    const mean = [128.0, 128.0, 128.0];
+    const std = [256.0, 256.0, 256.0];
 
     for (let i = 0; i < N; i++) {
-        const r = imgData[i * 4]     / 255.0;
-        const g = imgData[i * 4 + 1] / 255.0;
-        const b = imgData[i * 4 + 2] / 255.0;
+        const r = imgData[i * 4];
+        const g = imgData[i * 4 + 1];
+        const b = imgData[i * 4 + 2];
         
         inputTensor[i]         = (r - mean[0]) / std[0]; // R
         inputTensor[N + i]     = (g - mean[1]) / std[1]; // G
