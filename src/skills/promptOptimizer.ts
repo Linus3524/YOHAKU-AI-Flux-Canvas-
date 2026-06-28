@@ -107,16 +107,27 @@ const SKILL_SYSTEM_PROMPTS: Record<SkillType, string> = {
 - 描述資訊架構與使用者流程的邏輯
 
 保持使用者原始的品牌/產品主題方向。`,
+
+  icon: `你是 UI 與 App 圖示設計總監。使用者會給你一段簡短的圖示設計描述，你要把它優化成更精確、具備設計感且容易被 AI 繪圖模型理解的圖示生成提示詞。
+
+優化重點：
+- 補充圖示的具體幾何形態與結構描述（線條粗細、圓角半徑、對稱性）
+- 建議最適合的視覺表現（如單色線條的精確感、3D 黏土的軟糯感、磨砂玻璃的透光折射）
+- 描述色彩與材質光澤細節（金屬反射、漸變對比、微弱邊緣發光）
+- 強調圖示的「單一核心視覺」、「乾淨俐落的輪廓」與「高可讀性」，特別是小尺寸下的辨識度。
+- 強調背景為純色底以利去背。
+
+不要改動使用者選定的風格、精緻度或背景設定，只優化內容描述本身。`,
 };
 
-const USER_INSTRUCTION = `請根據以上角色設定，將使用者的模糊輸入優化成細節豐富、適合繪圖模型生成高品質影像的專業提示詞。
+const USER_INSTRUCTION = `請根據以上角色設定，將使用者的模糊輸入優化成「精煉但具體」的專業生圖提示詞。
 
 規則：
-1. 用使用者的原始語言回應（繁體中文用繁體中文、英文用英文、日文用日文）
-2. 保留並深入挖掘使用者的核心意圖，在此基礎上大幅豐富描述，補充具體的構圖、色彩、材質、光影氛圍及畫面細節，使其具有專業設計質感。
-3. 輸出內容為純提示詞文字，不需要任何標題、前綴、標籤或解釋，也不要加上引號（直接輸出優化後的內容本身，不要含有引號如「"」或「'」）。
-4. 盡可能詳盡描述，不要限制字數，確保提供充足的視覺細節給生圖模型。
-5. 不要加 markdown 格式。`;
+1. 用使用者的原始語言回應（繁體中文用繁體中文、英文用英文、日文用日文）。
+2. 保留使用者的核心意圖，補上最關鍵的視覺特徵（主體造型、構圖、色彩、材質/光影）即可——抓重點，不要逐項堆砌。
+3. **務必精煉**：每個主體控制在約 1～3 句、40～80 字內。避免冗長、華麗辭藻、重複與過度修飾。圖示（icon）類尤其要簡短俐落——過度描述會讓模型亂加紋理與雜訊，反而變醜。
+4. 若使用者輸入是多個項目（如一套圖示的多個主題），就逐項各給一句簡短描述，不要把每項都寫成長段落。
+5. 輸出純提示詞文字：不要標題、前綴、標籤、解釋、引號或 markdown。`;
 
 /**
  * 使用 Gemini 純文字模型優化使用者的提示詞。
@@ -125,24 +136,36 @@ const USER_INSTRUCTION = `請根據以上角色設定，將使用者的模糊輸
 export async function optimizePrompt(
   skillType: SkillType,
   rawContent: string,
-  _config: Record<string, any>,
+  configs: Record<string, any>,
   apiKey: string
 ): Promise<string> {
   if (!apiKey) throw new Error('需要 Gemini API Key');
-  if (!rawContent.trim()) throw new Error('請先輸入內容');
 
   const systemPrompt = SKILL_SYSTEM_PROMPTS[skillType];
   if (!systemPrompt) throw new Error(`不支援的技能類型: ${skillType}`);
+
+  let inputContent = rawContent;
+  if (skillType === 'logo' && configs) {
+    const brandName = (configs.brandName || '').trim();
+    const slogan = (configs.slogan || '').trim();
+    inputContent = `品牌名稱: "${brandName}"\n品牌標語: "${slogan}"\n原始描述: "${rawContent}"`;
+  }
+
+  if (!inputContent.trim()) throw new Error('請先輸入內容');
 
   const genAI = new GoogleGenAI({ apiKey });
 
   const response = await genAI.models.generateContent({
     model: 'gemini-2.5-flash',
-    contents: rawContent,
+    contents: inputContent,
     config: {
       systemInstruction: `${systemPrompt}\n\n${USER_INSTRUCTION}`,
       temperature: 0.7,
+      // Gemini 2.5 Flash 是 thinking 模型：thinking token 會吃掉 maxOutputTokens 額度，
+      // 導致實際輸出被截斷而「很短」。關閉 thinking（budget 0）讓額度全給輸出（這才是
+      // 解決截斷的關鍵）；上限設適中即可——配合「精煉」指令，避免又暴衝成華麗長文。
       maxOutputTokens: 1024,
+      thinkingConfig: { thinkingBudget: 0 },
     },
   });
 

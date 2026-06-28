@@ -673,7 +673,7 @@ const App: React.FC = () => {
       if (!el) return;
 
       const input = window.prompt(
-          "請輸入此大圖中所含的貼圖數量（例如：4, 9, 12, 16 等），以進行精準網格切分。\n\n若不確定請留空進行「自動偵測」：",
+          "請輸入此大圖中所含的貼圖或圖示數量（例如：3, 4, 5, 9 等），以進行精準長寬比與網格切分。\n\n若不確定請留空進行「自動偵測」：",
           ""
       );
       if (input === null) return; // 使用者按取消
@@ -2198,7 +2198,6 @@ const App: React.FC = () => {
         <div
           className="fixed inset-0 z-[2000] flex items-center justify-center p-6"
           style={{ background: 'rgba(240,240,245,0.82)', backdropFilter: 'blur(12px)' }}
-          onClick={() => setGeneratedImages(null)}
         >
           <div
             className="relative flex flex-col"
@@ -2416,9 +2415,9 @@ const App: React.FC = () => {
             apiKey={effectiveApiKey}
             showToast={showToast}
             onClose={() => setDesignMasterTargetId(null)}
-            onGenerate={(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride) => {
+            onGenerate={(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope) => {
               setDesignMasterTargetId(null);
-              handleGenerate([el], count, prompt, model, autoRemoveBg, aspect, imageSizeOverride);
+              handleGenerate([el], count, prompt, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope);
             }}
             referenceImages={el.type === 'note' ? (el as NoteElement).referenceImages : undefined}
             onUpdateReferenceImages={el.type === 'note' ? (refs) => updateElements({ ...(el as NoteElement), referenceImages: refs }) : undefined}

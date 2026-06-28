@@ -393,9 +393,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                 <MenuItem icon={<MenuIcons.Expand />} onClick={() => handleAction(() => actions.startOutpainting(menuData.elementId!))}>
                                     擴展圖片 (Outpainting)
                                 </MenuItem>
-                                {actions.splitSticker && (
+                                 {actions.splitSticker && (
                                      <MenuItem icon={<SquareBottomDashedScissors size={14} strokeWidth={1.8} style={{ display: 'block' }} />} onClick={() => handleAction(() => actions.splitSticker!(menuData.elementId!))}>
-                                         一鍵拆分貼圖
+                                         一鍵拆分貼圖/圖示
                                      </MenuItem>
                                  )}
                                  <div className="border-t my-0.5 border-gray-100/50" />

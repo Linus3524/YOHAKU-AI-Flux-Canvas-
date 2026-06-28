@@ -1260,7 +1260,7 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast]);
 
-    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K') => {
+    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number) => {
         const generationModel = modelOverride || generationModelGlobal;
         // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定
         const effImageSize = imageSizeOverride || imageSize;
@@ -1298,10 +1298,26 @@ CONSTRAINTS:
 
             // 收集便利貼中的參考圖（base64）
             const noteRefImgs: string[] = [];
+            let chosenRefSrc: string | null = null;
             for (const note of noteElements) {
                 if (note.type === 'note' && (note as NoteElement).referenceImages) {
-                    (note as NoteElement).referenceImages!.forEach(src => { if (src) noteRefImgs.push(src); });
+                    const refs = (note as NoteElement).referenceImages || [];
+                    if (refStyleIndex !== undefined && refs[refStyleIndex]) {
+                        chosenRefSrc = refs[refStyleIndex];
+                    }
                 }
+            }
+            for (const note of noteElements) {
+                if (note.type === 'note' && (note as NoteElement).referenceImages) {
+                    (note as NoteElement).referenceImages!.forEach(src => {
+                        if (src && src !== chosenRefSrc) {
+                            noteRefImgs.push(src);
+                        }
+                    });
+                }
+            }
+            if (chosenRefSrc) {
+                noteRefImgs.unshift(chosenRefSrc);
             }
             const hasNoteRefs = noteRefImgs.length > 0;
             const canDoImg2Img = atlasModelSupportsImg2Img(atlasModel);
@@ -1464,6 +1480,13 @@ CONSTRAINTS:
                           noteRefImages.push({ idx: i, data, mimeType });
                       }
                   });
+              }
+          }
+          if (refStyleIndex !== undefined) {
+              const targetPos = noteRefImages.findIndex(r => r.idx === refStyleIndex);
+              if (targetPos > -1) {
+                  const [chosen] = noteRefImages.splice(targetPos, 1);
+                  noteRefImages.unshift(chosen);
               }
           }
 

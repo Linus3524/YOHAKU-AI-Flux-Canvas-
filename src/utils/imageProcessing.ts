@@ -810,8 +810,37 @@ const findTransparentValley = (
 
 const splitByTransparentGutters = (snapshot: CanvasSnapshot, expectedCount: number) => {
   const count = Math.max(2, Math.min(36, expectedCount));
-  const columns = Math.ceil(Math.sqrt(count));
-  const rows = Math.ceil(count / columns);
+  const imageAspectRatio = snapshot.width / snapshot.height;
+
+  let columns = Math.ceil(Math.sqrt(count));
+  let rows = Math.ceil(count / columns);
+
+  // Dynamic grid layout estimation based on image aspect ratio
+  if (imageAspectRatio >= 2.2) {
+    // Single row layout (e.g. 1x3, 1x5)
+    rows = 1;
+    columns = count;
+  } else if (imageAspectRatio <= 0.45) {
+    // Single column layout
+    columns = 1;
+    rows = count;
+  } else {
+    // Search for the grid dimensions (R x C) that best match the image aspect ratio
+    let bestDiff = Number.POSITIVE_INFINITY;
+    for (let r = 1; r <= count; r++) {
+      const c = Math.ceil(count / r);
+      if (r * c > count * 2) continue; // Exclude grid sizes that are excessively empty
+      
+      const gridAspectRatio = c / r;
+      const diff = Math.abs(gridAspectRatio - imageAspectRatio);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        rows = r;
+        columns = c;
+      }
+    }
+  }
+
   const { columns: columnProjection, rows: rowProjection } = getAlphaProjections(snapshot);
   const xBoundaries = [0];
   const yBoundaries = [0];
@@ -876,14 +905,23 @@ export const splitStickerCollectionDetailed = async (
   }
   const transparentRatio = transparentPixels / totalPixels;
 
-  let boxes = expectedCount ? splitByTransparentGutters(snapshot, expectedCount) : componentBoxes;
-
-  if (expectedCount && boxes.length === 0) {
+  let boxes: ComponentBox[];
+  if (expectedCount) {
+    // 優先用「連通元件」偵測：直接抓出每塊實際貼圖，與排列方式無關 → 奇數（3、5…）
+    // 或非均勻排版（如上排3下排2、置中）都能正確切，不受矩形方格切割的限制。
+    if (componentBoxes.length === expectedCount) {
+      boxes = componentBoxes;
+    } else if (componentBoxes.length > expectedCount) {
+      // 元件偵測過多（單張貼圖被拆成數塊）→ 合併最接近的，收斂到指定張數
+      boxes = mergeClosestBoxesUntilCount(componentBoxes, expectedCount);
+    } else {
+      // 元件偵測過少（貼圖彼此相連而被視為一塊）→ 退回方格切割
+      boxes = splitByTransparentGutters(snapshot, expectedCount);
+      if (boxes.length === 0) boxes = componentBoxes;
+      if (boxes.length > expectedCount) boxes = mergeClosestBoxesUntilCount(boxes, expectedCount);
+    }
+  } else {
     boxes = componentBoxes;
-  }
-
-  if (expectedCount && boxes.length > expectedCount) {
-    boxes = mergeClosestBoxesUntilCount(boxes, expectedCount);
   }
 
   // 只有在具備基本透明度（透明像素大於 5%）時才進行自動偵測或降級切割，避免誤切一般相片

@@ -8,6 +8,7 @@ import { ArticleIllustratorSkillConfig, ILLUSTRATOR_DEFAULT_CONFIG, ILLUSTRATOR_
 import { ComicSkillConfig, COMIC_DEFAULT_CONFIG, COMIC_OPTION_GROUPS, buildComicPrompt } from './comic';
 import { SlideDeckSkillConfig, SLIDE_DEFAULT_CONFIG, SLIDE_OPTION_GROUPS, buildSlideDeckPrompt } from './slideDeck';
 import { UiWebpageSkillConfig, UI_WEBPAGE_DEFAULT_CONFIG, UI_WEBPAGE_OPTION_GROUPS, buildUiWebpagePrompt } from './uiWebpage';
+import { IconSkillConfig, ICON_DEFAULT_CONFIG, ICON_OPTION_GROUPS, buildIconPrompt } from './icon';
 import { STYLE_PRESETS } from '../utils/helpers';
 import { VISUAL_STYLE_TEMPLATES } from './styles';
 import { DESIGN_MD_TEMPLATES } from './designs';
@@ -17,6 +18,7 @@ export const SKILL_STYLE_KEYS: Record<SkillType, string> = {
   sticker: 'style',
   cover: 'rendering',
   logo: 'style',
+  icon: 'style',
   infographic: 'style',
   social: 'style',
   illustrator: 'style',
@@ -39,6 +41,7 @@ export type SkillType =
   | 'sticker'
   | 'cover'
   | 'logo'
+  | 'icon'
   | 'infographic'
   | 'social'
   | 'illustrator'
@@ -79,6 +82,14 @@ export const SKILL_LIST: SkillMetadata[] = [
     desc: '品牌標準字、徽章與商標設計',
     defaultConfig: LOGO_DEFAULT_CONFIG,
     optionGroups: LOGO_OPTION_GROUPS,
+  },
+  {
+    id: 'icon',
+    name: 'Icon Design',
+    name_zh: '圖示設計',
+    desc: '極簡、扁平、3D等各式圖示，支援單張與自訂張數套組生成',
+    defaultConfig: ICON_DEFAULT_CONFIG,
+    optionGroups: ICON_OPTION_GROUPS,
   },
   {
     id: 'infographic',
@@ -130,7 +141,7 @@ export const SKILL_LIST: SkillMetadata[] = [
   },
 ];
 
-export function buildSkillPrompt(type: SkillType, content: string, config: any): string {
+export function buildSkillPrompt(type: SkillType, content: string, config: any, referenceImages?: (string | null)[]): string {
   let basePrompt = '';
   switch (type) {
     case 'sticker':
@@ -141,6 +152,9 @@ export function buildSkillPrompt(type: SkillType, content: string, config: any):
       break;
     case 'logo':
       basePrompt = buildLogoPrompt(content, config as LogoSkillConfig);
+      break;
+    case 'icon':
+      basePrompt = buildIconPrompt(content, config as IconSkillConfig);
       break;
     case 'infographic':
       basePrompt = buildInfographicPrompt(content, config as InfographicSkillConfig);
@@ -167,16 +181,30 @@ export function buildSkillPrompt(type: SkillType, content: string, config: any):
   const styleKey = SKILL_STYLE_KEYS[type];
   if (styleKey && config && config[styleKey]) {
     const selectedStyleId = config[styleKey];
-    const visualTemplate = VISUAL_STYLE_TEMPLATES.find(t => t.id === selectedStyleId)
-      || DESIGN_MD_TEMPLATES.find(t => t.id === selectedStyleId);
-      
-    if (visualTemplate) {
-      basePrompt = `${basePrompt}\n\n============================================================\n[MANDATORY DESIGN SYSTEM SPECIFICATION TO FOLLOW]\nAdhere strictly to this design spec for colors (Hex), typography rules, card/button styles, and layout:\n\n${visualTemplate.content}\n============================================================`;
+    if (selectedStyleId === 'ref-style') {
+      const refIdx = config.refStyleIndex !== undefined ? config.refStyleIndex : 0;
+      const circledNums = ['①','②','③','④'];
+      basePrompt = `${basePrompt}\n\n============================================================\n[MANDATORY REFERENCE RULE - STYLE & STRUCTURE INHERITANCE]\nYou must emulate both the semantic content (pose, layout, subject) and the exact artistic style (color choices, line weights, materials, lighting, aesthetic rendering) of "Reference Image ${circledNums[refIdx]}". Make the output visually identical in style.\n============================================================`;
     } else {
-      const customStyle = STYLE_PRESETS.find(p => p.id === selectedStyleId);
-      if (customStyle) {
-        basePrompt = `${basePrompt}\n\nOVERRIDE VISUAL STYLE / ART DIRECTION:\nApply this visual style preset: ${customStyle.prompt}`;
+      const visualTemplate = VISUAL_STYLE_TEMPLATES.find(t => t.id === selectedStyleId)
+        || DESIGN_MD_TEMPLATES.find(t => t.id === selectedStyleId);
+        
+      if (visualTemplate) {
+        basePrompt = `${basePrompt}\n\n============================================================\n[MANDATORY DESIGN SYSTEM SPECIFICATION TO FOLLOW]\nAdhere strictly to this design spec for colors (Hex), typography rules, card/button styles, and layout:\n\n${visualTemplate.content}\n============================================================`;
+      } else {
+        const customStyle = STYLE_PRESETS.find(p => p.id === selectedStyleId);
+        if (customStyle) {
+          basePrompt = `${basePrompt}\n\nOVERRIDE VISUAL STYLE / ART DIRECTION:\nApply this visual style preset: ${customStyle.prompt}`;
+        }
       }
+    }
+  }
+
+  // 若有上傳參考圖但「沒有」選取「維持參考圖風格」→ 注入結構繼承、風格分離規則
+  if (referenceImages && referenceImages.some(Boolean)) {
+    const isRefStyle = styleKey && config && config[styleKey] === 'ref-style';
+    if (!isRefStyle) {
+      basePrompt = `${basePrompt}\n\n============================================================\n[MANDATORY REFERENCE RULE - STRUCTURE ONLY, IGNORE STYLE]\nYou must analyze the attached Reference Images and inherit ONLY their structural layout, subject pose, camera angle, and composition (including: spatial layout, pose/action, silhouettes, perspective, object relationships). STRICTLY IGNORE and discard the original rendering medium, lighting, color palette, brushstrokes, and material textures of the reference images. Render the new output using the chosen visual style/preset.\n============================================================`;
     }
   }
 

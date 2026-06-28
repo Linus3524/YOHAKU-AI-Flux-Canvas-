@@ -10,6 +10,7 @@ import {
   SKILL_LIST,
   SkillType,
   buildSkillPrompt,
+  SKILL_STYLE_KEYS,
 } from '../skills';
 import { UI_PLATFORMS, UI_RESOLUTIONS, resolveAspectFromResolution } from '../skills/uiWebpage';
 import { optimizePrompt } from '../skills/promptOptimizer';
@@ -50,7 +51,7 @@ interface DesignMasterPanelProps {
   hasAtlasKey: boolean;
   apiKey: string;
   showToast: (msg: string) => void;
-  onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string, imageSize?: '1K' | '2K' | '4K') => void;
+  onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string, imageSize?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only') => void;
   onClose: () => void;
   /** 便利貼本身的參考圖插槽（最多4張），讓所有 skill 模式都能用同一份參考圖生成 */
   referenceImages?: (string | null)[];
@@ -94,7 +95,8 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   const [isOptimizing, setIsOptimizing] = useState(false);
 
   const handleOptimizePrompt = async () => {
-    if (!content.trim()) return;
+    const hasLogoBrand = activeSkill === 'logo' && configs.logo.brandName.trim();
+    if (!content.trim() && !hasLogoBrand) return;
     if (!apiKey) {
       showToast('⚠️ 請先在設定中配置 Gemini API Key 才能使用 AI 優化');
       return;
@@ -230,9 +232,10 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
 
   const handleGenerate = () => {
     if (isGenerating) return;
-    const prompt = buildSkillPrompt(activeSkill, content, configs[activeSkill]);
+    const prompt = buildSkillPrompt(activeSkill, content, configs[activeSkill], referenceImages);
     const isSticker = activeSkill === 'sticker';
-    const autoRemoveBg = isSticker && configs.sticker.background === 'transparent';
+    const isIcon = activeSkill === 'icon';
+    const autoRemoveBg = (isSticker && configs.sticker.background === 'transparent') || (isIcon && configs.icon.background === 'transparent');
     
     // Resolve aspect ratio for the generation call
     let aspect: string | undefined;
@@ -243,6 +246,8 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
       } else if (activeSkill === 'logo') {
         aspect = currentConfig.size;
       } else if (activeSkill === 'sticker') {
+        aspect = currentConfig.aspect;
+      } else if (activeSkill === 'icon') {
         aspect = currentConfig.aspect;
       } else if (activeSkill === 'cover') {
         aspect = currentConfig.aspect;
@@ -261,10 +266,17 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
       }
     }
     
-    // LINE 貼圖固定高解析輸出（4K），不出低清
-    const imageSizeOverride: '4K' | undefined = isSticker ? '4K' : undefined;
+    // LINE 貼圖與圖示固定高解析輸出（4K），不出低清
+    const imageSizeOverride: '4K' | undefined = (isSticker || isIcon) ? '4K' : undefined;
+    
+    // 找出選定的參考圖風格索引與範圍
+    const styleKey = SKILL_STYLE_KEYS[activeSkill];
+    const isRefStyle = styleKey && currentConfig && currentConfig[styleKey] === 'ref-style';
+    const refStyleIndex = isRefStyle ? currentConfig.refStyleIndex : undefined;
+    const refStyleScope = isRefStyle ? (currentConfig.refStyleScope || 'all') : undefined;
+
     persistState();   // 生成前先回存設定 + 同步便利貼提示詞
-    onGenerate(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride);
+    onGenerate(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope);
   };
 
   return (
@@ -359,7 +371,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
               <button
                 type="button"
                 onClick={handleOptimizePrompt}
-                disabled={isOptimizing || !content.trim()}
+                disabled={isOptimizing || (!content.trim() && !(activeSkill === 'logo' && configs.logo.brandName.trim()))}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-[#AF52DE] bg-purple-50 hover:bg-purple-100 disabled:opacity-40 disabled:hover:bg-purple-50 transition-all border border-purple-100/50 cursor-pointer"
               >
                 {isOptimizing ? (
@@ -522,6 +534,193 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                   placeholder="輸入品牌標語..."
                   className="w-full text-[13px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2 focus:outline-none focus:border-[#AF52DE] focus:ring-4 focus:ring-[#AF52DE]/10 transition-all"
                 />
+              </div>
+            </div>
+          )}
+
+          {activeSkill === 'icon' && (
+            <div className="flex flex-col gap-4 bg-purple-50/20 p-4 rounded-2xl border border-purple-100/30">
+              {/* 版面模式 */}
+              <div>
+                <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">生成類型 (版面)</div>
+                <div className="grid grid-cols-2 gap-1.5 bg-[#F1F5F9] p-0.5 rounded-xl">
+                  {[
+                    { id: 'single', name: '單張圖示', tip: '生成單張獨立圖示。' },
+                    { id: 'collection', name: '圖示合集', tip: '在一張圖中生成多張成套圖示，支援一鍵切分。' },
+                  ].map(mode => {
+                    const isSelected = configs.icon.layoutMode === mode.id;
+                    return (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        title={mode.tip}
+                        onClick={() => {
+                          setConfigs(prev => ({
+                            ...prev,
+                            icon: {
+                              ...prev.icon,
+                              layoutMode: mode.id as 'single' | 'collection',
+                            }
+                          }));
+                        }}
+                        className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-white text-[#AF52DE] shadow-[0_2px_4px_rgba(0,0,0,0.05)]'
+                            : 'text-[#64748B] hover:text-[#1E293B]'
+                        }`}
+                      >
+                        {mode.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 數量滑桿 / 輸入框 (僅在合集模式下顯示) */}
+              {configs.icon.layoutMode === 'collection' && (
+                <div className="flex flex-col gap-2.5 bg-white/60 p-3 rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-gray-600">合集圖示張數</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="2"
+                        max="20"
+                        value={configs.icon.sheetCount}
+                        onChange={e => {
+                          const val = Math.max(2, Math.min(20, parseInt(e.target.value) || 2));
+                          setConfigs(prev => ({
+                            ...prev,
+                            icon: {
+                              ...prev.icon,
+                              sheetCount: val,
+                              collectionItemPrompts: Array.from({ length: val }, (_, i) => prev.icon.collectionItemPrompts[i] || '')
+                            }
+                          }));
+                        }}
+                        className="w-12 text-center text-xs font-bold bg-[#F1F5F9] border border-gray-200 rounded px-1 py-0.5"
+                      />
+                      <span className="text-xs text-gray-400">張</span>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="2"
+                    max="20"
+                    value={configs.icon.sheetCount}
+                    onChange={e => {
+                      const val = parseInt(e.target.value);
+                      setConfigs(prev => ({
+                        ...prev,
+                        icon: {
+                          ...prev.icon,
+                          sheetCount: val,
+                          collectionItemPrompts: Array.from({ length: val }, (_, i) => prev.icon.collectionItemPrompts[i] || '')
+                        }
+                      }));
+                    }}
+                    className="w-full accent-[#AF52DE] cursor-pointer"
+                  />
+
+                  {/* 子圖示主題內容 (選填) */}
+                  <div className="flex flex-col gap-1.5 mt-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-[#86868B]">子圖示畫面內容 (選填)</span>
+                      <button
+                        type="button"
+                        disabled={isBrainstorming}
+                        onClick={async () => {
+                          if (isBrainstorming) return;
+                          if (!apiKey) {
+                            showToast('⚠️ 請先配置 Gemini API Key');
+                            return;
+                          }
+                          if (!content.trim()) {
+                            showToast('⚠️ 請先在內容素材輸入大主題，例如「辦公室工具」');
+                            return;
+                          }
+                          setIsBrainstorming(true);
+                          showToast('AI 正在發想子主題中...');
+                          try {
+                            const count = configs.icon.sheetCount;
+                            const items = await generateCollectionItemPrompts(content, count, apiKey);
+                            setConfigs(prev => ({
+                              ...prev,
+                              icon: {
+                                ...prev.icon,
+                                collectionItemPrompts: items
+                              }
+                            }));
+                            showToast('子主題生成完成！✨');
+                          } catch (e: any) {
+                            showToast(`生成子主題失敗: ${e.message || e}`);
+                          } finally {
+                            setIsBrainstorming(false);
+                          }
+                        }}
+                        className="text-[10px] font-bold text-[#AF52DE] hover:underline flex items-center gap-0.5 disabled:opacity-60 disabled:cursor-wait"
+                      >
+                        {isBrainstorming ? (
+                          <>
+                            <span className="inline-block w-3 h-3 border-[1.5px] border-[#AF52DE] border-t-transparent rounded-full animate-spin" />
+                            發想中…
+                          </>
+                        ) : (
+                          <>⚡ AI 發想子主題</>
+                        )}
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+                      {Array.from({ length: configs.icon.sheetCount }).map((_, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="text-[10px] font-semibold text-gray-400 w-4">{idx + 1}</span>
+                          <input
+                            type="text"
+                            disabled={isBrainstorming}
+                            value={configs.icon.collectionItemPrompts[idx] || ''}
+                            placeholder={isBrainstorming ? 'AI 發想中…' : `圖示 ${idx + 1} 畫面內容...`}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setConfigs(prev => {
+                                const list = [...prev.icon.collectionItemPrompts];
+                                list[idx] = val;
+                                return {
+                                  ...prev,
+                                  icon: {
+                                    ...prev.icon,
+                                    collectionItemPrompts: list
+                                  }
+                                };
+                              });
+                            }}
+                            className="flex-1 text-[11px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-lg px-2.5 py-1 focus:outline-none focus:border-[#AF52DE]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 背景設定選項 */}
+              <div>
+                <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">背景處理</div>
+                <select
+                  value={configs.icon.background}
+                  onChange={e => setConfigs(prev => ({
+                    ...prev,
+                    icon: {
+                      ...prev.icon,
+                      background: e.target.value as 'transparent' | 'white' | 'colored' | 'pattern'
+                    }
+                  }))}
+                  className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-1.5 text-[12px] text-[#1E293B]"
+                >
+                  <option value="transparent">透明背景 (自動去背)</option>
+                  <option value="white">純白背景</option>
+                  <option value="colored">彩色背景</option>
+                  <option value="pattern">格線圖案背景</option>
+                </select>
               </div>
             </div>
           )}
@@ -940,6 +1139,85 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                     <div className="flex-1 h-px bg-gray-100" />
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {/* 若有上傳參考圖且是風格相關選項組，動態插入「維持參考圖風格」按鈕 */}
+                    {isStyleGroup && referenceImages && referenceImages.some(Boolean) && (() => {
+                      const active = configs[activeSkill][group.key] === 'ref-style';
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            set(group.key, 'ref-style');
+                            const firstValidIdx = referenceImages.findIndex(Boolean);
+                            setConfigs(prev => {
+                              const updatedConfig = { ...prev[activeSkill] };
+                              if (firstValidIdx > -1 && updatedConfig.refStyleIndex === undefined) {
+                                updatedConfig.refStyleIndex = firstValidIdx;
+                              }
+                              // 如果是貼圖模式，自動切換主題為「維持參考圖主題」，避免預設的「角色」主題破壞/擬人化了參考圖
+                              if (activeSkill === 'sticker') {
+                                updatedConfig.theme = 'ref-theme';
+                              }
+                              return {
+                                ...prev,
+                                [activeSkill]: updatedConfig
+                              };
+                            });
+                          }}
+                          className={`flex flex-col gap-0.5 px-4 py-3 rounded-2xl border text-left transition-all duration-200 relative ${
+                            active
+                              ? 'bg-[#FAF5FF] border-[#AF52DE] text-[#AF52DE] shadow-[0_4px_12px_rgba(175,82,222,0.08)]'
+                              : 'bg-white border-[#E2E8F0] hover:border-[#cbd5e1] hover:shadow-[0_4px_12px_rgba(0,0,0,0.02)] text-[#1E293B]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className={`text-[13px] font-bold leading-tight flex items-center gap-1.5 ${active ? 'text-[#7e22ce]' : 'text-[#1E293B]'}`}>
+                              <Icon name="image" size={15} className={active ? 'text-[#AF52DE]' : 'text-gray-400'} />
+                              維持參考圖風格
+                            </span>
+                            {active && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-[#AF52DE] flex-shrink-0">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`text-[10px] leading-snug mt-1 ${active ? 'text-[#AF52DE]/75' : 'text-[#64748B]'}`}>
+                            鎖定選定參考圖的色彩與質感
+                          </span>
+                        </button>
+                      );
+                    })()}
+
+                    {/* 若有上傳參考圖且是主題相關選項組，動態插入「維持參考圖主題」按鈕 */}
+                    {group.key === 'theme' && referenceImages && referenceImages.some(Boolean) && (() => {
+                      const active = configs[activeSkill][group.key] === 'ref-theme';
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => set(group.key, 'ref-theme')}
+                          className={`flex flex-col gap-0.5 px-4 py-3 rounded-2xl border text-left transition-all duration-200 relative ${
+                            active
+                              ? 'bg-[#FAF5FF] border-[#AF52DE] text-[#AF52DE] shadow-[0_4px_12px_rgba(175,82,222,0.08)]'
+                              : 'bg-white border-[#E2E8F0] hover:border-[#cbd5e1] hover:shadow-[0_4px_12px_rgba(0,0,0,0.02)] text-[#1E293B]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className={`text-[13px] font-bold leading-tight flex items-center gap-1.5 ${active ? 'text-[#7e22ce]' : 'text-[#1E293B]'}`}>
+                              <Icon name="category" size={15} className={active ? 'text-[#AF52DE]' : 'text-gray-400'} />
+                              維持參考圖主題
+                            </span>
+                            {active && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-[#AF52DE] flex-shrink-0">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`text-[10px] leading-snug mt-1 ${active ? 'text-[#AF52DE]/75' : 'text-[#64748B]'}`}>
+                            由參考圖的主體物導引，不限主題
+                          </span>
+                        </button>
+                      );
+                    })()}
+
                     {group.options.map((opt: any) => {
                       const active = configs[activeSkill][group.key] === opt.id;
                       return (
@@ -1037,6 +1315,82 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                       );
                     })()}
                   </div>
+
+                  {/* 維持參考圖風格的子選擇面板 */}
+                  {isStyleGroup && configs[activeSkill][group.key] === 'ref-style' && referenceImages && referenceImages.some(Boolean) && (
+                    <div className="mt-3 bg-purple-50/20 border border-purple-100/30 p-4 rounded-2xl flex flex-col gap-4 animate-[fadeIn_0.2s_ease-out]">
+                      {/* 1. 選擇參考圖 */}
+                      <div className="flex flex-col gap-2.5">
+                        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">請選擇風格來源的參考圖：</span>
+                        <div className="flex flex-wrap gap-2.5">
+                          {referenceImages.map((src, idx) => {
+                            if (!src) return null;
+                            const circledNums = ['①','②','③','④'];
+                            const isSelected = (configs[activeSkill].refStyleIndex ?? 0) === idx;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setConfigs(prev => ({
+                                    ...prev,
+                                    [activeSkill]: {
+                                      ...prev[activeSkill],
+                                      refStyleIndex: idx
+                                    }
+                                  }));
+                                }}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-white border-[#AF52DE] text-[#AF52DE] shadow-[0_2px_8px_rgba(175,82,222,0.12)]'
+                                    : 'bg-[#F8FAFC] border-[#E2E8F0] text-gray-600 hover:border-gray-300 hover:bg-white'
+                                }`}
+                              >
+                                <img src={src} alt={`參考圖 ${idx + 1}`} className="w-8 h-8 rounded-lg object-cover border border-black/5" />
+                                <span>參考圖 {circledNums[idx]}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 2. 選擇參考範圍 */}
+                      <div className="flex flex-col gap-2.5 border-t border-purple-100/30 pt-3">
+                        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">請選擇參考範圍：</span>
+                        <div className="flex gap-2">
+                          {([
+                            { id: 'all', name: '風格與結構並重', desc: '複製排版/姿勢與色彩/質感' },
+                            { id: 'style-only', name: '僅參考風格', desc: '僅套用色彩與畫風，忽略其構圖排版' }
+                          ] as const).map(item => {
+                            const isSelected = (configs[activeSkill].refStyleScope || 'all') === item.id;
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => {
+                                  setConfigs(prev => ({
+                                    ...prev,
+                                    [activeSkill]: {
+                                      ...prev[activeSkill],
+                                      refStyleScope: item.id
+                                    }
+                                  }));
+                                }}
+                                className={`flex flex-col gap-0.5 px-4 py-2.5 rounded-xl border text-left transition-all cursor-pointer flex-1 ${
+                                  isSelected
+                                    ? 'bg-white border-[#AF52DE] text-[#AF52DE] shadow-[0_2px_8px_rgba(175,82,222,0.12)]'
+                                    : 'bg-[#F8FAFC] border-[#E2E8F0] text-gray-600 hover:border-gray-300 hover:bg-white'
+                                }`}
+                              >
+                                <span className="text-[11px] font-bold">{item.name}</span>
+                                <span className="text-[9px] text-gray-400 font-normal leading-tight">{item.desc}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
