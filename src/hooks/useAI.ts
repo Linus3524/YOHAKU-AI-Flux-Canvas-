@@ -115,6 +115,8 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
     // 設計大師「透明背景」：本批生成的圖在放入畫布時自動去背
     const [pendingAutoDebg, setPendingAutoDebg] = useState(false);
+    // LINE 貼圖去背用：null = 非貼圖；true/false = 貼圖有/無白描邊（決定泛洪扣黑或白）
+    const [pendingStickerBorder, setPendingStickerBorder] = useState<boolean | null>(null);
     // 本機放大用的確定進度（0–100）；null = 不顯示進度條（一般生成走不確定 shimmer）
     const [genProgress, setGenProgress] = useState<number | null>(null);
     const [genOpType, setGenOpType] = useState<'upscale' | 'rmbg' | null>(null);
@@ -1311,11 +1313,13 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast]);
 
-    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only') => {
+    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean) => {
         const generationModel = modelOverride || generationModelGlobal;
         // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定
         const effImageSize = imageSizeOverride || imageSize;
         setPendingAutoDebg(autoRemoveBg);
+        // LINE 貼圖去背走泛洪 chroma 主路：null = 非貼圖（用語意去背）；true/false = 貼圖有無白邊
+        setPendingStickerBorder(stickerDebgBorder === undefined ? null : stickerDebgBorder);
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
         const noteElements = selectedElements.filter(el => el.type === 'note' || el.type === 'text') as (NoteElement | TextElement)[];
         const frameElements = selectedElements.filter(el => el.type === 'frame') as FrameElement[];
@@ -1691,6 +1695,7 @@ CONSTRAINTS:
         setGeneratedImages,
         pendingAutoDebg,
         setPendingAutoDebg,
+        pendingStickerBorder,
         restoreTransparencyFn,
         outpaintingState,
         setOutpaintingState,

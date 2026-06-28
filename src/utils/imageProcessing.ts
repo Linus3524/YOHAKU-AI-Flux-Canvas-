@@ -28,6 +28,10 @@ export interface TransparencyRepairOptions {
   backgroundColor?: string;
   hasStickerBorder?: boolean;
   tolerance?: number;
+  /** 去光暈 pass 數（每輪削掉一圈「接近背景色」的殘邊）。預設 2。 */
+  haloPasses?: number;
+  /** 幾何收縮 px：無條件往內削 N px（不分顏色，含抗鋸齒殘邊），會略吃白邊。預設 0。 */
+  erodePx?: number;
 }
 
 export interface SplitStickerCollectionOptions extends TransparencyRepairOptions {
@@ -358,8 +362,9 @@ export const repairStickerTransparency = async (
     if (y < height - 1) enqueue(position + width);
   }
 
-  // Remove a one-pixel halo of near-background matte connected to the cleared area.
-  for (let pass = 0; pass < 2; pass += 1) {
+  // 去光暈：每輪削掉一圈「接近背景色 + 碰到透明」的殘邊（只削背景色，不啃白邊/主體）。
+  const haloPasses = options.haloPasses ?? 2;
+  for (let pass = 0; pass < haloPasses; pass += 1) {
     const toClear: number[] = [];
     for (let position = 0; position < width * height; position += 1) {
       const idx = position * 4;
@@ -380,6 +385,26 @@ export const repairStickerTransparency = async (
     toClear.forEach((idx) => {
       data[idx + 3] = 0;
     });
+  }
+
+  // 幾何收縮：無條件往內削 erodePx 圈（不分顏色），清掉抗鋸齒/非背景色的殘邊。
+  // 每輪先收集「碰到透明的不透明邊緣像素」再一次清掉（確保是 1px/輪，不串聯）。
+  const erodePx = Math.max(0, Math.round(options.erodePx ?? 0));
+  for (let pass = 0; pass < erodePx; pass += 1) {
+    const toErode: number[] = [];
+    for (let position = 0; position < width * height; position += 1) {
+      const idx = position * 4;
+      if (data[idx + 3] <= 10) continue;
+      const x = position % width;
+      const y = Math.floor(position / width);
+      const touchesTransparent =
+        (x > 0 && data[(position - 1) * 4 + 3] <= 10) ||
+        (x < width - 1 && data[(position + 1) * 4 + 3] <= 10) ||
+        (y > 0 && data[(position - width) * 4 + 3] <= 10) ||
+        (y < height - 1 && data[(position + width) * 4 + 3] <= 10);
+      if (touchesTransparent) toErode.push(idx);
+    }
+    toErode.forEach((idx) => { data[idx + 3] = 0; });
   }
 
   ctx.putImageData(imageData, 0, 0);
@@ -894,6 +919,13 @@ export const splitStickerCollectionDetailed = async (
   const componentBoxes = mergeBoxes(findOpaqueComponents(snapshot), mergeGap)
     .filter(box => (box.maxX - box.minX + 1) * (box.maxY - box.minY + 1) >= minBoxArea);
 
+  // 指定張數模式專用：用「幾乎不過濾」的元件清單（只濾掉極小噪點）。
+  // minBoxArea 那層過濾會把貼圖周邊的小裝飾（櫻花、盾牌、徽章…）當噪點丟掉，
+  // 導致剛好剩主角數量、拆完小物件不見；這裡保留它們，再靠 merge 併進最近的主角。
+  const noiseFloor = Math.max(64, imageArea * 0.00006);
+  const allComponentBoxes = mergeBoxes(findOpaqueComponents(snapshot), mergeGap)
+    .filter(box => (box.maxX - box.minX + 1) * (box.maxY - box.minY + 1) >= noiseFloor);
+
   // 計算透明像素佔比 (alpha <= 50)
   const totalPixels = snapshot.width * snapshot.height;
   const data = snapshot.imageData.data;
@@ -907,17 +939,17 @@ export const splitStickerCollectionDetailed = async (
 
   let boxes: ComponentBox[];
   if (expectedCount) {
-    // 優先用「連通元件」偵測：直接抓出每塊實際貼圖，與排列方式無關 → 奇數（3、5…）
-    // 或非均勻排版（如上排3下排2、置中）都能正確切，不受矩形方格切割的限制。
-    if (componentBoxes.length === expectedCount) {
-      boxes = componentBoxes;
-    } else if (componentBoxes.length > expectedCount) {
-      // 元件偵測過多（單張貼圖被拆成數塊）→ 合併最接近的，收斂到指定張數
-      boxes = mergeClosestBoxesUntilCount(componentBoxes, expectedCount);
+    // 用「含小裝飾」的元件清單：與排列方式無關 → 奇數（3、5…）或非均勻排版都能正確切；
+    // 且周邊小物件不會被濾掉，會在 merge 階段併進最近的主角，不會消失。
+    if (allComponentBoxes.length === expectedCount) {
+      boxes = allComponentBoxes;
+    } else if (allComponentBoxes.length > expectedCount) {
+      // 元件數多於張數（主角 + 分離的小裝飾）→ 合併最接近的，把小裝飾併入最近的主角
+      boxes = mergeClosestBoxesUntilCount(allComponentBoxes, expectedCount);
     } else {
       // 元件偵測過少（貼圖彼此相連而被視為一塊）→ 退回方格切割
       boxes = splitByTransparentGutters(snapshot, expectedCount);
-      if (boxes.length === 0) boxes = componentBoxes;
+      if (boxes.length === 0) boxes = allComponentBoxes;
       if (boxes.length > expectedCount) boxes = mergeClosestBoxesUntilCount(boxes, expectedCount);
     }
   } else {

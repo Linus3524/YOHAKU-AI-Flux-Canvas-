@@ -51,7 +51,7 @@ interface DesignMasterPanelProps {
   hasAtlasKey: boolean;
   apiKey: string;
   showToast: (msg: string) => void;
-  onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string, imageSize?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only') => void;
+  onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string, imageSize?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean) => void;
   onClose: () => void;
   /** 便利貼本身的參考圖插槽（最多4張），讓所有 skill 模式都能用同一份參考圖生成 */
   referenceImages?: (string | null)[];
@@ -275,8 +275,14 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
     const refStyleIndex = isRefStyle ? currentConfig.refStyleIndex : undefined;
     const refStyleScope = isRefStyle ? (currentConfig.refStyleScope || 'all') : undefined;
 
+    // LINE 貼圖：背景已控制成純黑(有白邊)/純白(無白邊)，去背改走泛洪 chroma 主路；
+    // 傳白描邊旗標讓去背知道要扣黑還是白、並保住白色 die-cut 邊。其他模式維持語意去背。
+    const stickerDebgBorder = (isSticker && configs.sticker.background === 'transparent')
+      ? !!configs.sticker.useStickerBorder
+      : undefined;
+
     persistState();   // 生成前先回存設定 + 同步便利貼提示詞
-    onGenerate(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope);
+    onGenerate(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder);
   };
 
   return (

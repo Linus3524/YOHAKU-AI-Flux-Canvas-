@@ -281,6 +281,9 @@ ${(() => {
   }
   return modOf(STICKER_BACKGROUNDS, config.background);
 })()}
+${config.background === 'transparent'
+  ? `WHOLE-CANVAS BACKGROUND (CRITICAL): Treat the ENTIRE canvas as ONE single flat solid ${config.useStickerBorder ? 'pure black (#000000)' : 'pure white (#FFFFFF)'} background. Every gap, margin and empty space BETWEEN and AROUND ${isSheet ? 'the stickers' : 'the sticker'} must be exactly that same pure ${config.useStickerBorder ? 'black' : 'white'} — with absolutely NO marble / paper / fabric / canvas texture, NO grain or noise, NO gradient, NO vignette, NO shading, NO patterns and NO decorative fill ANYWHERE. The empty areas must be perfectly clean, flat and identical to the rest of the background.`
+  : ''}
 
 7. ASPECT RATIO
 ${aspectMod}
@@ -299,5 +302,6 @@ ${textInstruction}
 - NO photographic realistic human faces (stylized/illustrated only).
 - NO text overlapping the main subject (unless specified in TEXT CONFIG above); NO watermarks or signatures.
 - NO floating drop shadows; NO blurry edges or anti-aliasing artifacts.
+- NO background texture, marble/paper/fabric grain, noise, vignette or decorative fill in the gaps or empty areas — the whole-canvas background stays perfectly flat, solid and uniform.
 `.trim();
 }

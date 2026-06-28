@@ -36,7 +36,7 @@ import { gptLayerSegment } from './utils/gptLayerSplit';
 import { detectTextBlocks } from './utils/ocrService';
 import { SVGExportModal } from './components/SVGExportModal';
 import { SemanticEditorView } from './components/SemanticEditor';
-import { splitStickerCollectionDetailed, detectBackgroundColor } from './utils/imageProcessing';
+import { splitStickerCollectionDetailed, detectBackgroundColor, repairStickerTransparency } from './utils/imageProcessing';
 import type {
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -465,6 +465,7 @@ const App: React.FC = () => {
       generatedImages,
       setGeneratedImages,
       pendingAutoDebg,
+      pendingStickerBorder,
       restoreTransparencyFn,
       outpaintingState,
       setOutpaintingState,
@@ -1284,11 +1285,29 @@ const App: React.FC = () => {
 
         (async () => {
           try {
-            // 生成圖的底色由 AI 自選（綠/洋紅/青…），不能假設是白。
-            // 先量出實際邊緣背景色，再交給去背流程——BiRefNet 路線會忽略它，
-            // 但沒 fal key 走本機 chroma key / flood-fill 時，扣色才會跟對。
-             const detectedBg = await detectBackgroundColor(originalSrc);
-            const debgSrc = await restoreTransparencyFn(originalSrc, detectedBg);
+            let debgSrc: string;
+            if (pendingStickerBorder !== null) {
+              // LINE 貼圖：背景已控制成純黑(有白邊)/純白(無白邊) → 泛洪 chroma 為主路。
+              // 邊角泛洪只扣與邊緣相連的背景，不會挖洞、且有白邊時只扣黑→保住白色 die-cut 邊；
+              // 內建 2-pass 去光暈。萬一泛洪失敗才退回語意去背。
+              const hasBorder = pendingStickerBorder;
+              try {
+                debgSrc = await repairStickerTransparency(originalSrc, {
+                  backgroundColor: hasBorder ? '#000000' : '#FFFFFF',
+                  hasStickerBorder: hasBorder,
+                  tolerance: hasBorder ? 50 : 44,
+                  haloPasses: 3,   // 加強去背景色殘邊
+                  erodePx: 1,      // 再幾何收縮 1px 保底（清抗鋸齒殘邊）
+                });
+              } catch {
+                const detectedBg = await detectBackgroundColor(originalSrc);
+                debgSrc = await restoreTransparencyFn(originalSrc, detectedBg);
+              }
+            } else {
+              // 其他模式（icon chroma 底 / 一般）：底色由 AI 自選，先量邊緣色再交給語意去背流程。
+              const detectedBg = await detectBackgroundColor(originalSrc);
+              debgSrc = await restoreTransparencyFn(originalSrc, detectedBg);
+            }
             setElements(prev => prev.map(el => el.id === elementId && el.type === 'image' ? { ...el, src: debgSrc } : el));
             if (debgSrc.startsWith('data:')) {
               cacheImage(elementId, debgSrc);
@@ -1308,7 +1327,7 @@ const App: React.FC = () => {
       }
     };
     img.src = originalSrc;
-  }, [addElement, getCenterOfViewport, pendingAutoDebg, restoreTransparencyFn, showToast, setGeneratingElementIds, setGeneratingLabels, setElements]);
+  }, [addElement, getCenterOfViewport, pendingAutoDebg, pendingStickerBorder, restoreTransparencyFn, showToast, setGeneratingElementIds, setGeneratingLabels, setElements]);
 
   const downloadGeneratedImage = (imageUrl: string) => {
       if (!imageUrl) return;
@@ -2419,9 +2438,9 @@ const App: React.FC = () => {
             apiKey={effectiveApiKey}
             showToast={showToast}
             onClose={() => setDesignMasterTargetId(null)}
-            onGenerate={(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope) => {
+            onGenerate={(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder) => {
               setDesignMasterTargetId(null);
-              handleGenerate([el], count, prompt, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope);
+              handleGenerate([el], count, prompt, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder);
             }}
             referenceImages={el.type === 'note' ? (el as NoteElement).referenceImages : undefined}
             onUpdateReferenceImages={el.type === 'note' ? (refs) => updateElements({ ...(el as NoteElement), referenceImages: refs }) : undefined}
