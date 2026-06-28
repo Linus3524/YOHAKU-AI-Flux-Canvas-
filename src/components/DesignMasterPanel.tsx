@@ -266,8 +266,8 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
       }
     }
     
-    // LINE 貼圖與圖示固定高解析輸出（4K），不出低清
-    const imageSizeOverride: '4K' | undefined = (isSticker || isIcon) ? '4K' : undefined;
+    // 預設設計大師內所有模型均以最高解析度（4K）輸出
+    const imageSizeOverride: '4K' = '4K';
     
     // 找出選定的參考圖風格索引與範圍
     const styleKey = SKILL_STYLE_KEYS[activeSkill];
