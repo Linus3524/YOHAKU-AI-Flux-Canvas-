@@ -187,11 +187,13 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
       lama: 'not_downloaded', sam2_encoder: 'not_downloaded', sam2_decoder: 'not_downloaded',
       upscale_photo: 'not_downloaded', upscale_anime: 'not_downloaded', upscale_art: 'not_downloaded',
       ocr_det: 'not_downloaded', ocr_rec: 'not_downloaded', ocr_dict: 'not_downloaded',
+      bria_rmbg: 'not_downloaded',
   });
   const [modelProgress, setModelProgress] = useState<Record<OnnxModelKey, number>>({
       lama: 0, sam2_encoder: 0, sam2_decoder: 0,
       upscale_photo: 0, upscale_anime: 0, upscale_art: 0,
       ocr_det: 0, ocr_rec: 0, ocr_dict: 0,
+      bria_rmbg: 0,
   });
 
   // 開啟本機模型分頁時初始化狀態
@@ -1182,55 +1184,57 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   })}
                 </div>
 
-                {/* LaMa */}
-                {(['lama'] as OnnxModelKey[]).map(key => {
-                  const cfg = MODEL_CONFIGS[key];
-                  const status = modelStatuses[key];
-                  const progress = modelProgress[key];
-                  return (
-                    <div key={key} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-[13px] font-bold text-gray-900">{cfg.name}</span>
-                            {status === 'ready' && (
-                              <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">已安裝</span>
+                {/* LaMa & 本機去背 */}
+                <div className="space-y-3">
+                  {(['lama', 'bria_rmbg'] as OnnxModelKey[]).map(key => {
+                    const cfg = MODEL_CONFIGS[key];
+                    const status = modelStatuses[key];
+                    const progress = modelProgress[key];
+                    return (
+                      <div key={key} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-[13px] font-bold text-gray-900">{cfg.name}</span>
+                              {status === 'ready' && (
+                                <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">已安裝</span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-500 mb-2">{cfg.description}（~{cfg.sizeMB}MB）</p>
+                            {status === 'downloading' && (
+                              <div className="w-full bg-gray-100 rounded-full h-1.5">
+                                <div className="bg-purple-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                              </div>
                             )}
                           </div>
-                          <p className="text-[11px] text-gray-500 mb-2">{cfg.description}（~{cfg.sizeMB}MB）</p>
-                          {status === 'downloading' && (
-                            <div className="w-full bg-gray-100 rounded-full h-1.5">
-                              <div className="bg-purple-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-shrink-0">
-                          {status === 'not_downloaded' && (
-                            <button onClick={() => handleDownload(key)}
-                              className="text-[11px] font-semibold px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors">
-                              下載
-                            </button>
-                          )}
-                          {status === 'downloading' && (
-                            <span className="text-[11px] text-purple-500 font-medium">{progress}%</span>
-                          )}
-                          {status === 'ready' && (
-                            <button onClick={() => handleDelete(key)}
-                              className="text-[11px] text-gray-400 hover:text-red-500 transition-colors">
-                              刪除
-                            </button>
-                          )}
-                          {status === 'error' && (
-                            <button onClick={() => handleDownload(key)}
-                              className="text-[11px] text-red-500 font-medium">
-                              重試
-                            </button>
-                          )}
+                          <div className="flex-shrink-0">
+                            {status === 'not_downloaded' && (
+                              <button onClick={() => handleDownload(key)}
+                                className="text-[11px] font-semibold px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors">
+                                下載
+                              </button>
+                            )}
+                            {status === 'downloading' && (
+                              <span className="text-[11px] text-purple-500 font-medium">{progress}%</span>
+                            )}
+                            {status === 'ready' && (
+                              <button onClick={() => handleDelete(key)}
+                                className="text-[11px] text-gray-400 hover:text-red-500 transition-colors">
+                                刪除
+                              </button>
+                            )}
+                            {status === 'error' && (
+                              <button onClick={() => handleDownload(key)}
+                                className="text-[11px] text-red-500 font-medium">
+                                重試
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
 
                 {/* 本機高清放大（4x 超解析） */}
                 <div className="pt-1">

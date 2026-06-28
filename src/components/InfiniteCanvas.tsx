@@ -520,6 +520,7 @@ interface InfiniteCanvasProps {
   onCameraAngle: (prompt: string) => void;
   onRemoveBackground: (mode: string) => void;
   onBiRefNetRemoveBackground?: (model: string) => void;
+  onLocalRemoveBackground?: () => void;
   hasFalKey?: boolean;
   onHarmonize: () => void;
   isGenerating: boolean;
@@ -706,6 +707,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onCameraAngle,
   onRemoveBackground,
   onBiRefNetRemoveBackground,
+  onLocalRemoveBackground,
   hasFalKey = false,
   onHarmonize,
   isGenerating,
@@ -1992,6 +1994,16 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                     </div>
                                                 );
                                             })()}
+
+                                            {onLocalRemoveBackground && (
+                                                <button
+                                                    onClick={onLocalRemoveBackground}
+                                                    className="w-full py-2.5 bg-white border border-gray-200 text-gray-800 rounded-xl text-[13px] font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 active:scale-95"
+                                                >
+                                                    <Icon name="content_cut" size={17} style={{ color: '#8b5cf6' }} />
+                                                    本機 AI 去背 (ISNet)
+                                                </button>
+                                            )}
 
                                             <div className="flex gap-2">
                                                 <div className="flex bg-[#f1f5f9] p-1 rounded-xl w-[88px]">

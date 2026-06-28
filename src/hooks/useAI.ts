@@ -20,7 +20,9 @@ import { callAtlasGenerate, callAtlasImg2Img, callAtlasInpaint, atlasModelSuppor
 import { birefnetRemoveBg } from '../utils/geminiLayer';
 import { repairStickerTransparency } from '../utils/imageProcessing';
 import { runUpscaleInWorker } from '../utils/upscaleWorkerClient';
+import { runLocalRmbgInWorker } from '../utils/briaRmbgWorkerClient';
 import { MODEL_CONFIGS, getModelStatus, type OnnxModelKey } from '../utils/onnxModelCache';
+import { cacheImage } from '../utils/imageCache';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -1262,6 +1264,48 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast]);
 
+    // ── 本機 ONNX 去背（ISNet 模型，不走雲端、免額度） ──
+    const handleLocalRemoveBackground = useCallback(async () => {
+        const element = elements.find(el => el.id === selectedElementIds[0]);
+        if (!element || element.type !== 'image') return;
+
+        const cfg = MODEL_CONFIGS['bria_rmbg'];
+        const status = await getModelStatus('bria_rmbg');
+        if (status !== 'ready') {
+            showToast(`請先在「功能助手 → 本機 AI 模型」下載「${cfg.name}」(${cfg.sizeMB}MB)`);
+            return;
+        }
+
+        setGeneratingElementIds([element.id]);
+        setIsGenerating(true);
+        setGenProgress(0);
+        showToast('🔍 本機 AI 去背中 (ISNet)...');
+
+        try {
+            const resultSrc = await runLocalRmbgInWorker(
+                element.src,
+                cfg.cacheKey,
+                (pct) => {
+                    setGenProgress(pct);
+                }
+            );
+
+            // 更新原圖 src
+            setElements(prev => prev.map(e => e.id === element.id ? { ...e, src: resultSrc } : e));
+            // 寫入本地快取
+            if (resultSrc.startsWith('data:')) {
+                cacheImage(element.id, resultSrc);
+            }
+            showToast('本機去背完成！✨');
+        } catch (e: any) {
+            handleAIError(e, '本機去背');
+        } finally {
+            setGeneratingElementIds([]);
+            setGenProgress(null);
+            setIsGenerating(false);
+        }
+    }, [elements, selectedElementIds, setElements, showToast]);
+
     const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only') => {
         const generationModel = modelOverride || generationModelGlobal;
         // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定
@@ -1667,6 +1711,7 @@ CONSTRAINTS:
         handleAutoPromptGenerate,
         handleAIUpscale,
         handleLocalUpscale,
+        handleLocalRemoveBackground,
         genProgress,
         handleGenerate,
         handleAskAI 

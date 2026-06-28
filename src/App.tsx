@@ -489,6 +489,7 @@ const App: React.FC = () => {
       handleAutoPromptGenerate,
       handleAIUpscale,
       handleLocalUpscale,
+      handleLocalRemoveBackground,
       handleGenerate,
       handleAskAI 
   } = useAI({
@@ -2063,6 +2064,7 @@ const App: React.FC = () => {
         notePlacing={placingNote}
         onUpscale={handleAIUpscale}
         onLocalUpscale={handleLocalUpscale}
+        onLocalRemoveBackground={handleLocalRemoveBackground}
         onDragStart={() => setIsDraggingOnCanvas(true)}
         onDragEnd={() => setIsDraggingOnCanvas(false)}
       />

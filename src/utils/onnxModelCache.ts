@@ -20,7 +20,8 @@ export type OnnxModelKey =
     | 'upscale_art'
     | 'ocr_det'
     | 'ocr_rec'
-    | 'ocr_dict';
+    | 'ocr_dict'
+    | 'bria_rmbg';
 
 /** 放大模型共用屬性：放大倍率 + 輸入張量名稱（推論時用） */
 export const UPSCALE_KEYS: OnnxModelKey[] = ['upscale_photo', 'upscale_anime', 'upscale_art'];
@@ -111,6 +112,14 @@ export const MODEL_CONFIGS: Record<OnnxModelKey, ModelConfig> = {
         url: 'https://huggingface.co/karmueo/PaddleOcr/resolve/main/ppocr_keys_v1.txt',
         cacheKey: 'onnx_ocr_dict_v4_1',
         sizeMB: 0.3,
+    },
+    bria_rmbg: {
+        key: 'bria_rmbg',
+        name: '本機 AI 去背 (ISNet)',
+        description: '智慧二分圖像分割模型，免 API 額度本機高速去背',
+        url: 'https://huggingface.co/xrds/isnet-general-onnx-int8/resolve/main/onnx/model.onnx',
+        cacheKey: 'onnx_isnet_general_int8_v1',
+        sizeMB: 43.2,
     },
 };
 
@@ -225,7 +234,7 @@ export async function getAllModelStatuses(): Promise<Record<OnnxModelKey, ModelS
     const keys: OnnxModelKey[] = [
         'lama', 'sam2_encoder', 'sam2_decoder',
         'upscale_photo', 'upscale_anime', 'upscale_art',
-        'ocr_det', 'ocr_rec', 'ocr_dict'
+        'ocr_det', 'ocr_rec', 'ocr_dict', 'bria_rmbg'
     ];
     const results = await Promise.all(keys.map(k => getModelStatus(k)));
     return Object.fromEntries(keys.map((k, i) => [k, results[i]])) as Record<OnnxModelKey, ModelStatus>;
