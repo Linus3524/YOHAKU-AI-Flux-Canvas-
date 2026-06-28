@@ -449,9 +449,21 @@ export const repairStickerTransparency = async (
       }
     }
 
-    // 取原始 alpha 和模糊 alpha 的最小值（只收縮、羽化邊緣，不讓圖像擴大溢出）
+    // 透過高對比度處理（Feather + Contrast）使邊緣既平滑又銳利，消除階梯鋸齒
+    // 對比度係數 3.5，對比中心 0.55 (微調以防邊緣外擴)
+    const kContrast = 3.5;
+    const kCenter = 0.55;
     for (let i = 0; i < width * height; i++) {
-      data[i * 4 + 3] = Math.round(Math.min(alpha[i], blurred[i]) * 255.0);
+      if (alpha[i] === 0) {
+        data[i * 4 + 3] = 0;
+        continue;
+      }
+      const blurredVal = blurred[i];
+      let v = (blurredVal - kCenter) * kContrast + 0.5;
+      v = Math.max(0.0, Math.min(1.0, v));
+      
+      const finalAlpha = Math.min(alpha[i], v);
+      data[i * 4 + 3] = Math.round(finalAlpha * 255.0);
     }
   }
 

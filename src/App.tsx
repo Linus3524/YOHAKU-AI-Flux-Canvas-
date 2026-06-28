@@ -1298,7 +1298,7 @@ const App: React.FC = () => {
                   tolerance: hasBorder ? 50 : 44,
                   haloPasses: 3,   // 加強去背景色殘邊
                   erodePx: 1,      // 再幾何收縮 1px 保底（清抗鋸齒殘邊）
-                  featherRadius: 1, // 羽化 1px 消除泛洪產生的鋸齒硬邊，使邊緣更加平滑
+                  featherRadius: 2, // 羽化 2px 搭配對比度拉伸，消除階梯鋸齒以產生平滑邊緣
                 });
               } catch {
                 const detectedBg = await detectBackgroundColor(originalSrc);
