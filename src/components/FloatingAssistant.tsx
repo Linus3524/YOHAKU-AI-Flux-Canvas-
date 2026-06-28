@@ -542,6 +542,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         { t: '圖片逆向分析', d: '右鍵「提取提示詞」，AI 生成中英對照的詠唱咒語。' },
                         { t: '風格複製', d: 'AI 解構色彩、光影、畫風等 10 個維度，紋理/藝術樣式/手動三種貼上方式。' },
                         { t: '智慧去背', d: '右鍵「智慧去背」，由 Gemini AI 分析並去除背景，不需額外 API Key。' },
+                        { t: '本機 AI 去背', d: '選取圖片後於編輯面板點擊「本機 AI 去背 (ISNet)」，推論完全在本機離線執行，免 API 額度（需下載本機 ISNet 模型）。' },
                         { t: '擴展圖片', d: '拖曳外框定義擴展區域，AI 無縫填補空白（支援自動發想提示詞）。' },
                         { t: '影像調和', d: '選取多張圖片，AI 調整光影色調融合為自然畫面（支援 2K 高清）。' },
                         { t: '原圖比例輸出', d: '生成設定選「原圖比例」，AI 依據參考圖的寬高比輸出，結果更貼合原始構圖。' },
@@ -557,10 +558,11 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     {/* 設計大師 */}
                     <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-purple-900 text-[13px] mb-1">✦ 設計大師 (Design Master)</h4>
-                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">整合 60+ 種 Markdown 設計系統規格書與 50+ 品牌設計規格書，專為高排版性圖卡與插圖設計。支援 9 種專業創作技能，可自訂版面、裝置解析度、比例與受眾定位。</p>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">整合 60+ 種 Markdown 設計系統規格書與 50+ 品牌設計規格書，專為高排版性圖卡與插圖設計。支援 10 種專業創作技能，可自訂版面、裝置解析度、比例與受眾定位。</p>
                       <div className="grid grid-cols-2 gap-1.5 mb-2">
                         {[
                           { label: '模切貼圖', desc: '可切換「單圖、三視圖、貼貼套組」版面，支援一鍵表情與自訂壓字效果。' },
+                          { label: '圖示設計', desc: '一鍵生成單張或一整套 Icon 系列。支援 12 種對標風格與自訂背景底色設定。' },
                           { label: '精緻封面', desc: '適用於部落格、簡報或社群網站首圖封面' },
                           { label: '標誌設計', desc: '品牌標準字、徽章與商標 LOGO 設計' },
                           { label: '資訊圖表', desc: '便當網格、流程圖、對比圖等數據視覺化' },
