@@ -461,6 +461,7 @@ const App: React.FC = () => {
       generatingElementIds,
       setGeneratingElementIds,
       genProgress,
+      genOpType,
       generatedImages,
       setGeneratedImages,
       pendingAutoDebg,
@@ -2056,6 +2057,7 @@ const App: React.FC = () => {
         generatingElementIds={generatingElementIds}
         generatingLabels={generatingLabels}
         generatingProgress={genProgress}
+        generatingOpType={genOpType}
         croppingElementId={croppingElementId}
         onCancelCrop={handleCancelCrop}
         onApplyCrop={handleApplyCrop}

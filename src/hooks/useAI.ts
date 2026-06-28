@@ -117,6 +117,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [pendingAutoDebg, setPendingAutoDebg] = useState(false);
     // 本機放大用的確定進度（0–100）；null = 不顯示進度條（一般生成走不確定 shimmer）
     const [genProgress, setGenProgress] = useState<number | null>(null);
+    const [genOpType, setGenOpType] = useState<'upscale' | 'rmbg' | null>(null);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
     const [outpaintingState, setOutpaintingState] = useState<OutpaintingState | null>(null);
     const [copiedStyle, setCopiedStyle] = useState<{ analysis: import('../components/StylePasteModal').StyleAnalysisResult } | null>(null);
@@ -1223,6 +1224,7 @@ CONSTRAINTS:
 
         setGeneratingElementIds([element.id]);
         setGenProgress(0);   // 在元素 badge 上顯示確定進度條（取代每幾趴跳 toast）
+        setGenOpType('upscale');
         setIsGenerating(true);
         try {
             // 模型原生 4x；factor=2 時於 worker 內把 4x 結果降回 2x（仍享 4x 細節重構）
@@ -1260,6 +1262,7 @@ CONSTRAINTS:
         } finally {
             setGeneratingElementIds([]);
             setGenProgress(null);
+            setGenOpType(null);
             setIsGenerating(false);
         }
     }, [elements, selectedElementIds, setElements, showToast]);
@@ -1279,6 +1282,7 @@ CONSTRAINTS:
         setGeneratingElementIds([element.id]);
         setIsGenerating(true);
         setGenProgress(0);
+        setGenOpType('rmbg');
         showToast('🔍 本機 AI 去背中 (ISNet)...');
 
         try {
@@ -1302,6 +1306,7 @@ CONSTRAINTS:
         } finally {
             setGeneratingElementIds([]);
             setGenProgress(null);
+            setGenOpType(null);
             setIsGenerating(false);
         }
     }, [elements, selectedElementIds, setElements, showToast]);
@@ -1713,6 +1718,7 @@ CONSTRAINTS:
         handleLocalUpscale,
         handleLocalRemoveBackground,
         genProgress,
+        genOpType,
         handleGenerate,
         handleAskAI 
     };

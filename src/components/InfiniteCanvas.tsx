@@ -527,6 +527,7 @@ interface InfiniteCanvasProps {
   generatingElementIds?: string[];
   generatingLabels?: Record<string, string>;
   generatingProgress?: number | null;
+  generatingOpType?: 'upscale' | 'rmbg' | null;
   croppingElementId: string | null;
   onCancelCrop: () => void;
   onApplyCrop: (cropRect: { x: number, y: number, width: number, height: number }) => void;
@@ -714,6 +715,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   generatingElementIds = [],
   generatingLabels = {},
   generatingProgress = null,
+  generatingOpType,
   croppingElementId,
   onCancelCrop,
   onApplyCrop,
@@ -1427,14 +1429,29 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
               {el.id === badgeId && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   {generatingProgress != null ? (
-                    // 確定進度（本機放大）：彩色進度條 + 百分比，不跳 toast
+                    // 確定進度（本機去背/本機放大）：彩色進度條 + 百分比，不跳 toast
                     <div className="bg-white/95 backdrop-blur-md rounded-2xl px-3.5 py-2.5 flex flex-col items-center gap-1.5 shadow-lg" style={{ minWidth: 132 }}>
                       <div className="flex items-center gap-1.5">
-                        <Icon name="open_in_full" size={12} className="flex-shrink-0" style={{ color: '#6366f1' }} />
-                        <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">高清放大中 {generatingProgress}%</span>
+                        <Icon 
+                          name={generatingOpType === 'rmbg' ? 'content_cut' : 'open_in_full'} 
+                          size={12} 
+                          className="flex-shrink-0" 
+                          style={{ color: generatingOpType === 'rmbg' ? '#8b5cf6' : '#6366f1' }} 
+                        />
+                        <span className="text-[11px] font-semibold text-gray-800 whitespace-nowrap">
+                          {generatingOpType === 'rmbg' ? '本機去背中' : '高清放大中'} {generatingProgress}%
+                        </span>
                       </div>
                       <div className="w-full bg-gray-200/80 rounded-full h-1.5 overflow-hidden">
-                        <div className="h-1.5 rounded-full transition-all duration-200" style={{ width: `${generatingProgress}%`, background: 'linear-gradient(90deg,#6366f1,#a855f7)' }} />
+                        <div 
+                          className="h-1.5 rounded-full transition-all duration-200" 
+                          style={{ 
+                            width: `${generatingProgress}%`, 
+                            background: generatingOpType === 'rmbg' 
+                              ? 'linear-gradient(90deg,#8b5cf6,#ec4899)' 
+                              : 'linear-gradient(90deg,#6366f1,#a855f7)' 
+                          }} 
+                        />
                       </div>
                     </div>
                   ) : (
