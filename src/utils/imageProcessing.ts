@@ -32,6 +32,8 @@ export interface TransparencyRepairOptions {
   haloPasses?: number;
   /** 幾何收縮 px：無條件往內削 N px（不分顏色，含抗鋸齒殘邊），會略吃白邊。預設 0。 */
   erodePx?: number;
+  /** 羽化半徑（像素），大於 0 時會對 alpha 邊緣做平滑羽化以消除鋸齒。預設 0（不羽化）。 */
+  featherRadius?: number;
 }
 
 export interface SplitStickerCollectionOptions extends TransparencyRepairOptions {
@@ -405,6 +407,52 @@ export const repairStickerTransparency = async (
       if (touchesTransparent) toErode.push(idx);
     }
     toErode.forEach((idx) => { data[idx + 3] = 0; });
+  }
+
+  // 邊緣羽化（平滑化鋸齒）：僅當 featherRadius > 0 時執行
+  const featherRadius = Math.max(0, Math.round(options.featherRadius ?? 0));
+  if (featherRadius > 0) {
+    const alpha = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      alpha[i] = data[i * 4 + 3] / 255.0;
+    }
+
+    // 水平方向 box blur
+    const tempH = new Float32Array(width * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let sum = 0, cnt = 0;
+        for (let dx = -featherRadius; dx <= featherRadius; dx++) {
+          const nx = x + dx;
+          if (nx >= 0 && nx < width) {
+            sum += alpha[y * width + nx];
+            cnt++;
+          }
+        }
+        tempH[y * width + x] = sum / cnt;
+      }
+    }
+
+    // 垂直方向 box blur
+    const blurred = new Float32Array(width * height);
+    for (let x = 0; x < width; x++) {
+      for (let y = 0; y < height; y++) {
+        let sum = 0, cnt = 0;
+        for (let dy = -featherRadius; dy <= featherRadius; dy++) {
+          const ny = y + dy;
+          if (ny >= 0 && ny < height) {
+            sum += tempH[ny * width + x];
+            cnt++;
+          }
+        }
+        blurred[y * width + x] = sum / cnt;
+      }
+    }
+
+    // 取原始 alpha 和模糊 alpha 的最小值（只收縮、羽化邊緣，不讓圖像擴大溢出）
+    for (let i = 0; i < width * height; i++) {
+      data[i * 4 + 3] = Math.round(Math.min(alpha[i], blurred[i]) * 255.0);
+    }
   }
 
   ctx.putImageData(imageData, 0, 0);
