@@ -13,7 +13,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { InfiniteCanvas, CanvasApi } from './components/InfiniteCanvas';
 import { ContextMenu } from './components/ContextMenu';
 import { StylePasteModal } from './components/StylePasteModal';
-import { DesignMasterPanel } from './components/DesignMasterPanel';
+import { DesignMasterPanel, DesignMasterPersistState } from './components/DesignMasterPanel';
 import { DrawingModal } from './components/DrawingModal';
 import { ImageEditModal } from './components/ImageEditModal';
 import { DraggableToolbar } from './components/DraggableToolbar';
@@ -239,6 +239,8 @@ const App: React.FC = () => {
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [designMasterTargetId, setDesignMasterTargetId] = useState<string | null>(null);
+  // 每張便利貼上次的設計大師設定（key = elementId）：重複進入同一張便利貼時還原設定
+  const [designMasterStates, setDesignMasterStates] = useState<Record<string, DesignMasterPersistState>>({});
   const [showSVGExportModal, setShowSVGExportModal] = useState(false);
   const [showStoragePopover, setShowStoragePopover] = useState(false);
 
@@ -2420,6 +2422,14 @@ const App: React.FC = () => {
             }}
             referenceImages={el.type === 'note' ? (el as NoteElement).referenceImages : undefined}
             onUpdateReferenceImages={el.type === 'note' ? (refs) => updateElements({ ...(el as NoteElement), referenceImages: refs }) : undefined}
+            initialState={designMasterStates[el.id]}
+            onPersistState={(s) => {
+              // 記住這張便利貼的設定（下次重複進入還原）
+              setDesignMasterStates(prev => ({ ...prev, [el.id]: s }));
+              // 同步：把便利貼提示詞改成設計大師內編輯後的內容（避免回畫布後提示詞消失）
+              if (el.type === 'note') updateElements({ ...(el as NoteElement), content: s.content });
+              else updateElements({ ...(el as TextElement), text: s.content });
+            }}
           />
         );
       })()}

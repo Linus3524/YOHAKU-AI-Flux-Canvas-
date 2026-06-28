@@ -55,6 +55,18 @@ interface DesignMasterPanelProps {
   /** 便利貼本身的參考圖插槽（最多4張），讓所有 skill 模式都能用同一份參考圖生成 */
   referenceImages?: (string | null)[];
   onUpdateReferenceImages?: (refs: (string | null)[]) => void;
+  /** 該便利貼上次的設計大師設定（重複進入同一張便利貼時還原；新便利貼為 undefined → 用預設） */
+  initialState?: DesignMasterPersistState;
+  /** 將目前設定回存（生成或關閉時呼叫），供下次進入同一張便利貼還原 */
+  onPersistState?: (s: DesignMasterPersistState) => void;
+}
+
+export interface DesignMasterPersistState {
+  activeSkill: SkillType;
+  configs: Record<SkillType, any>;
+  count: 1 | 2 | 3 | 4;
+  model: string;
+  content: string;
 }
 
 const MODEL_OPTIONS: { id: string; label: string; needsAtlas: boolean }[] = [
@@ -75,8 +87,10 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   onClose,
   referenceImages,
   onUpdateReferenceImages,
+  initialState,
+  onPersistState,
 }) => {
-  const [activeSkill, setActiveSkill] = useState<SkillType>('sticker');
+  const [activeSkill, setActiveSkill] = useState<SkillType>(initialState?.activeSkill ?? 'sticker');
   const [isOptimizing, setIsOptimizing] = useState(false);
 
   const handleOptimizePrompt = async () => {
@@ -99,6 +113,9 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
     }
   };
   const [configs, setConfigs] = useState<Record<SkillType, any>>(() => {
+    // 有上次設定（同一張便利貼重複進入）→ 直接還原
+    if (initialState?.configs) return initialState.configs;
+
     const firstLine = noteContent.split('\n')[0]?.trim() || '';
     const remainingText = noteContent.split('\n').slice(1).join('\n')?.trim() || '';
 
@@ -115,9 +132,14 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
     return initialConfigs;
   });
 
-  const [count, setCount] = useState<1 | 2 | 3 | 4>(1);
-  const [content, setContent] = useState(noteContent);
-  const [model, setModel] = useState('gemini');
+  const [count, setCount] = useState<1 | 2 | 3 | 4>(initialState?.count ?? 1);
+  const [content, setContent] = useState(initialState?.content ?? noteContent);
+  const [model, setModel] = useState(initialState?.model ?? 'gemini');
+
+  // 回存目前設定（生成或關閉時呼叫），供下次進入同一張便利貼還原
+  const persistState = () => onPersistState?.({ activeSkill, configs, count, model, content });
+  // 關閉前先回存
+  const handleClose = () => { persistState(); onClose(); };
   const [isBrainstorming, setIsBrainstorming] = useState(false); // AI 發想子主題進行中（驅動輸入框動畫）
 
   const DESIGN_STYLE_CATEGORIES = [
@@ -241,13 +263,14 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
     
     // LINE 貼圖固定高解析輸出（4K），不出低清
     const imageSizeOverride: '4K' | undefined = isSticker ? '4K' : undefined;
+    persistState();   // 生成前先回存設定 + 同步便利貼提示詞
     onGenerate(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride);
   };
 
   return (
     <div
       className="fixed inset-0 z-[6050] flex items-center justify-center bg-[#0F172A]/40 backdrop-blur-[8px]"
-      onClick={onClose}
+      onClick={handleClose}
       onKeyDown={e => e.stopPropagation()}
     >
       <style>{`
@@ -286,7 +309,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
             </span>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="w-8 h-8 rounded-full bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-colors"
           >
             <Icon name="close" size={16} />
