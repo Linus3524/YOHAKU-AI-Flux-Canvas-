@@ -649,6 +649,32 @@ const boxesOverlapWithGap = (a: ComponentBox, b: ComponentBox, gap: number) => (
   a.maxY + gap >= b.minY
 );
 
+const boxBBoxArea = (b: ComponentBox) => (b.maxX - b.minX + 1) * (b.maxY - b.minY + 1);
+
+/**
+ * 是否該合併兩個框。重點：boxesOverlapWithGap 只看「矩形邊界框」是否相近，
+ * 但貼圖不是矩形——格狀排版裡兩張「沒相連、有乾淨透明縫」的貼圖，矩形框仍可能
+ * 互相卡到而被誤併，導致元件數被壓低、退化成均勻網格硬切（4-4-1 之類版面會切歪缺漏）。
+ * 因此這裡只允許：
+ *   1) 小衛星（裝飾/碎件，面積 < 較大框 25%）就近併回主角；
+ *   2) 兩個都夠大的框，必須矩形「大幅重疊」(>小框 60%) 才併（容錯：同一張被去背切開）。
+ * 兩個都夠大、只是邊界框相鄰 → 視為兩張不同貼圖，不併。
+ */
+const shouldMergeBoxes = (a: ComponentBox, b: ComponentBox, gap: number): boolean => {
+  if (!boxesOverlapWithGap(a, b, gap)) return false;
+  const areaA = boxBBoxArea(a);
+  const areaB = boxBBoxArea(b);
+  const smaller = Math.min(areaA, areaB);
+  const larger = Math.max(areaA, areaB);
+  // 小衛星併進大主角
+  if (larger > 0 && smaller / larger < 0.25) return true;
+  // 兩框都夠大：只有矩形實際大幅重疊才算同一張（避免併掉相鄰的不同貼圖）
+  const ox = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX);
+  const oy = Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY);
+  if (ox > 0 && oy > 0 && smaller > 0 && (ox * oy) / smaller > 0.6) return true;
+  return false;
+};
+
 const mergeBoxes = (boxes: ComponentBox[], gap: number) => {
   const merged = [...boxes];
   let changed = true;
@@ -658,7 +684,7 @@ const mergeBoxes = (boxes: ComponentBox[], gap: number) => {
 
     for (let i = 0; i < merged.length; i += 1) {
       for (let j = i + 1; j < merged.length; j += 1) {
-        if (!boxesOverlapWithGap(merged[i], merged[j], gap)) continue;
+        if (!shouldMergeBoxes(merged[i], merged[j], gap)) continue;
 
         merged[i] = {
           minX: Math.min(merged[i].minX, merged[j].minX),
