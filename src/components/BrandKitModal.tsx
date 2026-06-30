@@ -47,6 +47,12 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
   const [personality, setPersonality] = useState('');
   const [logoStyle, setLogoStyle] = useState('');
   const [usageContexts, setUsageContexts] = useState('');
+  const [customAssetsInput, setCustomAssetsInput] = useState('');
+
+  const parsedCustomAssets = customAssetsInput
+    .split(/[,，、;；]/)
+    .map(x => x.trim())
+    .filter(Boolean);
 
   const handleBackdropMouseDown = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -68,7 +74,8 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
   };
 
   const submit = () => {
-    if (!brandName.trim() || selectedAssets.length === 0) return;
+    const customList = parsedCustomAssets;
+    if (!brandName.trim() || (selectedAssets.length === 0 && customList.length === 0)) return;
     const brief: LogoSkillConfig = {
       ...LOGO_DEFAULT_CONFIG,
       brandName: brandName.trim(),
@@ -81,6 +88,7 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
       logoStyle: logoStyle.trim() || LOGO_DEFAULT_CONFIG.logoStyle,
       isBrandKit: true,
       brandKitResolution: imageSize,
+      customAssets: customList,
     };
     onGenerate(brief, model, imageSize, selectedAssets);
     onClose();
@@ -232,7 +240,7 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
 
         {/* 選擇要延伸生成的品牌資產 */}
         <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">選擇要延伸生成的品牌資產</div>
-        <div className="grid grid-cols-2 gap-1.5 max-h-[140px] overflow-y-auto mb-5 border border-[#E2E8F0] p-2.5 rounded-xl bg-gray-50/50">
+        <div className="grid grid-cols-2 gap-1.5 max-h-[140px] overflow-y-auto mb-4 border border-[#E2E8F0] p-2.5 rounded-xl bg-gray-50/50">
           {LOGO_BRAND_OUTPUTS.map(spec => {
             const on = selectedAssets.includes(spec.id);
             return (
@@ -259,18 +267,42 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
           })}
         </div>
 
-        {/* 按鈕 */}
-        <div className="flex gap-2">
-          <button onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors">
-            取消
-          </button>
-          <button onClick={submit} disabled={!brandName.trim() || selectedAssets.length === 0}
-            className="flex-1 py-2.5 rounded-xl bg-[#AF52DE] text-white text-[13px] font-medium hover:bg-[#9a3fc7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            生成 {selectedAssets.length} 張延伸資產
-          </button>
+        {/* 自訂其他品牌資產（選填） */}
+        <div className="mb-5">
+          <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5 flex items-center gap-1">
+            <span>📝 自訂額外品牌資產</span>
+            <span className="text-[#AF52DE] font-normal normal-case text-[10px]">（選填，多個以逗號區隔）</span>
+          </div>
+          <input
+            value={customAssetsInput}
+            onChange={e => setCustomAssetsInput(e.target.value)}
+            placeholder="例：外帶飲料杯、店員帆布圍裙、外送保溫袋"
+            className={inputClass}
+          />
+          <p className="text-[10px] text-[#86868B] mt-1.5 leading-relaxed">
+            AI 將依您輸入的項目自動設計專業 Mockup，並智慧融合您的 Logo、配色與風格氣氛。
+          </p>
         </div>
-        <p className="text-center text-[10px] text-[#86868B] mt-2">結果自動排在主 Logo 圖片右側</p>
+
+        {/* 按鈕 */}
+        {(() => {
+          const totalCount = selectedAssets.length + parsedCustomAssets.length;
+          return (
+            <>
+              <div className="flex gap-2">
+                <button onClick={onClose}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors">
+                  取消
+                </button>
+                <button onClick={submit} disabled={!brandName.trim() || totalCount === 0}
+                  className="flex-1 py-2.5 rounded-xl bg-[#AF52DE] text-white text-[13px] font-medium hover:bg-[#9a3fc7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  生成 {totalCount} 張延伸資產
+                </button>
+              </div>
+              <p className="text-center text-[10px] text-[#86868B] mt-2">結果自動排在主 Logo 圖片右側</p>
+            </>
+          );
+        })()}
       </div>
     </div>
   );

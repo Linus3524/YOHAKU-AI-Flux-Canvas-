@@ -18,6 +18,7 @@ export interface LogoSkillConfig {
   personality: string;
   usageContexts: string;
   logoStyle?: string;
+  customAssets?: string[];
 }
 
 export const LOGO_DEFAULT_CONFIG: LogoSkillConfig = {
@@ -37,6 +38,7 @@ export const LOGO_DEFAULT_CONFIG: LogoSkillConfig = {
   personality: '現代、可靠、優雅、精緻',
   usageContexts: '官網、社媒頭像、名片、產品包裝',
   logoStyle: '',
+  customAssets: [],
 };
 
 export const LOGO_TYPES: SkillOption[] = [

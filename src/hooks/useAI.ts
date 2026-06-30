@@ -2008,11 +2008,29 @@ CONSTRAINTS:
 
         try {
             const allSpecs = LOGO_BRAND_OUTPUTS;
-            const specs = selectedAssetIds
+            const baseSpecs = selectedAssetIds
                 ? allSpecs.filter(s => selectedAssetIds.includes(s.id))
                 : allSpecs;
+
+            // 支援自訂品牌資產動態生成
+            const customSpecs: LogoBrandOutputSpec[] = (brief.customAssets || []).map((title, idx) => {
+                return {
+                    id: `custom_asset_${idx}_${Date.now()}`,
+                    title: `自訂：${title}`,
+                    aspectRatio: '4:3', // 預設使用 4:3 萬能樣機比例
+                    ratioValue: 4 / 3,
+                    note: `使用者自訂品牌應用 Mockup：${title}`,
+                    guidance: [
+                        `Generate a professional photo-studio quality mockup featuring a ${title} as the main subject.`,
+                        `The approved logo from the reference image and the brand name "${brief.brandName}" must be clearly printed, embossed, or styled on the surface of the ${title} in a realistic way.`,
+                        `Ensure clean studio background, realistic material texture (e.g., paper, fabric, ceramic, glass, or plastic), professional lighting, and perfect placement.`
+                    ]
+                };
+            });
+
+            const specs = [...baseSpecs, ...customSpecs];
             const total = specs.length;
-            if (total === 0) { showToast('⚠️ 未選取任何品牌資產'); return; }
+            if (total === 0) { showToast('⚠️ 未選取或輸入任何品牌資產'); return; }
             let successCount = 0;
 
             // Atlas 可能回傳 CDN URL，後續 img2img 需要 base64 才能當參考圖
