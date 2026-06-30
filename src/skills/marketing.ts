@@ -33,6 +33,97 @@ export const PRODUCT_MARKETING_DEFAULT_CONFIG: ProductMarketingBrief = {
 };
 
 export const PRODUCT_MARKETING_PLATFORMS: Record<string, ProductMarketingPlatformSpec> = {
+  shopee: {
+    id: 'shopee',
+    name: '蝦皮購物 (Shopee)',
+    standards: [
+      '主圖應優先合規，建議以純白底或淡色無干擾背景為主，讓商品佔據畫面中心。',
+      '促銷活動圖可加入富有台灣在地電商氛圍的活動標籤或小裝飾（如：現貨快速出貨、免運、限時促銷）。',
+      '特色賣點圖與細節保固圖應傳達安心感，如台灣在地客服或商品特徵放大標註。'
+    ],
+    recipes: [
+      {
+        id: 'shopee-hero',
+        title: '蝦皮合規主圖',
+        aspectRatio: '1:1',
+        ratioValue: 1.0,
+        note: '白底或輕微淡色背景的合規首圖。',
+        guidance: [
+          'Generate a clean product hero shot for Shopee shop catalog. Use white or extremely light minimalist grey background. Center the product. No overlay text or badges.'
+        ]
+      },
+      {
+        id: 'shopee-promo',
+        title: '促銷活動主圖',
+        aspectRatio: '1:1',
+        ratioValue: 1.0,
+        note: '結合活動標籤的吸睛首圖。',
+        guidance: [
+          'Generate a Shopee promotional square visual featuring the product. Integrate clean graphical stickers or banner tags suggesting Taiwanese local ecommerce tags like "Free Shipping" (免運) or "Fast Shipping" (現貨快速出貨). Keep the layout modern and uncluttered.'
+        ]
+      },
+      {
+        id: 'shopee-features',
+        title: '商品特色賣點圖',
+        aspectRatio: '1:1',
+        ratioValue: 1.0,
+        note: '標註核心功能或特點。',
+        guidance: [
+          'Design an informative square graphic showing key features of the product. Use clean typographic labels and thin connector lines pointing to key features of the product. Focus on readability.'
+        ]
+      },
+      {
+        id: 'shopee-details',
+        title: '細節保固圖',
+        aspectRatio: '1:1',
+        ratioValue: 1.0,
+        note: '特寫細節並標註在地保固。',
+        guidance: [
+          'Generate a close-up detail shot of the product packaging or materials, accompanied by a clean confidence label badge like "Taiwan Warranty" (台灣保固) or "Official Authenticity" (官方正品) styled elegantly.'
+        ]
+      }
+    ]
+  },
+  line_marketing: {
+    id: 'line_marketing',
+    name: 'LINE 行銷素材',
+    standards: [
+      '圖文訊息與圖文選單應保持文字大而清晰、色彩飽和，確保在行動端小螢幕上有極佳的可讀性。',
+      '避免邊緣排版過於擁擠，為操作按鈕或文字訊息保留安全空間。'
+    ],
+    recipes: [
+      {
+        id: 'line-message',
+        title: 'LINE 廣播圖文訊息',
+        aspectRatio: '1:1',
+        ratioValue: 1.0,
+        note: '大圖吸睛、重點突出的發送素材。',
+        guidance: [
+          'Generate a high-impact square broadcast visual for LINE message channel. Feature the product prominently on one side, leaving balanced space with bold, easily readable typographic title header summarizing the product\'s value. Highly clean layout for small mobile screens.'
+        ]
+      },
+      {
+        id: 'line-menu',
+        title: 'LINE 圖文選單背景',
+        aspectRatio: '16:9',
+        ratioValue: 16 / 9,
+        note: 'LINE 底部常駐選單背景圖。',
+        guidance: [
+          'Generate a horizontal background image optimized for a LINE Rich Menu. It should have a clean grid layout feel. Render the product visual integrated smoothly in one corner or partition, while keeping the rest of the canvas clean with harmonious solid color block segments for custom button overlays.'
+        ]
+      },
+      {
+        id: 'line-lap',
+        title: 'LINE LAP 廣告圖',
+        aspectRatio: '1:1',
+        ratioValue: 1.0,
+        note: 'LINE Today 或列表方圖廣告。',
+        guidance: [
+          'Generate a square advertising graphic optimized for LINE LAP mobile news feeds. The product should be large and central, set against a bright, modern studio color palette. No cluttered micro text; focus on immediate visual hook.'
+        ]
+      }
+    ]
+  },
   amazon_listing: {
     id: 'amazon_listing',
     name: 'Amazon 商品頁 / A+',
@@ -120,7 +211,7 @@ export const PRODUCT_MARKETING_PLATFORMS: Record<string, ProductMarketingPlatfor
     id: 'shopify_store',
     name: 'Shopify / 獨立站商品頁',
     standards: [
-      '商品圖組要保持一致的光線、機位、裁切和背景風格，便於在商品頁和集合頁瀏覽。',
+      '商品圖組要保持一致的光線、機位、裁切和背景風格，便於在商品頁 and 集合頁瀏覽。',
       '主圖應讓產品成為焦點，附圖補充角度、材質、細節、使用方式和品牌氛圍。',
       '文字可以用於賣點廣告，但不要壓住產品，不要讓整組圖像風格跳躍。'
     ],
@@ -360,12 +451,20 @@ export function buildProductMarketingPrompt(
   index: number,
   total: number
 ): string {
+  const sellingPointsPrompt = config.sellingPoints
+    ? `Core Selling Points to convey: "${config.sellingPoints}"`
+    : `Since core selling points are not specified, please automatically analyze the visual features, materials, and potential functions of the product, and design a backdrop or context that complements its natural utility and premium appearance.`;
+
+  const audiencePrompt = config.targetAudience
+    ? `Target Customer / Audience: "${config.targetAudience}"`
+    : `Since target audience is not specified, please design the scene for general modern consumers, using neutral, elegant, and appealing context backgrounds.`;
+
   return [
     `Design a professional e-commerce product marketing graphic: "${spec.title}" (Part ${index + 1}/${total} of the set).`,
     `CRITICAL — PRODUCT VISUAL ANCHOR: A high-quality photo of the physical product is attached as a reference image. You MUST extract and preserve this EXACT product (its shape, color, branding logo, textures, and details) in the generated image. Do NOT alter, distort, simplify, or redesign the product itself — place it realistically within the new scene/context.`,
     `Product Name: "${config.productName}"`,
-    config.sellingPoints ? `Core Selling Points to convey: "${config.sellingPoints}"` : '',
-    config.targetAudience ? `Target Customer / Audience: "${config.targetAudience}"` : '',
+    sellingPointsPrompt,
+    audiencePrompt,
     `Visual Tone & Atmosphere: "${config.visualTone || 'clean, modern, professional'}"`,
     `This Image Goal: ${spec.note}`,
     `This Image Guidelines: ${spec.guidance.join(' ')}`,

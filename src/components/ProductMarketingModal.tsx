@@ -146,7 +146,7 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
       .map(item => item.title);
     const activeBuiltIn = selectedAssets.filter(id => !id.startsWith('custom_'));
 
-    if (!productName.trim() || !sellingPoints.trim() || !targetAudience.trim() || (activeBuiltIn.length === 0 && activeCustom.length === 0)) return;
+    if (!productName.trim() || (activeBuiltIn.length === 0 && activeCustom.length === 0)) return;
 
     const brief: ProductMarketingBrief = {
       productName: productName.trim(),
@@ -203,20 +203,20 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
         />
 
         {/* 核心賣點 */}
-        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">核心賣點 *</div>
+        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">核心賣點（選填）</div>
         <input
           value={sellingPoints}
           onChange={e => setSellingPoints(e.target.value)}
-          placeholder="例：24小時雙層保溫、莫蘭迪色簡約杯身"
+          placeholder="例：24小時雙層保溫、莫蘭迪色簡約杯身（填寫讓 AI 生成更精緻的情境）"
           className={`${inputClass} mb-3`}
         />
 
         {/* 目標受眾 */}
-        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">目標受眾 *</div>
+        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">目標受眾（選填）</div>
         <input
           value={targetAudience}
           onChange={e => setTargetAudience(e.target.value)}
-          placeholder="例：上班族、長途旅行者、精緻生活追求者"
+          placeholder="例：上班族、長途旅行者、精緻生活追求者（填寫讓 AI 生成更精緻的情境）"
           className={`${inputClass} mb-4`}
         />
 
@@ -415,7 +415,7 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
           const activeCustomCount = dynamicCustomAssets.filter(item => selectedAssets.includes(item.id)).length;
           const activeBuiltInCount = selectedAssets.filter(id => currentPlatformSpecs.map(r => r.id).includes(id)).length;
           const totalCount = activeCustomCount + activeBuiltInCount;
-          const isButtonDisabled = !productName.trim() || !sellingPoints.trim() || !targetAudience.trim() || totalCount === 0;
+          const isButtonDisabled = !productName.trim() || totalCount === 0;
 
           return (
             <>
