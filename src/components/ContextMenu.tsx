@@ -66,6 +66,7 @@ interface ContextMenuProps {
     splitSticker?: (elementId: string) => void;
     crossPlatformAdapt?: (elementId: string) => void;
     extendBrandKit?: (elementId: string) => void;
+    productMarketingSet?: (elementId: string) => void;
   };
   canChangeColor: boolean;
   elementType: ElementType | null;
@@ -120,6 +121,7 @@ const MenuIcons = {
   FlipV:        () => <Icon name="flip" size={15} style={{ transform: 'rotate(90deg)' }} />,
   Layout:       () => <Icon name="space_dashboard" size={15} />,
   MobileLayout: () => <Icon name="mobile_layout" size={15} />,
+  ShoppingBag:  () => <Icon name="shopping_bag" size={15} />,
   Reorder:      () => <Icon name="reorder" size={15} />,
   Export:       () => <Icon name="save" size={15} />,
   Save:         () => <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>,
@@ -410,6 +412,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                  {actions.extendBrandKit && (
                                      <MenuItem icon={<MenuIcons.SwatchBook />} onClick={() => handleAction(() => actions.extendBrandKit!(menuData.elementId!))}>
                                          延伸品牌套件
+                                     </MenuItem>
+                                 )}
+                                 {actions.productMarketingSet && (
+                                     <MenuItem icon={<MenuIcons.ShoppingBag />} onClick={() => handleAction(() => actions.productMarketingSet!(menuData.elementId!))}>
+                                         產品行銷組圖
                                      </MenuItem>
                                  )}
                                  <div className="border-t my-0.5 border-gray-100/50" />

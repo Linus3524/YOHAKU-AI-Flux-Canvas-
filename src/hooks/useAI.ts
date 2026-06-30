@@ -25,6 +25,7 @@ import { MODEL_CONFIGS, getModelStatus, type OnnxModelKey } from '../utils/onnxM
 import { cacheImage } from '../utils/imageCache';
 import { crossPlatformSpec, buildCrossPlatformPrompt, type CrossPlatformSpec } from '../skills/crossPlatform';
 import { LogoSkillConfig, LOGO_BRAND_OUTPUTS, buildLogoPrompt, buildLogoBrandPrompt } from '../skills/logo';
+import { PRODUCT_MARKETING_PLATFORMS, buildProductMarketingPrompt, type ProductMarketingBrief, type ProductMarketingOutputSpec } from '../skills/marketing';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -2095,6 +2096,155 @@ CONSTRAINTS:
         }
     }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast]);
 
+    /**
+     * 產品行銷組圖：以用戶選定的商品圖片作為錨點，延伸生成成套的行銷物料。
+     */
+    const handleProductMarketingSet = useCallback(async (
+        elementId: string,
+        brief: ProductMarketingBrief,
+        modelOverride?: string,
+        imageSizeOverride?: '1K' | '2K' | '4K',
+        selectedRecipeIds?: string[],
+        platformId: string = 'general_ecommerce',
+    ) => {
+        const el = elements.find(e => e.id === elementId);
+        if (!el || el.type !== 'image') { showToast('⚠️ 無法定位產品圖片'); return; }
+        
+        let productSrc = (el as ImageElement).src;
+
+        const chosenModel = modelOverride || generationModelGlobal;
+        const useAtlas = chosenModel !== 'gemini' && !!atlasApiKey;
+        if (!useAtlas && !apiKey) { setHasApiKey(false); showToast('⚠️ 產品行銷組圖生成需要 Gemini 或 Atlas API Key'); return; }
+
+        setIsGenerating(true);
+        setGeneratingElementIds([elementId]);
+
+        // 排成一列放原產品圖片右側, 固定顯示高度
+        const ROW_H = 220;
+        const gap = 24;
+        const prodImgEl = el as ImageElement;
+        let cursorX = prodImgEl.position.x + prodImgEl.width / 2 + 60;
+        const baseTop = prodImgEl.position.y - prodImgEl.height / 2;
+        const atlasModel = chosenModel as AtlasGenerationModel;
+        const quality: '2K' | '4K' = imageSizeOverride === '4K' ? '4K' : '2K';
+
+        // 把一張結果圖放上畫布（依實際像素比例定寬高），回傳是否成功
+        const placeAsset = async (resultSrc: string, title: string, fallbackRatio: number, key: string): Promise<boolean> => {
+            if (!resultSrc) return false;
+            let realRatio = fallbackRatio;
+            try {
+                const im = await loadImage(resultSrc);
+                if (im.naturalWidth > 0 && im.naturalHeight > 0) realRatio = im.naturalWidth / im.naturalHeight;
+            } catch { /* 載入失敗則沿用規格比例 */ }
+            const h = ROW_H;
+            const w = Math.round(ROW_H * realRatio);
+            const newId = `mktg_${Date.now()}_${key}`;
+            const newEl: ImageElement = {
+                type: 'image', id: newId, src: resultSrc,
+                name: `${brief.productName || 'Product'}（${title}）`,
+                position: { x: cursorX + w / 2, y: baseTop + h / 2 },
+                width: w, height: h, rotation: 0,
+                zIndex: zIndexCounter.current++,
+                groupId: null, isVisible: true, isLocked: false,
+            };
+            setElements(prev => [...prev, newEl]);
+            if (resultSrc.startsWith('data:')) cacheImage(newId, resultSrc);
+            cursorX += w + gap;
+            return true;
+        };
+
+        try {
+            const platformSpec = PRODUCT_MARKETING_PLATFORMS[platformId];
+            if (!platformSpec) { showToast('⚠️ 找不到指定的行銷平台設定'); return; }
+
+            const allSpecs = platformSpec.recipes;
+            const baseSpecs = selectedRecipeIds
+                ? allSpecs.filter(s => selectedRecipeIds.includes(s.id))
+                : allSpecs;
+
+            // 支援自訂規格動態生成
+            const customSpecs: ProductMarketingOutputSpec[] = (brief.customAssets || []).map((title, idx) => {
+                return {
+                    id: `custom_mktg_${idx}_${Date.now()}`,
+                    title: `自訂：${title}`,
+                    aspectRatio: '4:3', // 預設使用 4:3 萬能電商比例
+                    ratioValue: 4 / 3,
+                    note: `使用者自訂產品行銷 Mockup：${title}`,
+                    guidance: [
+                        `Generate a professional e-commerce product advertisement visual featuring a ${title} showcasing the product.`,
+                        `The product from the reference image must be realistically placed and integrated in the scene.`,
+                        `Maintain aesthetic studio lighting, clean background, and clear design layout.`
+                    ]
+                };
+            });
+
+            const specs = [...baseSpecs, ...customSpecs];
+            const total = specs.length;
+            if (total === 0) { showToast('⚠️ 未選取或輸入任何行銷規格'); return; }
+            let successCount = 0;
+
+            // base64 轉換
+            if (!productSrc.startsWith('data:')) {
+                try { productSrc = await downloadImageAsBase64(productSrc); } catch { /* 失敗則維持原樣 */ }
+            }
+
+            // ── 逐一調用 AI 模型生成 ──
+            for (let i = 0; i < specs.length; i++) {
+                const spec = specs[i];
+                showToast(`🎯 產品行銷組圖：${spec.title}（${i + 1}/${total}）...`);
+                const prompt = buildProductMarketingPrompt(brief, spec, i, specs.length);
+                let resultSrc = '';
+
+                try {
+                    if (useAtlas) {
+                        if (atlasModelSupportsImg2Img(atlasModel)) {
+                            const images = await withAtlasWaitToast(() =>
+                                callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, productSrc, 1, { ratio: spec.aspectRatio, quality }));
+                            if (images.length > 0) resultSrc = images[0];
+                        } else {
+                            // 降級退回純文字生成
+                            const images = await withAtlasWaitToast(() =>
+                                callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality }));
+                            if (images.length > 0) resultSrc = images[0];
+                        }
+                    } else {
+                        const genAI = new GoogleGenAI({ apiKey: apiKey! });
+                        const parts: any[] = [];
+                        if (productSrc.startsWith('data:')) {
+                            const [header, data] = productSrc.split(',');
+                            const mime = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                            parts.push({ inlineData: { data, mimeType: mime } });
+                        }
+                        parts.push({ text: `${prompt}\nOutput aspect ratio: ${spec.aspectRatio}.` });
+                        const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                            model: imageModel,
+                            contents: { parts },
+                            config: { imageConfig: { aspectRatio: spec.aspectRatio, imageSize: imageSizeOverride || imageSize } },
+                        }));
+                        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                        if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
+                    }
+                } catch (e) {
+                    console.warn('[productMarketingSet] 延伸生成失敗', spec.id, e);
+                    showToast(`⚠️ ${spec.title} 生成失敗,略過`);
+                    continue;
+                }
+
+                if (!resultSrc) { showToast(`⚠️ ${spec.title} 未回傳圖片,略過`); continue; }
+                if (await placeAsset(resultSrc, spec.title, spec.ratioValue, String(i))) successCount += 1;
+            }
+
+            showToast(successCount > 0
+                ? `✅ 產品行銷組圖生成完成！（共生成 ${successCount}/${total} 張資產）`
+                : '❌ 行銷組圖資產全部生成失敗，請稍後再試');
+        } catch (error) {
+            handleAIError(error, '產品行銷組圖生成');
+        } finally {
+            setGeneratingElementIds([]);
+            setIsGenerating(false);
+        }
+    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast]);
+
     return {
         createAiClient,
         isGenerating,
@@ -2138,6 +2288,7 @@ CONSTRAINTS:
         handleCrossPlatformAdapt,
         handleLogoBrandKit,
         handleExtendBrandKit,
+        handleProductMarketingSet,
         handleAskAI
     };
 };

@@ -18,6 +18,7 @@ import { DrawingModal } from './components/DrawingModal';
 import { ImageEditModal } from './components/ImageEditModal';
 import { CrossPlatformModal } from './components/CrossPlatformModal';
 import { BrandKitModal } from './components/BrandKitModal';
+import { ProductMarketingModal } from './components/ProductMarketingModal';
 import { DraggableToolbar } from './components/DraggableToolbar';
 import { LayerPanel } from './components/LayerPanel';
 import { TextPropertyPanel } from './components/TextPropertyPanel';
@@ -498,6 +499,7 @@ const App: React.FC = () => {
       handleCrossPlatformAdapt,
       handleLogoBrandKit,
       handleExtendBrandKit,
+      handleProductMarketingSet,
       handleAskAI
   } = useAI({
       elements,
@@ -689,6 +691,14 @@ const App: React.FC = () => {
       const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
       if (!el) return;
       setBrandKitTarget({ elementId, name: el.name });
+  }, [elements]);
+
+  // --- 產品行銷組圖 ---
+  const [productMarketingTarget, setProductMarketingTarget] = useState<{ elementId: string; name: string } | null>(null);
+  const handleOpenProductMarketing = useCallback((elementId: string) => {
+      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
+      if (!el) return;
+      setProductMarketingTarget({ elementId, name: el.name });
   }, [elements]);
 
   // --- 貼紙套組一鍵切分 ---
@@ -2394,6 +2404,20 @@ const App: React.FC = () => {
         />
       )}
 
+      {productMarketingTarget && (
+        <ProductMarketingModal
+          imageName={productMarketingTarget.name}
+          hasAtlas={!!atlasApiKey}
+          onGenerate={(brief, model, resolution, selectedRecipeIds, platformId) => {
+            const id = productMarketingTarget.elementId;
+            handleProductMarketingSet(id, brief, model, resolution, selectedRecipeIds, platformId).catch((e: any) =>
+              showToast(`❌ 產品行銷組圖生成失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`)
+            );
+          }}
+          onClose={() => setProductMarketingTarget(null)}
+        />
+      )}
+
       {contextMenu && (
         <ContextMenu
           menuData={contextMenu}
@@ -2452,6 +2476,7 @@ const App: React.FC = () => {
             splitSticker: handleSplitSticker,
             crossPlatformAdapt: handleOpenCrossPlatform,
             extendBrandKit: handleOpenBrandKit,
+            productMarketingSet: handleOpenProductMarketing,
             clearStorage: () => setShowClearConfirm(true),
           }}
           canChangeColor={canChangeColor}
