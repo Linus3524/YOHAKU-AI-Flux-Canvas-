@@ -497,6 +497,7 @@ const App: React.FC = () => {
       handleGenerate,
       handleCrossPlatformAdapt,
       handleLogoBrandKit,
+      handleExtendBrandKit,
       handleAskAI
   } = useAI({
       elements,
