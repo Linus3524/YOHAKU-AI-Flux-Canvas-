@@ -47,12 +47,10 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
   const [personality, setPersonality] = useState('');
   const [logoStyle, setLogoStyle] = useState('');
   const [usageContexts, setUsageContexts] = useState('');
-  const [customAssetsInput, setCustomAssetsInput] = useState('');
-
-  const parsedCustomAssets = customAssetsInput
-    .split(/[,，、;；]/)
-    .map(x => x.trim())
-    .filter(Boolean);
+  
+  // 動態自訂資產項目
+  const [dynamicCustomAssets, setDynamicCustomAssets] = useState<{ id: string; title: string }[]>([]);
+  const [newAssetInput, setNewAssetInput] = useState('');
 
   const handleBackdropMouseDown = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -73,9 +71,28 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
     setSelectedAssets(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
+  const addCustomAsset = () => {
+    const val = newAssetInput.trim();
+    if (!val) return;
+    const newId = `custom_${Date.now()}`;
+    setDynamicCustomAssets(prev => [...prev, { id: newId, title: val }]);
+    setSelectedAssets(prev => [...prev, newId]); // 新增後預設勾選
+    setNewAssetInput('');
+  };
+
+  const removeCustomAsset = (id: string) => {
+    setDynamicCustomAssets(prev => prev.filter(item => item.id !== id));
+    setSelectedAssets(prev => prev.filter(x => x !== id));
+  };
+
   const submit = () => {
-    const customList = parsedCustomAssets;
-    if (!brandName.trim() || (selectedAssets.length === 0 && customList.length === 0)) return;
+    const activeCustom = dynamicCustomAssets
+      .filter(item => selectedAssets.includes(item.id))
+      .map(item => item.title);
+    const activeBuiltIn = selectedAssets.filter(id => !id.startsWith('custom_'));
+
+    if (!brandName.trim() || (activeBuiltIn.length === 0 && activeCustom.length === 0)) return;
+
     const brief: LogoSkillConfig = {
       ...LOGO_DEFAULT_CONFIG,
       brandName: brandName.trim(),
@@ -88,9 +105,9 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
       logoStyle: logoStyle.trim() || LOGO_DEFAULT_CONFIG.logoStyle,
       isBrandKit: true,
       brandKitResolution: imageSize,
-      customAssets: customList,
+      customAssets: activeCustom,
     };
-    onGenerate(brief, model, imageSize, selectedAssets);
+    onGenerate(brief, model, imageSize, activeBuiltIn);
     onClose();
   };
 
@@ -240,7 +257,8 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
 
         {/* 選擇要延伸生成的品牌資產 */}
         <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">選擇要延伸生成的品牌資產</div>
-        <div className="grid grid-cols-2 gap-1.5 max-h-[140px] overflow-y-auto mb-4 border border-[#E2E8F0] p-2.5 rounded-xl bg-gray-50/50">
+        <div className="grid grid-cols-2 gap-1.5 max-h-[160px] overflow-y-auto mb-3 border border-[#E2E8F0] p-2.5 rounded-xl bg-gray-50/50">
+          {/* 內建資產 */}
           {LOGO_BRAND_OUTPUTS.map(spec => {
             const on = selectedAssets.includes(spec.id);
             return (
@@ -265,28 +283,74 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
               </button>
             );
           })}
+
+          {/* 動態自訂資產 */}
+          {dynamicCustomAssets.map(item => {
+            const on = selectedAssets.includes(item.id);
+            return (
+              <div
+                key={item.id}
+                className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all group/item ${
+                  on
+                    ? 'border-[#AF52DE] bg-purple-50 text-[#AF52DE]'
+                    : 'border-[#E2E8F0] bg-white text-[#64748B]'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleAsset(item.id)}
+                  className="flex items-center gap-2 text-left truncate flex-1 cursor-pointer"
+                >
+                  <span
+                    className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[9px] text-white shrink-0 ${
+                      on ? 'bg-[#AF52DE]' : 'bg-gray-200'
+                    }`}
+                  >
+                    {on ? '✓' : ''}
+                  </span>
+                  <span className="truncate">{item.title}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeCustomAsset(item.id)}
+                  className="text-gray-400 hover:text-red-500 opacity-0 group-hover/item:opacity-100 transition-opacity ml-1 px-1 cursor-pointer"
+                  title="刪除此項目"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
         </div>
 
-        {/* 自訂其他品牌資產（選填） */}
-        <div className="mb-5">
-          <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5 flex items-center gap-1">
-            <span>📝 自訂額外品牌資產</span>
-            <span className="text-[#AF52DE] font-normal normal-case text-[10px]">（選填，多個以逗號區隔）</span>
-          </div>
+        {/* 新增自訂資產輸入列 */}
+        <div className="flex gap-1.5 mb-5">
           <input
-            value={customAssetsInput}
-            onChange={e => setCustomAssetsInput(e.target.value)}
-            placeholder="例：外帶飲料杯、店員帆布圍裙、外送保溫袋"
-            className={inputClass}
+            value={newAssetInput}
+            onChange={e => setNewAssetInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustomAsset();
+              }
+            }}
+            placeholder="自訂其他資產，例：飲料杯、店員圍裙"
+            className="flex-1 bg-white border border-[#E2E8F0] rounded-xl px-3 py-1.5 text-[11px] text-[#1E293B] placeholder:text-gray-300 focus:outline-none focus:border-[#AF52DE]"
           />
-          <p className="text-[10px] text-[#86868B] mt-1.5 leading-relaxed">
-            AI 將依您輸入的項目自動設計專業 Mockup，並智慧融合您的 Logo、配色與風格氣氛。
-          </p>
+          <button
+            type="button"
+            onClick={addCustomAsset}
+            className="px-3.5 py-1.5 bg-[#AF52DE] text-white text-[11px] font-medium rounded-xl hover:bg-[#9a3fc7] transition-colors cursor-pointer shrink-0"
+          >
+            ＋新增
+          </button>
         </div>
 
         {/* 按鈕 */}
         {(() => {
-          const totalCount = selectedAssets.length + parsedCustomAssets.length;
+          const activeCustomCount = dynamicCustomAssets.filter(item => selectedAssets.includes(item.id)).length;
+          const activeBuiltInCount = selectedAssets.filter(id => !id.startsWith('custom_')).length;
+          const totalCount = activeCustomCount + activeBuiltInCount;
           return (
             <>
               <div className="flex gap-2">
