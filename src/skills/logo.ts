@@ -17,6 +17,7 @@ export interface LogoSkillConfig {
   positioning: string;
   personality: string;
   usageContexts: string;
+  logoStyle?: string;
 }
 
 export const LOGO_DEFAULT_CONFIG: LogoSkillConfig = {
@@ -35,6 +36,7 @@ export const LOGO_DEFAULT_CONFIG: LogoSkillConfig = {
   positioning: '高端、簡約、有獨特品牌記憶點',
   personality: '現代、可靠、優雅、精緻',
   usageContexts: '官網、社媒頭像、名片、產品包裝',
+  logoStyle: '',
 };
 
 export const LOGO_TYPES: SkillOption[] = [
@@ -291,7 +293,7 @@ export function buildLogoBrandPrompt(content: string, config: LogoSkillConfig, s
     config.positioning && config.positioning !== LOGO_DEFAULT_CONFIG.positioning ? `Brand Positioning: ${config.positioning}` : '',
     config.personality && config.personality !== LOGO_DEFAULT_CONFIG.personality ? `Brand Personality: ${config.personality}` : '',
     config.usageContexts && config.usageContexts !== LOGO_DEFAULT_CONFIG.usageContexts ? `Intended Usage Contexts: ${config.usageContexts}` : '',
-    styleMod ? `Visual Style Preset: ${config.style} (${styleMod})` : 'Visual Style: Automatically analyze and replicate the exact artistic style, textures, outline stroke weights, and design aesthetic of the attached logo reference image to ensure absolute visual harmony.',
+    config.logoStyle ? `Visual/Logo Style: ${config.logoStyle}` : (styleMod ? `Visual Style Preset: ${config.style} (${styleMod})` : 'Visual Style: Automatically analyze and replicate the exact artistic style, textures, outline stroke weights, and design aesthetic of the attached logo reference image to ensure absolute visual harmony.'),
     paletteMod ? `Color Scheme: ${config.palette} (${paletteMod})` : 'Color Scheme: Automatically analyze and extract the color palette (main brand color, secondary accent colors) from the attached logo reference image. Apply these exact colors consistently across the asset.',
     industryMod ? `Industry Context: ${config.industry} (${industryMod})` : '',
     moodMod ? `Brand Mood: ${config.mood} (${moodMod})` : 'Brand Mood: Match the mood (e.g. minimal, elegant, professional, playful) presented by the logo design in the reference image.',

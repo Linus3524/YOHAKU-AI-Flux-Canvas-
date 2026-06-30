@@ -23,13 +23,30 @@ interface BrandKitModalProps {
   onClose: () => void;
 }
 
+const cleanName = (name: string): string => {
+  if (!name) return '';
+  return name
+    .trim()
+    .replace(/[\uff08(].*?[\uff09)]/g, '') // 清除全形與半形括弧及其內容 (如：主 Logo)
+    .replace(/\.[a-zA-Z0-9]+$/, '') // 清除副檔名 (如：.png, .jpg)
+    .trim();
+};
+
 export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtlas = false, onGenerate, onClose }) => {
-  const [brandName, setBrandName] = useState(imageName?.replace(/[（(].+[）)]$/, '').trim() || '');
+  const [brandName, setBrandName] = useState(imageName ? cleanName(imageName) : '');
   const [slogan, setSlogan] = useState('');
   const [model, setModel] = useState('gemini');
   const [imageSize, setImageSize] = useState<'2K' | '4K'>('2K');
-  const [selectedAssets, setSelectedAssets] = useState<string[]>(LOGO_BRAND_OUTPUTS.map(x => x.id));
+  const [selectedAssets, setSelectedAssets] = useState<string[]>([]); // 預設全部沒勾，使用者自己挑
   const [isMouseDownOnBackdrop, setIsMouseDownOnBackdrop] = useState(false);
+
+  // 選填進階欄位
+  const [industry, setIndustry] = useState('');
+  const [targetAudience, setTargetAudience] = useState('');
+  const [positioning, setPositioning] = useState('');
+  const [personality, setPersonality] = useState('');
+  const [logoStyle, setLogoStyle] = useState('');
+  const [usageContexts, setUsageContexts] = useState('');
 
   const handleBackdropMouseDown = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -56,6 +73,12 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
       ...LOGO_DEFAULT_CONFIG,
       brandName: brandName.trim(),
       slogan: slogan.trim(),
+      industry: industry.trim() || LOGO_DEFAULT_CONFIG.industry,
+      targetAudience: targetAudience.trim() || LOGO_DEFAULT_CONFIG.targetAudience,
+      positioning: positioning.trim() || LOGO_DEFAULT_CONFIG.positioning,
+      personality: personality.trim() || LOGO_DEFAULT_CONFIG.personality,
+      usageContexts: usageContexts.trim() || LOGO_DEFAULT_CONFIG.usageContexts,
+      logoStyle: logoStyle.trim() || LOGO_DEFAULT_CONFIG.logoStyle,
       isBrandKit: true,
       brandKitResolution: imageSize,
     };
@@ -65,6 +88,7 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
 
   const selectClass = "w-full appearance-none bg-white border border-[#E2E8F0] rounded-xl pl-3 pr-8 py-2 text-[12px] font-semibold text-[#1E293B] focus:outline-none focus:border-[#AF52DE] cursor-pointer";
   const inputClass = "w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-[12px] text-[#1E293B] placeholder:text-gray-300 focus:outline-none focus:border-[#AF52DE]";
+  const labelClass = "text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5 block";
 
   return (
     <div
@@ -105,6 +129,69 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
           placeholder="例：Design Your Imagination"
           className={`${inputClass} mb-4`}
         />
+
+        {/* 進階品牌自訂選項（選填） */}
+        <details className="mb-4 group border border-gray-100 rounded-xl bg-purple-50/10 p-1">
+          <summary className="text-[11px] font-bold text-[#AF52DE] cursor-pointer select-none py-1.5 px-2.5">
+            ▶ 進階品牌設定（選填，未填寫則由 AI 自動分析 Logo）
+          </summary>
+          <div className="space-y-3 mt-2 p-2.5 bg-white rounded-lg border border-gray-100/50">
+            <div>
+              <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">行業背景</div>
+              <input
+                value={industry}
+                onChange={e => setIndustry(e.target.value)}
+                placeholder="例：精品咖啡、智慧科技 SaaS"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">目標受眾</div>
+              <input
+                value={targetAudience}
+                onChange={e => setTargetAudience(e.target.value)}
+                placeholder="例：注重質感的生活美學追求者"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">品牌定位</div>
+              <input
+                value={positioning}
+                onChange={e => setPositioning(e.target.value)}
+                placeholder="例：高端、簡約、具獨特品牌記憶點"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">品牌人格</div>
+              <input
+                value={personality}
+                onChange={e => setPersonality(e.target.value)}
+                placeholder="例：現代、優雅、精緻"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">Logo 設計風格</div>
+              <input
+                value={logoStyle}
+                onChange={e => setLogoStyle(e.target.value)}
+                placeholder="例：極簡線條、莫蘭迪色扁平插畫"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">使用情境</div>
+              <input
+                value={usageContexts}
+                onChange={e => setUsageContexts(e.target.value)}
+                placeholder="例：官網、名片、實體店面、產品包裝"
+                className={inputClass}
+              />
+            </div>
+          </div>
+        </details>
 
         {/* 生成模型 */}
         <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">生成模型</div>
