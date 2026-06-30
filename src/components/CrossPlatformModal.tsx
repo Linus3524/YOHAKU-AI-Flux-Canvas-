@@ -19,7 +19,7 @@ interface CrossPlatformModalProps {
   onClose: () => void;
 }
 
-const DEFAULT_SELECTED = ['xiaohongshu', 'instagram-feed', 'instagram-story', 'youtube', 'facebook-link'];
+const DEFAULT_SELECTED = ['instagram-feed'];
 // Atlas quality 只有 2K/4K 兩檔（無 1K），這裡只給真實存在的檔位，避免假選項
 const SIZE_OPTIONS: { id: '2K' | '4K'; label: string }[] = [
   { id: '2K', label: '2K（建議）' },
@@ -31,11 +31,7 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
   const [preserveSubject, setPreserveSubject] = useState(true);
   const [keepText, setKeepText] = useState(false);
   const [imageSize, setImageSize] = useState<'2K' | '4K'>('2K');
-  const [model, setModel] = useState<string>(() => {
-    const d = defaultModel || 'gemini';
-    const opt = MODEL_OPTIONS.find(o => o.id === d);
-    return opt && (!opt.needsAtlas || hasAtlas) ? d : 'gemini';
-  });
+  const [model, setModel] = useState<string>('gemini');
   const isGemini = model === 'gemini';
 
   const toggle = (id: string) =>
