@@ -49,7 +49,6 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
 
   const selectClass = "w-full appearance-none bg-white border border-[#E2E8F0] rounded-xl pl-3 pr-8 py-2 text-[12px] font-semibold text-[#1E293B] focus:outline-none focus:border-[#AF52DE] cursor-pointer";
   const inputClass = "w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-[12px] text-[#1E293B] placeholder:text-gray-300 focus:outline-none focus:border-[#AF52DE]";
-  const labelClass = "text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5 block";
 
   return (
     <div className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={onClose}>
@@ -58,16 +57,16 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="mb-5">
+        <div className="mb-4">
           <h3 className="font-bold text-[#1D1D1F] text-[15px] mb-1">🎨 延伸品牌套件</h3>
           <p className="text-[11px] text-[#86868B] leading-relaxed">
-            AI 將直接自動分析您選取的這張 Logo 圖片，智慧擷取其色彩、風格與視覺意境，
+            AI 將自動分析您選取的這張 Logo 圖片，智慧擷取其色彩、風格與視覺意境，
             延伸生成一系列專業品牌視覺資產。
           </p>
         </div>
 
         {/* 品牌名稱（必填） */}
-        <label className={labelClass}>品牌名稱 *</label>
+        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">品牌名稱 *</div>
         <input
           value={brandName}
           onChange={e => setBrandName(e.target.value)}
@@ -77,7 +76,7 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
         />
 
         {/* 品牌標語（選填） */}
-        <label className={labelClass}>品牌標語 <span className="text-gray-300 font-normal normal-case">（選填）</span></label>
+        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">品牌標語 <span className="text-gray-300 font-normal normal-case">（選填）</span></div>
         <input
           value={slogan}
           onChange={e => setSlogan(e.target.value)}
@@ -85,38 +84,9 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
           className={`${inputClass} mb-4`}
         />
 
-        {/* 選擇要延伸生成的品牌資產 */}
-        <div className={labelClass}>選擇要延伸生成的品牌資產</div>
-        <div className="grid grid-cols-2 gap-1.5 max-h-[140px] overflow-y-auto mb-4 border border-[#E2E8F0] p-2.5 rounded-xl bg-gray-50/50">
-          {LOGO_BRAND_OUTPUTS.map(spec => {
-            const on = selectedAssets.includes(spec.id);
-            return (
-              <button
-                key={spec.id}
-                type="button"
-                onClick={() => toggleAsset(spec.id)}
-                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold text-left transition-all cursor-pointer ${
-                  on
-                    ? 'border-[#AF52DE] bg-purple-50 text-[#AF52DE]'
-                    : 'border-[#E2E8F0] bg-white text-[#64748B] hover:border-purple-200'
-                }`}
-              >
-                <span
-                  className={`w-3 h-3 rounded flex items-center justify-center text-[8px] text-white shrink-0 ${
-                    on ? 'bg-[#AF52DE]' : 'bg-gray-200'
-                  }`}
-                >
-                  {on ? '✓' : ''}
-                </span>
-                <span className="truncate">{spec.title}</span>
-              </button>
-            );
-          })}
-        </div>
-
         {/* 生成模型 */}
-        <label className={labelClass}>生成模型</label>
-        <div className="relative w-full mb-3">
+        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">生成模型</div>
+        <div className="relative w-full mb-4">
           <select value={model} onChange={e => setModel(e.target.value)} className={selectClass}>
             {MODEL_OPTIONS.map(o => (
               <option key={o.id} value={o.id} disabled={o.needsAtlas && !hasAtlas}>
@@ -132,7 +102,7 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
         </div>
 
         {/* 輸出解析度 */}
-        <label className={labelClass}>輸出解析度</label>
+        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">輸出解析度</div>
         <div className="grid grid-cols-2 gap-1.5 bg-[#F1F5F9] p-0.5 rounded-xl mb-1">
           {SIZE_OPTIONS.map(o => (
             <button
@@ -149,7 +119,36 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-[#86868B] mb-5">僅影響生圖輸出的畫質等級。解析度越高生成時間越長。</p>
+        <p className="text-[10px] text-[#86868B] mb-4">僅影響生圖輸出的畫質等級。解析度越高生成時間越長。</p>
+
+        {/* 選擇要延伸生成的品牌資產 */}
+        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">選擇要延伸生成的品牌資產</div>
+        <div className="grid grid-cols-2 gap-1.5 max-h-[140px] overflow-y-auto mb-5 border border-[#E2E8F0] p-2.5 rounded-xl bg-gray-50/50">
+          {LOGO_BRAND_OUTPUTS.map(spec => {
+            const on = selectedAssets.includes(spec.id);
+            return (
+              <button
+                key={spec.id}
+                type="button"
+                onClick={() => toggleAsset(spec.id)}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold text-left transition-all cursor-pointer ${
+                  on
+                    ? 'border-[#AF52DE] bg-purple-50 text-[#AF52DE]'
+                    : 'border-[#E2E8F0] bg-white text-[#64748B] hover:border-purple-200'
+                }`}
+              >
+                <span
+                  className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[9px] text-white shrink-0 ${
+                    on ? 'bg-[#AF52DE]' : 'bg-gray-200'
+                  }`}
+                >
+                  {on ? '✓' : ''}
+                </span>
+                <span className="truncate">{spec.title}</span>
+              </button>
+            );
+          })}
+        </div>
 
         {/* 按鈕 */}
         <div className="flex gap-2">
