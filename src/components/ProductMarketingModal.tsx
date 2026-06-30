@@ -223,7 +223,7 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
         {/* 進階設定折疊面板 */}
         <details className="mb-4 group border border-gray-100 rounded-xl bg-purple-50/10 p-1">
           <summary className="text-[11px] font-bold text-[#AF52DE] cursor-pointer select-none py-1.5 px-2.5">
-            ▶ 進階視覺設定（選填）
+            進階視覺設定（選填）
           </summary>
           <div className="space-y-3 mt-2 p-2.5 bg-white rounded-lg border border-gray-100/50">
             <div>

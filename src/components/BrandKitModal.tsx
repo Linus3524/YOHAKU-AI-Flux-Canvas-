@@ -149,7 +149,7 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
         {/* 進階品牌自訂選項（選填） */}
         <details className="mb-4 group border border-gray-100 rounded-xl bg-purple-50/10 p-1">
           <summary className="text-[11px] font-bold text-[#AF52DE] cursor-pointer select-none py-1.5 px-2.5">
-            ▶ 進階品牌設定（選填，未填寫則由 AI 自動分析 Logo）
+            進階品牌設定（選填，未填寫則由 AI 自動分析 Logo）
           </summary>
           <div className="space-y-3 mt-2 p-2.5 bg-white rounded-lg border border-gray-100/50">
             <div>
