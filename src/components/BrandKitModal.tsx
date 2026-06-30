@@ -29,6 +29,22 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
   const [model, setModel] = useState('gemini');
   const [imageSize, setImageSize] = useState<'2K' | '4K'>('2K');
   const [selectedAssets, setSelectedAssets] = useState<string[]>(LOGO_BRAND_OUTPUTS.map(x => x.id));
+  const [isMouseDownOnBackdrop, setIsMouseDownOnBackdrop] = useState(false);
+
+  const handleBackdropMouseDown = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      setIsMouseDownOnBackdrop(true);
+    } else {
+      setIsMouseDownOnBackdrop(false);
+    }
+  };
+
+  const handleBackdropMouseUp = (e: React.MouseEvent) => {
+    if (isMouseDownOnBackdrop && e.target === e.currentTarget) {
+      onClose();
+    }
+    setIsMouseDownOnBackdrop(false);
+  };
 
   const toggleAsset = (id: string) => {
     setSelectedAssets(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -51,10 +67,16 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
   const inputClass = "w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-[12px] text-[#1E293B] placeholder:text-gray-300 focus:outline-none focus:border-[#AF52DE]";
 
   return (
-    <div className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/20 backdrop-blur-sm"
+      onMouseDown={handleBackdropMouseDown}
+      onMouseUp={handleBackdropMouseUp}
+    >
       <div
         className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/50 w-[440px] max-h-[85vh] overflow-y-auto p-6"
         onClick={e => e.stopPropagation()}
+        onMouseDown={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="mb-4">

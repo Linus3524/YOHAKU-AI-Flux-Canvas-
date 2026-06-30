@@ -48,6 +48,8 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
       <div
         className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/50 w-[440px] p-6"
         onClick={e => e.stopPropagation()}
+        onMouseDown={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
       >
         <div className="mb-4">
           <h3 className="font-bold text-[#1D1D1F] text-[15px] mb-1">一鍵跨平台適配</h3>
