@@ -53,6 +53,9 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
 
   const currentPlatformSpecs = PRODUCT_MARKETING_PLATFORMS[activePlatform]?.recipes || [];
 
+  const navRef = React.useRef<HTMLDivElement>(null);
+  const activeTabRef = React.useRef<HTMLButtonElement>(null);
+
   // 當切換平台分類時，預設留空不勾選任何內建規格項目
   useEffect(() => {
     setSelectedAssets(prev => {
@@ -60,6 +63,33 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
       return prev.filter(id => id.startsWith('custom_'));
     });
   }, [activePlatform]);
+
+  // 1. 自動將目前選取的平台分頁置中捲動
+  useEffect(() => {
+    if (activeTabRef.current) {
+      activeTabRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center',
+      });
+    }
+  }, [activePlatform]);
+
+  // 2. 映射滑輪事件以支援桌機滑鼠橫向滾動
+  useEffect(() => {
+    const navEl = navRef.current;
+    if (!navEl) return;
+    const handleNavWheel = (e: WheelEvent) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        navEl.scrollLeft += e.deltaY * 0.8;
+      }
+    };
+    navEl.addEventListener('wheel', handleNavWheel, { passive: false });
+    return () => {
+      navEl.removeEventListener('wheel', handleNavWheel);
+    };
+  }, []);
 
   const handleBackdropMouseDown = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -139,6 +169,15 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
       onMouseDown={handleBackdropMouseDown}
       onMouseUp={handleBackdropMouseUp}
     >
+      <style>{`
+        .mktg-platform-nav::-webkit-scrollbar {
+          display: none;
+        }
+        .mktg-platform-nav {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
       <div
         className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/50 w-[460px] max-h-[85vh] overflow-y-auto p-6"
         onClick={e => e.stopPropagation()}
@@ -238,21 +277,30 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
 
         {/* 行銷平台選擇 Tab 列 */}
         <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">選擇行銷平台 / 通路</div>
-        <div className="flex gap-1 overflow-x-auto pb-1 mb-3 scrollbar-thin border-b border-[#E2E8F0]">
-          {Object.values(PRODUCT_MARKETING_PLATFORMS).map(platform => (
-            <button
-              key={platform.id}
-              type="button"
-              onClick={() => setActivePlatform(platform.id)}
-              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                activePlatform === platform.id
-                  ? 'bg-[#AF52DE]/10 text-[#AF52DE]'
-                  : 'text-[#64748B] hover:bg-gray-50'
-              }`}
-            >
-              {platform.name}
-            </button>
-          ))}
+        <div className="relative mb-3">
+          <div
+            ref={navRef}
+            className="flex gap-1 overflow-x-auto pb-1 border-b border-[#E2E8F0] mktg-platform-nav scroll-smooth"
+          >
+            {Object.values(PRODUCT_MARKETING_PLATFORMS).map(platform => {
+              const active = activePlatform === platform.id;
+              return (
+                <button
+                  key={platform.id}
+                  ref={active ? activeTabRef : undefined}
+                  type="button"
+                  onClick={() => setActivePlatform(platform.id)}
+                  className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                    active
+                      ? 'bg-[#AF52DE]/10 text-[#AF52DE]'
+                      : 'text-[#64748B] hover:bg-gray-50'
+                  }`}
+                >
+                  {platform.name}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* 選擇要延伸生成的行銷規格 */}
