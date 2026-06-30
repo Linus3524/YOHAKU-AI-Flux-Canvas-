@@ -59,9 +59,28 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
     onClose();
   };
 
-  const selectClass = "w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-[12px] font-semibold text-[#1E293B] focus:outline-none focus:border-[#AF52DE] cursor-pointer";
+  const selectClass = "w-full appearance-none bg-white border border-[#E2E8F0] rounded-xl pl-3 pr-8 py-2 text-[12px] font-semibold text-[#1E293B] focus:outline-none focus:border-[#AF52DE] cursor-pointer";
   const inputClass = "w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-[12px] text-[#1E293B] placeholder:text-gray-300 focus:outline-none focus:border-[#AF52DE]";
   const labelClass = "text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5 block";
+
+  // 自訂下拉選單渲染輔助，整合自訂三角形
+  const renderCustomSelect = (
+    val: string,
+    onChangeFn: (e: React.ChangeEvent<HTMLSelectElement>) => void,
+    opts: React.ReactNode,
+    extraClass = ""
+  ) => (
+    <div className={`relative w-full ${extraClass}`}>
+      <select value={val} onChange={onChangeFn} className={selectClass}>
+        {opts}
+      </select>
+      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#64748B] flex items-center">
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={onClose}>
@@ -74,7 +93,7 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
           <h3 className="font-bold text-[#1D1D1F] text-[15px] mb-1">🎨 延伸品牌套件</h3>
           <p className="text-[11px] text-[#86868B] leading-relaxed">
             以您右鍵選取的這張圖片作為「主 Logo 錨點」，AI 將保留這個<strong>完全相同的標誌設計</strong>，
-            延伸生成 4 張品牌視覺資產：品牌視覺板、名片/信紙/包裝、社群橫幅、網站首頁。
+            延伸生成 4 張 brand 視覺資產：品牌視覺板、名片/信紙/包裝、社群橫幅、網站首頁。
           </p>
         </div>
 
@@ -101,27 +120,35 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className={labelClass}>行業</label>
-            <select value={industry} onChange={e => setIndustry(e.target.value)} className={selectClass}>
-              {LOGO_INDUSTRIES.map(o => <option key={o.id} value={o.id}>{o.name_zh} {o.name}</option>)}
-            </select>
+            {renderCustomSelect(
+              industry,
+              e => setIndustry(e.target.value),
+              LOGO_INDUSTRIES.map(o => <option key={o.id} value={o.id}>{o.name_zh} {o.name}</option>)
+            )}
           </div>
           <div>
             <label className={labelClass}>品牌調性</label>
-            <select value={mood} onChange={e => setMood(e.target.value)} className={selectClass}>
-              {LOGO_MOODS.map(o => <option key={o.id} value={o.id}>{o.name_zh} {o.name}</option>)}
-            </select>
+            {renderCustomSelect(
+              mood,
+              e => setMood(e.target.value),
+              LOGO_MOODS.map(o => <option key={o.id} value={o.id}>{o.name_zh} {o.name}</option>)
+            )}
           </div>
           <div>
             <label className={labelClass}>視覺風格</label>
-            <select value={style} onChange={e => setStyle(e.target.value)} className={selectClass}>
-              {LOGO_STYLES.map(o => <option key={o.id} value={o.id}>{o.name_zh} {o.name}</option>)}
-            </select>
+            {renderCustomSelect(
+              style,
+              e => setStyle(e.target.value),
+              LOGO_STYLES.map(o => <option key={o.id} value={o.id}>{o.name_zh} {o.name}</option>)
+            )}
           </div>
           <div>
             <label className={labelClass}>配色方案</label>
-            <select value={palette} onChange={e => setPalette(e.target.value)} className={selectClass}>
-              {LOGO_PALETTES.map(o => <option key={o.id} value={o.id}>{o.name_zh} {o.name}</option>)}
-            </select>
+            {renderCustomSelect(
+              palette,
+              e => setPalette(e.target.value),
+              LOGO_PALETTES.map(o => <option key={o.id} value={o.id}>{o.name_zh} {o.name}</option>)
+            )}
           </div>
         </div>
 
@@ -152,13 +179,16 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
 
         {/* 生成模型 */}
         <label className={labelClass}>生成模型</label>
-        <select value={model} onChange={e => setModel(e.target.value)} className={`${selectClass} mb-3`}>
-          {MODEL_OPTIONS.map(o => (
+        {renderCustomSelect(
+          model,
+          e => setModel(e.target.value),
+          MODEL_OPTIONS.map(o => (
             <option key={o.id} value={o.id} disabled={o.needsAtlas && !hasAtlas}>
               {o.label}{o.needsAtlas && !hasAtlas ? '（需 Atlas Key）' : ''}
             </option>
-          ))}
-        </select>
+          )),
+          "mb-3"
+        )}
 
         {/* 輸出解析度 */}
         <label className={labelClass}>輸出解析度</label>
