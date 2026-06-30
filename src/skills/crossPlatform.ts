@@ -24,7 +24,7 @@ export interface CrossPlatformSpec {
 export const CROSS_PLATFORM_SPECS: CrossPlatformSpec[] = [
   {
     id: 'instagram-story',
-    name: 'IG Story/Reels 9:16',
+    name: 'IG 限時動態/Reels 9:16',
     promptLabel: 'Instagram Story / Reels',
     atlasRatio: '9:16',
     ratioValue: 9 / 16,
@@ -63,7 +63,7 @@ export const CROSS_PLATFORM_SPECS: CrossPlatformSpec[] = [
   },
   {
     id: 'instagram-feed',
-    name: 'Instagram Feed 4:5',
+    name: 'IG 貼文 4:5',
     promptLabel: 'Instagram feed post',
     atlasRatio: '4:5',
     ratioValue: 4 / 5,
@@ -115,7 +115,7 @@ export const CROSS_PLATFORM_SPECS: CrossPlatformSpec[] = [
   },
   {
     id: 'wechat',
-    name: '公眾號封面 21:9',
+    name: 'WeChat 公眾號封面 21:9',
     promptLabel: 'WeChat Official Account article cover',
     atlasRatio: '21:9',
     ratioValue: 21 / 9,
