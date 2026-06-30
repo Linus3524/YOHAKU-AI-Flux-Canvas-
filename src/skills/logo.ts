@@ -276,25 +276,25 @@ export const LOGO_BRAND_OUTPUTS: LogoBrandOutputSpec[] = [
 ];
 
 export function buildLogoBrandPrompt(content: string, config: LogoSkillConfig, spec: LogoBrandOutputSpec, index: number, total: number): string {
-  const styleMod = LOGO_STYLES.find(o => o.id === config.style)?.promptModifier ?? '';
-  const paletteMod = LOGO_PALETTES.find(o => o.id === config.palette)?.promptModifier ?? '';
-  const industryMod = LOGO_INDUSTRIES.find(o => o.id === config.industry)?.promptModifier ?? '';
-  const moodMod = LOGO_MOODS.find(o => o.id === config.mood)?.promptModifier ?? '';
+  const styleMod = config.style && config.style !== 'flat' ? LOGO_STYLES.find(o => o.id === config.style)?.promptModifier ?? '' : '';
+  const paletteMod = config.palette && config.palette !== 'monochrome' ? LOGO_PALETTES.find(o => o.id === config.palette)?.promptModifier ?? '' : '';
+  const industryMod = config.industry && config.industry !== 'general' ? LOGO_INDUSTRIES.find(o => o.id === config.industry)?.promptModifier ?? '' : '';
+  const moodMod = config.mood && config.mood !== 'minimal' ? LOGO_MOODS.find(o => o.id === config.mood)?.promptModifier ?? '' : '';
 
   return [
     `Design a professional branding asset: "${spec.title}" (Part ${index + 1}/${total} of the Brand Identity Kit, extending an ALREADY-CHOSEN logo).`,
     `CRITICAL — LOGO ANCHOR: An image of the brand's FINAL, approved logo mark is attached as a reference image. You MUST reuse that EXACT logo (same symbol, lettering, and proportions) in this asset — do NOT redesign, reinterpret, or invent a different mark. Only place/scale/recolor-for-context it appropriately within this new asset.`,
     `Brand Name: "${config.brandName || 'My Brand'}"`,
     config.slogan ? `Brand Slogan: "${config.slogan}"` : '',
-    `Industry/Category: "${config.industry || 'General'}"`,
-    `Target Audience: ${config.targetAudience}`,
-    `Brand Positioning: ${config.positioning}`,
-    `Brand Personality: ${config.personality}`,
-    `Intended Usage Contexts: ${config.usageContexts}`,
-    `Visual Style Preset: ${config.style} (${styleMod})`,
-    `Color Scheme: ${config.palette} (${paletteMod})`,
-    `Industry Context: ${config.industry} (${industryMod})`,
-    `Brand Mood: ${config.mood} (${moodMod})`,
+    `Industry/Category: "${config.industry && config.industry !== 'general' ? config.industry : 'Extract and match from the logo reference image'}"`,
+    config.targetAudience && config.targetAudience !== LOGO_DEFAULT_CONFIG.targetAudience ? `Target Audience: ${config.targetAudience}` : '',
+    config.positioning && config.positioning !== LOGO_DEFAULT_CONFIG.positioning ? `Brand Positioning: ${config.positioning}` : '',
+    config.personality && config.personality !== LOGO_DEFAULT_CONFIG.personality ? `Brand Personality: ${config.personality}` : '',
+    config.usageContexts && config.usageContexts !== LOGO_DEFAULT_CONFIG.usageContexts ? `Intended Usage Contexts: ${config.usageContexts}` : '',
+    styleMod ? `Visual Style Preset: ${config.style} (${styleMod})` : 'Visual Style: Automatically analyze and replicate the exact artistic style, textures, outline stroke weights, and design aesthetic of the attached logo reference image to ensure absolute visual harmony.',
+    paletteMod ? `Color Scheme: ${config.palette} (${paletteMod})` : 'Color Scheme: Automatically analyze and extract the color palette (main brand color, secondary accent colors) from the attached logo reference image. Apply these exact colors consistently across the asset.',
+    industryMod ? `Industry Context: ${config.industry} (${industryMod})` : '',
+    moodMod ? `Brand Mood: ${config.mood} (${moodMod})` : 'Brand Mood: Match the mood (e.g. minimal, elegant, professional, playful) presented by the logo design in the reference image.',
     `Branding Standards: ${LOGO_BRAND_STANDARDS.join(' ')}`,
     `This asset goal: ${spec.note}`,
     `Execution instructions: ${spec.guidance.join(' ')}`,
