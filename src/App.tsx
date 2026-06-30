@@ -16,6 +16,7 @@ import { StylePasteModal } from './components/StylePasteModal';
 import { DesignMasterPanel, DesignMasterPersistState } from './components/DesignMasterPanel';
 import { DrawingModal } from './components/DrawingModal';
 import { ImageEditModal } from './components/ImageEditModal';
+import { CrossPlatformModal } from './components/CrossPlatformModal';
 import { DraggableToolbar } from './components/DraggableToolbar';
 import { LayerPanel } from './components/LayerPanel';
 import { TextPropertyPanel } from './components/TextPropertyPanel';
@@ -493,7 +494,8 @@ const App: React.FC = () => {
       handleLocalUpscale,
       handleLocalRemoveBackground,
       handleGenerate,
-      handleAskAI 
+      handleCrossPlatformAdapt,
+      handleAskAI
   } = useAI({
       elements,
       setElements,
@@ -669,6 +671,14 @@ const App: React.FC = () => {
           setGeneratingElementIds([]);
       }
   }, [effectiveApiKey, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+
+  // --- 一鍵跨平台適配 ---
+  const [crossPlatformTarget, setCrossPlatformTarget] = useState<{ elementId: string; name: string } | null>(null);
+  const handleOpenCrossPlatform = useCallback((elementId: string) => {
+      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
+      if (!el) return;
+      setCrossPlatformTarget({ elementId, name: el.name });
+  }, [elements]);
 
   // --- 貼紙套組一鍵切分 ---
   const handleSplitSticker = useCallback(async (elementId: string) => {
@@ -2344,6 +2354,21 @@ const App: React.FC = () => {
         />
       )}
 
+      {crossPlatformTarget && (
+        <CrossPlatformModal
+          imageName={crossPlatformTarget.name}
+          defaultModel={generationModel}
+          hasAtlas={!!atlasApiKey}
+          onGenerate={(platformIds, opts) => {
+            const id = crossPlatformTarget.elementId;
+            handleCrossPlatformAdapt(id, platformIds, opts).catch((e: any) =>
+              showToast(`❌ 跨平台適配失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`)
+            );
+          }}
+          onClose={() => setCrossPlatformTarget(null)}
+        />
+      )}
+
       {contextMenu && (
         <ContextMenu
           menuData={contextMenu}
@@ -2400,6 +2425,7 @@ const App: React.FC = () => {
             semanticEditor: handleOpenSemanticEditor,
             ocrConvert: handleOCRConvert,
             splitSticker: handleSplitSticker,
+            crossPlatformAdapt: handleOpenCrossPlatform,
             clearStorage: () => setShowClearConfirm(true),
           }}
           canChangeColor={canChangeColor}

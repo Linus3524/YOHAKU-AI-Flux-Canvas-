@@ -64,6 +64,7 @@ interface ContextMenuProps {
     ocrConvert: (elementId: string) => void;
     clearStorage: () => void;
     splitSticker?: (elementId: string) => void;
+    crossPlatformAdapt?: (elementId: string) => void;
   };
   canChangeColor: boolean;
   elementType: ElementType | null;
@@ -396,6 +397,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                  {actions.splitSticker && (
                                      <MenuItem icon={<SquareBottomDashedScissors size={14} strokeWidth={1.8} style={{ display: 'block' }} />} onClick={() => handleAction(() => actions.splitSticker!(menuData.elementId!))}>
                                          一鍵拆分貼圖/圖示
+                                     </MenuItem>
+                                 )}
+                                 {actions.crossPlatformAdapt && (
+                                     <MenuItem icon={<MenuIcons.Expand />} onClick={() => handleAction(() => actions.crossPlatformAdapt!(menuData.elementId!))}>
+                                         一鍵跨平台適配
                                      </MenuItem>
                                  )}
                                  <div className="border-t my-0.5 border-gray-100/50" />

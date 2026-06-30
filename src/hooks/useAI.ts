@@ -23,6 +23,7 @@ import { runUpscaleInWorker } from '../utils/upscaleWorkerClient';
 import { runLocalRmbgInWorker } from '../utils/briaRmbgWorkerClient';
 import { MODEL_CONFIGS, getModelStatus, type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
+import { crossPlatformSpec, buildCrossPlatformPrompt, type CrossPlatformSpec } from '../skills/crossPlatform';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -1685,6 +1686,114 @@ CONSTRAINTS:
         }
       }, [imageStyle, imageAspectRatio, imageSize, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, prepareForGeneration, restoreTransparencyFn]);
 
+    /**
+     * 一鍵跨平台適配：1 張來源圖 → 依所選平台逐張重構（比例/安全區/智能擴圖）。
+     * 對標 AI-Canvas：每平台 = 一個「參考圖 + prompt」的 img2img 重構,模型整張重生。
+     * 優先用 Atlas（有明確比例控制）,沒有才退回 Gemini 參考圖路徑。結果排成一列放在原圖右側。
+     */
+    const handleCrossPlatformAdapt = useCallback(async (
+        elementId: string,
+        platformIds: string[],
+        opts: { preserveSubject?: boolean; keepText?: boolean; model?: string; imageSize?: '2K' | '4K' } = {},
+    ) => {
+        const el = elements.find(e => e.id === elementId);
+        if (!el || el.type !== 'image') { showToast('⚠️ 請先選擇一張圖片'); return; }
+        const specs = platformIds.map(id => crossPlatformSpec(id)).filter(Boolean) as CrossPlatformSpec[];
+        if (specs.length === 0) { showToast('⚠️ 請至少選一個平台'); return; }
+
+        // 模型：以面板選的為主,沒帶則沿用全域生成模型
+        const chosenModel = opts.model || generationModelGlobal;
+        const useAtlas = chosenModel !== 'gemini' && !!atlasApiKey
+            && atlasModelSupportsImg2Img(chosenModel as AtlasGenerationModel);
+        if (chosenModel !== 'gemini' && !useAtlas) {
+            showToast('⚠️ 選用的 Atlas 模型需要 Atlas Cloud Key 或不支援圖生圖,改用 Gemini');
+        }
+        if (!useAtlas && !apiKey) { setHasApiKey(false); showToast('⚠️ 跨平台適配需要 Gemini 或 Atlas API Key'); return; }
+
+        const imgEl = el as ImageElement;
+        let src = imgEl.src;
+        if (!src.startsWith('data:')) src = await downloadImageAsBase64(src);
+        if (!src.startsWith('data:')) { showToast('⚠️ 無法讀取來源圖片'); return; }
+
+        setIsGenerating(true);
+        setGeneratingElementIds([elementId]);
+
+        // 結果排成一列放原圖右側,固定顯示高度、寬度依比例換算
+        const ROW_H = 220;
+        const gap = 24;
+        let cursorX = imgEl.position.x + imgEl.width / 2 + 60;
+        const baseTop = imgEl.position.y - imgEl.height / 2;
+
+        try {
+            for (let i = 0; i < specs.length; i++) {
+                const spec = specs[i];
+                showToast(`🎯 跨平台適配：${spec.name}（${i + 1}/${specs.length}）...`);
+                const prompt = buildCrossPlatformPrompt(spec, opts);
+                let resultSrc = '';
+                try {
+                    if (useAtlas) {
+                        const atlasModel = chosenModel as AtlasGenerationModel;
+                        // 跨平台適配用面板自己的解析度設定,不跟全域 imageSize。
+                        // Atlas quality 只接受 2K/4K,1K（快）就近用 2K（沒有更低檔位）。
+                        const quality = opts.imageSize === '4K' ? '4K' : '2K';
+                        const images = await withAtlasWaitToast(() =>
+                            callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, src, 1, { ratio: spec.atlasRatio, quality }));
+                        if (images.length > 0) resultSrc = images[0];
+                    } else {
+                        const genAI = new GoogleGenAI({ apiKey: apiKey! });
+                        const [header, data] = src.split(',');
+                        const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                        const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                            model: imageModel,
+                            contents: { parts: [{ inlineData: { data, mimeType } }, { text: `${prompt}\nOutput aspect ratio: ${spec.atlasRatio}.` }] },
+                        }));
+                        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                        if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
+                    }
+                } catch (e) {
+                    console.warn('[crossPlatform] 生成失敗', spec.id, e);
+                    showToast(`⚠️ ${spec.name} 生成失敗,略過`);
+                    continue;
+                }
+                if (!resultSrc) { showToast(`⚠️ ${spec.name} 未回傳圖片,略過`); continue; }
+
+                // 用「結果圖的實際像素比例」定畫布寬高,而非規格假設比例——
+                // 模型/Atlas 回傳的真實比例可能跟 spec.ratioValue 不同,用假設值會把圖拉伸壓扁。
+                let realRatio = spec.ratioValue;
+                try {
+                    const im = await loadImage(resultSrc);
+                    if (im.naturalWidth > 0 && im.naturalHeight > 0) realRatio = im.naturalWidth / im.naturalHeight;
+                } catch { /* 載入失敗則沿用規格比例 */ }
+                const h = ROW_H;
+                const w = Math.round(ROW_H * realRatio);
+                const newId = `xplatform_${Date.now()}_${i}`;
+                const newEl: ImageElement = {
+                    ...imgEl,
+                    id: newId,
+                    src: resultSrc,
+                    name: `${imgEl.name} (${spec.name})`,
+                    position: { x: cursorX + w / 2, y: baseTop + h / 2 },
+                    width: w,
+                    height: h,
+                    rotation: 0,
+                    zIndex: zIndexCounter.current++,
+                    groupId: null,
+                    isVisible: true,
+                    isLocked: false,
+                };
+                setElements(prev => [...prev, newEl]);
+                if (resultSrc.startsWith('data:')) cacheImage(newId, resultSrc);
+                cursorX += w + gap;
+            }
+            showToast('✅ 跨平台適配完成！');
+        } catch (error) {
+            handleAIError(error, '跨平台適配');
+        } finally {
+            setGeneratingElementIds([]);
+            setIsGenerating(false);
+        }
+    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast]);
+
     return {
         createAiClient,
         isGenerating,
@@ -1725,6 +1834,7 @@ CONSTRAINTS:
         genProgress,
         genOpType,
         handleGenerate,
-        handleAskAI 
+        handleCrossPlatformAdapt,
+        handleAskAI
     };
 };
