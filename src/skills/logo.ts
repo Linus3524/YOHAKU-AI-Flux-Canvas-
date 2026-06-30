@@ -208,6 +208,70 @@ export const LOGO_BRAND_OUTPUTS: LogoBrandOutputSpec[] = [
       'Generate a realistic website homepage screenshot/mockup: a top navigation bar featuring the EXACT provided logo, plus a hero section below with a headline, supporting visual, and the brand color palette applied to UI elements (buttons, accents).',
       'Render only the browser viewport content — no browser chrome, no device frames.'
     ]
+  },
+  {
+    id: 'shopping-bag',
+    title: '品牌購物紙袋',
+    aspectRatio: '1:1',
+    ratioValue: 1.0,
+    note: 'A premium paper shopping bag mockup with rope handles printed with the brand identity.',
+    guidance: [
+      'Generate a professional photo mockup of a premium paper shopping bag with textured paper and rope handles, printed with the EXACT provided logo on its side.',
+      'Place it in a clean minimal studio setting with soft shadows and realistic lighting.'
+    ]
+  },
+  {
+    id: 'storefront-sign',
+    title: '實體店面招牌',
+    aspectRatio: '4:3',
+    ratioValue: 4 / 3,
+    note: 'A realistic photo mockup of a 3D backlit storefront signage mounted on a wall.',
+    guidance: [
+      'Generate a photorealistic close-up of a 3D backlit storefront sign mounted on a clean concrete or brick wall, showcasing the EXACT provided logo glow or metallic finish.',
+      'Daytime or night with dramatic lighting and professional architectural photography style.'
+    ]
+  },
+  {
+    id: 'merchandise',
+    title: 'T-shirt 與帆布袋',
+    aspectRatio: '4:3',
+    ratioValue: 4 / 3,
+    note: 'A mockup displaying a T-shirt and a canvas tote bag printed with the brand logo.',
+    guidance: [
+      'Generate a clean product photo of a folded cotton T-shirt and a flat canvas tote bag side-by-side on a wooden or neutral table, both printed with the EXACT provided logo.',
+      'Ensure organic fabric textures and professional studio lighting.'
+    ]
+  },
+  {
+    id: 'office-stationery',
+    title: '辦公文具與識別證',
+    aspectRatio: '4:3',
+    ratioValue: 4 / 3,
+    note: 'A mockup of brand corporate office stationery including a notebook, pen, and lanyard badge.',
+    guidance: [
+      'Generate a realistic desk setup flatlay showing a closed hardcover notebook, a pen, and a corporate ID badge with a woven lanyard, all customized with the EXACT provided logo and the brand color scheme.'
+    ]
+  },
+  {
+    id: 'mobile-app',
+    title: '手機 App 啟動畫面',
+    aspectRatio: '9:16',
+    ratioValue: 9 / 16,
+    note: 'A mobile app splash screen mockup showing the brand logo on a smartphone display.',
+    guidance: [
+      'Generate a sleek mockup of a modern smartphone showing a clean app splash screen with the EXACT provided logo centered on a beautiful background color.',
+      'Render only the screen content with clean digital UI layout.'
+    ]
+  },
+  {
+    id: 'vehicle-wrap',
+    title: '品牌宣傳車體廣告',
+    aspectRatio: '16:9',
+    ratioValue: 16 / 9,
+    note: 'A clean delivery van wrap mockup with the brand identity applied to the side panels.',
+    guidance: [
+      'Generate a photorealistic mockup of a modern delivery van or transit van parked in a clean city street, with the EXACT provided logo and brand tagline wrapped cleanly on the side panels of the van.'
+    ]
   }
 ];
 

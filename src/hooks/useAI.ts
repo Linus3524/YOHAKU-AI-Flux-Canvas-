@@ -1958,6 +1958,7 @@ CONSTRAINTS:
         brief: LogoSkillConfig,
         modelOverride?: string,
         imageSizeOverride?: '1K' | '2K' | '4K',
+        selectedAssetIds?: string[],
     ) => {
         const el = elements.find(e => e.id === elementId);
         if (!el || el.type !== 'image') { showToast('⚠️ 無法定位主 Logo 圖片'); return; }
@@ -2006,8 +2007,12 @@ CONSTRAINTS:
         };
 
         try {
-            const specs = LOGO_BRAND_OUTPUTS;
+            const allSpecs = LOGO_BRAND_OUTPUTS;
+            const specs = selectedAssetIds
+                ? allSpecs.filter(s => selectedAssetIds.includes(s.id))
+                : allSpecs;
             const total = specs.length;
+            if (total === 0) { showToast('⚠️ 未選取任何品牌資產'); return; }
             let successCount = 0;
 
             // Atlas 可能回傳 CDN URL，後續 img2img 需要 base64 才能當參考圖
@@ -2015,7 +2020,7 @@ CONSTRAINTS:
                 try { logoSrc = await downloadImageAsBase64(logoSrc); } catch { /* 失敗則維持原樣 */ }
             }
 
-            // ── 用選定的主 Logo 圖片當錨點，延伸生成其餘 4 個品牌資產 ──
+            // ── 用選定的主 Logo 圖片當錨點，延伸生成其餘選定的品牌資產 ──
             for (let i = 0; i < specs.length; i++) {
                 const spec = specs[i];
                 showToast(`🎯 品牌視覺套件：${spec.title}（${i + 1}/${total}）...`);

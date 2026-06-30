@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   LOGO_STYLES, LOGO_PALETTES, LOGO_INDUSTRIES, LOGO_MOODS,
-  LOGO_DEFAULT_CONFIG, type LogoSkillConfig,
+  LOGO_DEFAULT_CONFIG, LOGO_BRAND_OUTPUTS, type LogoSkillConfig,
 } from '../skills/logo';
 
 const MODEL_OPTIONS: { id: string; label: string; needsAtlas: boolean }[] = [
@@ -20,7 +20,7 @@ const SIZE_OPTIONS: { id: '2K' | '4K'; label: string }[] = [
 interface BrandKitModalProps {
   imageName?: string;
   hasAtlas?: boolean;
-  onGenerate: (brief: LogoSkillConfig, model: string, resolution: '1K' | '2K' | '4K') => void;
+  onGenerate: (brief: LogoSkillConfig, model: string, resolution: '1K' | '2K' | '4K', selectedAssetIds: string[]) => void;
   onClose: () => void;
 }
 
@@ -37,9 +37,14 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
   const [usageContexts, setUsageContexts] = useState(LOGO_DEFAULT_CONFIG.usageContexts);
   const [model, setModel] = useState('gemini');
   const [imageSize, setImageSize] = useState<'2K' | '4K'>('2K');
+  const [selectedAssets, setSelectedAssets] = useState<string[]>(LOGO_BRAND_OUTPUTS.map(x => x.id));
+
+  const toggleAsset = (id: string) => {
+    setSelectedAssets(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
 
   const submit = () => {
-    if (!brandName.trim()) return;
+    if (!brandName.trim() || selectedAssets.length === 0) return;
     const brief: LogoSkillConfig = {
       ...LOGO_DEFAULT_CONFIG,
       brandName: brandName.trim(),
@@ -55,7 +60,7 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
       isBrandKit: true,
       brandKitResolution: imageSize,
     };
-    onGenerate(brief, model, imageSize);
+    onGenerate(brief, model, imageSize, selectedAssets);
     onClose();
   };
 
@@ -208,7 +213,36 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-[#86868B] mb-5">僅影響生圖輸出的畫質等級。解析度越高生成時間越長。</p>
+        <p className="text-[10px] text-[#86868B] mb-4">僅影響生圖輸出的畫質等級。解析度越高生成時間越長。</p>
+
+        {/* 選擇品牌資產 */}
+        <div className={labelClass}>選擇要延伸生成的品牌資產</div>
+        <div className="grid grid-cols-2 gap-1.5 max-h-[140px] overflow-y-auto mb-5 border border-[#E2E8F0] p-2.5 rounded-xl bg-gray-50/50">
+          {LOGO_BRAND_OUTPUTS.map(spec => {
+            const on = selectedAssets.includes(spec.id);
+            return (
+              <button
+                key={spec.id}
+                type="button"
+                onClick={() => toggleAsset(spec.id)}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold text-left transition-all cursor-pointer ${
+                  on
+                    ? 'border-[#AF52DE] bg-purple-50 text-[#AF52DE]'
+                    : 'border-[#E2E8F0] bg-white text-[#64748B] hover:border-purple-200'
+                }`}
+              >
+                <span
+                  className={`w-3 h-3 rounded flex items-center justify-center text-[8px] text-white shrink-0 ${
+                    on ? 'bg-[#AF52DE]' : 'bg-gray-200'
+                  }`}
+                >
+                  {on ? '✓' : ''}
+                </span>
+                <span className="truncate">{spec.title}</span>
+              </button>
+            );
+          })}
+        </div>
 
         {/* 按鈕 */}
         <div className="flex gap-2">
@@ -216,9 +250,9 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
             className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors">
             取消
           </button>
-          <button onClick={submit} disabled={!brandName.trim()}
+          <button onClick={submit} disabled={!brandName.trim() || selectedAssets.length === 0}
             className="flex-1 py-2.5 rounded-xl bg-[#AF52DE] text-white text-[13px] font-medium hover:bg-[#9a3fc7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            生成 4 張延伸資產
+            生成 {selectedAssets.length} 張延伸資產
           </button>
         </div>
         <p className="text-center text-[10px] text-[#86868B] mt-2">逐張依序生成（每張約 6–15 秒）· 結果排在原圖右側</p>

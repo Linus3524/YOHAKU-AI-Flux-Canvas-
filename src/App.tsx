@@ -2383,9 +2383,9 @@ const App: React.FC = () => {
         <BrandKitModal
           imageName={brandKitTarget.name}
           hasAtlas={!!atlasApiKey}
-          onGenerate={(brief, model, resolution) => {
+          onGenerate={(brief, model, resolution, selectedAssetIds) => {
             const id = brandKitTarget.elementId;
-            handleExtendBrandKit(id, brief, model, resolution).catch((e: any) =>
+            handleExtendBrandKit(id, brief, model, resolution, selectedAssetIds).catch((e: any) =>
               showToast(`❌ 品牌視覺延伸失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`)
             );
           }}
