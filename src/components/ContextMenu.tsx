@@ -3,7 +3,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import type { Point, ElementType } from '../types';
 import { COLORS } from '../utils/helpers';
 import { Icon } from './Icon';
-import { SaveAll, PencilRuler, SquareBottomDashedScissors } from 'lucide-react';
+import { SaveAll, PencilRuler, SquareBottomDashedScissors, SwatchBook } from 'lucide-react';
 
 interface ContextMenuData {
     x: number;
@@ -108,6 +108,7 @@ const MenuIcons = {
   Lock:         () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
   Unlock:       () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
   Eye:          () => <Icon name="visibility" size={15} />,
+  SwatchBook:   () => <SwatchBook size={13} strokeWidth={1.75} style={{ display: 'block' }} />,
   EyeOff:       () => <Icon name="visibility_off" size={15} />,
   UnlockAll:    () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
   ShowAll:      () => <Icon name="visibility" size={15} />,
@@ -407,7 +408,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                      </MenuItem>
                                  )}
                                  {actions.extendBrandKit && (
-                                     <MenuItem icon={<MenuIcons.Wand />} onClick={() => handleAction(() => actions.extendBrandKit!(menuData.elementId!))}>
+                                     <MenuItem icon={<MenuIcons.SwatchBook />} onClick={() => handleAction(() => actions.extendBrandKit!(menuData.elementId!))}>
                                          延伸品牌套件
                                      </MenuItem>
                                  )}
