@@ -113,6 +113,32 @@ export const CROSS_PLATFORM_SPECS: CrossPlatformSpec[] = [
       'Extend the background sideways generously when needed; avoid making the subject too small or cropped.',
     ],
   },
+  {
+    id: 'social-square',
+    name: '社群/廣告方圖 1:1',
+    promptLabel: 'social square post',
+    atlasRatio: '1:1',
+    ratioValue: 1,
+    standard: 'Square 1:1 aspect ratio is universally supported across most social platforms (LINE, FB, IG) and display ad networks, providing a stable cross-device visual format.',
+    safeArea: 'Keep key subjects, face, logo, and core message within the central 80% safe zone; leave at least 10% margins around the edges to prevent accidental cropping on mobile screens.',
+    guidance: [
+      'Recompose into a clean, balanced square layout where the subject is instantly recognizable.',
+      'Naturally extend the background equally to all sides or simplify the surroundings to fit the square frame without warping the main subject.',
+    ],
+  },
+  {
+    id: 'pinterest',
+    name: 'Pinterest 貼文 2:3',
+    promptLabel: 'Pinterest vertical pin',
+    atlasRatio: '2:3',
+    ratioValue: 2 / 3,
+    standard: 'Pinterest uses a high-aspect vertical 2:3 ratio; this format fills the user waterfall feed beautifully and is ideal for showcasing detail, products, and vertical scenes.',
+    safeArea: 'Keep key visual elements, text, and product details away from the absolute top and bottom edges; maintain a 10% vertical safe margin for lists overlay.',
+    guidance: [
+      'Recompose into an elegant vertical waterfall layout, accentuating height and depth.',
+      'Extend the background vertically (up/down) to fit the ratio; do not stretch the subject horizontally.',
+    ],
+  },
 ];
 
 export function crossPlatformSpec(id: string): CrossPlatformSpec | undefined {
