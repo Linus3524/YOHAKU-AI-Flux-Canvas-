@@ -60,6 +60,7 @@ interface DesignMasterPanelProps {
   initialState?: DesignMasterPersistState;
   /** 將目前設定回存（生成或關閉時呼叫），供下次進入同一張便利貼還原 */
   onPersistState?: (s: DesignMasterPersistState) => void;
+  onGenerateBrandKit?: (brief: any, model: string, resolution: '1K' | '2K' | '4K') => void;
 }
 
 export interface DesignMasterPersistState {
@@ -81,6 +82,7 @@ const MODEL_OPTIONS: { id: string; label: string; needsAtlas: boolean }[] = [
 export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   noteContent,
   isGenerating,
+  generationModel,
   hasAtlasKey,
   apiKey,
   showToast,
@@ -90,6 +92,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   onUpdateReferenceImages,
   initialState,
   onPersistState,
+  onGenerateBrandKit,
 }) => {
   const [activeSkill, setActiveSkill] = useState<SkillType>(initialState?.activeSkill ?? 'sticker');
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -282,6 +285,12 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
       : undefined;
 
     persistState();   // 生成前先回存設定 + 同步便利貼提示詞
+    if (activeSkill === 'logo' && configs.logo.isBrandKit) {
+      if (onGenerateBrandKit) {
+        onGenerateBrandKit(configs.logo, model, configs.logo.brandKitResolution || '2K');
+        return;
+      }
+    }
     onGenerate(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder);
   };
 
@@ -541,6 +550,92 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                   className="w-full text-[13px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2 focus:outline-none focus:border-[#AF52DE] focus:ring-4 focus:ring-[#AF52DE]/10 transition-all"
                 />
               </div>
+              <div className="border-t border-purple-100/30 my-1 pt-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={configs.logo.isBrandKit}
+                    onChange={e => setConfigs(prev => ({
+                      ...prev,
+                      logo: { ...prev.logo, isBrandKit: e.target.checked }
+                    }))}
+                    className="rounded border-[#cbd5e1] text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-[12px] font-bold text-[#1E293B]">生成完整品牌視覺套件 (主/備用Logo、視覺板、App圖示、應用預覽)</span>
+                </label>
+              </div>
+
+              {configs.logo.isBrandKit && (
+                <div className="flex flex-col gap-3 mt-1 pt-3 border-t border-purple-100/20">
+                  <div>
+                    <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">目標受眾</div>
+                    <input
+                      type="text"
+                      value={configs.logo.targetAudience}
+                      onChange={e => setConfigs(prev => ({
+                        ...prev,
+                        logo: { ...prev.logo, targetAudience: e.target.value }
+                      }))}
+                      placeholder="例如：大眾消費者、注重生活質感的追求者"
+                      className="w-full text-[13px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2 focus:outline-none focus:border-[#AF52DE] focus:ring-4 focus:ring-[#AF52DE]/10 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">定位與差異點</div>
+                    <input
+                      type="text"
+                      value={configs.logo.positioning}
+                      onChange={e => setConfigs(prev => ({
+                        ...prev,
+                        logo: { ...prev.logo, positioning: e.target.value }
+                      }))}
+                      placeholder="例如：高端、簡約、有獨特品牌記憶點"
+                      className="w-full text-[13px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2 focus:outline-none focus:border-[#AF52DE] focus:ring-4 focus:ring-[#AF52DE]/10 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">品牌人格</div>
+                    <input
+                      type="text"
+                      value={configs.logo.personality}
+                      onChange={e => setConfigs(prev => ({
+                        ...prev,
+                        logo: { ...prev.logo, personality: e.target.value }
+                      }))}
+                      placeholder="例如：現代、可靠、優雅、精緻"
+                      className="w-full text-[13px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2 focus:outline-none focus:border-[#AF52DE] focus:ring-4 focus:ring-[#AF52DE]/10 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">主要使用場景</div>
+                    <input
+                      type="text"
+                      value={configs.logo.usageContexts}
+                      onChange={e => setConfigs(prev => ({
+                        ...prev,
+                        logo: { ...prev.logo, usageContexts: e.target.value }
+                      }))}
+                      placeholder="例如：官網、社媒頭像、名片、產品包裝"
+                      className="w-full text-[13px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2 focus:outline-none focus:border-[#AF52DE] focus:ring-4 focus:ring-[#AF52DE]/10 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">套件解析度</div>
+                    <select
+                      value={configs.logo.brandKitResolution || '2K'}
+                      onChange={e => setConfigs(prev => ({
+                        ...prev,
+                        logo: { ...prev.logo, brandKitResolution: e.target.value as '1K' | '2K' | '4K' }
+                      }))}
+                      className="w-full text-[13px] text-[#1E293B] bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2 focus:outline-none focus:border-[#AF52DE] focus:ring-4 focus:ring-[#AF52DE]/10 transition-all cursor-pointer"
+                    >
+                      <option value="1K">1K (快速省錢)</option>
+                      <option value="2K">2K (平衡畫質)</option>
+                      <option value="4K">4K (高清精緻)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1127,6 +1222,9 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                   if (currentConfig && currentConfig.type !== 'social-post') {
                     return group.key !== 'layout' && group.key !== 'strategy';
                   }
+                }
+                if (activeSkill === 'logo' && configs.logo.isBrandKit) {
+                  return group.key !== 'size';
                 }
                 return true;
               })

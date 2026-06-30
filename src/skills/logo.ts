@@ -10,6 +10,13 @@ export interface LogoSkillConfig {
   size: string;
   brandName: string;
   slogan: string;
+  // 品牌套件欄位
+  isBrandKit: boolean;
+  brandKitResolution: '1K' | '2K' | '4K';
+  targetAudience: string;
+  positioning: string;
+  personality: string;
+  usageContexts: string;
 }
 
 export const LOGO_DEFAULT_CONFIG: LogoSkillConfig = {
@@ -21,6 +28,13 @@ export const LOGO_DEFAULT_CONFIG: LogoSkillConfig = {
   size: '1:1',
   brandName: '',
   slogan: '',
+  // 品牌套件預設值
+  isBrandKit: false,
+  brandKitResolution: '2K',
+  targetAudience: '大眾消費者、注重質感的生活美學追求者',
+  positioning: '高端、簡約、有獨特品牌記憶點',
+  personality: '現代、可靠、優雅、精緻',
+  usageContexts: '官網、社媒頭像、名片、產品包裝',
 };
 
 export const LOGO_TYPES: SkillOption[] = [
@@ -130,4 +144,108 @@ REQUIREMENTS:
 
 ${content ? `ADDITIONAL CONTEXT:\n${content}` : ''}
   `.trim();
+}
+
+export interface LogoBrandOutputSpec {
+  id: string;
+  title: string;
+  aspectRatio: string;
+  ratioValue: number;
+  note: string;
+  guidance: string[];
+}
+
+export const LOGO_BRAND_STANDARDS = [
+  'A brand style guide must establish consistent rules for logo usage, typography, colors, and design layouts across all assets.',
+  'The logo design should be highly recognizable, clean, and memorable; avoid copying famous trademarks or using generic industry templates.',
+  'Mockups and preview graphics should ensure high contrast and clear visual presentation for marketing purposes.',
+  'Do not add random AI-generated garbled letters or placeholder text unless requested; maintain precise typography.'
+];
+
+export const LOGO_BRAND_OUTPUTS: LogoBrandOutputSpec[] = [
+  {
+    id: 'primary-logo',
+    title: '主 Logo 概念',
+    aspectRatio: '1:1',
+    ratioValue: 1,
+    note: 'The primary brand mark featuring a balanced lockup of a symbol and the brand name wordmark.',
+    guidance: [
+      'Design a clean, memorable, and scalable primary logo concept including a distinct symbol and a legible wordmark lockup.',
+      'Ensure high-quality letterforms with no spelling errors, extra random letters, or messy gibberish text.',
+      'The graphical symbol should align with the brand positioning and industry without using generic clipart.'
+    ]
+  },
+  {
+    id: 'alternate-logo',
+    title: '備選 Logo 方向',
+    aspectRatio: '1:1',
+    ratioValue: 1,
+    note: 'An alternative visual direction under the same brand strategy to offer distinct aesthetic comparison.',
+    guidance: [
+      'Generate a secondary brand mark that conforms to the brand strategy but uses a different visual metaphor, glyph style, or composition.',
+      'Ensure it is not a simple color swap of the primary logo; explore distinct geometric or symbolic representations.'
+    ]
+  },
+  {
+    id: 'brand-board',
+    title: '品牌視覺板',
+    aspectRatio: '16:9',
+    ratioValue: 16 / 9,
+    note: 'A cohesive brand style guide sheet showing the logo, core color palette, typography mood, and image styling.',
+    guidance: [
+      'Generate a brand visual sheet containing the logo mark, a color palette with clear hex color squares, typography choices, and abstract brand styling elements.',
+      'Organize the sheet like a professional brand guidelines page with clear visual hierarchy, ample margin, and consistent aesthetic personality.'
+    ]
+  },
+  {
+    id: 'social-icon',
+    title: '社媒頭像 / App 圖標',
+    aspectRatio: '1:1',
+    ratioValue: 1,
+    note: 'A simplified and scaled-down version of the brand mark suitable for small display sizes.',
+    guidance: [
+      'Create a highly simplified brand icon optimized for small-scale layouts (avatars, mobile icons).',
+      'Focus on strong outline contrast and bold geometric shape. Strictly avoid small, complex slogans or long brand names.'
+    ]
+  },
+  {
+    id: 'application-preview',
+    title: '品牌應用預覽',
+    aspectRatio: '16:9',
+    ratioValue: 16 / 9,
+    note: 'A realistic application mockup showcasing the logo in a real-world usage scenario.',
+    guidance: [
+      'Generate a realistic brand mockup showcasing the logo and colors on items like a business card, website landing page, stationery, product packaging, or social media banner.',
+      'Ensure the mockup highlights the consistency of the brand identity across different materials.'
+    ]
+  }
+];
+
+export function buildLogoBrandPrompt(content: string, config: LogoSkillConfig, spec: LogoBrandOutputSpec, index: number, total: number): string {
+  const typeMod = LOGO_TYPES.find(o => o.id === config.type)?.promptModifier ?? '';
+  const styleMod = LOGO_STYLES.find(o => o.id === config.style)?.promptModifier ?? '';
+  const paletteMod = LOGO_PALETTES.find(o => o.id === config.palette)?.promptModifier ?? '';
+  const industryMod = LOGO_INDUSTRIES.find(o => o.id === config.industry)?.promptModifier ?? '';
+  const moodMod = LOGO_MOODS.find(o => o.id === config.mood)?.promptModifier ?? '';
+
+  return [
+    `Design a professional branding asset: "${spec.title}" (Part ${index + 1}/${total} of the Brand Identity Kit).`,
+    `Brand Name: "${config.brandName || 'My Brand'}"`,
+    config.slogan ? `Brand Slogan: "${config.slogan}"` : '',
+    `Industry/Category: "${config.industry || 'General'}"`,
+    `Target Audience: ${config.targetAudience}`,
+    `Brand Positioning: ${config.positioning}`,
+    `Brand Personality: ${config.personality}`,
+    `Intended Usage Contexts: ${config.usageContexts}`,
+    `Preferred Logo Type: ${config.type} (${typeMod})`,
+    `Visual Style Preset: ${config.style} (${styleMod})`,
+    `Color Scheme: ${config.palette} (${paletteMod})`,
+    `Industry Context: ${config.industry} (${industryMod})`,
+    `Brand Mood: ${config.mood} (${moodMod})`,
+    `Branding Standards: ${LOGO_BRAND_STANDARDS.join(' ')}`,
+    `This asset goal: ${spec.note}`,
+    `Execution instructions: ${spec.guidance.join(' ')}`,
+    `Requirements: Directly output the final designed raster image without any editing UI, window frames, or canvas mock frames. Focus on consistency in colors, style, and typography across the assets. Make text clean and avoid spelling errors.`,
+    content ? `Additional context:\n${content}` : ''
+  ].filter(Boolean).join('\n');
 }

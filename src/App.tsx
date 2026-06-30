@@ -495,6 +495,7 @@ const App: React.FC = () => {
       handleLocalRemoveBackground,
       handleGenerate,
       handleCrossPlatformAdapt,
+      handleLogoBrandKit,
       handleAskAI
   } = useAI({
       elements,
@@ -2468,6 +2469,12 @@ const App: React.FC = () => {
             onGenerate={(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder) => {
               setDesignMasterTargetId(null);
               handleGenerate([el], count, prompt, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder);
+            }}
+            onGenerateBrandKit={(brief, model, resolution) => {
+              setDesignMasterTargetId(null);
+              handleLogoBrandKit(el.id, brief, model, resolution).catch(e =>
+                showToast(`❌ 品牌套件生成失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`)
+              );
             }}
             referenceImages={el.type === 'note' ? (el as NoteElement).referenceImages : undefined}
             onUpdateReferenceImages={el.type === 'note' ? (refs) => updateElements({ ...(el as NoteElement), referenceImages: refs }) : undefined}

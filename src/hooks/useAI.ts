@@ -24,6 +24,7 @@ import { runLocalRmbgInWorker } from '../utils/briaRmbgWorkerClient';
 import { MODEL_CONFIGS, getModelStatus, type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
 import { crossPlatformSpec, buildCrossPlatformPrompt, type CrossPlatformSpec } from '../skills/crossPlatform';
+import { LogoSkillConfig, LOGO_BRAND_OUTPUTS, buildLogoBrandPrompt } from '../skills/logo';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -423,6 +424,7 @@ ALWAYS PRESERVE:
                     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                         model: imageModel,
                         contents: { parts: [imagePart, { text: basePrompt }] },
+                        config: { imageConfig: { imageSize: imageSize } },
                     }));
 
                     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
@@ -541,6 +543,7 @@ ALWAYS PRESERVE:
                         const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                             model: imageModel,
                             contents: { parts: [imagePart, { text: prompt }] },
+                            config: { imageConfig: { imageSize: imageSize } },
                         }));
 
                         const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
@@ -1746,6 +1749,7 @@ CONSTRAINTS:
                         const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                             model: imageModel,
                             contents: { parts: [{ inlineData: { data, mimeType } }, { text: `${prompt}\nOutput aspect ratio: ${spec.atlasRatio}.` }] },
+                            config: { imageConfig: { aspectRatio: spec.atlasRatio, imageSize: opts.imageSize || imageSize } },
                         }));
                         const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                         if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
@@ -1794,6 +1798,103 @@ CONSTRAINTS:
         }
     }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast]);
 
+    /**
+     * 品牌視覺套件生成：依品牌簡報循序生成 5 張成品圖（主Logo、備用Logo、品牌視覺板、App圖示、應用預覽），並排放至右側。
+     */
+    const handleLogoBrandKit = useCallback(async (
+        elementId: string,
+        brief: LogoSkillConfig,
+        modelOverride?: string,
+        imageSizeOverride?: '1K' | '2K' | '4K',
+    ) => {
+        const el = elements.find(e => e.id === elementId);
+        if (!el || (el.type !== 'note' && el.type !== 'text')) { showToast('⚠️ 無法定位來源內容'); return; }
+        const content = el.type === 'note' ? (el as NoteElement).content : (el as TextElement).text;
+
+        const chosenModel = modelOverride || generationModelGlobal;
+        const useAtlas = chosenModel !== 'gemini' && !!atlasApiKey;
+        if (!useAtlas && !apiKey) { setHasApiKey(false); showToast('⚠️ 品牌套件生成需要 Gemini 或 Atlas API Key'); return; }
+
+        setIsGenerating(true);
+        setGeneratingElementIds([elementId]);
+
+        // 排成一列放原便利貼右側, 固定顯示高度
+        const ROW_H = 220;
+        const gap = 24;
+        const noteEl = el as NoteElement | TextElement;
+        let cursorX = noteEl.position.x + noteEl.width / 2 + 60;
+        const baseTop = noteEl.position.y - noteEl.height / 2;
+
+        try {
+            const specs = LOGO_BRAND_OUTPUTS;
+            for (let i = 0; i < specs.length; i++) {
+                const spec = specs[i];
+                showToast(`🎯 品牌視覺套件：${spec.title}（${i + 1}/${specs.length}）...`);
+                const prompt = buildLogoBrandPrompt(content, brief, spec, i, specs.length);
+                let resultSrc = '';
+
+                try {
+                    if (useAtlas) {
+                        const atlasModel = chosenModel as AtlasGenerationModel;
+                        const quality = '2K'; // 預設 2K 速度與質量平衡
+                        const images = await withAtlasWaitToast(() =>
+                            callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality }));
+                        if (images.length > 0) resultSrc = images[0];
+                    } else {
+                        const genAI = new GoogleGenAI({ apiKey: apiKey! });
+                        const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                            model: imageModel,
+                            contents: { parts: [{ text: `${prompt}\nOutput aspect ratio: ${spec.aspectRatio}.` }] },
+                            config: { imageConfig: { aspectRatio: spec.aspectRatio, imageSize: imageSizeOverride || imageSize } },
+                        }));
+                        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                        if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
+                    }
+                } catch (e) {
+                    console.warn('[logoBrandKit] 生成失敗', spec.id, e);
+                    showToast(`⚠️ ${spec.title} 生成失敗,略過`);
+                    continue;
+                }
+
+                if (!resultSrc) { showToast(`⚠️ ${spec.title} 未回傳圖片,略過`); continue; }
+
+                // 用「結果圖的實際像素比例」定畫布寬高
+                let realRatio = spec.ratioValue;
+                try {
+                    const im = await loadImage(resultSrc);
+                    if (im.naturalWidth > 0 && im.naturalHeight > 0) realRatio = im.naturalWidth / im.naturalHeight;
+                } catch { /* 載入失敗則沿用規格比例 */ }
+
+                const h = ROW_H;
+                const w = Math.round(ROW_H * realRatio);
+                const newId = `brandkit_${Date.now()}_${i}`;
+                const newEl: ImageElement = {
+                    type: 'image',
+                    id: newId,
+                    src: resultSrc,
+                    name: `${brief.brandName || 'Brand'} (${spec.title})`,
+                    position: { x: cursorX + w / 2, y: baseTop + h / 2 },
+                    width: w,
+                    height: h,
+                    rotation: 0,
+                    zIndex: zIndexCounter.current++,
+                    groupId: null,
+                    isVisible: true,
+                    isLocked: false,
+                };
+                setElements(prev => [...prev, newEl]);
+                if (resultSrc.startsWith('data:')) cacheImage(newId, resultSrc);
+                cursorX += w + gap;
+            }
+            showToast('✅ 品牌視覺套件生成完成！');
+        } catch (error) {
+            handleAIError(error, '品牌視覺套件');
+        } finally {
+            setGeneratingElementIds([]);
+            setIsGenerating(false);
+        }
+    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast]);
+
     return {
         createAiClient,
         isGenerating,
@@ -1835,6 +1936,7 @@ CONSTRAINTS:
         genOpType,
         handleGenerate,
         handleCrossPlatformAdapt,
+        handleLogoBrandKit,
         handleAskAI
     };
 };

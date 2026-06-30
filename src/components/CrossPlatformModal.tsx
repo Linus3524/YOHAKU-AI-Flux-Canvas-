@@ -76,10 +76,9 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
             <button
               key={o.id}
               type="button"
-              disabled={isGemini}
               onClick={() => setImageSize(o.id)}
-              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
-                imageSize === o.id && !isGemini
+              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                imageSize === o.id
                   ? 'bg-white text-[#AF52DE] shadow-[0_2px_4px_rgba(0,0,0,0.05)]'
                   : 'text-[#64748B] hover:text-[#1E293B]'
               }`}
@@ -89,7 +88,7 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
           ))}
         </div>
         <p className="text-[10px] text-[#86868B] mb-4">
-          {isGemini ? 'Gemini 固定輸出原生解析度（約 1K 級），此設定不適用。' : '僅影響 Atlas 系模型（GPT/Seedream/Qwen）的輸出解析度。'}
+          僅影響生圖輸出的畫質等級。解析度越高生成時間越長。
         </p>
 
         <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">選擇平台</div>
