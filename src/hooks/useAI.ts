@@ -26,6 +26,7 @@ import { cacheImage } from '../utils/imageCache';
 import { crossPlatformSpec, buildCrossPlatformPrompt, type CrossPlatformSpec } from '../skills/crossPlatform';
 import { LogoSkillConfig, LOGO_BRAND_OUTPUTS, buildLogoPrompt, buildLogoBrandPrompt } from '../skills/logo';
 import { PRODUCT_MARKETING_PLATFORMS, buildProductMarketingPrompt, type ProductMarketingBrief, type ProductMarketingOutputSpec } from '../skills/marketing';
+import { applyPoissonBlend } from '../utils/poissonBlend';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -1035,7 +1036,20 @@ CONSTRAINTS:
                     : 'Naturally extend and continue the existing scene outward into the surrounding area — keep the same lighting, color palette, perspective, depth and artistic style so it looks like one continuous photograph.';
                 const resultSrc = await withAtlasWaitToast(() =>
                     callAtlasInpaint(outPrompt, compositeB64, maskB64, atlasApiKey!, undefined, undefined, undefined, `${outW}x${outH}`));
-                addResult(resultSrc, outRatio);
+                
+                try {
+                    const blendedSrc = await applyPoissonBlend(element.src, resultSrc, {
+                        originalPosition: { x: imgX, y: imgY },
+                        originalWidth: dw,
+                        originalHeight: dh,
+                        canvasWidth: outW,
+                        canvasHeight: outH,
+                    });
+                    addResult(blendedSrc, outRatio);
+                } catch (blendError) {
+                    console.error('Poisson blend failed for GPT, falling back to raw output:', blendError);
+                    addResult(resultSrc, outRatio);
+                }
             } else {
                 // ── Gemini 路徑（整張重生，用原生解析度合成 + 強化「勿動原圖」指令） ──
                 const MAX_EDGE = 2048;
@@ -1083,7 +1097,20 @@ CONSTRAINTS:
 
                 const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                 if (part?.inlineData) {
-                    addResult(`data:image/png;base64,${part.inlineData.data}`);
+                    const rawAiSrc = `data:image/png;base64,${part.inlineData.data}`;
+                    try {
+                        const blendedSrc = await applyPoissonBlend(element.src, rawAiSrc, {
+                            originalPosition: { x: imgX, y: imgY },
+                            originalWidth: dw,
+                            originalHeight: dh,
+                            canvasWidth: fW,
+                            canvasHeight: fH,
+                        });
+                        addResult(blendedSrc);
+                    } catch (blendError) {
+                        console.error('Poisson blend failed for Gemini, falling back to raw output:', blendError);
+                        addResult(rawAiSrc);
+                    }
                 }
             }
         } catch (e: any) {
