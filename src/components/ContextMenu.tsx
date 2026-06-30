@@ -65,6 +65,7 @@ interface ContextMenuProps {
     clearStorage: () => void;
     splitSticker?: (elementId: string) => void;
     crossPlatformAdapt?: (elementId: string) => void;
+    extendBrandKit?: (elementId: string) => void;
   };
   canChangeColor: boolean;
   elementType: ElementType | null;
@@ -402,6 +403,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                  {actions.crossPlatformAdapt && (
                                      <MenuItem icon={<MenuIcons.Expand />} onClick={() => handleAction(() => actions.crossPlatformAdapt!(menuData.elementId!))}>
                                          一鍵跨平台適配
+                                     </MenuItem>
+                                 )}
+                                 {actions.extendBrandKit && (
+                                     <MenuItem icon={<MenuIcons.Wand />} onClick={() => handleAction(() => actions.extendBrandKit!(menuData.elementId!))}>
+                                         延伸品牌套件
                                      </MenuItem>
                                  )}
                                  <div className="border-t my-0.5 border-gray-100/50" />

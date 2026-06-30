@@ -17,6 +17,7 @@ import { DesignMasterPanel, DesignMasterPersistState } from './components/Design
 import { DrawingModal } from './components/DrawingModal';
 import { ImageEditModal } from './components/ImageEditModal';
 import { CrossPlatformModal } from './components/CrossPlatformModal';
+import { BrandKitModal } from './components/BrandKitModal';
 import { DraggableToolbar } from './components/DraggableToolbar';
 import { LayerPanel } from './components/LayerPanel';
 import { TextPropertyPanel } from './components/TextPropertyPanel';
@@ -679,6 +680,14 @@ const App: React.FC = () => {
       const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
       if (!el) return;
       setCrossPlatformTarget({ elementId, name: el.name });
+  }, [elements]);
+
+  // --- 延伸品牌套件 ---
+  const [brandKitTarget, setBrandKitTarget] = useState<{ elementId: string; name: string } | null>(null);
+  const handleOpenBrandKit = useCallback((elementId: string) => {
+      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
+      if (!el) return;
+      setBrandKitTarget({ elementId, name: el.name });
   }, [elements]);
 
   // --- 貼紙套組一鍵切分 ---
@@ -2370,6 +2379,20 @@ const App: React.FC = () => {
         />
       )}
 
+      {brandKitTarget && (
+        <BrandKitModal
+          imageName={brandKitTarget.name}
+          hasAtlas={!!atlasApiKey}
+          onGenerate={(brief, model, resolution) => {
+            const id = brandKitTarget.elementId;
+            handleExtendBrandKit(id, brief, model, resolution).catch((e: any) =>
+              showToast(`❌ 品牌視覺延伸失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`)
+            );
+          }}
+          onClose={() => setBrandKitTarget(null)}
+        />
+      )}
+
       {contextMenu && (
         <ContextMenu
           menuData={contextMenu}
@@ -2427,6 +2450,7 @@ const App: React.FC = () => {
             ocrConvert: handleOCRConvert,
             splitSticker: handleSplitSticker,
             crossPlatformAdapt: handleOpenCrossPlatform,
+            extendBrandKit: handleOpenBrandKit,
             clearStorage: () => setShowClearConfirm(true),
           }}
           canChangeColor={canChangeColor}

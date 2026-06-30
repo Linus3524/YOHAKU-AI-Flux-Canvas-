@@ -24,7 +24,7 @@ import { runLocalRmbgInWorker } from '../utils/briaRmbgWorkerClient';
 import { MODEL_CONFIGS, getModelStatus, type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
 import { crossPlatformSpec, buildCrossPlatformPrompt, type CrossPlatformSpec } from '../skills/crossPlatform';
-import { LogoSkillConfig, LOGO_BRAND_OUTPUTS, buildLogoBrandPrompt } from '../skills/logo';
+import { LogoSkillConfig, LOGO_BRAND_OUTPUTS, buildLogoPrompt, buildLogoBrandPrompt } from '../skills/logo';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -1824,27 +1824,104 @@ CONSTRAINTS:
         const noteEl = el as NoteElement | TextElement;
         let cursorX = noteEl.position.x + noteEl.width / 2 + 60;
         const baseTop = noteEl.position.y - noteEl.height / 2;
+        const atlasModel = chosenModel as AtlasGenerationModel;
+        const quality: '2K' | '4K' = imageSizeOverride === '4K' ? '4K' : '2K';
+
+        // 把一張結果圖放上畫布（依實際像素比例定寬高），回傳是否成功
+        const placeAsset = async (resultSrc: string, title: string, fallbackRatio: number, key: string): Promise<boolean> => {
+            if (!resultSrc) return false;
+            let realRatio = fallbackRatio;
+            try {
+                const im = await loadImage(resultSrc);
+                if (im.naturalWidth > 0 && im.naturalHeight > 0) realRatio = im.naturalWidth / im.naturalHeight;
+            } catch { /* 載入失敗則沿用規格比例 */ }
+            const h = ROW_H;
+            const w = Math.round(ROW_H * realRatio);
+            const newId = `brandkit_${Date.now()}_${key}`;
+            const newEl: ImageElement = {
+                type: 'image', id: newId, src: resultSrc,
+                name: `${brief.brandName || 'Brand'}（${title}）`,
+                position: { x: cursorX + w / 2, y: baseTop + h / 2 },
+                width: w, height: h, rotation: 0,
+                zIndex: zIndexCounter.current++,
+                groupId: null, isVisible: true, isLocked: false,
+            };
+            setElements(prev => [...prev, newEl]);
+            if (resultSrc.startsWith('data:')) cacheImage(newId, resultSrc);
+            cursorX += w + gap;
+            return true;
+        };
 
         try {
             const specs = LOGO_BRAND_OUTPUTS;
+            const total = specs.length + 1; // 含主 Logo
+            let successCount = 0;
+
+            // ── Step 1：先獨立生成主 Logo（純文字創作，使用者最終要的標誌長相由這步決定）──
+            showToast(`🎯 品牌視覺套件：主 Logo（1/${total}）...`);
+            const logoAspect = brief.size || '1:1';
+            const logoPrompt = buildLogoPrompt(content, brief);
+            let logoSrc = '';
+            try {
+                if (useAtlas) {
+                    const images = await withAtlasWaitToast(() =>
+                        callAtlasGenerate(logoPrompt, atlasModel, atlasApiKey!, 1, { ratio: logoAspect, quality }));
+                    if (images.length > 0) logoSrc = images[0];
+                } else {
+                    const genAI = new GoogleGenAI({ apiKey: apiKey! });
+                    const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                        model: imageModel,
+                        contents: { parts: [{ text: `${logoPrompt}\nOutput aspect ratio: ${logoAspect}.` }] },
+                        config: { imageConfig: { aspectRatio: logoAspect, imageSize: imageSizeOverride || imageSize } },
+                    }));
+                    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                    if (part?.inlineData) logoSrc = `data:image/png;base64,${part.inlineData.data}`;
+                }
+            } catch (e) {
+                console.warn('[logoBrandKit] 主 Logo 生成失敗', e);
+            }
+            if (!logoSrc) {
+                showToast('❌ 主 Logo 生成失敗，品牌套件中止');
+                return;
+            }
+            // Atlas 可能回傳 CDN URL，後續 img2img 需要 base64 才能當參考圖
+            if (!logoSrc.startsWith('data:')) {
+                try { logoSrc = await downloadImageAsBase64(logoSrc); } catch { /* 失敗則維持原樣 */ }
+            }
+            if (await placeAsset(logoSrc, '主 Logo', 1, 'logo')) successCount += 1;
+
+            // ── Step 2：用選定的主 Logo 圖片當錨點，延伸生成其餘 4 個品牌資產 ──
+            // 明確要求模型重用這個 EXACT 標誌，不要重新設計，確保整套套件用的是同一個 logo。
             for (let i = 0; i < specs.length; i++) {
                 const spec = specs[i];
-                showToast(`🎯 品牌視覺套件：${spec.title}（${i + 1}/${specs.length}）...`);
+                showToast(`🎯 品牌視覺套件：${spec.title}（${i + 2}/${total}）...`);
                 const prompt = buildLogoBrandPrompt(content, brief, spec, i, specs.length);
                 let resultSrc = '';
 
                 try {
                     if (useAtlas) {
-                        const atlasModel = chosenModel as AtlasGenerationModel;
-                        const quality = '2K'; // 預設 2K 速度與質量平衡
-                        const images = await withAtlasWaitToast(() =>
-                            callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality }));
-                        if (images.length > 0) resultSrc = images[0];
+                        if (atlasModelSupportsImg2Img(atlasModel)) {
+                            const images = await withAtlasWaitToast(() =>
+                                callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, logoSrc, 1, { ratio: spec.aspectRatio, quality }));
+                            if (images.length > 0) resultSrc = images[0];
+                        } else {
+                            // 模型不支援圖生圖 → 退回純文字（無法錨定同一標誌，至少能出圖）
+                            const images = await withAtlasWaitToast(() =>
+                                callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality }));
+                            if (images.length > 0) resultSrc = images[0];
+                        }
                     } else {
                         const genAI = new GoogleGenAI({ apiKey: apiKey! });
+                        const parts: any[] = [];
+                        if (logoSrc.startsWith('data:')) {
+                            const [header, data] = logoSrc.split(',');
+                            const mime = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                            parts.push({ inlineData: { data, mimeType: mime } });
+                        }
+                        parts.push({ text: `${prompt}\nOutput aspect ratio: ${spec.aspectRatio}.` });
                         const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                             model: imageModel,
-                            contents: { parts: [{ text: `${prompt}\nOutput aspect ratio: ${spec.aspectRatio}.` }] },
+                            contents: { parts },
                             config: { imageConfig: { aspectRatio: spec.aspectRatio, imageSize: imageSizeOverride || imageSize } },
                         }));
                         const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
@@ -1857,38 +1934,138 @@ CONSTRAINTS:
                 }
 
                 if (!resultSrc) { showToast(`⚠️ ${spec.title} 未回傳圖片,略過`); continue; }
-
-                // 用「結果圖的實際像素比例」定畫布寬高
-                let realRatio = spec.ratioValue;
-                try {
-                    const im = await loadImage(resultSrc);
-                    if (im.naturalWidth > 0 && im.naturalHeight > 0) realRatio = im.naturalWidth / im.naturalHeight;
-                } catch { /* 載入失敗則沿用規格比例 */ }
-
-                const h = ROW_H;
-                const w = Math.round(ROW_H * realRatio);
-                const newId = `brandkit_${Date.now()}_${i}`;
-                const newEl: ImageElement = {
-                    type: 'image',
-                    id: newId,
-                    src: resultSrc,
-                    name: `${brief.brandName || 'Brand'} (${spec.title})`,
-                    position: { x: cursorX + w / 2, y: baseTop + h / 2 },
-                    width: w,
-                    height: h,
-                    rotation: 0,
-                    zIndex: zIndexCounter.current++,
-                    groupId: null,
-                    isVisible: true,
-                    isLocked: false,
-                };
-                setElements(prev => [...prev, newEl]);
-                if (resultSrc.startsWith('data:')) cacheImage(newId, resultSrc);
-                cursorX += w + gap;
+                if (await placeAsset(resultSrc, spec.title, spec.ratioValue, String(i))) successCount += 1;
             }
-            showToast('✅ 品牌視覺套件生成完成！');
+
+            showToast(successCount > 1
+                ? `✅ 品牌視覺套件生成完成！（${successCount}/${total} 張）`
+                : successCount === 1
+                    ? '⚠️ 只有主 Logo 生成成功，延伸資產皆失敗'
+                    : '❌ 品牌視覺套件全部生成失敗，請稍後再試');
         } catch (error) {
             handleAIError(error, '品牌視覺套件');
+        } finally {
+            setGeneratingElementIds([]);
+            setIsGenerating(false);
+        }
+    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast]);
+
+    /**
+     * 品牌視覺套件延伸：以用戶選定的主 Logo 圖片作為錨點，延伸生成其餘 4 個品牌資產。
+     */
+    const handleExtendBrandKit = useCallback(async (
+        elementId: string,
+        brief: LogoSkillConfig,
+        modelOverride?: string,
+        imageSizeOverride?: '1K' | '2K' | '4K',
+    ) => {
+        const el = elements.find(e => e.id === elementId);
+        if (!el || el.type !== 'image') { showToast('⚠️ 無法定位主 Logo 圖片'); return; }
+        
+        let logoSrc = (el as ImageElement).src;
+
+        const chosenModel = modelOverride || generationModelGlobal;
+        const useAtlas = chosenModel !== 'gemini' && !!atlasApiKey;
+        if (!useAtlas && !apiKey) { setHasApiKey(false); showToast('⚠️ 品牌套件生成需要 Gemini 或 Atlas API Key'); return; }
+
+        setIsGenerating(true);
+        setGeneratingElementIds([elementId]);
+
+        // 排成一列放原 Logo 圖片右側, 固定顯示高度
+        const ROW_H = 220;
+        const gap = 24;
+        const logoImgEl = el as ImageElement;
+        let cursorX = logoImgEl.position.x + logoImgEl.width / 2 + 60;
+        const baseTop = logoImgEl.position.y - logoImgEl.height / 2;
+        const atlasModel = chosenModel as AtlasGenerationModel;
+        const quality: '2K' | '4K' = imageSizeOverride === '4K' ? '4K' : '2K';
+
+        // 把一張結果圖放上畫布（依實際像素比例定寬高），回傳是否成功
+        const placeAsset = async (resultSrc: string, title: string, fallbackRatio: number, key: string): Promise<boolean> => {
+            if (!resultSrc) return false;
+            let realRatio = fallbackRatio;
+            try {
+                const im = await loadImage(resultSrc);
+                if (im.naturalWidth > 0 && im.naturalHeight > 0) realRatio = im.naturalWidth / im.naturalHeight;
+            } catch { /* 載入失敗則沿用規格比例 */ }
+            const h = ROW_H;
+            const w = Math.round(ROW_H * realRatio);
+            const newId = `brandkit_${Date.now()}_${key}`;
+            const newEl: ImageElement = {
+                type: 'image', id: newId, src: resultSrc,
+                name: `${brief.brandName || 'Brand'}（${title}）`,
+                position: { x: cursorX + w / 2, y: baseTop + h / 2 },
+                width: w, height: h, rotation: 0,
+                zIndex: zIndexCounter.current++,
+                groupId: null, isVisible: true, isLocked: false,
+            };
+            setElements(prev => [...prev, newEl]);
+            if (resultSrc.startsWith('data:')) cacheImage(newId, resultSrc);
+            cursorX += w + gap;
+            return true;
+        };
+
+        try {
+            const specs = LOGO_BRAND_OUTPUTS;
+            const total = specs.length;
+            let successCount = 0;
+
+            // Atlas 可能回傳 CDN URL，後續 img2img 需要 base64 才能當參考圖
+            if (!logoSrc.startsWith('data:')) {
+                try { logoSrc = await downloadImageAsBase64(logoSrc); } catch { /* 失敗則維持原樣 */ }
+            }
+
+            // ── 用選定的主 Logo 圖片當錨點，延伸生成其餘 4 個品牌資產 ──
+            for (let i = 0; i < specs.length; i++) {
+                const spec = specs[i];
+                showToast(`🎯 品牌視覺套件：${spec.title}（${i + 1}/${total}）...`);
+                const prompt = buildLogoBrandPrompt('', brief, spec, i, specs.length);
+                let resultSrc = '';
+
+                try {
+                    if (useAtlas) {
+                        if (atlasModelSupportsImg2Img(atlasModel)) {
+                            const images = await withAtlasWaitToast(() =>
+                                callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, logoSrc, 1, { ratio: spec.aspectRatio, quality }));
+                            if (images.length > 0) resultSrc = images[0];
+                        } else {
+                            // 模型不支援圖生圖 → 退回純文字
+                            const images = await withAtlasWaitToast(() =>
+                                callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality }));
+                            if (images.length > 0) resultSrc = images[0];
+                        }
+                    } else {
+                        const genAI = new GoogleGenAI({ apiKey: apiKey! });
+                        const parts: any[] = [];
+                        if (logoSrc.startsWith('data:')) {
+                            const [header, data] = logoSrc.split(',');
+                            const mime = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                            parts.push({ inlineData: { data, mimeType: mime } });
+                        }
+                        parts.push({ text: `${prompt}\nOutput aspect ratio: ${spec.aspectRatio}.` });
+                        const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                            model: imageModel,
+                            contents: { parts },
+                            config: { imageConfig: { aspectRatio: spec.aspectRatio, imageSize: imageSizeOverride || imageSize } },
+                        }));
+                        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                        if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
+                    }
+                } catch (e) {
+                    console.warn('[logoBrandKit] 延伸生成失敗', spec.id, e);
+                    showToast(`⚠️ ${spec.title} 生成失敗,略過`);
+                    continue;
+                }
+
+                if (!resultSrc) { showToast(`⚠️ ${spec.title} 未回傳圖片,略過`); continue; }
+                if (await placeAsset(resultSrc, spec.title, spec.ratioValue, String(i))) successCount += 1;
+            }
+
+            showToast(successCount > 0
+                ? `✅ 品牌視覺套件延伸完成！（共生成 ${successCount}/${total} 張資產）`
+                : '❌ 品牌視覺延伸資產全部生成失敗，請稍後再試');
+        } catch (error) {
+            handleAIError(error, '品牌視覺套件延伸');
         } finally {
             setGeneratingElementIds([]);
             setIsGenerating(false);
@@ -1937,6 +2114,7 @@ CONSTRAINTS:
         handleGenerate,
         handleCrossPlatformAdapt,
         handleLogoBrandKit,
+        handleExtendBrandKit,
         handleAskAI
     };
 };
