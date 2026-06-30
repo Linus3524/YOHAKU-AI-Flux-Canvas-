@@ -52,8 +52,8 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
         <div className="mb-4">
           <h3 className="font-bold text-[#1D1D1F] text-[15px] mb-1">一鍵跨平台適配</h3>
           <p className="text-[11px] text-[#86868B] leading-relaxed">
-            把{imageName ? `「${imageName}」` : '這張圖'}依各平台比例與安全區重構成多張成品。<br />
-            每個平台會以原圖為參考、由 AI 重新構圖（必要時擴圖、不裁壞主體）。
+            將您選取的圖片，自動調整成多種不同的社群平台尺寸。<br />
+            AI 會自動延伸背景並調整構圖，確保主體不變形、人臉與重點不被切到。
           </p>
         </div>
 
