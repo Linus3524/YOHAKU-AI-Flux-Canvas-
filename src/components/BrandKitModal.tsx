@@ -33,7 +33,7 @@ const cleanName = (name: string): string => {
 };
 
 export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtlas = false, onGenerate, onClose }) => {
-  const [brandName, setBrandName] = useState(imageName ? cleanName(imageName) : '');
+  const [brandName, setBrandName] = useState('');
   const [slogan, setSlogan] = useState('');
   const [model, setModel] = useState('gemini');
   const [imageSize, setImageSize] = useState<'2K' | '4K'>('2K');
@@ -117,17 +117,8 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
           value={brandName}
           onChange={e => setBrandName(e.target.value)}
           placeholder="例：YOHAKU、Café Lumière"
-          className={`${inputClass} mb-3`}
-          autoFocus
-        />
-
-        {/* 品牌標語（選填） */}
-        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">品牌標語 <span className="text-gray-300 font-normal normal-case">（選填）</span></div>
-        <input
-          value={slogan}
-          onChange={e => setSlogan(e.target.value)}
-          placeholder="例：Design Your Imagination"
           className={`${inputClass} mb-4`}
+          autoFocus
         />
 
         {/* 進階品牌自訂選項（選填） */}
@@ -136,6 +127,15 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
             ▶ 進階品牌設定（選填，未填寫則由 AI 自動分析 Logo）
           </summary>
           <div className="space-y-3 mt-2 p-2.5 bg-white rounded-lg border border-gray-100/50">
+            <div>
+              <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">品牌標語</div>
+              <input
+                value={slogan}
+                onChange={e => setSlogan(e.target.value)}
+                placeholder="例：Design Your Imagination"
+                className={inputClass}
+              />
+            </div>
             <div>
               <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">行業背景</div>
               <input
