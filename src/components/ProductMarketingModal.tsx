@@ -35,7 +35,7 @@ const cleanName = (name: string): string => {
 };
 
 export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ imageName, hasAtlas = false, onGenerate, onClose }) => {
-  const [productName, setProductName] = useState(imageName ? cleanName(imageName) : '');
+  const [productName, setProductName] = useState('');
   const [sellingPoints, setSellingPoints] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
   const [visualTone, setVisualTone] = useState('乾淨專業');
@@ -53,13 +53,11 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
 
   const currentPlatformSpecs = PRODUCT_MARKETING_PLATFORMS[activePlatform]?.recipes || [];
 
-  // 當切換平台分類時，預設將該平台下的所有項目全部勾選，利於整套輸出
+  // 當切換平台分類時，預設留空不勾選任何內建規格項目
   useEffect(() => {
-    const recipeIds = currentPlatformSpecs.map(r => r.id);
     setSelectedAssets(prev => {
-      // 濾除舊有的內建項目 ID (不包含自訂項目 'custom_')
-      const customIds = prev.filter(id => id.startsWith('custom_'));
-      return [...customIds, ...recipeIds];
+      // 僅保留自訂項目 ID (以 'custom_' 開頭)
+      return prev.filter(id => id.startsWith('custom_'));
     });
   }, [activePlatform]);
 
