@@ -158,6 +158,12 @@ const CollapsibleSection: React.FC<{
 };
 
 
+const removeModelOptions = [
+  { key: 'cloud' as const, label: '雲端模式', desc: '依據頂部 Model 設定' },
+  { key: 'lama' as const, label: '本機 LaMa', desc: '背景/紋理填補 (極速)' },
+  { key: 'mi_gan' as const, label: '本機 MI-GAN', desc: '人物/五官/結構修復' }
+];
+
 export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasKey, canvasImages = [] }) => {
   const imageRef = useRef<HTMLImageElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -200,11 +206,11 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
   const canSwitchEngine = !!(atlasKey || apiKey);
   const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'gemini'>(atlasKey ? 'gpt' : 'gemini');
   const [lamaReady, setLamaReady] = useState(false);
-  const [autoRemove, setAutoRemove] = useState(false); // 塗抹放開自動移除
   const [lamaBackend, setLamaBackend] = useState<'webgpu' | 'wasm' | null>(null);
   const [miGanReady, setMiGanReady] = useState(false);
   const [miGanBackend, setMiGanBackend] = useState<'webgpu' | 'wasm' | null>(null);
-  const [localModel, setLocalModel] = useState<'lama' | 'mi_gan'>('lama');
+  const [removeModel, setRemoveModel] = useState<'cloud' | 'lama' | 'mi_gan'>('cloud');
+  const [removeDropdownOpen, setRemoveDropdownOpen] = useState(false);
 
   useEffect(() => {
     // 檢查 LaMa
@@ -212,7 +218,6 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       const ready = s === 'ready';
       setLamaReady(ready);
       if (ready) {
-        setAutoRemove(true); // LaMa 就緒 → 預設開啟 auto-remove
         // 預載 session（WebGPU 偵測 + 模型初始化）
         warmUpLamaWorker()
           .then(backend => setLamaBackend(backend))
@@ -424,25 +429,6 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       setIsDrawing(false);
       strokePointsRef.current = [];
       saveMaskState();
-
-      // ── Auto-run：放開筆刷後自動觸發 LaMa/MI-GAN 移除 ──
-      const localReady = localModel === 'mi_gan' ? miGanReady : lamaReady;
-      if (autoRemove && localReady && !isLoading && !isBaking && !previewImageSrc) {
-        // 延遲一幀確保 mask state 已更新
-        requestAnimationFrame(() => {
-          const maskCtx = maskCanvasRef.current?.getContext('2d');
-          if (!maskCtx) return;
-          const { data } = maskCtx.getImageData(0, 0, maskCtx.canvas.width, maskCtx.canvas.height);
-          let hasMask = false;
-          for (let i = 3; i < data.length; i += 4) {
-            if (data[i] > 0) { hasMask = true; break; }
-          }
-          if (hasMask) {
-            setPendingAction('remove');
-            handleSubmit('remove');
-          }
-        });
-      }
     }
   };
 
@@ -872,33 +858,31 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
     try {
       const bwMaskBase64Url = await createBlackAndWhiteMask(context.baseImageSrc, context.maskDataUrl);
 
-      // ══ 路線 0：移除物件（本機 LaMa/MI-GAN 優先，無本機降級 Gemini）══════
+      // ══ 移除物件 (Remove Object) ══════
       if (context.type === 'remove') {
-        const localReady = localModel === 'mi_gan' ? miGanReady : lamaReady;
-        if (localReady) {
-          const result = localModel === 'mi_gan'
-            ? await runMiGanInWorker(context.baseImageSrc, bwMaskBase64Url)
-            : await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
-          // LaMa/MI-GAN 內部縮到 512×512 再放大回原尺寸，整張會糊；
-          // 局部超分還原：只對塗抹的遮罩區做本機 4x 高清放大再縮回原圖，極速恢復紋理細節！
+        if (removeModel === 'lama') {
+          if (!lamaReady) {
+            throw new Error("本機 LaMa 模型尚未安裝，請先於功能助手面板下載。");
+          }
+          const result = await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
           const restoredResult = await restoreDetailWithUpscale(context.baseImageSrc, result, bwMaskBase64Url);
-          // 只取遮罩區的填補結果貼回原圖，遮罩外維持原始像素不變。
           const composited = await compositeImagesPixelPerfect(context.baseImageSrc, restoredResult, bwMaskBase64Url);
           setPreviewImageSrc(composited);
           return;
         }
-        // 本機未下載 → 用 Gemini 填補背景
-      }
 
-      // ══ 路線 0b：手動選 LaMa 模式（直接移除，無論 action 為何）══════
-      if (inpaintEngine === 'lama') {
-        const result = localModel === 'mi_gan' && miGanReady
-          ? await runMiGanInWorker(context.baseImageSrc, bwMaskBase64Url)
-          : await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
-        const restoredResult = await restoreDetailWithUpscale(context.baseImageSrc, result, bwMaskBase64Url);
-        const composited = await compositeImagesPixelPerfect(context.baseImageSrc, restoredResult, bwMaskBase64Url);
-        setPreviewImageSrc(composited);
-        return;
+        if (removeModel === 'mi_gan') {
+          if (!miGanReady) {
+            throw new Error("本機 MI-GAN 模型尚未安裝，請先於功能助手面板下載。");
+          }
+          const result = await runMiGanInWorker(context.baseImageSrc, bwMaskBase64Url);
+          const restoredResult = await restoreDetailWithUpscale(context.baseImageSrc, result, bwMaskBase64Url);
+          const composited = await compositeImagesPixelPerfect(context.baseImageSrc, restoredResult, bwMaskBase64Url);
+          setPreviewImageSrc(composited);
+          return;
+        }
+
+        // 否則走雲端移除 (removeModel === 'cloud')
       }
 
       // ══ 路線 A：Atlas GPT Image 2 ══════
@@ -1181,14 +1165,14 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
             ) : null}
 
             {/* Local Inpaint backend badge */}
-            {localModel === 'mi_gan' ? (
+            {removeModel === 'mi_gan' ? (
               miGanReady && miGanBackend && (
                 <div className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-purple-50 text-purple-600 border border-purple-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
                   MI-GAN {miGanBackend === 'webgpu' ? 'GPU' : 'CPU'}
                 </div>
               )
-            ) : (
+            ) : removeModel === 'lama' ? (
               lamaReady && lamaBackend && (
                 <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium ${
                   lamaBackend === 'webgpu'
@@ -1201,7 +1185,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                   LaMa {lamaBackend === 'webgpu' ? 'GPU' : 'CPU'}
                 </div>
               )
-            )}
+            ) : null}
           </div>
 
           <button onClick={onClose} className="text-gray-400 hover:text-gray-800 transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
@@ -1448,7 +1432,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                 <div className="w-px bg-gray-100 flex-shrink-0" />
 
                 {/* Right: action buttons */}
-                <div className="flex flex-col gap-2 w-[136px] justify-center flex-shrink-0">
+                <div className="flex flex-col gap-2 w-[144px] justify-center flex-shrink-0">
                   <button
                     onClick={() => { setPendingAction('edit'); handleSubmit('edit'); }}
                     disabled={isLoading || isBaking}
@@ -1457,48 +1441,64 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
                     編輯物件
                   </button>
-                  <button
-                    onClick={() => { setPendingAction('remove'); handleSubmit('remove'); }}
-                    disabled={isLoading || isBaking}
-                    className="w-full py-2.5 bg-white border-2 border-red-100 hover:bg-red-50 text-red-500 text-[13px] font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-wait"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    移除物件
-                  </button>
 
-                  {/* Auto-remove toggle & local engine selector */}
-                  {(lamaReady || miGanReady) && (
-                    <div className="flex flex-col gap-1.5 w-full bg-gray-50/50 p-2 rounded-lg border border-gray-100 mt-1">
-                      <label className="flex items-center gap-1.5 cursor-pointer group" title="開啟後，塗抹放開滑鼠即自動移除物件">
-                        <div
-                          className={`relative w-7 h-4 rounded-full transition-colors ${
-                            autoRemove ? 'bg-green-400' : 'bg-gray-300'
-                          }`}
-                          onClick={() => setAutoRemove(v => !v)}
-                        >
-                          <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
-                            autoRemove ? 'translate-x-3.5' : 'translate-x-0.5'
-                          }`} />
-                        </div>
-                        <span className="text-[10px] text-gray-500 group-hover:text-gray-700 transition-colors select-none font-medium">
-                          自動移除
+                  {/* 移除物件 Split Button Dropdown */}
+                  <div className="relative w-full">
+                    <div className="flex w-full rounded-xl overflow-hidden border-2 border-red-100 bg-[#f8fafc]">
+                      <button
+                        onClick={() => { setPendingAction('remove'); handleSubmit('remove'); }}
+                        disabled={isLoading || isBaking}
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-white text-red-500 py-2.5 text-[13px] font-bold hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        移除物件
+                      </button>
+                      <div className="w-px bg-red-100 my-0"/>
+                      <button
+                        onClick={() => setRemoveDropdownOpen(v => !v)}
+                        disabled={isLoading || isBaking}
+                        className="flex items-center gap-0.5 px-2 bg-white text-red-400 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        title="選擇移除模式"
+                      >
+                        <span className="text-[10px] font-bold whitespace-nowrap">
+                          {removeModel === 'cloud' ? '雲端' : removeModel === 'lama' ? 'LaMa' : 'MI-GAN'}
                         </span>
-                      </label>
-
-                      {/* Engine select dropdown */}
-                      <div className="flex items-center justify-between gap-1 mt-0.5">
-                        <span className="text-[10px] text-gray-400">本機引擎</span>
-                        <select
-                          value={localModel}
-                          onChange={e => setLocalModel(e.target.value as 'lama' | 'mi_gan')}
-                          className="bg-transparent text-[10px] font-bold text-gray-700 focus:outline-none border-b border-gray-200 py-0.5 cursor-pointer"
-                        >
-                          {lamaReady && <option value="lama">LaMa (背景)</option>}
-                          {miGanReady && <option value="mi_gan">MI-GAN (人物)</option>}
-                        </select>
-                      </div>
+                        <svg className="flex-shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                      </button>
                     </div>
-                  )}
+
+                    {removeDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-[7001]" onClick={() => setRemoveDropdownOpen(false)}/>
+                        <div className="absolute bottom-full mb-1 right-0 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-[7002] min-w-[170px] py-1">
+                          {removeModelOptions.map(opt => {
+                            const isReady = opt.key === 'cloud' || (opt.key === 'lama' ? lamaReady : miGanReady);
+                            return (
+                              <button
+                                key={opt.key}
+                                onClick={() => {
+                                  setRemoveModel(opt.key);
+                                  setRemoveDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-3.5 py-2 text-left hover:bg-red-50/50 transition-colors ${removeModel === opt.key ? 'bg-red-50/50' : ''}`}
+                              >
+                                <div>
+                                  <div className="text-[11px] font-bold text-gray-800 flex items-center gap-1">
+                                    {opt.label}
+                                    {!isReady && <span className="text-[9px] font-normal text-gray-400">(未安裝)</span>}
+                                  </div>
+                                  <div className="text-[9px] text-gray-400 leading-normal">{opt.desc}</div>
+                                </div>
+                                {removeModel === opt.key && (
+                                  <svg className="text-red-500" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Hidden file input */}
