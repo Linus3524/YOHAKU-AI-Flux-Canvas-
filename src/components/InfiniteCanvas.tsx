@@ -563,8 +563,10 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
                         </div>
                     ))}
                     <div className="w-px h-3.5 bg-white/20 mx-0.5" />
-                    <span className="text-white/35 text-[9px]">
-                        原圖 {Math.round(element.width)} × {Math.round(element.height)}
+                    <span className="text-white/35 text-[9px] flex items-center gap-1.5 font-mono">
+                        <span>原圖 {Math.round(element.width)}×{Math.round(element.height)}</span>
+                        <span className="text-white/10">|</span>
+                        <span className="text-blue-400 font-bold">裁剪後 {Math.round(cropRect.width)}×{Math.round(cropRect.height)}</span>
                     </span>
                 </div>
                 {/* 按鈕列 */}
