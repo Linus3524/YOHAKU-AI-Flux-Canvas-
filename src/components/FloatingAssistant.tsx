@@ -551,9 +551,6 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         { t: '原圖比例輸出', d: '生成設定選「原圖比例」，AI 依據參考圖的寬高比輸出，結果更貼合原始構圖。' },
                         { t: '視角轉換 & 智能放大', d: '改變拍攝角度。2x/4x 放大，智慧保持透明背景邊緣清晰。' },
                         { t: '文字辨識轉換 (OCR)', d: '右鍵點擊圖片選「文字辨識轉換」，Gemini AI 辨識圖中所有文字並輸出可複製文字，支援中、英、日等多語言混排。' },
-                        { t: '一鍵跨平台適配', d: '選取圖像或設計稿，一鍵重新剪裁與排版，自動生成為多種常用的社群與廣告比例尺寸（如 1:1、16:9、9:16），自動適配多平台格式。' },
-                        { t: '延伸品牌套件', d: '選取主標誌（Logo）圖片，輸入品牌名稱與標語（Slogan），一鍵延伸生成信封、名片、提袋、馬克杯等多種真實質感的樣機 Mockup。' },
-                        { t: '產品行銷組圖', d: '選擇一張去背產品圖，一鍵生成成套電商行銷物料與情境套圖。支援「保持整組風格與色調一致」開關，自動由 Gemini 提取商品配色與光影特徵，並鎖定批次隨機 Seed，使整組圖色調、光效、質感高度一致。' },
                       ].map((item, i) => (
                         <div key={i}>
                           <h4 className="font-bold text-emerald-800 text-[13px] mb-1">{item.t}</h4>
@@ -586,6 +583,25 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       </div>
                       <div className="text-[11px] text-purple-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 內建 60+ 種藝術風格與 50+ 品牌預設。支援 <code className="font-mono bg-purple-100 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等比例與多種手機/平板/桌面/瀏覽器解析度。各模式均支援「✨ AI 提示詞優化」重寫最佳指令。</div>
                     </div>
+
+                    {/* 品牌與行銷工具組 */}
+                    <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-purple-900 text-[13px] mb-1.5">✦ 品牌與行銷工具組 (Brand & Marketing)</h4>
+                      <p className="text-[11.5px] text-[#4F46E5] font-semibold mb-2">整合電商商品與品牌視覺的批次物料生成系統，快速輸出成套規格資產：</p>
+                      <div className="grid grid-cols-1 gap-2 mb-2.5">
+                        {[
+                          { label: '產品行銷組圖', desc: '選擇去背產品圖，一鍵生成成套電商行銷物料與情境套圖（Amazon/Shopify/Meta 廣告等）。支援「保持整組風格與色調一致」功能，自動由 Gemini 提取商品配色與光影特徵，並鎖定批次隨機 Seed，達到完美的品牌統一感。' },
+                          { label: '延伸品牌套件', desc: '選取主標誌（Logo）圖片，輸入品牌名稱與標語（Slogan），一鍵延伸生成信封、名片、提袋、馬克杯等多種真實質感的品牌樣機（Mockup）展示。' },
+                          { label: '一鍵跨平台適配', desc: '選取任意圖像或設計稿，一鍵重新剪裁與排版，自動生成為多種常用的社群與廣告比例尺寸（如 1:1、16:9、9:16），自動適配多平台格式。' },
+                        ].map((m, i) => (
+                          <div key={i} className="bg-white/80 border border-purple-100 rounded-xl p-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                            <div className="font-bold text-purple-700 text-[12px] mb-1">⚙️ {m.label}</div>
+                            <div className="text-gray-600 text-[11px] leading-relaxed font-normal">{m.desc}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* 魔法分層 */}
                     <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-purple-900 text-[13px] mb-1">✦ 魔法分層</h4>
