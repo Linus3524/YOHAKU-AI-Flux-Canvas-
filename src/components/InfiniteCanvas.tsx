@@ -847,6 +847,11 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
 }, ref) => {
   const [pan, setPan] = useState<Point>(() => loadSavedViewport()?.pan ?? { x: 0, y: 0 });
   const [zoom, setZoom] = useState(() => loadSavedViewport()?.zoom ?? 1);
+  // 視口虛擬化用：容器像素尺寸（隨視窗/面板變動更新）
+  const [viewportSize, setViewportSize] = useState<{ w: number; h: number }>(() => ({
+    w: typeof window !== 'undefined' ? window.innerWidth : 1920,
+    h: typeof window !== 'undefined' ? window.innerHeight : 1080,
+  }));
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState<Point>({ x: 0, y: 0 });
   const [isSpacebarPressed, setIsSpacebarPressed] = useState(false);
@@ -917,7 +922,18 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   }, [elements, selectedElementIds]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  
+
+  // 追蹤容器實際像素尺寸（視口虛擬化計算可視範圍用）
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const update = () => setViewportSize({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const screenToWorld = useCallback((screenPoint: Point): Point => {
     return {
       x: (screenPoint.x - pan.x) / zoom,
@@ -1348,6 +1364,37 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
       })
   , [elements]);
 
+  // ── 視口虛擬化：只渲染「可視範圍 + 緩衝」內的元素，畫面外的不掛 DOM ──
+  // 可視世界矩形由 pan/zoom/容器尺寸反推；MARGIN 給足半螢幕以上，避免捲動邊緣白閃。
+  const VIRT_MARGIN = 800;  // 世界座標緩衝
+  const VIRT_QUANT = 256;   // 量化網格：可視矩形四邊吸附到此格（向外取整）
+  // 原始可視矩形
+  const rawMinX = -pan.x / zoom - VIRT_MARGIN;
+  const rawMinY = -pan.y / zoom - VIRT_MARGIN;
+  const rawMaxX = (viewportSize.w - pan.x) / zoom + VIRT_MARGIN;
+  const rawMaxY = (viewportSize.h - pan.y) / zoom + VIRT_MARGIN;
+  // 向外吸附到網格：min 往下取、max 往上取（確保永遠蓋過真實視口，不露白）。
+  // 連續縮放/平移未跨格時四值不變 → 下方 useMemo 依賴這四個 primitive → 直接跳過重算，
+  // 消除手勢中零星的 mount/unmount churn（縮放卡頓的來源）。
+  const qMinX = Math.floor(rawMinX / VIRT_QUANT) * VIRT_QUANT;
+  const qMinY = Math.floor(rawMinY / VIRT_QUANT) * VIRT_QUANT;
+  const qMaxX = Math.ceil(rawMaxX / VIRT_QUANT) * VIRT_QUANT;
+  const qMaxY = Math.ceil(rawMaxY / VIRT_QUANT) * VIRT_QUANT;
+  const visibleElements = useMemo(() => {
+      return sortedElements.filter(el => {
+          // 永遠保留：artboard 底板、選取中、正在 outpaint/crop 的元素（避免飄出視口就消失/中斷操作）
+          if (el.type === 'artboard') return true;
+          if (selectedIdSet.has(el.id)) return true;
+          if (outpaintingState?.element.id === el.id) return true;
+          if (croppingElementId === el.id) return true;
+          const halfW = el.width / 2, halfH = el.height / 2;
+          return el.position.x + halfW >= qMinX &&
+                 el.position.x - halfW <= qMaxX &&
+                 el.position.y + halfH >= qMinY &&
+                 el.position.y - halfH <= qMaxY;
+      });
+  }, [sortedElements, qMinX, qMinY, qMaxX, qMaxY, selectedIdSet, outpaintingState, croppingElementId]);
+
   return (
     <div 
       ref={canvasRef}
@@ -1375,7 +1422,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, willChange: 'transform' }}
       >
         {
-          sortedElements.map(el => (
+          visibleElements.map(el => (
           <TransformableElement
             key={el.id}
             element={el}
