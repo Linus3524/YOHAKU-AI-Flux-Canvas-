@@ -161,7 +161,7 @@ export const ImageResizeModal: React.FC<ImageResizeModalProps> = ({ element, onR
           <div className="flex gap-2">
             {[
               { label: '50%', scale: 0.5 },
-              { label: '原圖大小 (1:1)', scale: 1.0, isNatural: true },
+              { label: '原圖大小', scale: 1.0, isNatural: true },
               { label: '150%', scale: 1.5 },
               { label: '200%', scale: 2.0 },
             ].map(p => (
