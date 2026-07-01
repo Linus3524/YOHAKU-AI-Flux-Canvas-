@@ -802,6 +802,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           { label: '矩形框選', desc: '拖曳框住目標區域，SAM2 切出框內主體物件' },
                           { label: '筆塗選取', desc: '筆刷塗抹任意形狀區域，本機 SAM2 或 fal.ai 均支援' },
                           { label: '多點精確選取', desc: '左鍵放前景點、右鍵放背景排除點，多點組合精準控制分割範圍' },
+                          { label: '文字編輯', desc: '切換至文字模式，點選並直接修改圖中文字內容，字數增減自動適配排版重繪' },
+                          { label: 'OCR 雙引擎', desc: '支援 Gemini 雲端或本機 PaddleOCR-v4 離線偵測，精確掃描圖中所有設計字塊' },
                           { label: '物件重繪', desc: '選物件改提示詞，GPT Image 2 或 Gemini 重繪後自動切割回貼' },
                           { label: '版本管理', desc: '每次重繪產生新版本分頁，可切換比較或刪除' },
                           { label: 'LaMa 純背景', desc: '一鍵移除所有前景，生成乾淨純背景圖層' },
