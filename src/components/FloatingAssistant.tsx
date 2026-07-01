@@ -410,9 +410,9 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
               </button>
           );
       } else if (status === 'downloading') {
-          badge = <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-semibold animate-pulse">下載中</span>;
+          badge = <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-semibold animate-pulse">下載中</span>;
           actionBtn = (
-              <span className="text-[11px] text-purple-600 font-semibold">下載中...</span>
+              <span className="text-[11px] text-blue-600 font-semibold">下載中...</span>
           );
       } else if (status === 'error') {
           badge = <span className="text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-semibold">下載失敗</span>;
@@ -424,14 +424,14 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
       } else {
           badge = <span className="text-[10px] bg-gray-50 text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full font-semibold">未安裝</span>;
           actionBtn = (
-              <button onClick={onDownload} className="text-[11px] font-semibold px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all shadow-sm active:scale-95">
+              <button onClick={onDownload} className="text-[11px] font-semibold px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-black transition-all shadow-sm active:scale-95">
                   下載
               </button>
           );
       }
 
       return (
-          <div className="bg-white border border-purple-100/50 rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] space-y-3 hover:shadow-md transition-shadow duration-200 flex flex-col justify-between">
+          <div className="bg-white border border-gray-200/60 rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] space-y-3 hover:shadow-md transition-shadow duration-200 flex flex-col justify-between">
               <div className="space-y-2">
                   {/* Header */}
                   <div className="flex items-start justify-between gap-3">
@@ -856,7 +856,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           { t: '局部重繪與移除物件', d: '塗抹遮罩以重繪或擦除。擦除物件（橡皮擦）為 Split Button 設計，支援雲端模式與本機 LaMa/MI-GAN WebGPU 極速推理，移除後會自動觸發 4x 局部超分細節縫合以防止模糊。' },
                           { t: '基礎與進階調整', d: '亮度、對比、飽和度、色溫、亮部、陰影、銳化等細節調整。' },
                           { t: '混合模式 & 淡出', d: '色彩增值、濾色等混合模式。方向性淡出 (上下左右/放射) 柔和邊緣。' },
-                          { t: '裁剪 & 陰影效果', d: '非破壞性裁剪。數值面板支援直觀的「上、下、左、右」邊距裁剪，支援失焦/回車防呆約束，並動態呈現裁剪後的最終尺寸。' },
+                          { t: '邊距裁剪', d: '非破壞性裁剪。數值面板支援直觀的「上、下、左、右」邊距輸入，支援失焦或回車防呆約束，並動態呈現裁剪後的最終解析度。' },
+                          { t: '陰影效果', d: '投影跟隨像素形狀，下載或合併均能完美保留去背圖層的陰影邊界。' },
                           { t: '精準尺寸調整', d: '右鍵點擊圖片選「調整圖片尺寸」，可直接輸入寬高數值，支援比例鎖定鈕 🔗（防止拉伸）或解鎖，並提供 50%/150%/200% 與「還原原圖大小」快捷鍵。' },
                           { t: '下載圖片', d: '右鍵點擊圖片選「下載圖片」，存為 PNG，透明背景完整保留。多選圖片後右鍵可批次下載，自動逐一匯出所有選取圖片。' },
                         ].map((item, i) => (
@@ -1262,8 +1263,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
 
                   {/* 1. 影像去背與分割 */}
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 border-b border-purple-100 pb-1.5">
-                      <span className="text-[11px] font-bold text-purple-700 tracking-wider">影像去背與分割 (Segmentation & Matte)</span>
+                    <div className="flex items-center gap-2 border-b border-gray-200/80 pb-1.5">
+                      <span className="text-[11px] font-bold text-gray-700 tracking-wider">影像去背與分割 (Segmentation & Matte)</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* SAM 2 Card */}
@@ -1295,8 +1296,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
 
                   {/* 2. 局部修復與填洞 */}
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 border-b border-purple-100 pb-1.5">
-                      <span className="text-[11px] font-bold text-purple-700 tracking-wider">局部修復與填洞 (Inpainting & Erasing)</span>
+                    <div className="flex items-center gap-2 border-b border-gray-200/80 pb-1.5">
+                      <span className="text-[11px] font-bold text-gray-700 tracking-wider">局部修復與填洞 (Inpainting & Erasing)</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* LaMa Card */}
@@ -1324,8 +1325,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
 
                   {/* 3. 無損畫質放大 */}
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 border-b border-purple-100 pb-1.5">
-                      <span className="text-[11px] font-bold text-purple-700 tracking-wider">無損畫質放大 (4x Upscaling)</span>
+                    <div className="flex items-center gap-2 border-b border-gray-200/80 pb-1.5">
+                      <span className="text-[11px] font-bold text-gray-700 tracking-wider">無損畫質放大 (4x Upscaling)</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* upscale_photo Card */}
@@ -1353,8 +1354,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
 
                   {/* 4. 文字辨識與佈局 */}
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 border-b border-purple-100 pb-1.5">
-                      <span className="text-[11px] font-bold text-purple-700 tracking-wider">文字辨識與佈局 (OCR & Layout)</span>
+                    <div className="flex items-center gap-2 border-b border-gray-200/80 pb-1.5">
+                      <span className="text-[11px] font-bold text-gray-700 tracking-wider">文字辨識與佈局 (OCR & Layout)</span>
                     </div>
                     <div className="grid grid-cols-1">
                       {/* OCR Card */}
