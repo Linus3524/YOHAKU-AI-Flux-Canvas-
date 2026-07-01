@@ -360,22 +360,22 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
     const dragRef = useRef<{ type: string, startPoint: Point, startRect: typeof cropRect } | null>(null);
 
     const [localInputs, setLocalInputs] = useState({
-        x: String(Math.round(cropRect.x)),
-        y: String(Math.round(cropRect.y)),
-        width: String(Math.round(cropRect.width)),
-        height: String(Math.round(cropRect.height))
+        left: String(Math.round(cropRect.x)),
+        top: String(Math.round(cropRect.y)),
+        right: String(Math.round(element.width - cropRect.x - cropRect.width)),
+        bottom: String(Math.round(element.height - cropRect.y - cropRect.height))
     });
 
     useEffect(() => {
         setLocalInputs({
-            x: String(Math.round(cropRect.x)),
-            y: String(Math.round(cropRect.y)),
-            width: String(Math.round(cropRect.width)),
-            height: String(Math.round(cropRect.height))
+            left: String(Math.round(cropRect.x)),
+            top: String(Math.round(cropRect.y)),
+            right: String(Math.round(element.width - cropRect.x - cropRect.width)),
+            bottom: String(Math.round(element.height - cropRect.y - cropRect.height))
         });
-    }, [cropRect.x, cropRect.y, cropRect.width, cropRect.height]);
+    }, [cropRect.x, cropRect.y, cropRect.width, cropRect.height, element.width, element.height]);
 
-    const handleInputChange = (key: 'x' | 'y' | 'width' | 'height', valueStr: string) => {
+    const handleInputChange = (key: 'left' | 'top' | 'right' | 'bottom', valueStr: string) => {
         setLocalInputs(prev => ({ ...prev, [key]: valueStr }));
 
         if (valueStr === '') return;
@@ -385,26 +385,27 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
 
         setCropRect(prev => {
             const next = { ...prev };
-            if (key === 'x') {
-                next.x = Math.max(0, Math.min(element.width - 1, val));
-                if (next.x + next.width > element.width) {
-                    next.width = Math.max(1, element.width - next.x);
-                }
-            } else if (key === 'y') {
-                next.y = Math.max(0, Math.min(element.height - 1, val));
-                if (next.y + next.height > element.height) {
-                    next.height = Math.max(1, element.height - next.y);
-                }
-            } else if (key === 'width') {
-                next.width = Math.max(1, Math.min(element.width - prev.x, val));
-            } else if (key === 'height') {
-                next.height = Math.max(1, Math.min(element.height - prev.y, val));
-            }
+            const currentLeft = key === 'left' ? val : prev.x;
+            const currentTop = key === 'top' ? val : prev.y;
+            const currentRight = key === 'right' ? val : (element.width - prev.x - prev.width);
+            const currentBottom = key === 'bottom' ? val : (element.height - prev.y - prev.height);
+
+            // 限制邊界，且保留至少 20px 的剩餘裁剪寬高
+            const finalL = Math.max(0, Math.min(element.width - 20 - currentRight, currentLeft));
+            const finalR = Math.max(0, Math.min(element.width - 20 - finalL, currentRight));
+            const finalT = Math.max(0, Math.min(element.height - 20 - currentBottom, currentTop));
+            const finalB = Math.max(0, Math.min(element.height - 20 - finalT, currentBottom));
+
+            next.x = finalL;
+            next.y = finalT;
+            next.width = Math.max(20, element.width - finalL - finalR);
+            next.height = Math.max(20, element.height - finalT - finalB);
+
             return next;
         });
     };
 
-    const handleInputBlur = (key: 'x' | 'y' | 'width' | 'height') => {
+    const handleInputBlur = (key: 'left' | 'top' | 'right' | 'bottom') => {
         setCropRect(prev => {
             const next = { ...prev };
             if (next.width < 20) next.width = 20;
@@ -418,10 +419,10 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
             }
 
             setLocalInputs({
-                x: String(Math.round(next.x)),
-                y: String(Math.round(next.y)),
-                width: String(Math.round(next.width)),
-                height: String(Math.round(next.height))
+                left: String(Math.round(next.x)),
+                top: String(Math.round(next.y)),
+                right: String(Math.round(element.width - next.x - next.width)),
+                bottom: String(Math.round(element.height - next.y - next.height))
             });
 
             return next;
@@ -539,13 +540,13 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
                 {/* 精準裁剪數值面板 */}
                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/80 backdrop-blur-lg text-white text-[10px] font-mono border border-white/10 shadow-[0_4px_16px_rgba(0,0,0,0.3)]">
                     {[
-                        { label: 'X', key: 'x' as const },
-                        { label: 'Y', key: 'y' as const },
-                        { label: 'W', key: 'width' as const },
-                        { label: 'H', key: 'height' as const },
+                        { label: '左', key: 'left' as const },
+                        { label: '上', key: 'top' as const },
+                        { label: '右', key: 'right' as const },
+                        { label: '下', key: 'bottom' as const },
                     ].map(({ label, key }) => (
                         <div key={key} className="flex items-center gap-0.5">
-                            <span className="text-white/50 text-[9px] font-bold w-3 text-right">{label}</span>
+                            <span className="text-white/50 text-[9px] font-bold w-3 text-center">{label}</span>
                             <input
                                 type="text"
                                 value={localInputs[key]}
