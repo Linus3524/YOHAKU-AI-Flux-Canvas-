@@ -544,10 +544,10 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
                 {/* 精準裁剪數值面板 */}
                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/80 backdrop-blur-lg text-white text-[10px] font-mono border border-white/10 shadow-[0_4px_16px_rgba(0,0,0,0.3)]">
                     {[
-                        { label: '左', key: 'left' as const },
                         { label: '上', key: 'top' as const },
-                        { label: '右', key: 'right' as const },
                         { label: '下', key: 'bottom' as const },
+                        { label: '左', key: 'left' as const },
+                        { label: '右', key: 'right' as const },
                     ].map(({ label, key }) => (
                         <div key={key} className="flex items-center gap-0.5">
                             <span className="text-white/50 text-[9px] font-bold w-3 text-center">{label}</span>
