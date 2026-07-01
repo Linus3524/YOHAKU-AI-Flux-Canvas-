@@ -69,6 +69,7 @@ interface ContextMenuProps {
     productMarketingSet?: (elementId: string) => void;
     toggleSnapToObjects?: () => void;
     toggleShowImageSizes?: () => void;
+    resizeImage?: (elementId: string) => void;
   };
   canChangeColor: boolean;
   elementType: ElementType | null;
@@ -372,6 +373,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                         </div>
                                     )}
                                 </div>
+                                {actions.resizeImage && (
+                                    <MenuItem icon={<Icon name="aspect_ratio" size={14} />} onClick={() => handleAction(() => actions.resizeImage!(menuData.elementId!))}>
+                                        調整圖片尺寸
+                                    </MenuItem>
+                                )}
                                 <div className="border-t my-0.5 border-gray-100/50" />
                                 <MenuItem icon={<MenuIcons.Search />} onClick={() => handleAction(() => actions.extractPrompt(menuData.elementId!))}>
                                     提取提示詞

@@ -1289,6 +1289,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         setElements(prev => prev.map(el => el.id === id ? { ...el, name: newName } : el));
     }, [setElements]);
 
+    const handleResizeElement = useCallback((id: string, width: number, height: number) => {
+        setElements(prev => prev.map(el => el.id === id ? { ...el, width, height } : el), { addToHistory: true });
+    }, [setElements]);
+
     const handleLayerDragDrop = useCallback((sourceId: string, targetId: string) => {
         if (sourceId === targetId) return;
 
@@ -2021,6 +2025,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         handleToggleGroupVisibility,
         handleToggleGroupLock,
         handleRename,
+        handleResizeElement,
         handleLayerDragDrop,
         handleGroupLayerDragDrop,
         handleDeleteLayer,

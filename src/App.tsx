@@ -19,6 +19,7 @@ import { ImageEditModal } from './components/ImageEditModal';
 import { CrossPlatformModal } from './components/CrossPlatformModal';
 import { BrandKitModal } from './components/BrandKitModal';
 import { ProductMarketingModal } from './components/ProductMarketingModal';
+import { ImageResizeModal } from './components/ImageResizeModal';
 import { DraggableToolbar } from './components/DraggableToolbar';
 import { LayerPanel } from './components/LayerPanel';
 import { TextPropertyPanel } from './components/TextPropertyPanel';
@@ -215,6 +216,7 @@ const App: React.FC = () => {
 
   // --- Semantic Editor state (handler defined later, after elements) ---
   const [semanticEditorTarget, setSemanticEditorTarget] = useState<{ src: string; name: string; elementId?: string } | null>(null);
+  const [resizeImageTargetId, setResizeImageTargetId] = useState<string | null>(null);
 
   /**
    * 保留每張圖片的語意編輯器狀態，key = element.src（base64 前 100 字元作為識別）
@@ -325,6 +327,7 @@ const App: React.FC = () => {
       handleToggleGroupVisibility,
       handleToggleGroupLock,
       handleRename,
+      handleResizeElement,
       handleLayerDragDrop,
       handleGroupLayerDragDrop,
       handleDeleteLayer,
@@ -2497,6 +2500,7 @@ const App: React.FC = () => {
             clearStorage: () => setShowClearConfirm(true),
             toggleSnapToObjects,
             toggleShowImageSizes,
+            resizeImage: (elementId: string) => setResizeImageTargetId(elementId),
           }}
           canChangeColor={canChangeColor}
           elementType={contextMenuElement?.type || null}
@@ -2512,6 +2516,18 @@ const App: React.FC = () => {
           showImageSizes={showImageSizes}
         />
       )}
+
+      {resizeImageTargetId && (() => {
+        const el = elements.find(e => e.id === resizeImageTargetId);
+        if (!el) return null;
+        return (
+          <ImageResizeModal
+            element={el}
+            onResize={handleResizeElement}
+            onClose={() => setResizeImageTargetId(null)}
+          />
+        );
+      })()}
 
       {stylePasteModal && copiedStyle && (
         <StylePasteModal
