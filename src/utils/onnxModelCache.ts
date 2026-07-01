@@ -21,7 +21,8 @@ export type OnnxModelKey =
     | 'ocr_det'
     | 'ocr_rec'
     | 'ocr_dict'
-    | 'bria_rmbg';
+    | 'bria_rmbg'
+    | 'mi_gan';
 
 /** 放大模型共用屬性：放大倍率 + 輸入張量名稱（推論時用） */
 export const UPSCALE_KEYS: OnnxModelKey[] = ['upscale_photo', 'upscale_anime', 'upscale_art'];
@@ -121,6 +122,14 @@ export const MODEL_CONFIGS: Record<OnnxModelKey, ModelConfig> = {
         cacheKey: 'onnx_isnet_general_int8_v1',
         sizeMB: 43.2,
     },
+    mi_gan: {
+        key: 'mi_gan',
+        name: 'MI-GAN（語意與人物修復）',
+        description: '適合修復人物、五官、服飾與商品等具備語意結構的遮罩區域',
+        url: 'https://huggingface.co/andraniksargsyan/migan/resolve/main/migan_pipeline_v2.onnx',
+        cacheKey: 'onnx_mi_gan_fp32_v1',
+        sizeMB: 112,
+    },
 };
 
 // 模型狀態
@@ -183,10 +192,10 @@ export async function loadModel(key: OnnxModelKey): Promise<ort.InferenceSession
     const cached = await get<ArrayBuffer>(config.cacheKey);
     if (!cached) throw new Error(`模型 ${config.name} 尚未下載，請先在「本機 AI 模型」下載`);
 
-    // LaMa 的 FFC（Fast Fourier Convolution）包含 WebGPU 不支援的算子，強制 WASM
+    // LaMa 在 Worker 內部自行偵測 WebGPU → WASM；此處 loadModel 也嘗試 WebGPU 優先
     // SAM2 正常走 WebGPU → WASM fallback
     // OCR 模型為求穩定與極小尺寸，強制跑 WASM
-    const providers: string[] = (key === 'lama' || key === 'ocr_det' || key === 'ocr_rec') ? ['wasm'] : ['webgpu', 'wasm'];
+    const providers: string[] = (key === 'ocr_det' || key === 'ocr_rec') ? ['wasm'] : ['webgpu', 'wasm'];
 
     try {
         return await ort.InferenceSession.create(cached, {
@@ -234,7 +243,7 @@ export async function getAllModelStatuses(): Promise<Record<OnnxModelKey, ModelS
     const keys: OnnxModelKey[] = [
         'lama', 'sam2_encoder', 'sam2_decoder',
         'upscale_photo', 'upscale_anime', 'upscale_art',
-        'ocr_det', 'ocr_rec', 'ocr_dict', 'bria_rmbg'
+        'ocr_det', 'ocr_rec', 'ocr_dict', 'bria_rmbg', 'mi_gan'
     ];
     const results = await Promise.all(keys.map(k => getModelStatus(k)));
     return Object.fromEntries(keys.map((k, i) => [k, results[i]])) as Record<OnnxModelKey, ModelStatus>;

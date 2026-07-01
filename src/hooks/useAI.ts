@@ -24,7 +24,7 @@ import { runLocalRmbgInWorker } from '../utils/briaRmbgWorkerClient';
 import { MODEL_CONFIGS, getModelStatus, type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
 import { crossPlatformSpec, buildCrossPlatformPrompt, type CrossPlatformSpec } from '../skills/crossPlatform';
-import { LogoSkillConfig, LOGO_BRAND_OUTPUTS, buildLogoPrompt, buildLogoBrandPrompt } from '../skills/logo';
+import { LogoSkillConfig, LOGO_BRAND_OUTPUTS, LogoBrandOutputSpec, buildLogoPrompt, buildLogoBrandPrompt } from '../skills/logo';
 import { PRODUCT_MARKETING_PLATFORMS, buildProductMarketingPrompt, type ProductMarketingBrief, type ProductMarketingOutputSpec } from '../skills/marketing';
 import { applyPoissonBlend } from '../utils/poissonBlend';
 

@@ -1190,9 +1190,9 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                   })}
                 </div>
 
-                {/* LaMa & 本機去背 */}
+                {/* LaMa & 本機去背 & MI-GAN */}
                 <div className="space-y-3">
-                  {(['lama', 'bria_rmbg'] as OnnxModelKey[]).map(key => {
+                  {(['lama', 'bria_rmbg', 'mi_gan'] as OnnxModelKey[]).map(key => {
                     const cfg = MODEL_CONFIGS[key];
                     const status = modelStatuses[key];
                     const progress = modelProgress[key];

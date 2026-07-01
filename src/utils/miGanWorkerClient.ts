@@ -1,6 +1,6 @@
 /**
- * LaMa Worker 主執行緒呼叫介面
- * Worker 單例（跨呼叫共用，session 只載入一次）
+ * MI-GAN Worker 主執行緒呼叫介面
+ * Worker 單例
  */
 
 let worker: Worker | null = null;
@@ -10,15 +10,13 @@ let watchdog: ReturnType<typeof setTimeout> | null = null;
 let warmUpResolve: ((backend: 'webgpu' | 'wasm') => void) | null = null;
 let warmUpReject:  ((err: Error) => void) | null = null;
 
-// LaMa 只跑小 crop（512 內部推論）通常數秒內完成；設寬鬆 timeout 避免誤殺慢機器
-const LAMA_TIMEOUT_MS = 120_000;
+// MI-GAN 推論設寬鬆 timeout
+const MIGAN_TIMEOUT_MS = 120_000;
 
-/** 上次偵測到的 Worker 後端（由 warm-up 回報） */
 let _resolvedBackend: 'webgpu' | 'wasm' | null = null;
-export function getLamaBackend(): 'webgpu' | 'wasm' | null { return _resolvedBackend; }
+export function getMiGanBackend(): 'webgpu' | 'wasm' | null { return _resolvedBackend; }
 
-/** 終止並清掉單例，下次呼叫會重建全新 Worker（用於 crash / timeout 後復原） */
-export function terminateLamaWorker(): void {
+export function terminateMiGanWorker(): void {
     if (watchdog) { clearTimeout(watchdog); watchdog = null; }
     worker?.terminate();
     worker = null;
@@ -33,8 +31,7 @@ function settleReject(err: Error) {
     pending = null;
     pendingReject = null;
     if (watchdog) { clearTimeout(watchdog); watchdog = null; }
-    // Worker 可能已處於不可用狀態（OOM 被瀏覽器回收）→ 砍掉重建
-    terminateLamaWorker();
+    terminateMiGanWorker();
     rej?.(err);
 }
 
@@ -49,7 +46,7 @@ function settleResolve(result: string) {
 function getWorker(): Worker {
     if (worker) return worker;
     worker = new Worker(
-        new URL('../workers/lamaWorker.ts', import.meta.url),
+        new URL('../workers/miGanWorker.ts', import.meta.url),
         { type: 'module' }
     );
     worker.onmessage = (e: MessageEvent) => {
@@ -57,12 +54,11 @@ function getWorker(): Worker {
             settleResolve(e.data.result);
         } else if (e.data?.type === 'warmed-up') {
             _resolvedBackend = e.data.backend ?? 'wasm';
-            console.log(`[LaMa] Worker 後端: ${_resolvedBackend}`);
+            console.log(`[MI-GAN] Worker 後端: ${_resolvedBackend}`);
             warmUpResolve?.(_resolvedBackend);
             warmUpResolve = null;
             warmUpReject = null;
         } else if (e.data?.type === 'error') {
-            // warm-up 階段的 error
             if (warmUpReject) {
                 warmUpReject(new Error(e.data.message));
                 warmUpResolve = null;
@@ -72,30 +68,25 @@ function getWorker(): Worker {
             }
         }
     };
-    // 腳本層級錯誤
     worker.onerror = (e) => {
         if (warmUpReject) {
-            warmUpReject(new Error(e.message ?? 'LaMa Worker 錯誤'));
+            warmUpReject(new Error(e.message ?? 'MI-GAN Worker 錯誤'));
             warmUpResolve = null;
             warmUpReject = null;
         } else {
-            settleReject(new Error(e.message ?? 'LaMa Worker 錯誤'));
+            settleReject(new Error(e.message ?? 'MI-GAN Worker 錯誤'));
         }
     };
-    // 訊息序列化失敗
     worker.onmessageerror = () => {
-        settleReject(new Error('LaMa Worker 訊息錯誤'));
+        settleReject(new Error('MI-GAN Worker 訊息錯誤'));
     };
     return worker;
 }
 
 /**
- * 預載 LaMa session（打開編輯面板時呼叫）
- * 讓 Worker 事先建立 InferenceSession，首次推論不再冷啟動。
- * 回傳實際使用的後端（webgpu / wasm）。
+ * 預載 MI-GAN session
  */
-export function warmUpLamaWorker(): Promise<'webgpu' | 'wasm'> {
-    // 已預載過 → 直接回傳快取的後端
+export function warmUpMiGanWorker(): Promise<'webgpu' | 'wasm'> {
     if (_resolvedBackend) return Promise.resolve(_resolvedBackend);
     return new Promise<'webgpu' | 'wasm'>((resolve, reject) => {
         warmUpResolve = resolve;
@@ -105,38 +96,32 @@ export function warmUpLamaWorker(): Promise<'webgpu' | 'wasm'> {
         } catch (e) {
             warmUpResolve = null;
             warmUpReject = null;
-            reject(e instanceof Error ? e : new Error('LaMa Worker 預載失敗'));
+            reject(e instanceof Error ? e : new Error('MI-GAN Worker 預載失敗'));
         }
     });
 }
 
 /**
- * 在 Web Worker 內執行 LaMa 推論（不阻塞主執行緒 / UI）
- * 含 watchdog timeout：若 Worker 因 OOM 被瀏覽器靜默回收（不觸發 onerror），
- * 逾時後 reject 並重建 Worker，避免 Promise 永遠 pending 卡死整個流程。
- * @param imageBase64 原圖 base64
- * @param maskBase64  黑白 mask（白=填補區域）
+ * 在 Web Worker 內執行 MI-GAN 推論
  */
-export function runLamaInWorker(
+export function runMiGanInWorker(
     imageBase64: string,
     maskBase64: string,
 ): Promise<string> {
     return new Promise<string>((resolve, reject) => {
-        // 同時間只允許一個任務（單例 Worker）
         if (pending) {
-            reject(new Error('LaMa 正在處理中，請稍候'));
+            reject(new Error('MI-GAN 正在處理中，請稍候'));
             return;
         }
         pending = resolve;
         pendingReject = reject;
         watchdog = setTimeout(() => {
-            settleReject(new Error('LaMa 推論逾時（可能記憶體不足），已重設'));
-        }, LAMA_TIMEOUT_MS);
+            settleReject(new Error('MI-GAN 推論逾時（可能記憶體不足），已重設'));
+        }, MIGAN_TIMEOUT_MS);
         try {
-            getWorker().postMessage({ type: 'run-lama', imageBase64, maskBase64 });
+            getWorker().postMessage({ type: 'run-migan', imageBase64, maskBase64 });
         } catch (e) {
-            settleReject(e instanceof Error ? e : new Error('LaMa Worker 啟動失敗'));
+            settleReject(e instanceof Error ? e : new Error('MI-GAN Worker 啟動失敗'));
         }
     });
 }
-

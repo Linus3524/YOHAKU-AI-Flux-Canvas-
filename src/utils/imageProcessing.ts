@@ -1206,7 +1206,11 @@ export const compositeImagesPixelPerfect = async (
     finalData.data[i]     = Math.round(genData.data[i]     * maskAlpha + origData.data[i]     * (1 - maskAlpha));
     finalData.data[i + 1] = Math.round(genData.data[i + 1] * maskAlpha + origData.data[i + 1] * (1 - maskAlpha));
     finalData.data[i + 2] = Math.round(genData.data[i + 2] * maskAlpha + origData.data[i + 2] * (1 - maskAlpha));
-    finalData.data[i + 3] = 255; // Keep fully opaque
+    // 保留原圖 alpha，不可寫死 255。
+    // 原因：LaMa/MI-GAN 只吃 RGB、輸出一律不透明；若這裡再強制 alpha=255，
+    // 透明 PNG（貼圖/icon）的整片透明背景會被灌成純黑實心。
+    // 遮罩外維持原圖透明度；遮罩內原本不透明的物件區其 alpha 本就是 255，填補結果照常顯示。
+    finalData.data[i + 3] = origData.data[i + 3];
   }
 
   ctx.putImageData(finalData, 0, 0);

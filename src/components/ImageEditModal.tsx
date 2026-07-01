@@ -2,12 +2,14 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
 import type { ImageElement, Point } from '../types';
-import { callGeminiWithRetry, analyzeDominantColor } from '../utils/helpers';
+import { callGeminiWithRetry, analyzeDominantColor, loadImage } from '../utils/helpers';
 import { Icon } from './Icon';
 import { rgbToHsl, hslToRgb, compositeImagesPixelPerfect, createPrefilledImage } from '../utils/imageProcessing';
 import { callAtlasInpaint } from '../utils/atlasImage';
 import { getModelStatus } from '../utils/onnxModelCache';
-import { runLamaInWorker } from '../utils/lamaWorkerClient';
+import { runLamaInWorker, warmUpLamaWorker, getLamaBackend } from '../utils/lamaWorkerClient';
+import { runUpscaleInWorker } from '../utils/upscaleWorkerClient';
+import { runMiGanInWorker, warmUpMiGanWorker, getMiGanBackend } from '../utils/miGanWorkerClient';
 
 // Helper: Simple debounce hook
 const useDebounce = (callback: (...args: any[]) => void, delay: number) => {
@@ -198,9 +200,36 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
   const canSwitchEngine = !!(atlasKey || apiKey);
   const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'gemini'>(atlasKey ? 'gpt' : 'gemini');
   const [lamaReady, setLamaReady] = useState(false);
+  const [autoRemove, setAutoRemove] = useState(false); // 塗抹放開自動移除
+  const [lamaBackend, setLamaBackend] = useState<'webgpu' | 'wasm' | null>(null);
+  const [miGanReady, setMiGanReady] = useState(false);
+  const [miGanBackend, setMiGanBackend] = useState<'webgpu' | 'wasm' | null>(null);
+  const [localModel, setLocalModel] = useState<'lama' | 'mi_gan'>('lama');
 
   useEffect(() => {
-    getModelStatus('lama').then(s => setLamaReady(s === 'ready'));
+    // 檢查 LaMa
+    getModelStatus('lama').then(s => {
+      const ready = s === 'ready';
+      setLamaReady(ready);
+      if (ready) {
+        setAutoRemove(true); // LaMa 就緒 → 預設開啟 auto-remove
+        // 預載 session（WebGPU 偵測 + 模型初始化）
+        warmUpLamaWorker()
+          .then(backend => setLamaBackend(backend))
+          .catch(() => { /* 預載失敗不影響手動觸發 */ });
+      }
+    });
+
+    // 檢查 MI-GAN
+    getModelStatus('mi_gan').then(s => {
+      const ready = s === 'ready';
+      setMiGanReady(ready);
+      if (ready) {
+        warmUpMiGanWorker()
+          .then(backend => setMiGanBackend(backend))
+          .catch(() => { /* 預載失敗不影響手動觸發 */ });
+      }
+    });
   }, []);
 
   const saveMaskState = useCallback(() => {
@@ -395,6 +424,25 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       setIsDrawing(false);
       strokePointsRef.current = [];
       saveMaskState();
+
+      // ── Auto-run：放開筆刷後自動觸發 LaMa/MI-GAN 移除 ──
+      const localReady = localModel === 'mi_gan' ? miGanReady : lamaReady;
+      if (autoRemove && localReady && !isLoading && !isBaking && !previewImageSrc) {
+        // 延遲一幀確保 mask state 已更新
+        requestAnimationFrame(() => {
+          const maskCtx = maskCanvasRef.current?.getContext('2d');
+          if (!maskCtx) return;
+          const { data } = maskCtx.getImageData(0, 0, maskCtx.canvas.width, maskCtx.canvas.height);
+          let hasMask = false;
+          for (let i = 3; i < data.length; i += 4) {
+            if (data[i] > 0) { hasMask = true; break; }
+          }
+          if (hasMask) {
+            setPendingAction('remove');
+            handleSubmit('remove');
+          }
+        });
+      }
     }
   };
 
@@ -719,29 +767,136 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
     }
   }, [apiKey]);
 
+  /**
+   * 局部超解析度細節還原 (Inpaint + Local Upscale)
+   * 僅針對被塗抹遮罩的最小包圍矩形 (Bounding Box) 區塊進行本機 4x 超解析
+   * 縮小回原尺寸貼回，能重新生成細緻的高頻紋理與背景細節
+   */
+  const restoreDetailWithUpscale = useCallback(async (
+    originalSrc: string,
+    inpaintedSrc: string,
+    bwMaskSrc: string
+  ): Promise<string> => {
+    try {
+      const upscaleStatus = await getModelStatus('upscale_photo');
+      if (upscaleStatus !== 'ready') {
+        console.log('[Upscale Detail] 相片高清模型未下載，跳過局部超分細節還原');
+        return inpaintedSrc;
+      }
+
+      const [origImg, inpaintImg, maskImg] = await Promise.all([
+        loadImage(originalSrc),
+        loadImage(inpaintedSrc),
+        loadImage(bwMaskSrc)
+      ]);
+
+      const W = origImg.naturalWidth;
+      const H = origImg.naturalHeight;
+
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = W;
+      maskCanvas.height = H;
+      const maskCtx = maskCanvas.getContext('2d');
+      if (!maskCtx) return inpaintedSrc;
+      maskCtx.drawImage(maskImg, 0, 0);
+      const maskData = maskCtx.getImageData(0, 0, W, H).data;
+
+      // 找出 Mask 塗抹區的最小包圍矩形 (Bounding Box)
+      let minX = W, minY = H, maxX = 0, maxY = 0;
+      let hasMask = false;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const idx = (y * W + x) * 4;
+          if (maskData[idx] > 10) { // 有遮罩像素
+            hasMask = true;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      if (!hasMask) return inpaintedSrc;
+
+      // 擴大 Bounding Box 邊界 (Padding 16px) 以保留過渡區邊緣，有利細節還原
+      const padding = 16;
+      minX = Math.max(0, minX - padding);
+      minY = Math.max(0, minY - padding);
+      maxX = Math.min(W - 1, maxX + padding);
+      maxY = Math.min(H - 1, maxY + padding);
+
+      const boxW = maxX - minX + 1;
+      const boxH = maxY - minY + 1;
+      if (boxW < 8 || boxH < 8) return inpaintedSrc;
+
+      console.log(`[Upscale Detail] 執行局部超分: (${minX}, ${minY}) -> (${maxX}, ${maxY}), 尺寸: ${boxW}x${boxH}`);
+
+      // 裁切局部區塊
+      const cropCanvas = document.createElement('canvas');
+      cropCanvas.width = boxW;
+      cropCanvas.height = boxH;
+      const cropCtx = cropCanvas.getContext('2d');
+      if (!cropCtx) return inpaintedSrc;
+      cropCtx.drawImage(inpaintImg, minX, minY, boxW, boxH, 0, 0, boxW, boxH);
+      const cropBase64 = cropCanvas.toDataURL('image/png');
+
+      // 執行 4x 超解析 (PurePhoto SPAN - 極輕極快)
+      const upscaledBase64 = await runUpscaleInWorker(cropBase64, 'onnx_upscale_purephoto_span_v1', 4);
+      const upscaledImg = await loadImage(upscaledBase64);
+
+      // 放回大圖 Canvas (高品質縮小 4x 以貼回對應位置，能重建細微紋理)
+      const detailCanvas = document.createElement('canvas');
+      detailCanvas.width = W;
+      detailCanvas.height = H;
+      const detailCtx = detailCanvas.getContext('2d');
+      if (!detailCtx) return inpaintedSrc;
+
+      detailCtx.drawImage(inpaintImg, 0, 0);
+      detailCtx.imageSmoothingEnabled = true;
+      detailCtx.imageSmoothingQuality = 'high';
+      detailCtx.drawImage(upscaledImg, 0, 0, upscaledImg.naturalWidth, upscaledImg.naturalHeight, minX, minY, boxW, boxH);
+
+      const fineResult = detailCanvas.toDataURL('image/png');
+      console.log('[Upscale Detail] 局部超解析度還原完成！');
+      return fineResult;
+    } catch (e) {
+      console.warn('[Upscale Detail] 局部超分失敗，跳過並降級為普通 LaMa 結果', e);
+      return inpaintedSrc;
+    }
+  }, []);
+
   const runGeneration = async (context: GenerationContext) => {
     // ── 準備黑白遮罩（兩條路都需要） ──────────────────────────
     setIsLoading(true);
     try {
       const bwMaskBase64Url = await createBlackAndWhiteMask(context.baseImageSrc, context.maskDataUrl);
 
-      // ══ 路線 0：移除物件（LaMa 優先，無 LaMa 降級 Gemini）══════
+      // ══ 路線 0：移除物件（本機 LaMa/MI-GAN 優先，無本機降級 Gemini）══════
       if (context.type === 'remove') {
-        if (lamaReady) {
-          const result = await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
-          // LaMa 內部縮到 512×512 再放大回原尺寸，整張會糊；
+        const localReady = localModel === 'mi_gan' ? miGanReady : lamaReady;
+        if (localReady) {
+          const result = localModel === 'mi_gan'
+            ? await runMiGanInWorker(context.baseImageSrc, bwMaskBase64Url)
+            : await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
+          // LaMa/MI-GAN 內部縮到 512×512 再放大回原尺寸，整張會糊；
+          // 局部超分還原：只對塗抹的遮罩區做本機 4x 高清放大再縮回原圖，極速恢復紋理細節！
+          const restoredResult = await restoreDetailWithUpscale(context.baseImageSrc, result, bwMaskBase64Url);
           // 只取遮罩區的填補結果貼回原圖，遮罩外維持原始像素不變。
-          const composited = await compositeImagesPixelPerfect(context.baseImageSrc, result, bwMaskBase64Url);
+          const composited = await compositeImagesPixelPerfect(context.baseImageSrc, restoredResult, bwMaskBase64Url);
           setPreviewImageSrc(composited);
           return;
         }
-        // LaMa 未下載 → 用 Gemini 填補背景
+        // 本機未下載 → 用 Gemini 填補背景
       }
 
       // ══ 路線 0b：手動選 LaMa 模式（直接移除，無論 action 為何）══════
       if (inpaintEngine === 'lama') {
-        const result = await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
-        const composited = await compositeImagesPixelPerfect(context.baseImageSrc, result, bwMaskBase64Url);
+        const result = localModel === 'mi_gan' && miGanReady
+          ? await runMiGanInWorker(context.baseImageSrc, bwMaskBase64Url)
+          : await runLamaInWorker(context.baseImageSrc, bwMaskBase64Url);
+        const restoredResult = await restoreDetailWithUpscale(context.baseImageSrc, result, bwMaskBase64Url);
+        const composited = await compositeImagesPixelPerfect(context.baseImageSrc, restoredResult, bwMaskBase64Url);
         setPreviewImageSrc(composited);
         return;
       }
@@ -1024,6 +1179,29 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                 <span className="text-[11px] font-bold text-purple-600">Gemini</span>
               </div>
             ) : null}
+
+            {/* Local Inpaint backend badge */}
+            {localModel === 'mi_gan' ? (
+              miGanReady && miGanBackend && (
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-purple-50 text-purple-600 border border-purple-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                  MI-GAN {miGanBackend === 'webgpu' ? 'GPU' : 'CPU'}
+                </div>
+              )
+            ) : (
+              lamaReady && lamaBackend && (
+                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium ${
+                  lamaBackend === 'webgpu'
+                    ? 'bg-green-50 text-green-600 border border-green-200'
+                    : 'bg-gray-50 text-gray-500 border border-gray-200'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    lamaBackend === 'webgpu' ? 'bg-green-400' : 'bg-gray-400'
+                  }`} />
+                  LaMa {lamaBackend === 'webgpu' ? 'GPU' : 'CPU'}
+                </div>
+              )
+            )}
           </div>
 
           <button onClick={onClose} className="text-gray-400 hover:text-gray-800 transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
@@ -1270,7 +1448,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                 <div className="w-px bg-gray-100 flex-shrink-0" />
 
                 {/* Right: action buttons */}
-                <div className="flex flex-col gap-2 w-[124px] justify-center flex-shrink-0">
+                <div className="flex flex-col gap-2 w-[136px] justify-center flex-shrink-0">
                   <button
                     onClick={() => { setPendingAction('edit'); handleSubmit('edit'); }}
                     disabled={isLoading || isBaking}
@@ -1287,6 +1465,40 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     移除物件
                   </button>
+
+                  {/* Auto-remove toggle & local engine selector */}
+                  {(lamaReady || miGanReady) && (
+                    <div className="flex flex-col gap-1.5 w-full bg-gray-50/50 p-2 rounded-lg border border-gray-100 mt-1">
+                      <label className="flex items-center gap-1.5 cursor-pointer group" title="開啟後，塗抹放開滑鼠即自動移除物件">
+                        <div
+                          className={`relative w-7 h-4 rounded-full transition-colors ${
+                            autoRemove ? 'bg-green-400' : 'bg-gray-300'
+                          }`}
+                          onClick={() => setAutoRemove(v => !v)}
+                        >
+                          <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
+                            autoRemove ? 'translate-x-3.5' : 'translate-x-0.5'
+                          }`} />
+                        </div>
+                        <span className="text-[10px] text-gray-500 group-hover:text-gray-700 transition-colors select-none font-medium">
+                          自動移除
+                        </span>
+                      </label>
+
+                      {/* Engine select dropdown */}
+                      <div className="flex items-center justify-between gap-1 mt-0.5">
+                        <span className="text-[10px] text-gray-400">本機引擎</span>
+                        <select
+                          value={localModel}
+                          onChange={e => setLocalModel(e.target.value as 'lama' | 'mi_gan')}
+                          className="bg-transparent text-[10px] font-bold text-gray-700 focus:outline-none border-b border-gray-200 py-0.5 cursor-pointer"
+                        >
+                          {lamaReady && <option value="lama">LaMa (背景)</option>}
+                          {miGanReady && <option value="mi_gan">MI-GAN (人物)</option>}
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Hidden file input */}
