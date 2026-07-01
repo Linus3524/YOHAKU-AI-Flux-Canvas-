@@ -1038,7 +1038,11 @@ export function SemanticEditorView({
         ]).then(([enc, dec, lama, det, rec, dict]) => {
             setOnnxSAM2Ready(enc === 'ready' && dec === 'ready');
             setLamaReady(lama === 'ready');
-            setOcrReady(det === 'ready' && rec === 'ready' && dict === 'ready');
+            const localOcrReady = det === 'ready' && rec === 'ready' && dict === 'ready';
+            setOcrReady(localOcrReady);
+            // 本機 OCR 已安裝 → 預設就用本機偵測（框緊、免費離線），第一次分析不再走 Gemini。
+            // 沒裝本機模型才留在 Gemini 當後備；使用者仍可用切換鈕改回 Gemini。
+            if (localOcrReady) setOcrEngine('local');
         });
     }, []);
 

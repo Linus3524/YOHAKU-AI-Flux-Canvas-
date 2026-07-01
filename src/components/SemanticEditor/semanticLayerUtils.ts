@@ -22,6 +22,7 @@ import type { SmartLayer, SmartLayerCategory } from '../../types';
 import { trimTransparentPixels } from '../../utils/falImage';
 import { compressForAtlas, detectClosestRatio, downloadImageAsBase64 } from '../../utils/atlasImage';
 import { sam2EncodeInWorker, sam2DecodeInWorker } from '../../utils/sam2WorkerClient';
+import { getModelStatus } from '../../utils/onnxModelCache';
 
 // ─── 型別 ────────────────────────────────────────────────────────────────────
 
@@ -862,6 +863,31 @@ async function detectTextBlocksLocal(imageBase64: string): Promise<TextBlock[]> 
         .slice(0, 60); // 本機逐行偵測通常較多框，放寬上限
 }
 
+/**
+ * 用本機 DBNet 偵測框「吸附收緊」一塊 LLM 粗框：
+ * 取所有「中心落在該粗框（稍放寬）內」的偵測框之聯集 = 該塊文字的像素級緊框。
+ * 同一塊多行/多字會被一起框住；沒有命中回 null（交給呼叫端 fallback）。
+ */
+function snapToDetections(
+    box: { x: number; y: number; w: number; h: number },
+    detBoxes: { x: number; y: number; w: number; h: number }[],
+): { x: number; y: number; w: number; h: number } | null {
+    if (!detBoxes.length) return null;
+    const mx = box.x - box.w * 0.1, my = box.y - box.h * 0.1;
+    const Mx = box.x + box.w * 1.1, My = box.y + box.h * 1.1;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, hit = 0;
+    for (const d of detBoxes) {
+        const cx = d.x + d.w / 2, cy = d.y + d.h / 2;
+        if (cx >= mx && cx <= Mx && cy >= my && cy <= My) {
+            x0 = Math.min(x0, d.x); y0 = Math.min(y0, d.y);
+            x1 = Math.max(x1, d.x + d.w); y1 = Math.max(y1, d.y + d.h);
+            hit++;
+        }
+    }
+    if (!hit) return null;
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
 export async function detectTextRegions({
     imageBase64,
     geminiApiKey,
@@ -897,11 +923,37 @@ export async function detectTextRegions({
     const layers: SmartLayer[] = [];
     const img = await loadImg(imageBase64);
 
+    // ── DBNet 當主：Gemini 模式下，若本機 OCR 模型已安裝，改用 DBNet 偵測框收緊幾何 ──
+    // （偵測器給的框像素級貼合，遠比 LLM 猜框 + 梯度投影準；沒裝模型才退回梯度 refine，不退步）
+    let detBoxes: { x: number; y: number; w: number; h: number }[] | null = null;
+    if (engine === 'gemini') {
+        try {
+            const [detReady, recReady, dictReady] = await Promise.all([
+                getModelStatus('ocr_det'), getModelStatus('ocr_rec'), getModelStatus('ocr_dict'),
+            ]);
+            if (detReady === 'ready' && recReady === 'ready' && dictReady === 'ready') {
+                onProgress?.('本機 DBNet 收緊文字框...');
+                const { runOcrInWorker } = await import('../../utils/ocrWorkerClient');
+                const ocr = await runOcrInWorker(imageBase64);
+                detBoxes = (ocr || []).map(o => o.bbox).filter(Boolean);
+            }
+        } catch (e) {
+            console.warn('[detectTextRegions] DBNet 收緊不可用，改用梯度 refine:', e);
+        }
+    }
+
     for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];
         try {
-            // 使用投影演算法精細修正 BBox
-            const refinedBBox = await refineTextBBox(img, b.bbox);
+            // 框幾何來源優先序：
+            //  本機引擎 → DBNet 框已緊，直接用（不再過梯度 refine，避免把好框弄鬆）
+            //  Gemini 引擎 → 有 DBNet 就吸附收緊；否則退回梯度 refine
+            let refinedBBox: { x: number; y: number; w: number; h: number };
+            if (engine === 'local') {
+                refinedBBox = b.bbox;
+            } else {
+                refinedBBox = (detBoxes && snapToDetections(b.bbox, detBoxes)) || await refineTextBBox(img, b.bbox);
+            }
             const crop = await cropToBBox(imageBase64, refinedBBox);
             const full = await placeInFullCanvas(crop, dims.w, dims.h, refinedBBox);
             const layer = await buildSmartLayer(full, {
