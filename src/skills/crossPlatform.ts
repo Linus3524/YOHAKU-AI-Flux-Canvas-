@@ -139,6 +139,19 @@ export const CROSS_PLATFORM_SPECS: CrossPlatformSpec[] = [
       'Keep the main subject clear and not too small; preserve brand identity and colors.',
     ],
   },
+  {
+    id: 'desktop-banner-3-1',
+    name: '桌機廣告 3:1 (2160x720)',
+    promptLabel: 'Desktop wide billboard banner',
+    atlasRatio: '21:9',
+    ratioValue: 3,
+    standard: 'Desktop wide banner / billboard ad uses a horizontal 3:1 ratio (2160x720); it must stay highly visible on wide desktop screens.',
+    safeArea: 'Keep core branding, face, product focus, and headlines centered within the middle 70% safe area; left/right edges may be cropped or overlayed on smaller viewports.',
+    guidance: [
+      'Recompose into a wide landscape banner layout; extend background elements sideways generously to fit the extreme width without stretching the subject.',
+      'Ensure the product or main focal point remains centered and proportionally balanced.',
+    ],
+  },
 ];
 
 export function crossPlatformSpec(id: string): CrossPlatformSpec | undefined {
