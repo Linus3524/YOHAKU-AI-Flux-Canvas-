@@ -290,21 +290,21 @@ const DraggableOutpaintingPanel: React.FC<{
                             <button
                                 onClick={() => setModel('gpt')}
                                 disabled={!hasAtlasKey}
-                                title={hasAtlasKey ? 'GPT Image 2 遮罩外擴：原圖保真、不變形（推薦）' : '需 Atlas Cloud Key'}
+                                title={hasAtlasKey ? 'GPT Image 2 遮罩外擴：原圖保真、邊緣無縫融合（推薦）' : '需 Atlas Cloud Key'}
                                 className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${model === 'gpt' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 GPT
                             </button>
                             <button
                                 onClick={() => setModel('gemini')}
-                                title="Gemini：整張重生，速度快、免 Atlas Key"
+                                title="Gemini 智慧外擴：無縫拼接、免 Atlas Key"
                                 className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${model === 'gemini' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 Gemini
                             </button>
                         </div>
                         <span className="text-[10px] text-gray-400 leading-tight">
-                            {model === 'gpt' ? '原圖保真・不變形' : '整張重生・快'}
+                            {model === 'gpt' ? '原圖保真・無縫融合' : '無縫拼接・免 Key'}
                         </span>
                     </div>
 
