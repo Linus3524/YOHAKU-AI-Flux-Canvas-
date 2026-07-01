@@ -1038,39 +1038,54 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">🔵 Gemini 生圖模型（需 Gemini API Key）</span>
                         <ul className="text-xs text-gray-600 space-y-2 leading-relaxed mb-3 [&>li]:pl-[1.3em] [&>li]:[text-indent:-1.3em]">
                           <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-lite</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
-                          <li>・ <span className="font-bold text-gray-600">生圖模型</span>：可在頂部狀態欄切換 Flash / Pro，依需求選擇。需付費使用。</li>
+                          <li>・ <span className="font-bold text-gray-600">生圖模型</span>：可在頂部狀態欄切換 Lite / Flash / Pro，依需求選擇。需付費使用。</li>
                         </ul>
                         <span className="text-xs font-bold text-yohaku-text-main block mb-2">Gemini 生圖模型比較：</span>
                         <div className="overflow-x-auto">
                           <table className="w-full text-[10px] text-gray-600 border-collapse">
                             <thead>
                               <tr className="border-b border-gray-200">
-                                <th className="text-left py-1.5 pr-3 font-medium text-yohaku-text-muted w-1/3">維度</th>
-                                <th className="text-left py-1.5 pr-3 font-medium text-yohaku-text-main">Gemini 3 Flash（預設）</th>
-                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">Gemini 3 Pro</th>
+                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-muted w-1/4">維度</th>
+                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-main">3.1 Flash-Lite (極速)</th>
+                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-main">3.1 Flash (預設)</th>
+                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">3 Pro</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                               {[
-                                ['底層架構', 'gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'],
-                                ['生成速度', '4–6 秒', '8–12 秒'],
-                                ['輸出解析度', '512 / 1K / 2K / 4K', '1K / 2K / 4K'],
-                                ['文字渲染', '短句・標籤準確', '長句・複雜排版精準'],
-                                ['提示詞理解', '視覺直覺・大眾描述', '精確參數（焦距・材質）'],
-                              ].map(([dim, flash, pro]) => (
+                                ['底層架構', 'gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'],
+                                ['生成速度', '小於 4 秒', '4–6 秒', '8–12 秒'],
+                                ['輸出解析度', '1K', '512 / 1K / 2K / 4K', '1K / 2K / 4K'],
+                                ['文字渲染', '短句・標籤準確', '短句・標籤準確', '長句・複雜排版精準'],
+                                ['提示詞理解', '高吞吐量・低成本', '視覺直覺・大眾描述', '精確參數（焦距・材質）'],
+                              ].map(([dim, lite, flash, pro]) => (
                                 <tr key={dim}>
-                                  <td className="py-1.5 pr-3 text-yohaku-text-muted">{dim}</td>
-                                  <td className="py-1.5 pr-3 text-gray-600">{flash}</td>
+                                  <td className="py-1.5 pr-2 text-yohaku-text-muted">{dim}</td>
+                                  <td className="py-1.5 pr-2 text-gray-600">{lite}</td>
+                                  <td className="py-1.5 pr-2 text-gray-600">{flash}</td>
                                   <td className="py-1.5 text-gray-600">{pro}</td>
                                 </tr>
                               ))}
                               <tr>
-                                <td className="py-1.5 pr-3 text-yohaku-text-muted align-top">物件連續性</td>
-                                <td className="py-1.5 pr-3 text-gray-600 align-top">每次獨立生成<br/>跨圖角色外觀易跑掉</td>
+                                <td className="py-1.5 pr-2 text-yohaku-text-muted align-top">物件連續性</td>
+                                <td className="py-1.5 pr-2 text-gray-600 align-top">每次獨立生成</td>
+                                <td className="py-1.5 pr-2 text-gray-600 align-top">每次獨立生成<br/>跨圖角色外觀易跑掉</td>
                                 <td className="py-1.5 text-gray-600 align-top">鎖定角色視覺特徵<br/>跨圖外觀一致・最多 14 物件</td>
                               </tr>
                             </tbody>
                           </table>
+                        </div>
+
+                        {/* 模型限制提示 */}
+                        <div className="mt-3 p-3 bg-purple-50/50 rounded-xl border border-purple-100/50 space-y-2 text-[10px] text-gray-600 leading-relaxed">
+                          <div className="font-bold text-purple-800 text-[11px] flex items-center gap-1">
+                            💡 選用建議與限制提示：
+                          </div>
+                          <ul className="list-disc list-inside space-y-1">
+                            <li><span className="font-bold">Lite (極速)</span>：適合快速草稿預覽，**最大輸出解析度限制為 1K**，不支援角色/物件一致性特徵鎖定。</li>
+                            <li><span className="font-bold">Flash (預設)</span>：最平衡的選擇，**支援 2K/4K 輸出**，適合日常大多數插畫與常規去背調和。</li>
+                            <li><span className="font-bold">Pro (高階)</span>：速度慢但品質最佳，特別適合複雜的文字渲染與物理排版，且**支援最多 14 物件的跨圖特徵鎖定**。</li>
+                          </ul>
                         </div>
                       </div>
 

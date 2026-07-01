@@ -1874,6 +1874,16 @@ const App: React.FC = () => {
           {isKeyValid && (
             <div className="flex items-center bg-black/5 backdrop-blur-sm rounded-full border border-white/20 p-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
               <button
+                onClick={() => handleSetImageModel('gemini-3.1-flash-lite-image')}
+                className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide transition-all duration-200 ${
+                  imageModel === 'gemini-3.1-flash-lite-image'
+                    ? 'bg-white text-[#1D1D1F] shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Lite
+              </button>
+              <button
                 onClick={() => handleSetImageModel('gemini-3.1-flash-image-preview')}
                 className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide transition-all duration-200 ${
                   imageModel === 'gemini-3.1-flash-image-preview'
