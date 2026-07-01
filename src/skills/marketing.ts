@@ -6,6 +6,7 @@ export interface ProductMarketingBrief {
   targetAudience: string;
   visualTone: string;
   customAssets?: string[];
+  lockStyleConsistency?: boolean;
 }
 
 export interface ProductMarketingOutputSpec {
@@ -449,7 +450,8 @@ export function buildProductMarketingPrompt(
   config: ProductMarketingBrief,
   spec: ProductMarketingOutputSpec,
   index: number,
-  total: number
+  total: number,
+  sharedStyleAnchor?: string
 ): string {
   const sellingPointsPrompt = config.sellingPoints
     ? `Core Selling Points to convey: "${config.sellingPoints}"`
@@ -459,13 +461,17 @@ export function buildProductMarketingPrompt(
     ? `Target Customer / Audience: "${config.targetAudience}"`
     : `Since target audience is not specified, please design the scene for general modern consumers, using neutral, elegant, and appealing context backgrounds.`;
 
+  const styleAnchorPrompt = sharedStyleAnchor
+    ? `Shared Visual Style Anchor:\n${sharedStyleAnchor}`
+    : `Visual Tone & Atmosphere: "${config.visualTone || 'clean, modern, professional'}"`;
+
   return [
     `Design a professional e-commerce product marketing graphic: "${spec.title}" (Part ${index + 1}/${total} of the set).`,
     `CRITICAL — PRODUCT VISUAL ANCHOR: A high-quality photo of the physical product is attached as a reference image. You MUST extract and preserve this EXACT product (its shape, color, branding logo, textures, and details) in the generated image. Do NOT alter, distort, simplify, or redesign the product itself — place it realistically within the new scene/context.`,
     `Product Name: "${config.productName}"`,
     sellingPointsPrompt,
     audiencePrompt,
-    `Visual Tone & Atmosphere: "${config.visualTone || 'clean, modern, professional'}"`,
+    styleAnchorPrompt,
     `This Image Goal: ${spec.note}`,
     `This Image Guidelines: ${spec.guidance.join(' ')}`,
     `Cohesive Set Requirements: Maintain absolute product consistency (same product color, exact features, logo mark placement). Maintain similar studio lighting angle, color palette tones, and overall premium aesthetic across all generated images in the set.`,

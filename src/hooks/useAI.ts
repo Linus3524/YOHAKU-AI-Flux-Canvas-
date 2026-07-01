@@ -2146,6 +2146,35 @@ CONSTRAINTS:
         setIsGenerating(true);
         setGeneratingElementIds([elementId]);
 
+        // 1. base64 轉換移至最前面，以供後續分析及生圖共用
+        if (!productSrc.startsWith('data:')) {
+            try { productSrc = await downloadImageAsBase64(productSrc); } catch { /* 失敗則維持原樣 */ }
+        }
+
+        // 2. 進行風格預分析以抽取配色與氛圍錨點
+        let sharedStyleAnchor = '';
+        if (brief.lockStyleConsistency && apiKey && productSrc.startsWith('data:')) {
+            showToast('🔍 正在分析商品風格，為成套行銷圖鎖定風格與色調...');
+            try {
+                const genAI = createAiClient();
+                const [header, data] = productSrc.split(',');
+                const mime = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+                const styleAnalysisPrompt = `Analyze this product image. In 2-3 concise bullet points, describe a suitable commercial visual design language for it. Specify: 1. A harmonious color palette (give 2-3 colors with hex codes if applicable). 2. Studio lighting style (e.g. soft diffuse, high contrast). 3. Background materials or visual textures (e.g. marble, matte wood, plain studio). Keep it short and in English. Output ONLY the bullet points.`;
+                const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+                    model: 'gemini-3.1-flash-lite',
+                    contents: { parts: [{ inlineData: { data, mimeType: mime } }, { text: styleAnalysisPrompt }] }
+                }));
+                sharedStyleAnchor = response.text ? response.text.trim() : '';
+            } catch (e) {
+                console.warn('[productStyleAnalysis] 風格分析失敗，將使用默認風格設定進行生成', e);
+            }
+        }
+
+        // 3. 風格一致性隨機種子碼
+        const consistencySeed = brief.lockStyleConsistency
+            ? Math.floor(Math.random() * 2147483647)
+            : undefined;
+
         // 排成一列放原產品圖片右側, 固定顯示高度
         const ROW_H = 220;
         const gap = 24;
@@ -2210,28 +2239,23 @@ CONSTRAINTS:
             if (total === 0) { showToast('⚠️ 未選取或輸入任何行銷規格'); return; }
             let successCount = 0;
 
-            // base64 轉換
-            if (!productSrc.startsWith('data:')) {
-                try { productSrc = await downloadImageAsBase64(productSrc); } catch { /* 失敗則維持原樣 */ }
-            }
-
             // ── 逐一調用 AI 模型生成 ──
             for (let i = 0; i < specs.length; i++) {
                 const spec = specs[i];
                 showToast(`🎯 產品行銷組圖：${spec.title}（${i + 1}/${total}）...`);
-                const prompt = buildProductMarketingPrompt(brief, spec, i, specs.length);
+                const prompt = buildProductMarketingPrompt(brief, spec, i, specs.length, sharedStyleAnchor || undefined);
                 let resultSrc = '';
 
                 try {
                     if (useAtlas) {
                         if (atlasModelSupportsImg2Img(atlasModel)) {
                             const images = await withAtlasWaitToast(() =>
-                                callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, productSrc, 1, { ratio: spec.aspectRatio, quality }));
+                                callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, productSrc, 1, { ratio: spec.aspectRatio, quality, seed: consistencySeed }));
                             if (images.length > 0) resultSrc = images[0];
                         } else {
                             // 降級退回純文字生成
                             const images = await withAtlasWaitToast(() =>
-                                callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality }));
+                                callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality, seed: consistencySeed }));
                             if (images.length > 0) resultSrc = images[0];
                         }
                     } else {
@@ -2246,7 +2270,13 @@ CONSTRAINTS:
                         const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                             model: imageModel,
                             contents: { parts },
-                            config: { imageConfig: { aspectRatio: spec.aspectRatio, imageSize: imageSizeOverride || imageSize } },
+                            config: {
+                                imageConfig: {
+                                    aspectRatio: spec.aspectRatio,
+                                    imageSize: imageSizeOverride || imageSize,
+                                    ...(consistencySeed !== undefined ? { seed: consistencySeed } : {})
+                                }
+                            },
                         }));
                         const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                         if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;

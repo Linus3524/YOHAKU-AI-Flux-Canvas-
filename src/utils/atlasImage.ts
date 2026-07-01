@@ -295,6 +295,7 @@ interface AtlasCallOptions {
     quality?: '2K' | '4K';
     transparentBg?: boolean; // 要求輸出透明背景（background: 'transparent'）
     keepAlpha?: boolean;     // 壓縮時使用 PNG 保留 alpha（預設 JPEG 會破壞透明）
+    seed?: number;           // 鎖定隨機種子碼以利批次風格一致
 }
 
 function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
@@ -315,6 +316,9 @@ function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOp
     }
     if (options?.transparentBg) {
         extra['background'] = 'transparent';
+    }
+    if (options?.seed !== undefined) {
+        extra['seed'] = options.seed;
     }
     return config.useInputWrapper
         ? { model: config.id, input: { prompt, ...extra } }
@@ -366,6 +370,9 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
     }
     if (options?.transparentBg) {
         extra['background'] = 'transparent';
+    }
+    if (options?.seed !== undefined) {
+        extra['seed'] = options.seed;
     }
     return config.img2imgUseInputWrapper
         ? { model: config.img2imgId, input: { prompt, [imgParam]: imgValue, ...extra } }

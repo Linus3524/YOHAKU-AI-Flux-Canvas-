@@ -39,6 +39,7 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
   const [sellingPoints, setSellingPoints] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
   const [visualTone, setVisualTone] = useState('乾淨專業');
+  const [lockStyleConsistency, setLockStyleConsistency] = useState(true);
   const [model, setModel] = useState('gemini');
   const [imageSize, setImageSize] = useState<'2K' | '4K'>('2K');
 
@@ -154,6 +155,7 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
       targetAudience: targetAudience.trim(),
       visualTone: visualTone.trim() || '乾淨專業',
       customAssets: activeCustom,
+      lockStyleConsistency,
     };
 
     onGenerate(brief, model, imageSize, activeBuiltIn, activePlatform);
@@ -208,6 +210,22 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
             進階行銷與視覺設定（選填）
           </summary>
           <div className="space-y-3 mt-2 p-2.5 bg-white rounded-lg border border-gray-100/50">
+            {/* 風格一致性鎖定 */}
+            <div className="flex items-center gap-2 mb-1 bg-purple-50/20 p-2.5 rounded-xl border border-purple-100/50">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none w-full">
+                <input
+                  type="checkbox"
+                  checked={lockStyleConsistency}
+                  onChange={e => setLockStyleConsistency(e.target.checked)}
+                  className="rounded border-[#AF52DE]/30 text-[#AF52DE] focus:ring-[#AF52DE] w-3.5 h-3.5 cursor-pointer"
+                />
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-bold text-[#AF52DE]">保持整組風格與色調一致</span>
+                  <span className="text-[9px] text-[#86868B] font-normal leading-tight mt-0.5">鎖定種子碼與智慧配色分析，使系列圖極具一致感</span>
+                </div>
+              </label>
+            </div>
+
             {/* 核心賣點 */}
             <div>
               <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">核心賣點</div>
