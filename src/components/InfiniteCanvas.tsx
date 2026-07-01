@@ -534,8 +534,12 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
             </div>
 
             <div 
-                className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-auto whitespace-nowrap z-[2001]"
-                style={{ top: 'calc(100% + 12px)' }}
+                className="absolute left-1/2 flex flex-col items-center gap-2 pointer-events-auto whitespace-nowrap z-[2001]"
+                style={{ 
+                    top: 'calc(100% + 12px)',
+                    transform: `translateX(-50%) scale(${Math.min(1 / zoom, 5.5)})`,
+                    transformOrigin: 'top center',
+                }}
             >
                 {/* 精準裁剪數值面板 */}
                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/80 backdrop-blur-lg text-white text-[10px] font-mono border border-white/10 shadow-[0_4px_16px_rgba(0,0,0,0.3)]">
