@@ -190,13 +190,13 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
       lama: 'not_downloaded', sam2_encoder: 'not_downloaded', sam2_decoder: 'not_downloaded',
       upscale_photo: 'not_downloaded', upscale_anime: 'not_downloaded', upscale_art: 'not_downloaded',
       ocr_det: 'not_downloaded', ocr_rec: 'not_downloaded', ocr_dict: 'not_downloaded',
-      bria_rmbg: 'not_downloaded',
+      bria_rmbg: 'not_downloaded', mi_gan: 'not_downloaded',
   });
   const [modelProgress, setModelProgress] = useState<Record<OnnxModelKey, number>>({
       lama: 0, sam2_encoder: 0, sam2_decoder: 0,
       upscale_photo: 0, upscale_anime: 0, upscale_art: 0,
       ocr_det: 0, ocr_rec: 0, ocr_dict: 0,
-      bria_rmbg: 0,
+      bria_rmbg: 0, mi_gan: 0,
   });
 
   // 開啟本機模型分頁時初始化狀態
@@ -223,6 +223,83 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
       await deleteModel(key);
       setModelStatuses(s => ({ ...s, [key]: 'not_downloaded' }));
       setModelProgress(p => ({ ...p, [key]: 0 }));
+  }, []);
+
+  const handleDownloadSam2 = useCallback(async () => {
+      setModelStatuses(s => ({ ...s, sam2_encoder: 'downloading', sam2_decoder: 'downloading' }));
+      setModelProgress(p => ({ ...p, sam2_encoder: 0, sam2_decoder: 0 }));
+      try {
+          await downloadModel('sam2_encoder', (pct) => {
+              setModelProgress(p => ({ ...p, sam2_encoder: pct }));
+          });
+          setModelStatuses(s => ({ ...s, sam2_encoder: 'ready' }));
+
+          await downloadModel('sam2_decoder', (pct) => {
+              setModelProgress(p => ({ ...p, sam2_decoder: pct }));
+          });
+          setModelStatuses(s => ({ ...s, sam2_decoder: 'ready' }));
+      } catch (e) {
+          console.error('SAM2 下載失敗', e);
+          setModelStatuses(s => ({
+              ...s,
+              sam2_encoder: s.sam2_encoder === 'ready' ? 'ready' : 'error',
+              sam2_decoder: s.sam2_decoder === 'ready' ? 'ready' : 'error',
+          }));
+      }
+  }, []);
+
+  const handleDeleteSam2 = useCallback(async () => {
+      await deleteModel('sam2_encoder');
+      await deleteModel('sam2_decoder');
+      setModelStatuses(s => ({ ...s, sam2_encoder: 'not_downloaded', sam2_decoder: 'not_downloaded' }));
+      setModelProgress(p => ({ ...p, sam2_encoder: 0, sam2_decoder: 0 }));
+  }, []);
+
+  const handleDownloadOcr = useCallback(async () => {
+      setModelStatuses(s => ({ ...s, ocr_dict: 'downloading', ocr_det: 'downloading', ocr_rec: 'downloading' }));
+      setModelProgress(p => ({ ...p, ocr_dict: 0, ocr_det: 0, ocr_rec: 0 }));
+      try {
+          await downloadModel('ocr_dict', (pct) => {
+              setModelProgress(p => ({ ...p, ocr_dict: pct }));
+          });
+          setModelStatuses(s => ({ ...s, ocr_dict: 'ready' }));
+
+          await downloadModel('ocr_det', (pct) => {
+              setModelProgress(p => ({ ...p, ocr_det: pct }));
+          });
+          setModelStatuses(s => ({ ...s, ocr_det: 'ready' }));
+
+          await downloadModel('ocr_rec', (pct) => {
+              setModelProgress(p => ({ ...p, ocr_rec: pct }));
+          });
+          setModelStatuses(s => ({ ...s, ocr_rec: 'ready' }));
+      } catch (e) {
+          console.error('OCR 下載失敗', e);
+          setModelStatuses(s => ({
+              ...s,
+              ocr_dict: s.ocr_dict === 'ready' ? 'ready' : 'error',
+              ocr_det: s.ocr_det === 'ready' ? 'ready' : 'error',
+              ocr_rec: s.ocr_rec === 'ready' ? 'ready' : 'error',
+          }));
+      }
+  }, []);
+
+  const handleDeleteOcr = useCallback(async () => {
+      await deleteModel('ocr_dict');
+      await deleteModel('ocr_det');
+      await deleteModel('ocr_rec');
+      setModelStatuses(s => ({
+          ...s,
+          ocr_dict: 'not_downloaded',
+          ocr_det: 'not_downloaded',
+          ocr_rec: 'not_downloaded',
+      }));
+      setModelProgress(p => ({
+          ...p,
+          ocr_dict: 0,
+          ocr_det: 0,
+          ocr_rec: 0,
+      }));
   }, []);
 
   // Chat State
@@ -310,6 +387,111 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
 
   const handleCreateSticky = (text: string) => {
     if (onCreateSticky) { onCreateSticky(text); setIsOpen(false); }
+  };
+
+  const renderModelCard = (
+      title: string,
+      description: string,
+      status: ModelStatus,
+      progress: number,
+      onDownload: () => void,
+      onDelete: () => void,
+      sizeMB: number,
+      subItems?: { key: OnnxModelKey; name: string; sizeMB: number }[]
+  ) => {
+      let badge = null;
+      let actionBtn = null;
+
+      if (status === 'ready') {
+          badge = <span className="text-[10px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full font-semibold">已安裝</span>;
+          actionBtn = (
+              <button onClick={onDelete} className="text-[11px] text-gray-400 hover:text-red-500 transition-colors font-medium">
+                  刪除
+              </button>
+          );
+      } else if (status === 'downloading') {
+          badge = <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-semibold animate-pulse">下載中</span>;
+          actionBtn = (
+              <span className="text-[11px] text-purple-600 font-semibold">下載中...</span>
+          );
+      } else if (status === 'error') {
+          badge = <span className="text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-semibold">下載失敗</span>;
+          actionBtn = (
+              <button onClick={onDownload} className="text-[11px] text-red-500 hover:text-red-700 font-semibold">
+                  重試
+              </button>
+          );
+      } else {
+          badge = <span className="text-[10px] bg-gray-50 text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full font-semibold">未安裝</span>;
+          actionBtn = (
+              <button onClick={onDownload} className="text-[11px] font-semibold px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all shadow-sm active:scale-95">
+                  下載
+              </button>
+          );
+      }
+
+      return (
+          <div className="bg-white border border-purple-100/50 rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] space-y-3 hover:shadow-md transition-shadow duration-200 flex flex-col justify-between">
+              <div className="space-y-2">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                          <div className="flex items-center flex-wrap gap-2">
+                              <span className="text-[13px] font-bold text-gray-800">{title}</span>
+                              {badge}
+                          </div>
+                          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{description}</p>
+                      </div>
+                      <div className="flex-shrink-0 flex items-center justify-end">
+                          {actionBtn}
+                      </div>
+                  </div>
+
+                  {/* Size info for single model */}
+                  {!subItems && (
+                      <div className="text-[10px] text-gray-400">
+                          檔案大小：~{sizeMB}MB
+                      </div>
+                  )}
+
+                  {/* Sub-items list (e.g. SAM 2, OCR) */}
+                  {subItems && subItems.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-purple-50/50">
+                          {subItems.map(item => {
+                              const subStatus = modelStatuses[item.key];
+                              const subProgress = modelProgress[item.key];
+                              return (
+                                  <div key={item.key} className="pl-1 space-y-1">
+                                      <div className="flex items-center justify-between text-[10px] leading-none">
+                                          <span className="text-gray-500 font-medium">{item.name}</span>
+                                          <span className="text-gray-400 tabular-nums">
+                                              {subStatus === 'ready' && '就緒'}
+                                              {subStatus === 'downloading' && `${subProgress}%`}
+                                              {subStatus === 'not_downloaded' && '未下載'}
+                                              {subStatus === 'error' && '失敗'}
+                                              {` (${item.sizeMB}MB)`}
+                                          </span>
+                                      </div>
+                                      {subStatus === 'downloading' && (
+                                          <div className="w-full bg-purple-50 rounded-full h-1 overflow-hidden">
+                                              <div className="bg-purple-600 h-1 rounded-full transition-all duration-300" style={{ width: `${subProgress}%` }} />
+                                          </div>
+                                      )}
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  )}
+              </div>
+
+              {/* Single model progress bar */}
+              {!subItems && status === 'downloading' && (
+                  <div className="w-full bg-purple-50 rounded-full h-1 overflow-hidden pt-1">
+                      <div className="bg-purple-600 h-1 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                  </div>
+              )}
+          </div>
+      );
   };
 
   if (isHidden) return null;
@@ -587,7 +769,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     {/* 品牌與行銷工具組 */}
                     <div className="bg-purple-50/40 border border-purple-100 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-purple-900 text-[13px] mb-1.5">✦ 品牌與行銷工具組 (Brand & Marketing)</h4>
-                      <p className="text-[11.5px] text-[#4F46E5] font-semibold mb-2">整合電商商品與品牌視覺的批次物料生成系統，快速輸出成套規格資產：</p>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">整合電商商品與品牌視覺的批次物料生成系統，快速輸出成套規格資產：</p>
                       <div className="grid grid-cols-1 gap-2 mb-2.5">
                         {[
                           { label: '產品行銷組圖', desc: '選擇去背產品圖，一鍵生成成套電商行銷物料與情境套圖（Amazon/Shopify/Meta 廣告等）。支援「保持整組風格與色調一致」功能，自動由 Gemini 提取商品配色與光影特徵，並鎖定批次隨機 Seed，達到完美的品牌統一感。' },
@@ -595,7 +777,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           { label: '一鍵跨平台適配', desc: '選取任意圖像或設計稿，一鍵重新剪裁與排版，自動生成為多種常用的社群與廣告比例尺寸（如 1:1、16:9、9:16），自動適配多平台格式。' },
                         ].map((m, i) => (
                           <div key={i} className="bg-white/80 border border-purple-100 rounded-xl p-3 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-                            <div className="font-bold text-purple-700 text-[12px] mb-1">⚙️ {m.label}</div>
+                            <div className="font-bold text-purple-700 text-[12px] mb-1">{m.label}</div>
                             <div className="text-gray-600 text-[11px] leading-relaxed font-normal">{m.desc}</div>
                           </div>
                         ))}
@@ -851,7 +1033,6 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           <li>・ <span className="font-bold">fal.ai API：</span>費用由您的 fal.ai 帳號扣款，依模型推理時間（compute seconds）計費。</li>
                         </ul>
                       </div>
-
                       {/* Gemini 模型 */}
                       <div className="pb-3 border-b border-yohaku-border-light">
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">🔵 Gemini 生圖模型（需 Gemini API Key）</span>
@@ -1032,303 +1213,157 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
             )}
 
             {/* ── 本機 AI 模型 ── */}
-            {activeSection === 'local_models' && (
-              <div className="p-6 space-y-4">
-                <h2 className="text-xl font-bold text-yohaku-text-main" style={{ fontFamily: "'Noto Serif JP', serif" }}>
-                  本機 AI 模型
-                </h2>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  下載後儲存在瀏覽器（IndexedDB），之後離線也可使用。無需 API Key，推論完全在您的裝置上執行。
-                </p>
+            {activeSection === 'local_models' && (() => {
+              const sam2Status: ModelStatus =
+                  modelStatuses.sam2_encoder === 'ready' && modelStatuses.sam2_decoder === 'ready'
+                      ? 'ready'
+                      : (modelStatuses.sam2_encoder === 'downloading' || modelStatuses.sam2_decoder === 'downloading')
+                          ? 'downloading'
+                          : (modelStatuses.sam2_encoder === 'error' || modelStatuses.sam2_decoder === 'error')
+                              ? 'error'
+                              : 'not_downloaded';
 
-                {/* SAM 2（兩個模型合在一起顯示） */}
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[13px] font-bold text-gray-900">SAM 2 Tiny（點選物件分割）</span>
-                        {modelStatuses.sam2_encoder === 'ready' && modelStatuses.sam2_decoder === 'ready' && (
-                          <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">已安裝</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-gray-500">替代 fal.ai SAM2，點選圖片任意物件即時分割。共 ~163MB（Encoder 148MB + Decoder 15MB）。支援 WebGPU 加速。</p>
-                    </div>
+              const ocrStatus: ModelStatus =
+                  (modelStatuses.ocr_det === 'ready' && modelStatuses.ocr_rec === 'ready' && modelStatuses.ocr_dict === 'ready')
+                      ? 'ready'
+                      : (modelStatuses.ocr_det === 'downloading' || modelStatuses.ocr_rec === 'downloading' || modelStatuses.ocr_dict === 'downloading')
+                          ? 'downloading'
+                          : (modelStatuses.ocr_det === 'error' || modelStatuses.ocr_rec === 'error' || modelStatuses.ocr_dict === 'error')
+                              ? 'error'
+                              : 'not_downloaded';
+
+              return (
+                <div className="p-6 space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-yohaku-text-main" style={{ fontFamily: "'Noto Serif JP', serif" }}>
+                      本機 AI 模型
+                    </h2>
+                    <p className="text-xs text-gray-500 leading-relaxed mt-1">
+                      下載後儲存在瀏覽器本機快取（IndexedDB），離線亦可完全運作。無需 API Key，推論 100% 在您的本地裝置執行。
+                    </p>
                   </div>
 
-                  {(['sam2_encoder', 'sam2_decoder'] as OnnxModelKey[]).map(key => {
-                    const cfg = MODEL_CONFIGS[key];
-                    const status = modelStatuses[key];
-                    const progress = modelProgress[key];
-                    return (
-                      <div key={key} className="flex items-center gap-3 pl-1">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between text-[11px] mb-1">
-                            <span className="text-gray-600 font-medium">{cfg.name}</span>
-                            <span className="text-gray-400">{cfg.sizeMB}MB</span>
-                          </div>
-                          {status === 'downloading' && (
-                            <div className="w-full bg-gray-100 rounded-full h-1.5">
-                              <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
-                            </div>
-                          )}
-                        </div>
-                        {status === 'not_downloaded' && (
-                          <button onClick={() => handleDownload(key)}
-                            className="text-[11px] font-semibold px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors flex-shrink-0">
-                            下載
-                          </button>
-                        )}
-                        {status === 'downloading' && (
-                          <span className="text-[11px] text-blue-500 font-medium flex-shrink-0">{progress}%</span>
-                        )}
-                        {status === 'ready' && (
-                          <button onClick={() => handleDelete(key)}
-                            className="text-[11px] text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
-                            刪除
-                          </button>
-                        )}
-                        {status === 'error' && (
-                          <button onClick={() => handleDownload(key)}
-                            className="text-[11px] text-red-500 font-medium flex-shrink-0">
-                            重試
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* 本機 OCR 文字辨識 (PaddleOCR) */}
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[13px] font-bold text-gray-900">本機 OCR 文字辨識 (PaddleOCR)</span>
-                        {modelStatuses.ocr_det === 'ready' && modelStatuses.ocr_rec === 'ready' && modelStatuses.ocr_dict === 'ready' && (
-                          <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">已安裝</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-gray-500">本機執行 OCR 文字檢測與辨識，無須上傳雲端，零延遲且保護隱私。共 ~15.4MB。下載後自動啟用。</p>
+                  {/* 1. 影像去背與分割 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 border-b border-purple-100 pb-1.5">
+                      <span className="text-[11px] font-bold text-purple-700 tracking-wider">影像去背與分割 (Segmentation & Matte)</span>
                     </div>
-                    {/* 一鍵下載 / 一鍵刪除 */}
-                    <div className="flex-shrink-0">
-                      {!(modelStatuses.ocr_det === 'ready' && modelStatuses.ocr_rec === 'ready' && modelStatuses.ocr_dict === 'ready') ? (
-                        (modelStatuses.ocr_det === 'downloading' || modelStatuses.ocr_rec === 'downloading' || modelStatuses.ocr_dict === 'downloading') ? (
-                          <span className="text-[11px] text-blue-500 font-medium">下載中...</span>
-                        ) : (
-                          <button onClick={async () => {
-                            try {
-                              // 一鍵下載
-                              await downloadModel('ocr_dict', (pct) => {
-                                setModelStatuses(s => ({ ...s, ocr_dict: 'downloading' }));
-                                setModelProgress(p => ({ ...p, ocr_dict: pct }));
-                              });
-                              setModelStatuses(s => ({ ...s, ocr_dict: 'ready' }));
-
-                              await downloadModel('ocr_det', (pct) => {
-                                setModelStatuses(s => ({ ...s, ocr_det: 'downloading' }));
-                                setModelProgress(p => ({ ...p, ocr_det: pct }));
-                              });
-                              setModelStatuses(s => ({ ...s, ocr_det: 'ready' }));
-
-                              await downloadModel('ocr_rec', (pct) => {
-                                setModelStatuses(s => ({ ...s, ocr_rec: 'downloading' }));
-                                setModelProgress(p => ({ ...p, ocr_rec: pct }));
-                              });
-                              setModelStatuses(s => ({ ...s, ocr_rec: 'ready' }));
-                            } catch (e) {
-                              console.error('OCR 下載失敗', e);
-                              setModelStatuses(s => {
-                                const next = { ...s };
-                                if (next.ocr_dict === 'downloading') next.ocr_dict = 'error';
-                                if (next.ocr_det === 'downloading') next.ocr_det = 'error';
-                                if (next.ocr_rec === 'downloading') next.ocr_rec = 'error';
-                                return next;
-                              });
-                            }
-                          }}
-                            className="text-[11px] font-semibold px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors">
-                            下載
-                          </button>
-                        )
-                      ) : (
-                        <button onClick={async () => {
-                          await deleteModel('ocr_dict');
-                          await deleteModel('ocr_det');
-                          await deleteModel('ocr_rec');
-                          setModelStatuses(s => ({
-                            ...s,
-                            ocr_dict: 'not_downloaded',
-                            ocr_det: 'not_downloaded',
-                            ocr_rec: 'not_downloaded',
-                          }));
-                          setModelProgress(p => ({
-                            ...p,
-                            ocr_dict: 0,
-                            ocr_det: 0,
-                            ocr_rec: 0,
-                          }));
-                        }}
-                          className="text-[11px] text-gray-400 hover:text-red-500 transition-colors">
-                          刪除
-                        </button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* SAM 2 Card */}
+                      {renderModelCard(
+                          "SAM 2 Tiny 物件感知分割",
+                          "替代 fal.ai 雲端分割。點選、框選或筆塗即可精準選取並切割圖片中任意物件為圖層。支援 WebGPU 瀏覽器硬體加速。",
+                          sam2Status,
+                          0,
+                          handleDownloadSam2,
+                          handleDeleteSam2,
+                          163,
+                          [
+                              { key: 'sam2_encoder', name: 'SAM 2 特徵編碼器 (Encoder)', sizeMB: 148 },
+                              { key: 'sam2_decoder', name: 'SAM 2 遮罩解碼器 (Decoder)', sizeMB: 15 }
+                          ]
+                      )}
+                      {/* ISNet Card */}
+                      {renderModelCard(
+                          "本機 AI 快速去背 (ISNet)",
+                          "智慧二分圖像分割模型，完全在瀏覽器本機執行，不消耗 API 額度即可高速完成主體去背。",
+                          modelStatuses.bria_rmbg,
+                          modelProgress.bria_rmbg,
+                          () => handleDownload('bria_rmbg'),
+                          () => handleDelete('bria_rmbg'),
+                          43.2
                       )}
                     </div>
                   </div>
 
-                  {/* 列出三個資源的各自狀態與進度條 */}
-                  {(['ocr_dict', 'ocr_det', 'ocr_rec'] as OnnxModelKey[]).map(key => {
-                    const cfg = MODEL_CONFIGS[key];
-                    const status = modelStatuses[key];
-                    const progress = modelProgress[key];
-                    return (
-                      <div key={key} className="flex items-center gap-3 pl-1">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between text-[11px] mb-1">
-                            <span className="text-gray-600 font-medium">{cfg.name}</span>
-                            <span className="text-gray-400">{cfg.sizeMB}MB</span>
-                          </div>
-                          {status === 'downloading' && (
-                            <div className="w-full bg-gray-100 rounded-full h-1.5">
-                              <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
-                            </div>
-                          )}
-                        </div>
-                        <div className="w-12 text-right flex-shrink-0">
-                          {status === 'not_downloaded' && (
-                            <span className="text-[10px] text-gray-400">未下載</span>
-                          )}
-                          {status === 'downloading' && (
-                            <span className="text-[10px] text-blue-500 font-medium">{progress}%</span>
-                          )}
-                          {status === 'ready' && (
-                            <span className="text-[10px] text-green-600 font-medium">就緒</span>
-                          )}
-                          {status === 'error' && (
-                            <span className="text-[10px] text-red-500 font-medium">失敗</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* LaMa & 本機去背 & MI-GAN */}
-                <div className="space-y-3">
-                  {(['lama', 'bria_rmbg', 'mi_gan'] as OnnxModelKey[]).map(key => {
-                    const cfg = MODEL_CONFIGS[key];
-                    const status = modelStatuses[key];
-                    const progress = modelProgress[key];
-                    return (
-                      <div key={key} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <span className="text-[13px] font-bold text-gray-900">{cfg.name}</span>
-                              {status === 'ready' && (
-                                <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">已安裝</span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-gray-500 mb-2">{cfg.description}（~{cfg.sizeMB}MB）</p>
-                            {status === 'downloading' && (
-                              <div className="w-full bg-gray-100 rounded-full h-1.5">
-                                <div className="bg-purple-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-shrink-0">
-                            {status === 'not_downloaded' && (
-                              <button onClick={() => handleDownload(key)}
-                                className="text-[11px] font-semibold px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors">
-                                下載
-                              </button>
-                            )}
-                            {status === 'downloading' && (
-                              <span className="text-[11px] text-purple-500 font-medium">{progress}%</span>
-                            )}
-                            {status === 'ready' && (
-                              <button onClick={() => handleDelete(key)}
-                                className="text-[11px] text-gray-400 hover:text-red-500 transition-colors">
-                                刪除
-                              </button>
-                            )}
-                            {status === 'error' && (
-                              <button onClick={() => handleDownload(key)}
-                                className="text-[11px] text-red-500 font-medium">
-                                重試
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* 本機高清放大（4x 超解析） */}
-                <div className="pt-1">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[12px] font-bold text-gray-700">本機高清放大（4x）</span>
-                    <span className="text-[10px] text-gray-400">純像素超解析・結構不變・免 API 額度</span>
-                  </div>
+                  {/* 2. 局部修復與填洞 */}
                   <div className="space-y-3">
-                    {/* upscale_art 與 upscale_photo 共用同一檔 → 只列一次 */}
-                    {(['upscale_photo', 'upscale_anime'] as OnnxModelKey[]).map(key => {
-                      const cfg = MODEL_CONFIGS[key];
-                      const status = modelStatuses[key];
-                      const progress = modelProgress[key];
-                      return (
-                        <div key={key} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <span className="text-[13px] font-bold text-gray-900">{cfg.name}</span>
-                                {status === 'ready' && (
-                                  <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">已安裝</span>
-                                )}
-                              </div>
-                              <p className="text-[11px] text-gray-500 mb-2">{cfg.description}（~{cfg.sizeMB}MB）</p>
-                              {status === 'downloading' && (
-                                <div className="w-full bg-gray-100 rounded-full h-1.5">
-                                  <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-shrink-0">
-                              {status === 'not_downloaded' && (
-                                <button onClick={() => handleDownload(key)}
-                                  className="text-[11px] font-semibold px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-black transition-colors">
-                                  下載
-                                </button>
-                              )}
-                              {status === 'downloading' && (
-                                <span className="text-[11px] text-indigo-500 font-medium">{progress}%</span>
-                              )}
-                              {status === 'ready' && (
-                                <button onClick={() => handleDelete(key)}
-                                  className="text-[11px] text-gray-400 hover:text-red-500 transition-colors">
-                                  刪除
-                                </button>
-                              )}
-                              {status === 'error' && (
-                                <button onClick={() => handleDownload(key)}
-                                  className="text-[11px] text-red-500 font-medium">
-                                  重試
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div className="flex items-center gap-2 border-b border-purple-100 pb-1.5">
+                      <span className="text-[11px] font-bold text-purple-700 tracking-wider">局部修復與填洞 (Inpainting & Erasing)</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* LaMa Card */}
+                      {renderModelCard(
+                          "LaMa 圖片橡皮擦 (AI 填洞)",
+                          "智慧擦除畫面中塗抹的物件，並由本機 AI 自動生成背景進行無痕補全（內容感知填充）。",
+                          modelStatuses.lama,
+                          modelProgress.lama,
+                          () => handleDownload('lama'),
+                          () => handleDelete('lama'),
+                          60
+                      )}
+                      {/* MI-GAN Card */}
+                      {renderModelCard(
+                          "MI-GAN 語意與人物修復",
+                          "適合修復人像、面部五官、服飾與複雜產品等具備高層次語意結構的遮罩重繪區域。",
+                          modelStatuses.mi_gan,
+                          modelProgress.mi_gan,
+                          () => handleDownload('mi_gan'),
+                          () => handleDelete('mi_gan'),
+                          112
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <p className="text-[10px] text-gray-400 text-center pt-2">
-                  模型儲存於瀏覽器 IndexedDB，清除瀏覽器資料時會一併移除
-                </p>
-              </div>
-            )}
+                  {/* 3. 無損畫質放大 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 border-b border-purple-100 pb-1.5">
+                      <span className="text-[11px] font-bold text-purple-700 tracking-wider">無損畫質放大 (4x Upscaling)</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* upscale_photo Card */}
+                      {renderModelCard(
+                          "寫實相片放大 (PurePhoto SPAN)",
+                          "極輕量化 CNN 架構，針對真實相片、擬真材質或一般插圖，進行 4 倍高清無損像素超解析。WASM 執行極快。",
+                          modelStatuses.upscale_photo,
+                          modelProgress.upscale_photo,
+                          () => handleDownload('upscale_photo'),
+                          () => handleDelete('upscale_photo'),
+                          2
+                      )}
+                      {/* upscale_anime Card */}
+                      {renderModelCard(
+                          "動漫線稿放大 (RealESR Anime)",
+                          "動漫特化型輕量架構，針對二次元動漫、賽璐璐風、手繪線稿進行 4 倍高清放大與邊緣降噪修補。",
+                          modelStatuses.upscale_anime,
+                          modelProgress.upscale_anime,
+                          () => handleDownload('upscale_anime'),
+                          () => handleDelete('upscale_anime'),
+                          2
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 4. 文字辨識與佈局 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 border-b border-purple-100 pb-1.5">
+                      <span className="text-[11px] font-bold text-purple-700 tracking-wider">文字辨識與佈局 (OCR & Layout)</span>
+                    </div>
+                    <div className="grid grid-cols-1">
+                      {/* OCR Card */}
+                      {renderModelCard(
+                          "本機 OCR 文字辨識 (PaddleOCR-v4)",
+                          "本機執行 OCR 文字檢測與多語言（繁中/簡中/英/日）辨識，零延遲且保護隱私。下載後文字編輯器自動開啟離線按鈕。",
+                          ocrStatus,
+                          0,
+                          handleDownloadOcr,
+                          handleDeleteOcr,
+                          15.4,
+                          [
+                              { key: 'ocr_dict', name: 'OCR 字元對照字典 (ch_dict)', sizeMB: 0.3 },
+                              { key: 'ocr_det', name: 'OCR 文字檢測模型 (DBNet_det)', sizeMB: 4.6 },
+                              { key: 'ocr_rec', name: 'OCR 文字識別模型 (SVTR_rec)', sizeMB: 10.5 }
+                          ]
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-gray-400 text-center pt-2">
+                    模型下載後安全儲存於您的瀏覽器本地快取，清除瀏覽器快取或資料時會被一同移除。
+                  </p>
+                </div>
+              );
+            })()}
 
           </div>
         </div>
