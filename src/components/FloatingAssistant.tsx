@@ -764,7 +764,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           </div>
                         ))}
                       </div>
-                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">⚙️ 內建 60+ 種藝術風格與 50+ 品牌預設。支援 <code className="font-mono bg-purple-50 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等比例與多種手機/平板/桌面/瀏覽器解析度。各模式均支援「✨ AI 提示詞優化」重寫最佳指令。</div>
+                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 內建 60+ 種藝術風格與 50+ 品牌預設。支援 <code className="font-mono bg-purple-50 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等比例與多種手機/平板/桌面/瀏覽器解析度。各模式均支援「✨ AI 提示詞優化」重寫最佳指令。</div>
                     </div>
 
                     {/* 品牌與行銷工具組 */}
@@ -789,7 +789,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-slate-800 text-[13px] mb-1">✦ 魔法分層</h4>
                       <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 10 個物件層。</p>
-                      <div className="text-[11px] text-slate-700 bg-white/80 px-3 py-2 rounded-lg">⚙️ 需 <code className="font-mono bg-slate-100 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-slate-100 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
+                      <div className="text-[11px] text-slate-700 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-slate-100 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-slate-100 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
                     </div>
                     {/* 物件感知編輯 */}
                     <div className="bg-cyan-50/20 border border-cyan-100 rounded-xl p-4 mb-3">
@@ -812,7 +812,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           </div>
                         ))}
                       </div>
-                      <div className="text-[11px] text-cyan-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 語意分層需 <code className="font-mono bg-cyan-50 px-1 rounded">Gemini Key</code>；物件重繪最佳品質需 <code className="font-mono bg-cyan-50 px-1 rounded">Atlas Key</code>（GPT Image 2）或 <code className="font-mono bg-cyan-50 px-1 rounded">Gemini Key</code>；SAM2 分割需 <code className="font-mono bg-cyan-50 px-1 rounded">fal.ai Key</code> 或下載本機模型。</div>
+                      <div className="text-[11px] text-cyan-800 bg-white/80 px-3 py-2 rounded-lg">✔ 語意分層需 <code className="font-mono bg-cyan-50 px-1 rounded">Gemini Key</code>；物件重繪最佳品質需 <code className="font-mono bg-cyan-50 px-1 rounded">Atlas Key</code>（GPT Image 2）或 <code className="font-mono bg-cyan-50 px-1 rounded">Gemini Key</code>；SAM2 分割需 <code className="font-mono bg-cyan-50 px-1 rounded">fal.ai Key</code> 或下載本機模型。</div>
                     </div>
                     {/* 快速去背 */}
                     <div className="bg-orange-50/40 border border-orange-100 rounded-xl p-4 mb-3">
@@ -833,7 +833,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           </div>
                         ))}
                       </div>
-                      <div className="text-[11px] text-orange-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 需 <code className="font-mono bg-orange-100 px-1 rounded">fal.ai Key</code>；未設定時右鍵選單不顯示此功能。</div>
+                      <div className="text-[11px] text-orange-800 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-orange-100 px-1 rounded">fal.ai Key</code>；未設定時右鍵選單不顯示此功能。</div>
                     </div>
                     {/* 一鍵拆分貼圖 */}
                     <div className="bg-emerald-50/20 border border-emerald-100 rounded-xl p-4 mb-3">
