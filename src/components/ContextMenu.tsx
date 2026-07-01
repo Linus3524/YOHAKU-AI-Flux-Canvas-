@@ -169,7 +169,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     hasHiddenElements,
 }) => {
     const menuRef = useRef<HTMLDivElement>(null);
-    type SubMenuType = 'color' | 'frame' | 'layerOrder' | 'layout' | null;
+    type SubMenuType = 'color' | 'frame' | 'layerOrder' | 'layout' | 'aiImageTools' | 'aiMarketing' | null;
     const [activeSubMenu, setActiveSubMenu] = useState<SubMenuType>(null);
     const toggleSubMenu = (name: SubMenuType) =>
         setActiveSubMenu(prev => (prev === name ? null : name));
@@ -380,46 +380,80 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                 >
                                     貼上風格 (Paste Style)
                                 </MenuItem>
+                                 {/* AI 圖像工具 submenu */}
+                                <div className="relative">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); toggleSubMenu('aiImageTools'); }}
+                                        className={`w-full flex justify-between items-center text-left px-3 py-[7px] text-[11px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group ${activeSubMenu === 'aiImageTools' ? 'bg-[#F5F5F7]' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[#AF52DE] group-hover:text-[#AF52DE] transition-colors"><MenuIcons.Wand /></span>
+                                            <span className="font-semibold text-[#AF52DE]">AI 圖像工具</span>
+                                        </div>
+                                        <Icon name="chevron_right" size={10} className="text-[#86868B] transition-transform" style={{ transform: activeSubMenu === 'aiImageTools' ? 'rotate(90deg)' : 'rotate(0deg)' }} />
+                                    </button>
+                                    {activeSubMenu === 'aiImageTools' && (
+                                        <div style={subMenuStyle} className="w-[176px] rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-1 ring-1 ring-black/5">
+                                            <MenuItem icon={<MenuIcons.Edit />} onClick={() => handleAction(() => actions.startImageEdit(menuData.elementId!))}>
+                                                局部重繪與圖片編輯
+                                            </MenuItem>
+                                            <MenuItem icon={<MenuIcons.Expand />} onClick={() => handleAction(() => actions.startOutpainting(menuData.elementId!))}>
+                                                擴展圖片 (Outpainting)
+                                            </MenuItem>
+                                            <MenuItem icon={<MenuIcons.Wand />} onClick={() => handleAction(() => actions.magicLayer(menuData.elementId!))}>
+                                                魔法分層
+                                            </MenuItem>
+                                            <MenuItem
+                                                icon={<Icon name="wallpaper" size={15} />}
+                                                onClick={() => handleAction(() => actions.semanticEditor(menuData.elementId!))}
+                                            >
+                                                物件感知編輯
+                                            </MenuItem>
+                                            <MenuItem icon={<MenuIcons.OCR />} onClick={() => handleAction(() => actions.ocrConvert(menuData.elementId!))}>
+                                                文字辨識轉換
+                                            </MenuItem>
+                                             {actions.splitSticker && (
+                                                 <MenuItem icon={<SquareBottomDashedScissors size={14} strokeWidth={1.8} style={{ display: 'block' }} />} onClick={() => handleAction(() => actions.splitSticker!(menuData.elementId!))}>
+                                                     一鍵拆分貼圖/圖示
+                                                 </MenuItem>
+                                             )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* AI 品牌與行銷 submenu */}
+                                <div className="relative mt-0.5">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); toggleSubMenu('aiMarketing'); }}
+                                        className={`w-full flex justify-between items-center text-left px-3 py-[7px] text-[11px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors group ${activeSubMenu === 'aiMarketing' ? 'bg-[#F5F5F7]' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[#AF52DE] group-hover:text-[#AF52DE] transition-colors"><MenuIcons.SwatchBook /></span>
+                                            <span className="font-semibold text-[#AF52DE]">AI 品牌與行銷</span>
+                                        </div>
+                                        <Icon name="chevron_right" size={10} className="text-[#86868B] transition-transform" style={{ transform: activeSubMenu === 'aiMarketing' ? 'rotate(90deg)' : 'rotate(0deg)' }} />
+                                    </button>
+                                    {activeSubMenu === 'aiMarketing' && (
+                                        <div style={subMenuStyle} className="w-[152px] rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-1 ring-1 ring-black/5">
+                                             {actions.crossPlatformAdapt && (
+                                                 <MenuItem icon={<MenuIcons.MobileLayout />} onClick={() => handleAction(() => actions.crossPlatformAdapt!(menuData.elementId!))}>
+                                                     一鍵跨平台適配
+                                                 </MenuItem>
+                                             )}
+                                             {actions.extendBrandKit && (
+                                                 <MenuItem icon={<MenuIcons.SwatchBook />} onClick={() => handleAction(() => actions.extendBrandKit!(menuData.elementId!))}>
+                                                     延伸品牌套件
+                                                 </MenuItem>
+                                             )}
+                                             {actions.productMarketingSet && (
+                                                 <MenuItem icon={<MenuIcons.ShoppingBag />} onClick={() => handleAction(() => actions.productMarketingSet!(menuData.elementId!))}>
+                                                     產品行銷組圖
+                                                 </MenuItem>
+                                             )}
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="border-t my-0.5 border-gray-100/50" />
-                                <MenuItem icon={<MenuIcons.Wand />} onClick={() => handleAction(() => actions.magicLayer(menuData.elementId!))}>
-                                    魔法分層
-                                </MenuItem>
-                                <MenuItem
-                                    icon={<Icon name="wallpaper" size={15} />}
-                                    onClick={() => handleAction(() => actions.semanticEditor(menuData.elementId!))}
-                                >
-                                    物件感知編輯
-                                </MenuItem>
-                                <MenuItem icon={<MenuIcons.OCR />} onClick={() => handleAction(() => actions.ocrConvert(menuData.elementId!))}>
-                                    文字辨識轉換
-                                </MenuItem>
-                                <MenuItem icon={<MenuIcons.Edit />} onClick={() => handleAction(() => actions.startImageEdit(menuData.elementId!))}>
-                                    局部重繪與圖片編輯
-                                </MenuItem>
-                                <MenuItem icon={<MenuIcons.Expand />} onClick={() => handleAction(() => actions.startOutpainting(menuData.elementId!))}>
-                                    擴展圖片 (Outpainting)
-                                </MenuItem>
-                                 {actions.splitSticker && (
-                                     <MenuItem icon={<SquareBottomDashedScissors size={14} strokeWidth={1.8} style={{ display: 'block' }} />} onClick={() => handleAction(() => actions.splitSticker!(menuData.elementId!))}>
-                                         一鍵拆分貼圖/圖示
-                                     </MenuItem>
-                                 )}
-                                 {actions.crossPlatformAdapt && (
-                                     <MenuItem icon={<MenuIcons.MobileLayout />} onClick={() => handleAction(() => actions.crossPlatformAdapt!(menuData.elementId!))}>
-                                         一鍵跨平台適配
-                                     </MenuItem>
-                                 )}
-                                 {actions.extendBrandKit && (
-                                     <MenuItem icon={<MenuIcons.SwatchBook />} onClick={() => handleAction(() => actions.extendBrandKit!(menuData.elementId!))}>
-                                         延伸品牌套件
-                                     </MenuItem>
-                                 )}
-                                 {actions.productMarketingSet && (
-                                     <MenuItem icon={<MenuIcons.ShoppingBag />} onClick={() => handleAction(() => actions.productMarketingSet!(menuData.elementId!))}>
-                                         產品行銷組圖
-                                     </MenuItem>
-                                 )}
-                                 <div className="border-t my-0.5 border-gray-100/50" />
                             </>
                         )}
                         
