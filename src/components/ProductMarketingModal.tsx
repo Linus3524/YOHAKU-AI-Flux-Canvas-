@@ -202,30 +202,35 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
           autoFocus
         />
 
-        {/* 核心賣點 */}
-        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">核心賣點（選填）</div>
-        <input
-          value={sellingPoints}
-          onChange={e => setSellingPoints(e.target.value)}
-          placeholder="例：24小時雙層保溫、莫蘭迪色簡約杯身（填寫讓 AI 生成更精緻的情境）"
-          className={`${inputClass} mb-3`}
-        />
-
-        {/* 目標受眾 */}
-        <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-1.5">目標受眾（選填）</div>
-        <input
-          value={targetAudience}
-          onChange={e => setTargetAudience(e.target.value)}
-          placeholder="例：上班族、長途旅行者、精緻生活追求者（填寫讓 AI 生成更精緻的情境）"
-          className={`${inputClass} mb-4`}
-        />
-
         {/* 進階設定折疊面板 */}
         <details className="mb-4 group border border-gray-100 rounded-xl bg-purple-50/10 p-1">
           <summary className="text-[11px] font-bold text-[#AF52DE] cursor-pointer select-none py-1.5 px-2.5">
-            進階視覺設定（選填）
+            進階行銷與視覺設定（選填）
           </summary>
           <div className="space-y-3 mt-2 p-2.5 bg-white rounded-lg border border-gray-100/50">
+            {/* 核心賣點 */}
+            <div>
+              <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">核心賣點</div>
+              <input
+                value={sellingPoints}
+                onChange={e => setSellingPoints(e.target.value)}
+                placeholder="例：24小時雙層保溫、莫蘭迪色簡約杯身"
+                className={inputClass}
+              />
+            </div>
+
+            {/* 目標受眾 */}
+            <div>
+              <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">目標受眾</div>
+              <input
+                value={targetAudience}
+                onChange={e => setTargetAudience(e.target.value)}
+                placeholder="例：上班族、長途旅行者、精緻生活追求者"
+                className={inputClass}
+              />
+            </div>
+
+            {/* 視覺風格調性 */}
             <div>
               <div className="text-[10px] font-bold text-[#86868B] uppercase tracking-wide mb-1">視覺風格調性</div>
               <input
