@@ -742,8 +742,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       ))}
                     </div>
                     {/* 設計大師 */}
-                    <div className="bg-indigo-50/20 border border-indigo-100 rounded-xl p-4 mb-3">
-                      <h4 className="font-bold text-indigo-900 text-[13px] mb-1">✦ 設計大師 (Design Master)</h4>
+                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 設計大師 (Design Master)</h4>
                       <p className="text-[11px] text-gray-700 leading-relaxed mb-2">整合 60+ 種 Markdown 設計系統規格書與 50+ 品牌設計規格書，專為高排版性圖卡與插圖設計。支援 10 種專業創作技能，可自訂版面、裝置解析度、比例與受眾定位。</p>
                       <div className="grid grid-cols-2 gap-1.5 mb-2">
                         {[
@@ -758,13 +758,13 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           { label: '簡報投影片', desc: '排版完整、適合社群分享的單頁簡報底圖' },
                           { label: '網頁 UI', desc: '首頁、後台、App 等 UI 介面視覺排版' },
                         ].map((m, i) => (
-                          <div key={i} className="bg-white/80 border border-indigo-50 rounded-lg px-2.5 py-2">
-                            <div className="font-bold text-indigo-700 text-[11px] mb-0.5">{m.label}</div>
+                          <div key={i} className="bg-white/80 border border-purple-100/50 rounded-lg px-2.5 py-2">
+                            <div className="font-bold text-purple-700 text-[11px] mb-0.5">{m.label}</div>
                             <div className="text-gray-500 text-[10px] leading-snug">{m.desc}</div>
                           </div>
                         ))}
                       </div>
-                      <div className="text-[11px] text-indigo-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 內建 60+ 種藝術風格與 50+ 品牌預設。支援 <code className="font-mono bg-indigo-50 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等比例與多種手機/平板/桌面/瀏覽器解析度。各模式均支援「✨ AI 提示詞優化」重寫最佳指令。</div>
+                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">⚙️ 內建 60+ 種藝術風格與 50+ 品牌預設。支援 <code className="font-mono bg-purple-50 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等比例與多種手機/平板/桌面/瀏覽器解析度。各模式均支援「✨ AI 提示詞優化」重寫最佳指令。</div>
                     </div>
 
                     {/* 品牌與行銷工具組 */}
@@ -792,8 +792,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <div className="text-[11px] text-slate-700 bg-white/80 px-3 py-2 rounded-lg">⚙️ 需 <code className="font-mono bg-slate-100 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-slate-100 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
                     </div>
                     {/* 物件感知編輯 */}
-                    <div className="bg-blue-50/40 border border-blue-100 rounded-xl p-4 mb-3">
-                      <h4 className="font-bold text-blue-900 text-[13px] mb-1">✦ 物件感知編輯</h4>
+                    <div className="bg-cyan-50/20 border border-cyan-100 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-cyan-900 text-[13px] mb-1">✦ 物件感知編輯</h4>
                       <p className="text-[11px] text-gray-700 leading-relaxed mb-2">雙擊圖片進入編輯器，Gemini 自動識別圖中所有物件並用 SAM2 精準去背，每個物件成為獨立圖層，可分別修改提示詞重繪、切換版本、或單獨匯入畫布。</p>
                       <div className="grid grid-cols-2 gap-1.5 mb-2">
                         {[
@@ -806,13 +806,13 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           { label: '版本管理', desc: '每次重繪產生新版本分頁，可切換比較或刪除' },
                           { label: 'LaMa 純背景', desc: '一鍵移除所有前景，生成乾淨純背景圖層' },
                         ].map((m, i) => (
-                          <div key={i} className="bg-white/80 border border-blue-100 rounded-lg px-2.5 py-2">
-                            <div className="font-bold text-blue-700 text-[11px] mb-0.5">{m.label}</div>
+                          <div key={i} className="bg-white/80 border border-cyan-100/50 rounded-lg px-2.5 py-2">
+                            <div className="font-bold text-cyan-700 text-[11px] mb-0.5">{m.label}</div>
                             <div className="text-gray-500 text-[10px] leading-snug">{m.desc}</div>
                           </div>
                         ))}
                       </div>
-                      <div className="text-[11px] text-blue-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 語意分層需 <code className="font-mono bg-blue-100 px-1 rounded">Gemini Key</code>；物件重繪最佳品質需 <code className="font-mono bg-blue-100 px-1 rounded">Atlas Key</code>（GPT Image 2）或 <code className="font-mono bg-blue-100 px-1 rounded">Gemini Key</code>；SAM2 分割需 <code className="font-mono bg-blue-100 px-1 rounded">fal.ai Key</code> 或下載本機模型。</div>
+                      <div className="text-[11px] text-cyan-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 語意分層需 <code className="font-mono bg-cyan-50 px-1 rounded">Gemini Key</code>；物件重繪最佳品質需 <code className="font-mono bg-cyan-50 px-1 rounded">Atlas Key</code>（GPT Image 2）或 <code className="font-mono bg-cyan-50 px-1 rounded">Gemini Key</code>；SAM2 分割需 <code className="font-mono bg-cyan-50 px-1 rounded">fal.ai Key</code> 或下載本機模型。</div>
                     </div>
                     {/* 快速去背 */}
                     <div className="bg-orange-50/40 border border-orange-100 rounded-xl p-4 mb-3">
@@ -836,13 +836,13 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <div className="text-[11px] text-orange-800 bg-white/80 px-3 py-2 rounded-lg">⚙️ 需 <code className="font-mono bg-orange-100 px-1 rounded">fal.ai Key</code>；未設定時右鍵選單不顯示此功能。</div>
                     </div>
                     {/* 一鍵拆分貼圖 */}
-                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-3">
-                      <h4 className="font-bold text-gray-800 text-[13px] mb-1">✦ 一鍵拆分貼圖</h4>
+                    <div className="bg-emerald-50/20 border border-emerald-100 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-emerald-900 text-[13px] mb-1">✦ 一鍵拆分貼圖</h4>
                       <p className="text-[11px] text-gray-700 leading-relaxed">右鍵點擊圖片選「一鍵拆分貼圖」，可自動將套組中相鄰的多張貼圖獨立分割。支援彈出對話框手動輸入預估數量（進行高精度的網格谷底均分），或直接點擊確定進行智慧自動偵測。拆分後會自動為每張子貼圖去背並個別存入本地快取。</p>
                     </div>
                     {/* Magic Style */}
-                    <div className="bg-emerald-50/30 border border-emerald-100 rounded-xl p-4">
-                      <h4 className="font-bold text-emerald-800 text-[13px] mb-1">✦ Magic Style 風格庫</h4>
+                    <div className="bg-rose-50/20 border border-rose-100 rounded-xl p-4">
+                      <h4 className="font-bold text-rose-900 text-[13px] mb-1">✦ Magic Style 風格庫</h4>
                       <p className="text-[11px] text-gray-600 leading-relaxed">內建 150+ 種藝術風格，涵蓋 12 大分類：繪畫插畫、動漫漫畫、攝影底片、數位藝術、特殊材質、次文化少女暗黑、新世代潮流、節慶限定、歷史宗教、稀有新趨勢、經典數位相機與CCD模擬、光學硬體與AI氛圍。一鍵套用至選取圖片，生成設定面板也可預設參考風格。</p>
                     </div>
                   </div>
