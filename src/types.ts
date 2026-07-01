@@ -105,7 +105,9 @@ export interface TextElement extends BaseElement {
   isHeightLocked?: boolean;
 }
 
-export type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'pentagon' | 'hexagon' | 'star' | 'heart' | 'rounded_rect';
+export type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'pentagon' | 'hexagon' | 'star' | 'heart' | 'rounded_rect'
+    | 'diamond' | 'octagon' | 'cloud' | 'cross' | 'trapezoid' | 'parallelogram'
+    | 'arrow_right' | 'arrow_left' | 'arrow_up' | 'arrow_down';
 
 export interface ShapeElement extends BaseElement {
   type: 'shape';

@@ -728,6 +728,125 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
     // left-click is blocked inside handleInteractionStart (early return when isLocked).
     const pointerEventsClass = interactionMode === 'hand' ? '!pointer-events-none' : '';
 
+// ── tldraw 雲形演算法移植 ──
+// 來源：tldraw getGeoShapePath.ts 的 getCloudPath，改寫為輸出 SVG path 字串。
+// 原理：沿內縮 pill（膠囊）周長等距取 numBumps 個點，兩端點做 seeded 隨機 wiggle 讓凸起「popping」，
+// 相鄰兩點以三點求圓心畫外凸圓弧 → 蓬鬆有機的雲，而非固定圓弧拼貼。
+type CloudVec = { x: number; y: number };
+function cloudRng(seed: string) {
+    let x = 0, y = 0, z = 0, w = 0;
+    function next() {
+        const t = x ^ (x << 11);
+        x = y; y = z; z = w;
+        w ^= ((w >>> 19) ^ t ^ (t >>> 8)) >>> 0;
+        return (w / 0x100000000) * 2;
+    }
+    for (let k = 0; k < seed.length + 64; k++) { x ^= seed.charCodeAt(k) | 0; next(); }
+    return next;
+}
+function cloudOvalPerimeter(h: number, w: number) {
+    if (h > w) return (Math.PI * (w / 2) + (h - w)) * 2;
+    return (Math.PI * (h / 2) + (w - h)) * 2;
+}
+function cloudCenterFrom3(a: CloudVec, b: CloudVec, c: CloudVec): CloudVec | null {
+    const u = -2 * (a.x * (b.y - c.y) - a.y * (b.x - c.x) + b.x * c.y - c.x * b.y);
+    const x = ((a.x*a.x + a.y*a.y) * (c.y - b.y) + (b.x*b.x + b.y*b.y) * (a.y - c.y) + (c.x*c.x + c.y*c.y) * (b.y - a.y)) / u;
+    const y = ((a.x*a.x + a.y*a.y) * (b.x - c.x) + (b.x*b.x + b.y*b.y) * (c.x - a.x) + (c.x*c.x + c.y*c.y) * (a.x - b.x)) / u;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x, y };
+}
+function cloudDist(a: CloudVec, b: CloudVec) { return Math.hypot(a.x - b.x, a.y - b.y); }
+type CloudPill = { type: 'straight'; start: CloudVec; delta: CloudVec } | { type: 'arc'; center: CloudVec; startAngle: number };
+function cloudPillPoints(width: number, height: number, numPoints: number): CloudVec[] {
+    const PI = Math.PI;
+    const radius = Math.min(width, height) / 2;
+    const longSide = Math.max(width, height) - radius * 2;
+    const circumference = PI * (radius * 2) + 2 * longSide;
+    const spacing = circumference / numPoints;
+    const sections: CloudPill[] = width > height
+        ? [
+            { type: 'straight', start: { x: radius, y: 0 }, delta: { x: 1, y: 0 } },
+            { type: 'arc', center: { x: width - radius, y: radius }, startAngle: -PI / 2 },
+            { type: 'straight', start: { x: width - radius, y: height }, delta: { x: -1, y: 0 } },
+            { type: 'arc', center: { x: radius, y: radius }, startAngle: PI / 2 },
+          ]
+        : [
+            { type: 'straight', start: { x: width, y: radius }, delta: { x: 0, y: 1 } },
+            { type: 'arc', center: { x: radius, y: height - radius }, startAngle: 0 },
+            { type: 'straight', start: { x: 0, y: height - radius }, delta: { x: 0, y: -1 } },
+            { type: 'arc', center: { x: radius, y: radius }, startAngle: PI },
+          ];
+    let sectionOffset = 0;
+    const points: CloudVec[] = [];
+    for (let i = 0; i < numPoints; i++) {
+        const section = sections[0];
+        if (section.type === 'straight') {
+            points.push({ x: section.start.x + section.delta.x * sectionOffset, y: section.start.y + section.delta.y * sectionOffset });
+        } else {
+            const a = section.startAngle + sectionOffset / radius;
+            points.push({ x: section.center.x + radius * Math.cos(a), y: section.center.y + radius * Math.sin(a) });
+        }
+        sectionOffset += spacing;
+        let sectionLength = section.type === 'straight' ? longSide : PI * radius;
+        while (sectionOffset > sectionLength) {
+            sectionOffset -= sectionLength;
+            sections.push(sections.shift()!);
+            sectionLength = sections[0].type === 'straight' ? longSide : PI * radius;
+        }
+    }
+    return points;
+}
+function getCloudPath(width: number, height: number, seed: string): string {
+    const getRandom = cloudRng(seed);
+    // SIZE 越大 → 凸起越少越寬；BUMP_PROTRUSION 越大 → 凸得越飽滿。
+    const BUMP_PROTRUSION = 0.3, SIZE = 130, scale = 1;
+    const pillCircumference = cloudOvalPerimeter(width, height);
+    const numBumps = Math.max(
+        Math.ceil(pillCircumference / SIZE),
+        5,
+        Math.ceil(pillCircumference / Math.min(width, height)),
+    );
+    const targetBumpProtrusion = (pillCircumference / numBumps) * BUMP_PROTRUSION;
+    const innerWidth = Math.max(width - targetBumpProtrusion * 2, 1);
+    const innerHeight = Math.max(height - targetBumpProtrusion * 2, 1);
+    const innerCircumference = cloudOvalPerimeter(innerWidth, innerHeight);
+    const distanceBetweenPointsOnPerimeter = innerCircumference / numBumps;
+    const paddingX = (width - innerWidth) / 2;
+    const paddingY = (height - innerHeight) / 2;
+    const bumpPoints = cloudPillPoints(innerWidth, innerHeight, numBumps).map(p => ({ x: p.x + paddingX, y: p.y + paddingY }));
+    const maxWiggleX = width < 20 ? 0 : targetBumpProtrusion * 0.3;
+    const maxWiggleY = height < 20 ? 0 : targetBumpProtrusion * 0.3;
+    const wiggledPoints = bumpPoints.slice(0);
+    for (let i = 0; i < Math.floor(numBumps / 2); i++) {
+        wiggledPoints[i] = { x: wiggledPoints[i].x + getRandom() * maxWiggleX * scale, y: wiggledPoints[i].y + getRandom() * maxWiggleY * scale };
+        const k = numBumps - i - 1;
+        wiggledPoints[k] = { x: wiggledPoints[k].x + getRandom() * maxWiggleX * scale, y: wiggledPoints[k].y + getRandom() * maxWiggleY * scale };
+    }
+    let d = '';
+    for (let i = 0; i < wiggledPoints.length; i++) {
+        const j = i === wiggledPoints.length - 1 ? 0 : i + 1;
+        const leftWiggle = wiggledPoints[i], rightWiggle = wiggledPoints[j];
+        const leftPoint = bumpPoints[i], rightPoint = bumpPoints[j];
+        const distOrig = cloudDist(leftPoint, rightPoint);
+        const curvatureOffset = distanceBetweenPointsOnPerimeter - distOrig;
+        const distWiggle = cloudDist(leftWiggle, rightWiggle);
+        const relativeSize = distWiggle / distOrig;
+        const finalDistance = (Math.max(paddingX, paddingY) + curvatureOffset) * relativeSize;
+        const dir = { x: rightPoint.x - leftPoint.x, y: rightPoint.y - leftPoint.y };
+        const len = Math.hypot(dir.x, dir.y) || 1;
+        const perX = dir.y / len, perY = -dir.x / len; // 單位向量的垂直向量（tldraw Vec.per）
+        const midX = (leftPoint.x + rightPoint.x) / 2, midY = (leftPoint.y + rightPoint.y) / 2;
+        const arcPoint = { x: midX + perX * finalDistance, y: midY + perY * finalDistance };
+        arcPoint.x = Math.max(0, Math.min(width, arcPoint.x));
+        arcPoint.y = Math.max(0, Math.min(height, arcPoint.y));
+        const center = cloudCenterFrom3(leftWiggle, rightWiggle, arcPoint);
+        const radius = cloudDist(center ?? { x: (leftWiggle.x + rightWiggle.x) / 2, y: (leftWiggle.y + rightWiggle.y) / 2 }, leftWiggle);
+        if (i === 0) d += `M${leftWiggle.x},${leftWiggle.y} `;
+        d += `A${radius},${radius} 0 0 1 ${rightWiggle.x},${rightWiggle.y} `;
+    }
+    return d + 'Z';
+}
+
 const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
     const { shapeType } = shapeEl;
 
@@ -741,6 +860,42 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
             return `M${w/2},0 A${w/2},${h/2} 0 1,0 ${w/2},${h} A${w/2},${h/2} 0 1,0 ${w/2},0 Z`;
         case 'heart':
             return `M ${w*0.5} ${h*0.22} C ${w*0.5} ${h*0.16} ${w*0.42} ${h*0.0} ${w*0.25} ${h*0.0} C ${w*0.08} ${h*0.0} ${w*0.0} ${h*0.14} ${w*0.0} ${h*0.3} C ${w*0.0} ${h*0.52} ${w*0.18} ${h*0.75} ${w*0.5} ${h*1.0} C ${w*0.82} ${h*0.75} ${w*1.0} ${h*0.52} ${w*1.0} ${h*0.3} C ${w*1.0} ${h*0.14} ${w*0.92} ${h*0.0} ${w*0.75} ${h*0.0} C ${w*0.58} ${h*0.0} ${w*0.5} ${h*0.16} ${w*0.5} ${h*0.22} Z`;
+        case 'diamond':
+            return `M${w/2},0 L${w},${h/2} L${w/2},${h} L0,${h/2} Z`;
+        case 'cross': {
+            const t = Math.min(w, h) * 0.3;
+            return `M${(w-t)/2},0 L${(w+t)/2},0 L${(w+t)/2},${(h-t)/2} L${w},${(h-t)/2} L${w},${(h+t)/2} L${(w+t)/2},${(h+t)/2} L${(w+t)/2},${h} L${(w-t)/2},${h} L${(w-t)/2},${(h+t)/2} L0,${(h+t)/2} L0,${(h-t)/2} L${(w-t)/2},${(h-t)/2} Z`;
+        }
+        case 'trapezoid': {
+            const inset = w * 0.2;
+            return `M${inset},0 L${w-inset},0 L${w},${h} L0,${h} Z`;
+        }
+        case 'parallelogram': {
+            const skew = w * 0.2;
+            return `M${skew},0 L${w},0 L${w-skew},${h} L0,${h} Z`;
+        }
+        case 'cloud':
+            return getCloudPath(w, h, shapeEl.id);
+        case 'arrow_right': {
+            const ah = h * 0.4, ay = (h - ah) / 2;
+            const ax = w * 0.55;
+            return `M0,${ay} L${ax},${ay} L${ax},0 L${w},${h/2} L${ax},${h} L${ax},${h-ay} L0,${h-ay} Z`;
+        }
+        case 'arrow_left': {
+            const ah2 = h * 0.4, ay2 = (h - ah2) / 2;
+            const ax2 = w * 0.45;
+            return `M${w},${ay2} L${ax2},${ay2} L${ax2},0 L0,${h/2} L${ax2},${h} L${ax2},${h-ay2} L${w},${h-ay2} Z`;
+        }
+        case 'arrow_up': {
+            const aw = w * 0.4, axu = (w - aw) / 2;
+            const ayu = h * 0.55;
+            return `M${axu},${h} L${axu},${ayu} L0,${ayu} L${w/2},0 L${w},${ayu} L${w-axu},${ayu} L${w-axu},${h} Z`;
+        }
+        case 'arrow_down': {
+            const awd = w * 0.4, axd = (w - awd) / 2;
+            const ayd = h * 0.45;
+            return `M${axd},0 L${axd},${ayd} L0,${ayd} L${w/2},${h} L${w},${ayd} L${w-axd},${ayd} L${w-axd},0 Z`;
+        }
     }
 
     // 需要正規化的圖形：先計算原始頂點
@@ -760,6 +915,11 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
     } else if (shapeType === 'hexagon') {
         for (let i = 0; i < 6; i++) {
             const angle = i * 2 * Math.PI / 6 - Math.PI / 6;
+            rawPoints.push({ x: w/2 + w/2 * Math.cos(angle), y: h/2 + h/2 * Math.sin(angle) });
+        }
+    } else if (shapeType === 'octagon') {
+        for (let i = 0; i < 8; i++) {
+            const angle = i * 2 * Math.PI / 8 - Math.PI / 8;
             rawPoints.push({ x: w/2 + w/2 * Math.cos(angle), y: h/2 + h/2 * Math.sin(angle) });
         }
     } else if (shapeType === 'star') {
@@ -1442,7 +1602,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                     {el.shapeType === 'rectangle' && <rect x="0" y="0" width={el.width} height={el.height} fill={isGradient(el.fillColor) ? `url(#grad-${el.id})` : el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} strokeDasharray={shapeDashArray} strokeLinecap="round" strokeLinejoin="round" />}
                                     {el.shapeType === 'rounded_rect' && <rect x="0" y="0" width={el.width} height={el.height} rx="20" ry="20" fill={isGradient(el.fillColor) ? `url(#grad-${el.id})` : el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} strokeDasharray={shapeDashArray} strokeLinecap="round" strokeLinejoin="round" />}
                                     {el.shapeType === 'circle' && <ellipse cx={el.width/2} cy={el.height/2} rx={el.width/2} ry={el.height/2} fill={isGradient(el.fillColor) ? `url(#grad-${el.id})` : el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} strokeDasharray={shapeDashArray} strokeLinecap="round" strokeLinejoin="round" />}
-                                    {['triangle', 'pentagon', 'hexagon', 'star', 'heart'].includes(el.shapeType) && (
+                                    {!['rectangle', 'rounded_rect', 'circle'].includes(el.shapeType) && (
                                         <path d={getShapePath(el, el.width, el.height)} fill={isGradient(el.fillColor) ? `url(#grad-${el.id})` : el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} strokeDasharray={shapeDashArray} strokeLinecap="round" strokeLinejoin="round" />
                                     )}
                                 </svg>

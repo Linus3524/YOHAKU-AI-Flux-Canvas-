@@ -23,11 +23,17 @@ const Icons = {
     Unlink: () => <Icon name="link_off" size={12} />,
 };
 
+// 面板最後位置記憶（模組層 → 跨關閉 / 切換形狀都保留，不會每次跳回原位）
+let lastPanelPosition: { x: number; y: number } | null = null;
+
 export const ShapePropertyPanel: React.FC<ShapePropertyPanelProps> = ({ element, onUpdate, onClose }) => {
     // Draggable State
-    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 200, y: window.innerHeight - 280 });
+    const panelRef = useRef<HTMLDivElement>(null);
+    const [position, setPosition] = useState(() => lastPanelPosition ?? {
+        x: window.innerWidth / 2 - 200,
+        y: window.innerHeight - 280,
+    });
     const [isDragging, setIsDragging] = useState(false);
-    const dragStartRef = useRef({ x: 0, y: 0 });
     const [showFillPicker, setShowFillPicker] = useState(false);
     const [showStrokePicker, setShowStrokePicker] = useState(false);
 
@@ -35,32 +41,31 @@ export const ShapePropertyPanel: React.FC<ShapePropertyPanelProps> = ({ element,
     const [constrainProportions, setConstrainProportions] = useState(true);
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        // Allow interacting with inputs/selects inside without dragging
+        // 點到內部 input / button 不觸發拖曳
         if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input')) return;
+        e.preventDefault();
+        const offsetX = e.clientX - position.x;
+        const offsetY = e.clientY - position.y;
         setIsDragging(true);
-        dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+
+        // 拖曳期間直接改 DOM style，不經 setState → 不重繪整個面板（消除卡頓）
+        const handleMove = (ev: MouseEvent) => {
+            if (!panelRef.current) return;
+            panelRef.current.style.left = `${ev.clientX - offsetX}px`;
+            panelRef.current.style.top = `${ev.clientY - offsetY}px`;
+        };
+        const handleUp = (ev: MouseEvent) => {
+            const next = { x: ev.clientX - offsetX, y: ev.clientY - offsetY };
+            setPosition(next);
+            lastPanelPosition = next;   // 記住最後位置
+            setIsDragging(false);
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleUp);
+        };
+        // 立即掛載監聽（不經 useEffect 的一次 render 延遲 → 首次拖曳不再卡）
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleUp);
     };
-
-    useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!isDragging) return;
-            e.preventDefault();
-            setPosition({
-                x: e.clientX - dragStartRef.current.x,
-                y: e.clientY - dragStartRef.current.y
-            });
-        };
-        const handleMouseUp = () => setIsDragging(false);
-
-        if (isDragging) {
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
-        }
-        return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, [isDragging]);
 
     // --- NEW HANDLERS: Size Adjustment ---
     const handleWidthChange = (w: number) => {
@@ -141,6 +146,7 @@ export const ShapePropertyPanel: React.FC<ShapePropertyPanelProps> = ({ element,
 
     return (
         <div
+            ref={panelRef}
             className="fixed z-[1000] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-gray-100 p-2.5 flex items-end gap-2.5 animate-fade-in-up"
             style={{
                 left: position.x,
