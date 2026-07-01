@@ -67,6 +67,8 @@ interface ContextMenuProps {
     crossPlatformAdapt?: (elementId: string) => void;
     extendBrandKit?: (elementId: string) => void;
     productMarketingSet?: (elementId: string) => void;
+    toggleSnapToObjects?: () => void;
+    toggleShowImageSizes?: () => void;
   };
   canChangeColor: boolean;
   elementType: ElementType | null;
@@ -79,6 +81,8 @@ interface ContextMenuProps {
   isVisible: boolean;
   hasLockedElements: boolean;
   hasHiddenElements: boolean;
+  snapToObjects?: boolean;
+  showImageSizes?: boolean;
 }
 
 const MenuIcons = {
@@ -167,6 +171,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     isVisible,
     hasLockedElements,
     hasHiddenElements,
+    snapToObjects = true,
+    showImageSizes = false,
 }) => {
     const menuRef = useRef<HTMLDivElement>(null);
     type SubMenuType = 'color' | 'frame' | 'layerOrder' | 'layout' | 'aiImageTools' | 'aiMarketing' | null;
@@ -582,6 +588,33 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     <div className="px-3 py-1 text-[9px] font-bold text-[#86868B] uppercase tracking-wider opacity-60">圖層管理</div>
                     <MenuItem icon={<MenuIcons.UnlockAll />} onClick={() => handleAction(actions.unlockAll)} disabled={!hasLockedElements}>全部解除鎖定</MenuItem>
                     <MenuItem icon={<MenuIcons.ShowAll />} onClick={() => handleAction(actions.showAll)} disabled={!hasHiddenElements}>顯示全部物件</MenuItem>
+
+                    <div className="border-t my-0.5 border-gray-100/50" />
+                    <div className="px-3 py-1 text-[9px] font-bold text-[#86868B] uppercase tracking-wider opacity-60">畫布工具</div>
+                    {actions.toggleSnapToObjects && (
+                        <MenuItem
+                            icon={
+                                <span className={`inline-flex items-center justify-center w-3 h-3 rounded-sm border ${snapToObjects ? 'bg-blue-500 border-blue-500' : 'border-gray-400'}`}>
+                                    {snapToObjects && <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4L3.2 5.7L6.5 2.3" stroke="white" strokeWidth="1.2" strokeLinecap="round"/></svg>}
+                                </span>
+                            }
+                            onClick={() => { actions.toggleSnapToObjects!(); }}
+                        >
+                            自動對齊參考線
+                        </MenuItem>
+                    )}
+                    {actions.toggleShowImageSizes && (
+                        <MenuItem
+                            icon={
+                                <span className={`inline-flex items-center justify-center w-3 h-3 rounded-sm border ${showImageSizes ? 'bg-blue-500 border-blue-500' : 'border-gray-400'}`}>
+                                    {showImageSizes && <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4L3.2 5.7L6.5 2.3" stroke="white" strokeWidth="1.2" strokeLinecap="round"/></svg>}
+                                </span>
+                            }
+                            onClick={() => { actions.toggleShowImageSizes!(); }}
+                        >
+                            顯示圖片尺寸標籤
+                        </MenuItem>
+                    )}
 
                     <div className="border-t my-0.5 border-gray-100/50" />
 

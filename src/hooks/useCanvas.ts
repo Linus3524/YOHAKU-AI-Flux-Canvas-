@@ -85,6 +85,39 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     // 拖曳/縮放/旋轉手勢中：true = 下一次 updateElements 是手勢首幀，需新增一筆歷史（保住手勢前狀態）
     const transformPendingRef = useRef(false);
 
+    // --- Snap to Objects & Guidelines ---
+    const [showImageSizes, setShowImageSizes] = useState<boolean>(() => {
+        try {
+            return localStorage.getItem('yohaku_show_image_sizes') === 'true';
+        } catch {
+            return false;
+        }
+    });
+    const [snapToObjects, setSnapToObjects] = useState<boolean>(() => {
+        try {
+            return localStorage.getItem('yohaku_snap_to_objects') !== 'false';
+        } catch {
+            return true;
+        }
+    });
+    const [activeGuidelines, setActiveGuidelines] = useState<{ type: 'h' | 'v'; x?: number; y?: number }[]>([]);
+
+    const toggleShowImageSizes = useCallback(() => {
+        setShowImageSizes(prev => {
+            const next = !prev;
+            try { localStorage.setItem('yohaku_show_image_sizes', String(next)); } catch {}
+            return next;
+        });
+    }, []);
+
+    const toggleSnapToObjects = useCallback(() => {
+        setSnapToObjects(prev => {
+            const next = !prev;
+            try { localStorage.setItem('yohaku_snap_to_objects', String(next)); } catch {}
+            return next;
+        });
+    }, []);
+
     // --- File System (A) ---
     const [currentFileHandle, setCurrentFileHandle] = useState<FileSystemFileHandle | null>(null);
     const [currentFileName, setCurrentFileName] = useState<string | null>(null);
@@ -504,6 +537,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     // 手勢結束（mouseup）：清除首幀標記。歷史已在首幀新增，這裡不再 commit 重複
     const endTransform = useCallback(() => {
         transformPendingRef.current = false;
+        setActiveGuidelines([]); // 結束手勢時清除對齊線
     }, []);
 
     // 批次更新多個元素（群組等比縮放用）
@@ -527,21 +561,143 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             const consumeFirstFrame = () => { transformPendingRef.current = false; };
 
             if (dragDelta) {
-                // Leader-Follower Logic: Calculate actual delta relative to current state
+                let currentSnappedElement = { ...updatedElement };
+                let snappedGuidelines: { type: 'h' | 'v'; x?: number; y?: number }[] = [];
+
+                if (snapToObjects) {
+                    const snapThreshold = 5; // world pixels
+                    const w = currentSnappedElement.width;
+                    const h = currentSnappedElement.height;
+                    const cx = currentSnappedElement.position.x;
+                    const cy = currentSnappedElement.position.y;
+
+                    // Dragged element axes
+                    const myL = cx - w / 2;
+                    const myR = cx + w / 2;
+                    const myC = cx;
+                    const myT = cy - h / 2;
+                    const myB = cy + h / 2;
+                    const myM = cy;
+
+                    const selectedIds = selectedElementIdsRef.current;
+                    const otherEls = prevElements.filter(el =>
+                        el.isVisible &&
+                        el.id !== currentSnappedElement.id &&
+                        !selectedIds.includes(el.id)
+                    );
+
+                    let bestDiffX = snapThreshold;
+                    let bestDiffY = snapThreshold;
+                    let snapX: number | undefined;
+                    let snapY: number | undefined;
+
+                    for (const el of otherEls) {
+                        const ow = el.width;
+                        const oh = el.height;
+                        const ocx = el.position.x;
+                        const ocy = el.position.y;
+
+                        const itsL = ocx - ow / 2;
+                        const itsR = ocx + ow / 2;
+                        const itsC = ocx;
+                        const itsT = ocy - oh / 2;
+                        const itsB = ocy + oh / 2;
+                        const itsM = ocy;
+
+                        // Check horizontal alignment (X snapping, draws a vertical line)
+                        const myXAxes = [
+                            { val: myL, offset: w / 2 },
+                            { val: myC, offset: 0 },
+                            { val: myR, offset: -w / 2 }
+                        ];
+                        const itsXAxes = [itsL, itsC, itsR];
+
+                        for (const myX of myXAxes) {
+                            for (const itsX of itsXAxes) {
+                                const diff = Math.abs(myX.val - itsX);
+                                if (diff < bestDiffX) {
+                                    bestDiffX = diff;
+                                    snapX = itsX + myX.offset;
+                                }
+                            }
+                        }
+
+                        // Check vertical alignment (Y snapping, draws a horizontal line)
+                        const myYAxes = [
+                            { val: myT, offset: h / 2 },
+                            { val: myM, offset: 0 },
+                            { val: myB, offset: -h / 2 }
+                        ];
+                        const itsYAxes = [itsT, itsM, itsB];
+
+                        for (const myY of myYAxes) {
+                            for (const itsY of itsYAxes) {
+                                const diff = Math.abs(myY.val - itsY);
+                                if (diff < bestDiffY) {
+                                    bestDiffY = diff;
+                                    snapY = itsY + myY.offset;
+                                }
+                            }
+                        }
+                    }
+
+                    // Apply snap corrections and record guidelines
+                    if (snapX !== undefined) {
+                        currentSnappedElement.position.x = snapX;
+                        const finalL = snapX - w / 2;
+                        const finalR = snapX + w / 2;
+                        const finalC = snapX;
+                        
+                        let matchedX = finalC;
+                        let minD = snapThreshold;
+                        for (const el of otherEls) {
+                            const itsXAxes = [el.position.x - el.width/2, el.position.x, el.position.x + el.width/2];
+                            for (const itsX of itsXAxes) {
+                                if (Math.abs(finalL - itsX) < minD) { minD = Math.abs(finalL - itsX); matchedX = itsX; }
+                                if (Math.abs(finalR - itsX) < minD) { minD = Math.abs(finalR - itsX); matchedX = itsX; }
+                                if (Math.abs(finalC - itsX) < minD) { minD = Math.abs(finalC - itsX); matchedX = itsX; }
+                            }
+                        }
+                        snappedGuidelines.push({ type: 'v', x: matchedX });
+                    }
+
+                    if (snapY !== undefined) {
+                        currentSnappedElement.position.y = snapY;
+                        const finalT = snapY - h / 2;
+                        const finalB = snapY + h / 2;
+                        const finalM = snapY;
+
+                        let matchedY = finalM;
+                        let minD = snapThreshold;
+                        for (const el of otherEls) {
+                            const itsYAxes = [el.position.y - el.height/2, el.position.y, el.position.y + el.height/2];
+                            for (const itsY of itsYAxes) {
+                                if (Math.abs(finalT - itsY) < minD) { minD = Math.abs(finalT - itsY); matchedY = itsY; }
+                                if (Math.abs(finalB - itsY) < minD) { minD = Math.abs(finalB - itsY); matchedY = itsY; }
+                                if (Math.abs(finalM - itsY) < minD) { minD = Math.abs(finalM - itsY); matchedY = itsY; }
+                            }
+                        }
+                        snappedGuidelines.push({ type: 'h', y: matchedY });
+                    }
+                }
+
+                // Update guidelines state
+                setActiveGuidelines(snappedGuidelines);
+
                 const actualDelta = {
-                    x: updatedElement.position.x - leaderInState.position.x,
-                    y: updatedElement.position.y - leaderInState.position.y
+                    x: currentSnappedElement.position.x - leaderInState.position.x,
+                    y: currentSnappedElement.position.y - leaderInState.position.y
                 };
 
                 // Skip if no movement to prevent redundant updates
                 if (actualDelta.x === 0 && actualDelta.y === 0) return prevElements;
 
-                const groupId = updatedElement.groupId;
+                const groupId = currentSnappedElement.groupId;
                 const selectedSet = new Set(selectedElementIdsRef.current);
 
                 consumeFirstFrame();
                 return prevElements.map(el => {
-                    if (el.id === leaderId) return updatedElement;
+                    if (el.id === leaderId) return currentSnappedElement;
 
                     const isSameGroup = groupId && el.groupId === groupId && el.isVisible;
                     const isSelected = selectedSet.has(el.id);
@@ -563,9 +719,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             }
             // Non-drag update (e.g. resize)
             consumeFirstFrame();
+            setActiveGuidelines([]); // Clear guidelines on non-drag updates
             return prevElements.map(el => (el.id === leaderId ? updatedElement : el));
         }, { addToHistory: isFirstFrame });
-    }, [setElements]);
+    }, [setElements, snapToObjects]);
 
     // --- Merge Logic ---
     const handleMergeLayers = useCallback(async () => {
@@ -1891,5 +2048,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         isFileSystemSupported,
         storageStatus,
         clearStorage,
+        showImageSizes,
+        toggleShowImageSizes,
+        snapToObjects,
+        toggleSnapToObjects,
+        activeGuidelines,
     };
 };

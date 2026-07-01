@@ -359,6 +359,75 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
     const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: element.width, height: element.height });
     const dragRef = useRef<{ type: string, startPoint: Point, startRect: typeof cropRect } | null>(null);
 
+    const [localInputs, setLocalInputs] = useState({
+        x: String(Math.round(cropRect.x)),
+        y: String(Math.round(cropRect.y)),
+        width: String(Math.round(cropRect.width)),
+        height: String(Math.round(cropRect.height))
+    });
+
+    useEffect(() => {
+        setLocalInputs({
+            x: String(Math.round(cropRect.x)),
+            y: String(Math.round(cropRect.y)),
+            width: String(Math.round(cropRect.width)),
+            height: String(Math.round(cropRect.height))
+        });
+    }, [cropRect.x, cropRect.y, cropRect.width, cropRect.height]);
+
+    const handleInputChange = (key: 'x' | 'y' | 'width' | 'height', valueStr: string) => {
+        setLocalInputs(prev => ({ ...prev, [key]: valueStr }));
+
+        if (valueStr === '') return;
+
+        const val = parseInt(valueStr, 10);
+        if (isNaN(val)) return;
+
+        setCropRect(prev => {
+            const next = { ...prev };
+            if (key === 'x') {
+                next.x = Math.max(0, Math.min(element.width - 1, val));
+                if (next.x + next.width > element.width) {
+                    next.width = Math.max(1, element.width - next.x);
+                }
+            } else if (key === 'y') {
+                next.y = Math.max(0, Math.min(element.height - 1, val));
+                if (next.y + next.height > element.height) {
+                    next.height = Math.max(1, element.height - next.y);
+                }
+            } else if (key === 'width') {
+                next.width = Math.max(1, Math.min(element.width - prev.x, val));
+            } else if (key === 'height') {
+                next.height = Math.max(1, Math.min(element.height - prev.y, val));
+            }
+            return next;
+        });
+    };
+
+    const handleInputBlur = (key: 'x' | 'y' | 'width' | 'height') => {
+        setCropRect(prev => {
+            const next = { ...prev };
+            if (next.width < 20) next.width = 20;
+            if (next.height < 20) next.height = 20;
+            
+            if (next.x + next.width > element.width) {
+                next.x = Math.max(0, element.width - next.width);
+            }
+            if (next.y + next.height > element.height) {
+                next.y = Math.max(0, element.height - next.height);
+            }
+
+            setLocalInputs({
+                x: String(Math.round(next.x)),
+                y: String(Math.round(next.y)),
+                width: String(Math.round(next.width)),
+                height: String(Math.round(next.height))
+            });
+
+            return next;
+        });
+    };
+
     const handleMouseDown = (e: React.MouseEvent, type: string) => {
         e.stopPropagation();
         dragRef.current = {
@@ -464,23 +533,56 @@ const CropManager: React.FC<CropManagerProps> = ({ element, zoom, onCancel, onCo
             </div>
 
             <div 
-                className="absolute left-1/2 -translate-x-1/2 flex gap-2 pointer-events-auto whitespace-nowrap z-[2001]"
-                style={{ top: 'calc(100% + 16px)' }}
+                className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-auto whitespace-nowrap z-[2001]"
+                style={{ top: 'calc(100% + 12px)' }}
             >
-                 <button 
-                    onClick={onCancel}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur-md text-[#1D1D1F] text-xs font-bold border border-black/10 shadow-[0_4px_12px_rgba(0,0,0,0.12)] hover:bg-white hover:scale-105 transition-all active:scale-95"
-                 >
-                     <Icon name="close" size={12} />
-                     取消
-                 </button>
-                 <button 
-                    onClick={() => onConfirm(cropRect)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/90 backdrop-blur-md text-white text-xs font-bold border border-transparent shadow-[0_4px_12px_rgba(0,0,0,0.2)] hover:bg-black hover:scale-105 transition-all active:scale-95"
-                 >
-                     <Icon name="check" size={12} />
-                     確認裁剪
-                 </button>
+                {/* 精準裁剪數值面板 */}
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/80 backdrop-blur-lg text-white text-[10px] font-mono border border-white/10 shadow-[0_4px_16px_rgba(0,0,0,0.3)]">
+                    {[
+                        { label: 'X', key: 'x' as const },
+                        { label: 'Y', key: 'y' as const },
+                        { label: 'W', key: 'width' as const },
+                        { label: 'H', key: 'height' as const },
+                    ].map(({ label, key }) => (
+                        <div key={key} className="flex items-center gap-0.5">
+                            <span className="text-white/50 text-[9px] font-bold w-3 text-right">{label}</span>
+                            <input
+                                type="text"
+                                value={localInputs[key]}
+                                onChange={(e) => handleInputChange(key, e.target.value)}
+                                onBlur={() => handleInputBlur(key)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        (e.target as HTMLInputElement).blur();
+                                    }
+                                }}
+                                className="w-11 bg-white/10 rounded px-1 py-0.5 text-center text-[10px] text-white border border-white/10 focus:border-blue-400/60 focus:outline-none transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                        </div>
+                    ))}
+                    <div className="w-px h-3.5 bg-white/20 mx-0.5" />
+                    <span className="text-white/35 text-[9px]">
+                        原圖 {Math.round(element.width)} × {Math.round(element.height)}
+                    </span>
+                </div>
+                {/* 按鈕列 */}
+                <div className="flex gap-2">
+                     <button 
+                        onClick={onCancel}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur-md text-[#1D1D1F] text-xs font-bold border border-black/10 shadow-[0_4px_12px_rgba(0,0,0,0.12)] hover:bg-white hover:scale-105 transition-all active:scale-95"
+                     >
+                         <Icon name="close" size={12} />
+                         取消
+                     </button>
+                     <button 
+                        onClick={() => onConfirm(cropRect)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/90 backdrop-blur-md text-white text-xs font-bold border border-transparent shadow-[0_4px_12px_rgba(0,0,0,0.2)] hover:bg-black hover:scale-105 transition-all active:scale-95"
+                     >
+                         <Icon name="check" size={12} />
+                         確認裁剪
+                     </button>
+                </div>
             </div>
         </div>
     );
@@ -543,6 +645,8 @@ interface InfiniteCanvasProps {
   hasAtlasKey?: boolean;
   onUpdateMultipleElements?: (elements: CanvasElement[]) => void;
   onAlign?: (mode: AlignMode) => void;
+  activeGuidelines?: { type: 'h' | 'v'; x?: number; y?: number }[];
+  showImageSizes?: boolean;
 }
 
 // ... (MarqueeRect, CanvasApi, Constants, CameraIcons, SelectionMenuIcons, CAMERA_ANGLES, ASPECT_RATIOS) ...
@@ -731,6 +835,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   hasAtlasKey = false,
   onUpdateMultipleElements,
   onAlign,
+  activeGuidelines = [],
+  showImageSizes = false,
 }, ref) => {
   const [pan, setPan] = useState<Point>(() => loadSavedViewport()?.pan ?? { x: 0, y: 0 });
   const [zoom, setZoom] = useState(() => loadSavedViewport()?.zoom ?? 1);
@@ -1281,6 +1387,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
             interactionMode={interactionMode}
             screenToWorld={screenToWorld}
             disableResizeHandles={false}
+            showImageSizes={showImageSizes}
           />
         ))}
 
@@ -1494,6 +1601,34 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                 onUpdateFrame={onUpdateOutpaintingFrame} 
             />
         )}
+        {/* 對齊輔助線 */}
+        {activeGuidelines.map((gl, idx) => (
+          gl.type === 'h' ? (
+            <div
+              key={`gl-h-${idx}`}
+              className="absolute border-t border-dashed border-red-500/80 pointer-events-none"
+              style={{
+                left: -100000,
+                right: -100000,
+                top: gl.y,
+                height: 0,
+                zIndex: 9999999,
+              }}
+            />
+          ) : (
+            <div
+              key={`gl-v-${idx}`}
+              className="absolute border-l border-dashed border-red-500/80 pointer-events-none"
+              style={{
+                top: -100000,
+                bottom: -100000,
+                left: gl.x,
+                width: 0,
+                zIndex: 9999999,
+              }}
+            />
+          )
+        ))}
       </div>
 
       {outpaintingState && (

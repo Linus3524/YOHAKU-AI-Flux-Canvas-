@@ -352,6 +352,11 @@ const App: React.FC = () => {
       isFileSystemSupported,
       storageStatus,
       clearStorage,
+      showImageSizes,
+      toggleShowImageSizes,
+      snapToObjects,
+      toggleSnapToObjects,
+      activeGuidelines,
   } = useCanvas(showToast);
 
   // --- Semantic Editor handler (needs elements) ---
@@ -2130,6 +2135,8 @@ const App: React.FC = () => {
         onLocalRemoveBackground={handleLocalRemoveBackground}
         onDragStart={() => setIsDraggingOnCanvas(true)}
         onDragEnd={() => setIsDraggingOnCanvas(false)}
+        activeGuidelines={activeGuidelines}
+        showImageSizes={showImageSizes}
       />
 
       {!isFocusMode && !semanticEditorTarget && (
@@ -2488,6 +2495,8 @@ const App: React.FC = () => {
             extendBrandKit: handleOpenBrandKit,
             productMarketingSet: handleOpenProductMarketing,
             clearStorage: () => setShowClearConfirm(true),
+            toggleSnapToObjects,
+            toggleShowImageSizes,
           }}
           canChangeColor={canChangeColor}
           elementType={contextMenuElement?.type || null}
@@ -2499,6 +2508,8 @@ const App: React.FC = () => {
           isVisible={isVisible}
           hasLockedElements={elements.some(el => el.isLocked)}
           hasHiddenElements={elements.some(el => !el.isVisible)}
+          snapToObjects={snapToObjects}
+          showImageSizes={showImageSizes}
         />
       )}
 

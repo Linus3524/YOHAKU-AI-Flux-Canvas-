@@ -24,6 +24,7 @@ interface TransformableElementProps {
   interactionMode: 'select' | 'hand';
   screenToWorld: (screenPoint: Point) => Point;
   disableResizeHandles?: boolean;
+  showImageSizes?: boolean;
 }
 
 type ResizeHandle = 'se' | 'sw' | 'ne' | 'nw' | 'e' | 'w' | 's' | 'n';
@@ -239,13 +240,23 @@ const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, noteW
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TransformableElementInner: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld, disableResizeHandles }) => {
+const TransformableElementInner: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld, disableResizeHandles, showImageSizes = false }) => {
   const [interaction, setInteraction] = useState<Interaction>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [galleryHovered, setGalleryHovered] = useState(false);
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasMovedRef = useRef(false);
+
+  // 讀取圖片原始像素尺寸
+  useEffect(() => {
+    if ((element.type === 'image' || element.type === 'drawing') && element.src && showImageSizes) {
+      const img = new Image();
+      img.onload = () => setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+      img.src = element.src;
+    }
+  }, [element.src, element.type, showImageSizes]);
 
   useEffect(() => {
     if (!isSelected) {
@@ -1447,6 +1458,42 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                 <>
                     {/* 選取框：1px 貼齊 element 邊緣 */}
                     <div className={`absolute inset-0 border pointer-events-none ${borderRadiusClass}`} style={{ borderColor: getLayerColor(element.type) }} />
+
+                    {/* 圖片尺寸標籤 */}
+                    {showImageSizes && (element.type === 'image' || element.type === 'drawing') && (() => {
+                        const labelScale = 1 / zoom;
+                        const displayW = Math.round(element.width);
+                        const displayH = Math.round(element.height);
+                        return (
+                            <div
+                                className="absolute pointer-events-none"
+                                style={{
+                                    left: 0,
+                                    bottom: 0,
+                                    transform: `translate(0, 100%) scale(${labelScale})`,
+                                    transformOrigin: 'top left',
+                                    zIndex: 9999,
+                                }}
+                            >
+                                <div style={{
+                                    background: 'rgba(0,0,0,0.75)',
+                                    color: '#fff',
+                                    fontSize: '11px',
+                                    fontFamily: 'SF Mono, Menlo, monospace',
+                                    padding: '2px 6px',
+                                    borderRadius: '0 0 4px 4px',
+                                    whiteSpace: 'nowrap',
+                                    lineHeight: '1.4',
+                                    backdropFilter: 'blur(4px)',
+                                }}>
+                                    {displayW} × {displayH} px
+                                    {naturalSize && <span style={{ opacity: 0.55, marginLeft: 6 }}>
+                                        (原始: {naturalSize.w} × {naturalSize.h})
+                                    </span>}
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {(() => {
                         // zoom 補償：縮小畫布時把 handle 放大，上限 5.5×（zoom≈18% 時觸頂）
