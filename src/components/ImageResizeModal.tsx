@@ -16,6 +16,18 @@ export const ImageResizeModal: React.FC<ImageResizeModalProps> = ({ element, onR
   const [width, setWidth] = useState<string>(String(originalWidth));
   const [height, setHeight] = useState<string>(String(originalHeight));
   const [locked, setLocked] = useState<boolean>(true);
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+
+  // 載入圖片真實原始解析度
+  useEffect(() => {
+    if ((element.type === 'image' || element.type === 'drawing') && (element as any).src) {
+      const img = new Image();
+      img.onload = () => {
+        setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+      };
+      img.src = (element as any).src;
+    }
+  }, [element]);
 
   // 當比例鎖定開啟，且寬度變更時自動推算高度
   const handleWidthChange = (valStr: string) => {
@@ -51,12 +63,17 @@ export const ImageResizeModal: React.FC<ImageResizeModalProps> = ({ element, onR
     });
   };
 
-  // 快捷縮放比率（例如 50%, 150%, 200%）
-  const applyPresetScale = (scale: number) => {
-    const newW = Math.round(originalWidth * scale);
-    const newH = Math.round(originalHeight * scale);
-    setWidth(String(newW));
-    setHeight(String(newH));
+  // 快捷縮放比率（例如 50%, 150%, 200%, 或是原圖大小）
+  const applyPresetScale = (scale: number, isNatural = false) => {
+    if (isNatural && naturalSize) {
+      setWidth(String(naturalSize.w));
+      setHeight(String(naturalSize.h));
+    } else {
+      const newW = Math.round(originalWidth * scale);
+      const newH = Math.round(originalHeight * scale);
+      setWidth(String(newW));
+      setHeight(String(newH));
+    }
   };
 
   const handleSubmit = () => {
@@ -144,14 +161,15 @@ export const ImageResizeModal: React.FC<ImageResizeModalProps> = ({ element, onR
           <div className="flex gap-2">
             {[
               { label: '50%', scale: 0.5 },
-              { label: '原始大', scale: 1.0 },
+              { label: '原圖大小 (1:1)', scale: 1.0, isNatural: true },
               { label: '150%', scale: 1.5 },
               { label: '200%', scale: 2.0 },
             ].map(p => (
               <button
                 key={p.label}
-                onClick={() => applyPresetScale(p.scale)}
-                className="flex-1 py-1 rounded-lg border border-[#E2E8F0] bg-white text-[11px] font-semibold text-gray-600 hover:border-[#AF52DE]/30 hover:bg-[#AF52DE]/5 hover:text-[#AF52DE] transition-all"
+                onClick={() => applyPresetScale(p.scale, p.isNatural)}
+                disabled={p.isNatural && !naturalSize}
+                className="flex-1 py-1 rounded-lg border border-[#E2E8F0] bg-white text-[10px] font-semibold text-gray-600 hover:border-[#AF52DE]/30 hover:bg-[#AF52DE]/5 hover:text-[#AF52DE] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {p.label}
               </button>
@@ -162,11 +180,17 @@ export const ImageResizeModal: React.FC<ImageResizeModalProps> = ({ element, onR
         {/* Size comparison info */}
         <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 mb-5 text-[11px] text-[#64748B] flex flex-col gap-1">
           <div className="flex justify-between">
-            <span>原尺寸：</span>
+            <span>畫布當前尺寸：</span>
             <span className="font-mono text-gray-800 font-semibold">{originalWidth} × {originalHeight} px</span>
           </div>
+          {naturalSize && (
+            <div className="flex justify-between">
+              <span>圖片原始尺寸：</span>
+              <span className="font-mono text-gray-800 font-semibold">{naturalSize.w} × {naturalSize.h} px</span>
+            </div>
+          )}
           <div className="flex justify-between">
-            <span>調整後：</span>
+            <span>調整後尺寸：</span>
             <span className="font-mono text-[#AF52DE] font-semibold">
               {width || '?' } × {height || '?'} px
             </span>
