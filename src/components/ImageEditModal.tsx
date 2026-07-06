@@ -158,6 +158,27 @@ const CollapsibleSection: React.FC<{
 };
 
 
+/**
+ * 圓形色塊工具：從拖曳起訖點畫「自由橢圓」（寬高各自的拖曳距離決定長短軸），
+ * 按住 Shift 鎖定正圓（取寬高中較大者為半徑）——對齊設計軟體慣例（PS/AI/Figma 皆用 Shift）。
+ */
+function drawEllipseFromDrag(
+  ctx: CanvasRenderingContext2D,
+  startX: number, startY: number,
+  curX: number, curY: number,
+  constrainCircle: boolean,
+) {
+  const cx = (startX + curX) / 2;
+  const cy = (startY + curY) / 2;
+  let rx = Math.abs(curX - startX) / 2;
+  let ry = Math.abs(curY - startY) / 2;
+  if (constrainCircle) {
+    const r = Math.max(rx, ry);
+    rx = r; ry = r;
+  }
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+}
+
 const removeModelOptions = [
   { key: 'cloud' as const, label: '雲端模式', desc: '依據頂部 Model 設定' },
   { key: 'lama' as const, label: '本機 LaMa', desc: '背景/紋理填補 (極速)' },
@@ -172,7 +193,35 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [brushSize, setBrushSize] = useState(20);
-  const [tool, setTool] = useState<'brush' | 'eraser' | 'hand'>('brush');
+  const [tool, setTool] = useState<'brush' | 'eraser' | 'hand'>('hand');
+
+  // ── 手動像素修復狀態 ──────────────────────────────────────────
+  const [editMode, setEditMode] = useState<'ai' | 'pixel'>('ai');
+  const [paintColor, setPaintColor] = useState<string>('#000000');
+  const [paintTool, setPaintTool] = useState<'brush' | 'eraser' | 'rect' | 'circle' | 'picker' | 'hand'>('hand');
+  const [paintSize, setPaintSize] = useState<number>(24);
+  const [paintHardness, setPaintHardness] = useState<number>(80);
+  // 矩形/圓形色塊專屬設定（色塊不吃筆刷大小；用實心/邊框/透明度/羽化）
+  const [shapeFill, setShapeFill] = useState<boolean>(true);
+  const [shapeStroke, setShapeStroke] = useState<boolean>(false);
+  const [shapeOpacity, setShapeOpacity] = useState<number>(100);
+  const [shapeFeather, setShapeFeather] = useState<number>(0);
+  // 筆刷/橡皮擦的大小預覽游標圈（直接操作 DOM，避免 mousemove 每幀 re-render）
+  const brushCursorRef = useRef<HTMLDivElement>(null);
+  const [pixelHistory, setPixelHistory] = useState<ImageData[]>([]);
+  const [pixelHistoryIndex, setPixelHistoryIndex] = useState<number>(-1);
+  const pixelCanvasRef = useRef<HTMLCanvasElement>(null);
+  // 手動模式下 <img ref={imageRef}> 已 unmount（imageRef.current = null），
+  // 外層容器尺寸必須改用這份 state，否則會 fallback 到 800×600 → 圖被壓縮 + 筆刷座標錯位
+  const [pixelCanvasDims, setPixelCanvasDims] = useState<{ w: number; h: number } | null>(null);
+  const [pixelRectDrag, setPixelRectDrag] = useState<{
+    startX: number; startY: number;
+    curX: number; curY: number;
+    active: boolean;
+  } | null>(null);
+  const pixelStrokePointsRef = useRef<Point[]>([]);
+  const pixelDrawingRef = useRef<boolean>(false);
+  const colorInputRef = useRef<HTMLInputElement>(null);
   
   const [currentImageSrc, setCurrentImageSrc] = useState(element.src);
   const [previewImageSrc, setPreviewImageSrc] = useState<string | null>(null);
@@ -338,6 +387,185 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
     }
   }, [canRedo, history, historyIndex]);
 
+  // ── 手動像素修復核心函數 ──────────────────────────────────────
+  const hexToRgba = useCallback((hex: string, alpha: number): string => {
+    let r = 0, g = 0, b = 0;
+    const cleanHex = hex.replace('#', '');
+    if (cleanHex.length === 3) {
+      r = parseInt(cleanHex[0] + cleanHex[0], 16);
+      g = parseInt(cleanHex[1] + cleanHex[1], 16);
+      b = parseInt(cleanHex[2] + cleanHex[2], 16);
+    } else if (cleanHex.length >= 6) {
+      r = parseInt(cleanHex.substring(0, 2), 16);
+      g = parseInt(cleanHex.substring(2, 4), 16);
+      b = parseInt(cleanHex.substring(4, 6), 16);
+    }
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }, []);
+
+  const getTransparentColor = useCallback((color: string): string => {
+    if (color.startsWith('#')) {
+      return hexToRgba(color, 0);
+    }
+    if (color.startsWith('rgba')) {
+      return color.replace(/[^,]+(?=\s*\)$)/, '0');
+    }
+    if (color.startsWith('rgb')) {
+      return color.replace('rgb', 'rgba').replace(')', ', 0)');
+    }
+    return 'rgba(0,0,0,0)';
+  }, [hexToRgba]);
+
+  const triggerEyeDropper = useCallback(async () => {
+    if ('EyeDropper' in window) {
+      try {
+        const eyeDropper = new (window as any).EyeDropper();
+        const result = await eyeDropper.open();
+        if (result.sRGBHex) {
+          setPaintColor(result.sRGBHex);
+        }
+      } catch (e) {
+        console.warn('EyeDropper 失敗或取消:', e);
+      }
+    } else {
+      setPaintTool('picker');
+    }
+  }, []);
+
+  const savePixelState = useCallback(() => {
+    const canvas = pixelCanvasRef.current;
+    const ctx = canvas?.getContext('2d', { willReadFrequently: true });
+    if (!ctx || !canvas) return;
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    setPixelHistory(prev => {
+      const newHistory = prev.slice(0, pixelHistoryIndex + 1);
+      return [...newHistory, imageData];
+    });
+    setPixelHistoryIndex(prev => prev + 1);
+  }, [pixelHistoryIndex]);
+
+  const canPixelUndo = pixelHistoryIndex > 0;
+  const canPixelRedo = pixelHistoryIndex < pixelHistory.length - 1;
+
+  const pixelUndo = useCallback(() => {
+    if (canPixelUndo) {
+      const newIndex = pixelHistoryIndex - 1;
+      setPixelHistoryIndex(newIndex);
+      const ctx = pixelCanvasRef.current?.getContext('2d');
+      if (ctx && pixelHistory[newIndex]) {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.putImageData(pixelHistory[newIndex], 0, 0);
+      }
+    }
+  }, [canPixelUndo, pixelHistory, pixelHistoryIndex]);
+
+  const pixelRedo = useCallback(() => {
+    if (canPixelRedo) {
+      const newIndex = pixelHistoryIndex + 1;
+      setPixelHistoryIndex(newIndex);
+      const ctx = pixelCanvasRef.current?.getContext('2d');
+      if (ctx && pixelHistory[newIndex]) {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.putImageData(pixelHistory[newIndex], 0, 0);
+      }
+    }
+  }, [canPixelRedo, pixelHistory, pixelHistoryIndex]);
+
+  const initPixelCanvas = useCallback(async () => {
+    const canvas = pixelCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+
+    try {
+      const img = await loadImage(currentImageSrc);
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      setPixelCanvasDims({ w: img.naturalWidth, h: img.naturalHeight });
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      const firstState = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      setPixelHistory([firstState]);
+      setPixelHistoryIndex(0);
+    } catch (e) {
+      console.error('初始化像素畫布失敗:', e);
+    }
+  }, [currentImageSrc]);
+
+  useEffect(() => {
+    if (editMode === 'pixel') {
+      initPixelCanvas();
+    }
+  }, [editMode, initPixelCanvas]);
+
+  const handleApplyPixelChanges = useCallback(() => {
+    const canvas = pixelCanvasRef.current;
+    if (!canvas) return;
+    
+    const base64 = canvas.toDataURL('image/png');
+    setCurrentImageSrc(base64);
+    
+    setPixelHistory([canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height)]);
+    setPixelHistoryIndex(0);
+    setEditMode('ai');
+  }, []);
+
+  const drawSoftCircle = useCallback((
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    radius: number,
+    hardness: number,
+    color: string,
+    isEraser: boolean
+  ) => {
+    ctx.save();
+    
+    if (isEraser) {
+      ctx.globalCompositeOperation = 'destination-out';
+      const grad = ctx.createRadialGradient(x, y, radius * (hardness / 100), x, y, radius);
+      grad.addColorStop(0, 'rgba(0,0,0,1)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      const grad = ctx.createRadialGradient(x, y, radius * (hardness / 100), x, y, radius);
+      grad.addColorStop(0, color);
+      grad.addColorStop(1, getTransparentColor(color));
+      ctx.fillStyle = grad;
+    }
+
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }, [getTransparentColor]);
+
+  const drawSoftLine = useCallback((
+    ctx: CanvasRenderingContext2D,
+    p1: Point,
+    p2: Point,
+    radius: number,
+    hardness: number,
+    color: string,
+    isEraser: boolean
+  ) => {
+    const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const step = Math.max(1, radius * 0.08);
+    if (dist === 0) {
+      drawSoftCircle(ctx, p1.x, p1.y, radius, hardness, color, isEraser);
+      return;
+    }
+    for (let d = 0; d < dist; d += step) {
+      const t = d / dist;
+      const x = p1.x + (p2.x - p1.x) * t;
+      const y = p1.y + (p2.y - p1.y) * t;
+      drawSoftCircle(ctx, x, y, radius, hardness, color, isEraser);
+    }
+    drawSoftCircle(ctx, p2.x, p2.y, radius, hardness, color, isEraser);
+  }, [drawSoftCircle]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         const target = e.target as HTMLElement;
@@ -358,13 +586,13 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
         if (isCtrlOrCmd && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             if (e.shiftKey) {
-                redo();
+                if (editMode === 'pixel') pixelRedo(); else redo();
             } else {
-                undo();
+                if (editMode === 'pixel') pixelUndo(); else undo();
             }
         } else if (isCtrlOrCmd && e.key.toLowerCase() === 'y') {
             e.preventDefault();
-            redo();
+            if (editMode === 'pixel') pixelRedo(); else redo();
         }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -380,7 +608,205 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
         window.removeEventListener('keydown', handleKeyDown);
         window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [undo, redo]);
+  }, [undo, redo, editMode, pixelUndo, pixelRedo]);
+
+  const handlePixelMouseDown = (e: React.MouseEvent) => {
+    // previewImageSrc 顯示時 pixel canvas 沒有渲染，不能對隱藏的 canvas 作畫
+    if (editMode !== 'pixel' || isLoading || isBaking || previewImageSrc) return;
+    
+    // 吸色管 fallback
+    if (paintTool === 'picker') {
+      const point = getCanvasPoint(e);
+      if (point) {
+        const canvas = pixelCanvasRef.current;
+        const ctx = canvas?.getContext('2d', { willReadFrequently: true });
+        if (ctx && canvas) {
+          const x = Math.max(0, Math.min(canvas.width - 1, Math.round(point.x)));
+          const y = Math.max(0, Math.min(canvas.height - 1, Math.round(point.y)));
+          const px = ctx.getImageData(x, y, 1, 1).data;
+          const hex = '#' + [px[0], px[1], px[2]].map(val => {
+            const hexStr = val.toString(16);
+            return hexStr.length === 1 ? '0' + hexStr : hexStr;
+          }).join('');
+          setPaintColor(hex);
+          setPaintTool('brush');
+        }
+      }
+      return;
+    }
+
+    const isPanStart = e.button === 1 || isSpacebarPressed || (paintTool === 'hand' && e.button === 0);
+    if (isPanStart) {
+        e.preventDefault();
+        setIsPanning(true);
+        panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+        return;
+    }
+
+    if (e.button !== 0) return;
+
+    const point = getCanvasPoint(e);
+    if (!point) return;
+
+    if (paintTool === 'brush' || paintTool === 'eraser') {
+      // 只有筆刷/橡皮擦走 stroke 流程；矩形/圓形不能設 pixelDrawingRef，
+      // 否則 mouseup 會走進筆刷分支、pixelRectDrag 永遠不清 → 拖曳無法結束一直產生
+      pixelDrawingRef.current = true;
+      pixelStrokePointsRef.current = [point];
+      const canvas = pixelCanvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (ctx) {
+        drawSoftCircle(ctx, point.x, point.y, paintSize / 2, paintHardness, paintColor, paintTool === 'eraser');
+      }
+    } else if (paintTool === 'rect' || paintTool === 'circle') {
+      setPixelRectDrag({
+        startX: point.x, startY: point.y,
+        curX: point.x, curY: point.y,
+        active: true
+      });
+    }
+  };
+
+  /**
+   * 筆刷/橡皮擦大小游標圈：AI 模式（遮罩筆刷）與手動筆刷模式共用。
+   * 直徑 = 該模式當前的筆刷大小 × zoom；直接改 DOM 不觸發 re-render。
+   */
+  const updateBrushCursor = useCallback((e: React.MouseEvent) => {
+    const el = brushCursorRef.current;
+    const container = containerRef.current;
+    if (!el || !container) return;
+
+    const activeTool = editMode === 'pixel' ? paintTool : tool;
+    const size = editMode === 'pixel' ? paintSize : brushSize;
+    const show = !previewImageSrc && !isPanning && !isSpacebarPressed
+      && (activeTool === 'brush' || activeTool === 'eraser');
+
+    if (show) {
+      const rect = container.getBoundingClientRect();
+      const d = size * zoom;
+      el.style.display = 'block';
+      el.style.width = `${d}px`;
+      el.style.height = `${d}px`;
+      el.style.left = `${e.clientX - rect.left - d / 2}px`;
+      el.style.top = `${e.clientY - rect.top - d / 2}px`;
+    } else {
+      el.style.display = 'none';
+    }
+  }, [editMode, paintTool, tool, paintSize, brushSize, zoom, previewImageSrc, isPanning, isSpacebarPressed]);
+
+  const handlePixelMouseMove = (e: React.MouseEvent) => {
+    updateBrushCursor(e);
+
+    if (isPanning) {
+        setPan({ x: e.clientX - panStartRef.current.x, y: e.clientY - panStartRef.current.y });
+        return;
+    }
+    if (editMode !== 'pixel') return;
+
+    const point = getCanvasPoint(e);
+    if (!point) return;
+
+    if ((paintTool === 'brush' || paintTool === 'eraser') && pixelDrawingRef.current) {
+      const canvas = pixelCanvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (ctx && pixelStrokePointsRef.current.length > 0) {
+        const lastPoint = pixelStrokePointsRef.current[pixelStrokePointsRef.current.length - 1];
+        drawSoftLine(ctx, lastPoint, point, paintSize / 2, paintHardness, paintColor, paintTool === 'eraser');
+        pixelStrokePointsRef.current.push(point);
+      }
+    } else if ((paintTool === 'rect' || paintTool === 'circle') && pixelRectDrag?.active) {
+      setPixelRectDrag(prev => prev ? { ...prev, curX: point.x, curY: point.y } : null);
+      
+      const canvas = pixelCanvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (canvas && ctx && pixelHistory[pixelHistoryIndex]) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.putImageData(pixelHistory[pixelHistoryIndex], 0, 0);
+
+        // 預覽依實心/邊框/透明度設定畫（羽化只在放開時套用，避免每幀 blur 卡頓）
+        ctx.save();
+        ctx.globalAlpha = shapeOpacity / 100;
+        ctx.strokeStyle = paintColor;
+        ctx.lineWidth = Math.max(1, 2 / zoom);
+        ctx.setLineDash([6 / zoom, 4 / zoom]);
+        ctx.fillStyle = hexToRgba(paintColor, 0.5);
+
+        const drag = pixelRectDrag;
+        const startX = drag.startX;
+        const startY = drag.startY;
+        const curX = point.x;
+        const curY = point.y;
+
+        ctx.beginPath();
+        if (paintTool === 'rect') {
+          const x = Math.min(startX, curX);
+          const y = Math.min(startY, curY);
+          const w = Math.abs(curX - startX);
+          const h = Math.abs(curY - startY);
+          ctx.rect(x, y, w, h);
+        } else if (paintTool === 'circle') {
+          // 自由橢圓：拖曳框的寬高各自決定橢圓半徑；按住 Shift 鎖定正圓（設計軟體慣例）
+          drawEllipseFromDrag(ctx, startX, startY, curX, curY, e.shiftKey);
+        }
+        if (shapeFill) ctx.fill();
+        ctx.stroke(); // 虛線外框永遠顯示，當拖曳範圍指示
+        ctx.restore();
+      }
+    }
+  };
+
+  const handlePixelMouseUp = (e: React.MouseEvent) => {
+    setIsPanning(false);
+    // 滑鼠離開容器時（onMouseLeave 也走這裡）收掉游標圈，下次 mousemove 會再顯示
+    if (e.type === 'mouseleave' && brushCursorRef.current) {
+      brushCursorRef.current.style.display = 'none';
+    }
+    if (editMode !== 'pixel') return;
+
+    if (pixelDrawingRef.current) {
+      pixelDrawingRef.current = false;
+      pixelStrokePointsRef.current = [];
+      savePixelState();
+    } else if (pixelRectDrag?.active) {
+      const point = getCanvasPoint(e) || { x: pixelRectDrag.curX, y: pixelRectDrag.curY };
+      setPixelRectDrag(null);
+
+      const canvas = pixelCanvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (canvas && ctx && pixelHistory[pixelHistoryIndex]) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.putImageData(pixelHistory[pixelHistoryIndex], 0, 0);
+
+        ctx.save();
+        ctx.globalAlpha = shapeOpacity / 100;
+        if (shapeFeather > 0) ctx.filter = `blur(${shapeFeather}px)`; // 邊緣羽化
+        ctx.fillStyle = paintColor;
+        ctx.strokeStyle = paintColor;
+        ctx.lineWidth = 3;
+
+        const drag = pixelRectDrag;
+        const startX = drag.startX;
+        const startY = drag.startY;
+        const curX = point.x;
+        const curY = point.y;
+
+        ctx.beginPath();
+        if (paintTool === 'rect') {
+          const x = Math.min(startX, curX);
+          const y = Math.min(startY, curY);
+          const w = Math.abs(curX - startX);
+          const h = Math.abs(curY - startY);
+          ctx.rect(x, y, w, h);
+        } else if (paintTool === 'circle') {
+          drawEllipseFromDrag(ctx, startX, startY, curX, curY, e.shiftKey);
+        }
+        if (shapeFill) ctx.fill();
+        if (shapeStroke) ctx.stroke();
+        ctx.restore();
+        savePixelState();
+      }
+    }
+  };
 
   const getCanvasPoint = useCallback((e: React.MouseEvent): Point | null => {
     const container = containerRef.current;
@@ -425,6 +851,8 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
 
   const finishDrawing = () => {
     setIsPanning(false);
+    // 這裡也綁在 onMouseLeave，滑鼠離開容器時順手收掉游標圈
+    if (brushCursorRef.current) brushCursorRef.current.style.display = 'none';
     if (isDrawing) {
       setIsDrawing(false);
       strokePointsRef.current = [];
@@ -433,6 +861,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
   };
 
   const draw = (e: React.MouseEvent) => {
+    updateBrushCursor(e);
     if (isPanning) {
         setPan({ x: e.clientX - panStartRef.current.x, y: e.clientY - panStartRef.current.y });
         return;
@@ -1003,6 +1432,12 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
   };
 
   const handleSubmit = async (type: 'remove' | 'edit') => {
+    // 手動模式下沒有遮罩層：先把手動塗改套用進圖片、切回 AI 模式，再請使用者塗遮罩
+    if (editMode === 'pixel') {
+      handleApplyPixelChanges();
+      alert('已套用手動修改並切回 AI 模式。請先用筆刷塗抹要編輯的區域，再執行 AI 指令。');
+      return;
+    }
     // For 'edit', prompt is required unless reference images are provided
     if (type === 'edit' && !prompt.trim() && referenceImages.length === 0) {
       alert("請輸入編輯描述，或上傳參考圖。");
@@ -1088,11 +1523,19 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
     }
   };
   
+  const isPixelMode = editMode === 'pixel';
+  const activeHand = isPixelMode ? paintTool === 'hand' : tool === 'hand';
+  const activeToolForCursor = isPixelMode ? paintTool : tool;
+  const showsBrushCursorCircle = !previewImageSrc && (activeToolForCursor === 'brush' || activeToolForCursor === 'eraser');
   let cursorClass = 'cursor-crosshair';
-  if (isSpacebarPressed || tool === 'hand') {
+  if (isSpacebarPressed || activeHand) {
       cursorClass = isPanning ? 'cursor-grabbing' : 'cursor-grab';
   } else if (previewImageSrc) {
       cursorClass = 'cursor-default';
+  } else if (showsBrushCursorCircle) {
+      // 顯示自訂圓形游標圈時，隱藏瀏覽器原生十字游標——兩者同時顯示會疊在一起，
+      // 中心點對不齊看起來很醜。只留我們自己畫的圈，圈心才會跟落筆位置完全一致。
+      cursorClass = 'cursor-none';
   }
 
   const imageSrcForDisplay = adjustedPreviewSrc || currentImageSrc;
@@ -1134,6 +1577,32 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
         <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100 bg-white flex-shrink-0">
           <div className="flex items-center gap-3">
             <h1 className="text-[16px] font-bold text-gray-900">局部重繪與圖片編輯</h1>
+
+            {/* Mode Tab Switcher */}
+            <div className="flex bg-gray-100 p-0.5 rounded-lg ml-4 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] border border-gray-200">
+              <button
+                onClick={() => setEditMode('ai')}
+                title="筆刷圈選要 AI 重繪的區域；右側可調整色調"
+                className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${
+                  editMode === 'ai'
+                    ? 'bg-white text-gray-900 shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                🪄 AI 重繪
+              </button>
+              <button
+                onClick={() => setEditMode('pixel')}
+                title="筆刷直接塗改／擦除像素，本機處理不耗 API"
+                className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${
+                  editMode === 'pixel'
+                    ? 'bg-white text-gray-900 shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                🎨 手繪編輯
+              </button>
+            </div>
 
             {/* Model / Engine switcher */}
             {canSwitchEngine ? (
@@ -1210,10 +1679,10 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                 backgroundPosition: '0 0,0 10px,10px -10px,-10px 0px',
                 boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.04)',
               }}
-              onMouseDown={startDrawing}
-              onMouseUp={finishDrawing}
-              onMouseLeave={finishDrawing}
-              onMouseMove={draw}
+              onMouseDown={editMode === 'pixel' ? handlePixelMouseDown : startDrawing}
+              onMouseUp={editMode === 'pixel' ? handlePixelMouseUp : finishDrawing}
+              onMouseLeave={editMode === 'pixel' ? handlePixelMouseUp : finishDrawing}
+              onMouseMove={editMode === 'pixel' ? handlePixelMouseMove : draw}
               onWheel={handleWheel}
             >
               {/* Loading overlay */}
@@ -1245,24 +1714,56 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                 <div
                   className="relative"
                   style={{
-                    width: imageRef.current?.naturalWidth,
-                    height: imageRef.current?.naturalHeight,
+                    // 手動模式 imageRef 已 unmount，改用 pixelCanvasDims；容器必須等於原圖像素尺寸，
+                    // 否則 canvas 被拉伸（圖壓縮）且 getCanvasPoint 座標對不上（筆刷錯位）
+                    width: (editMode === 'pixel' ? pixelCanvasDims?.w : imageRef.current?.naturalWidth) || imageRef.current?.naturalWidth || 800,
+                    height: (editMode === 'pixel' ? pixelCanvasDims?.h : imageRef.current?.naturalHeight) || imageRef.current?.naturalHeight || 600,
                     transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                     transformOrigin: 'top left',
                   }}
                 >
-                  <div className="relative w-full h-full" style={imageFilterStyle}>
-                    <img ref={imageRef} src={imageSrcForDisplay} alt="Editable" className="block pointer-events-none max-w-none" />
-                    {!areAdjustmentsBaked && adjustments.temperature > 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(255,165,0)', opacity: adjustments.temperature / 100, mixBlendMode: 'overlay' }} />}
-                    {!areAdjustmentsBaked && adjustments.temperature < 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(0,100,255)', opacity: -adjustments.temperature / 100, mixBlendMode: 'overlay' }} />}
-                    {!areAdjustmentsBaked && adjustments.tint > 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(255,0,255)', opacity: adjustments.tint / 100, mixBlendMode: 'overlay' }} />}
-                    {!areAdjustmentsBaked && adjustments.tint < 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(0,255,0)', opacity: -adjustments.tint / 100, mixBlendMode: 'overlay' }} />}
-                  </div>
-                  <canvas ref={maskCanvasRef} className={`absolute top-0 left-0 pointer-events-none transition-opacity duration-200 ${isMaskVisible ? 'opacity-100' : 'opacity-0'}`} />
+                  {editMode === 'pixel' ? (
+                    <canvas
+                      ref={pixelCanvasRef}
+                      className="block select-none max-w-none"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        cursor: paintTool === 'picker' ? 'cell'
+                          : (paintTool === 'hand' || isSpacebarPressed) ? (isPanning ? 'grabbing' : 'grab')
+                          : (paintTool === 'brush' || paintTool === 'eraser') ? 'none'
+                          : 'crosshair'
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <div className="relative w-full h-full" style={imageFilterStyle}>
+                        <img ref={imageRef} src={imageSrcForDisplay} alt="Editable" className="block pointer-events-none max-w-none" />
+                        {!areAdjustmentsBaked && adjustments.temperature > 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(255,165,0)', opacity: adjustments.temperature / 100, mixBlendMode: 'overlay' }} />}
+                        {!areAdjustmentsBaked && adjustments.temperature < 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(0,100,255)', opacity: -adjustments.temperature / 100, mixBlendMode: 'overlay' }} />}
+                        {!areAdjustmentsBaked && adjustments.tint > 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(255,0,255)', opacity: adjustments.tint / 100, mixBlendMode: 'overlay' }} />}
+                        {!areAdjustmentsBaked && adjustments.tint < 0 && <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(0,255,0)', opacity: -adjustments.tint / 100, mixBlendMode: 'overlay' }} />}
+                      </div>
+                      <canvas ref={maskCanvasRef} className={`absolute top-0 left-0 pointer-events-none transition-opacity duration-200 ${isMaskVisible ? 'opacity-100' : 'opacity-0'}`} />
+                    </>
+                  )}
                 </div>
               )}
 
-              {/* ── Floating pill toolbar ── */}
+              {/* 筆刷/橡皮擦大小游標圈（AI 遮罩筆刷 + 手動筆刷共用；位置由 updateBrushCursor 直接更新 DOM） */}
+              {!previewImageSrc && (
+                <div
+                  ref={brushCursorRef}
+                  className="absolute pointer-events-none rounded-full z-10"
+                  style={{
+                    display: 'none',
+                    border: '1.5px solid rgba(255,255,255,0.95)',
+                    boxShadow: '0 0 0 1px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.25)',
+                  }}
+                />
+              )}
+
+              {/* ── Floating pill toolbar（兩模式共用；按鈕依模式映射到遮罩系統或手動像素系統） ── */}
               {!isLoading && !isBaking && (
                 <div
                   className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md border border-gray-100 rounded-full px-4 py-2 flex items-center gap-4 z-20"
@@ -1292,28 +1793,28 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                   ) : (
                     /* ── Drawing controls ── */
                     <>
-                      {/* Tool buttons */}
+                      {/* Tool buttons：抓手排最前面，預設工具也是抓手 */}
                       <div className="flex items-center gap-0.5">
                         <button
-                          onClick={() => setTool('brush')}
-                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${tool === 'brush' ? ' active' : ''}`}
+                          onClick={() => isPixelMode ? setPaintTool('hand') : setTool('hand')}
+                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${activeHand ? ' active' : ''}`}
+                          title="抓手"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
+                        </button>
+                        <button
+                          onClick={() => isPixelMode ? setPaintTool('brush') : setTool('brush')}
+                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${(isPixelMode ? paintTool === 'brush' : tool === 'brush') ? ' active' : ''}`}
                           title="筆刷"
                         >
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.4 2.245 4.5 4.5 0 0 0 8.4-2.245c0-.399-.078-.78-.22-1.128Zm0 0a15.998 15.998 0 0 0 3.388-1.62m-5.043-.025a15.994 15.994 0 0 1 1.622-3.395m3.42 3.42a15.995 15.995 0 0 0 4.764-4.648l3.876-5.814a1.151 1.151 0 0 0-1.597-1.597L14.146 6.32a15.996 15.996 0 0 0-4.649 4.763m3.42 3.42a6.776 6.776 0 0 0-3.42-3.42"/></svg>
                         </button>
                         <button
-                          onClick={() => setTool('eraser')}
-                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${tool === 'eraser' ? ' active' : ''}`}
+                          onClick={() => isPixelMode ? setPaintTool('eraser') : setTool('eraser')}
+                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${(isPixelMode ? paintTool === 'eraser' : tool === 'eraser') ? ' active' : ''}`}
                           title="橡皮擦"
                         >
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg>
-                        </button>
-                        <button
-                          onClick={() => setTool('hand')}
-                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${tool === 'hand' ? ' active' : ''}`}
-                          title="抓手"
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
                         </button>
                       </div>
 
@@ -1326,8 +1827,8 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                           {BRUSH_SIZES.map(size => (
                             <div
                               key={size}
-                              onClick={() => setBrushSize(size)}
-                              className={`rounded-full cursor-pointer transition-all ${dotSizeMap[size] || 'w-3 h-3'} ${brushSize === size ? 'bg-[#1e293b]' : 'bg-[#cbd5e1] hover:bg-[#94a3b8]'}`}
+                              onClick={() => isPixelMode ? setPaintSize(size) : setBrushSize(size)}
+                              className={`rounded-full cursor-pointer transition-all ${dotSizeMap[size] || 'w-3 h-3'} ${(isPixelMode ? paintSize : brushSize) === size ? 'bg-[#1e293b]' : 'bg-[#cbd5e1] hover:bg-[#94a3b8]'}`}
                             />
                           ))}
                         </div>
@@ -1337,16 +1838,21 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
 
                       {/* Actions */}
                       <div className="flex items-center gap-0.5">
-                        <button onClick={undo} disabled={!canUndo} className="img-editor-tool-btn w-8 h-8 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed" title="復原"><EditIcons.Undo /></button>
-                        <button onClick={redo} disabled={!canRedo} className="img-editor-tool-btn w-8 h-8 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed" title="重做"><EditIcons.Redo /></button>
-                        <button onClick={clearMask} className="img-editor-tool-btn w-8 h-8 flex items-center justify-center hover:text-red-500" title="清除遮罩"><EditIcons.Trash /></button>
-                        <button
-                          onClick={() => setIsMaskVisible(!isMaskVisible)}
-                          className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${isMaskVisible ? ' text-purple-600 bg-purple-50' : ''}`}
-                          title={isMaskVisible ? '隱藏遮罩' : '顯示遮罩'}
-                        >
-                          {isMaskVisible ? <EditIcons.Eye /> : <EditIcons.EyeOff />}
-                        </button>
+                        <button onClick={isPixelMode ? pixelUndo : undo} disabled={isPixelMode ? !canPixelUndo : !canUndo} className="img-editor-tool-btn w-8 h-8 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed" title="復原"><EditIcons.Undo /></button>
+                        <button onClick={isPixelMode ? pixelRedo : redo} disabled={isPixelMode ? !canPixelRedo : !canRedo} className="img-editor-tool-btn w-8 h-8 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed" title="重做"><EditIcons.Redo /></button>
+                        {/* 遮罩專屬按鈕：手動模式沒有遮罩層，不顯示 */}
+                        {!isPixelMode && (
+                          <>
+                            <button onClick={clearMask} className="img-editor-tool-btn w-8 h-8 flex items-center justify-center hover:text-red-500" title="清除遮罩"><EditIcons.Trash /></button>
+                            <button
+                              onClick={() => setIsMaskVisible(!isMaskVisible)}
+                              className={`img-editor-tool-btn w-8 h-8 flex items-center justify-center${isMaskVisible ? ' text-purple-600 bg-purple-50' : ''}`}
+                              title={isMaskVisible ? '隱藏遮罩' : '顯示遮罩'}
+                            >
+                              {isMaskVisible ? <EditIcons.Eye /> : <EditIcons.EyeOff />}
+                            </button>
+                          </>
+                        )}
                       </div>
 
                       <div className="w-px h-5 bg-gray-200" />
@@ -1359,8 +1865,9 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
               )}
             </div>
 
-            {/* ── AI Command card (hidden in preview mode) ── */}
-            {!previewImageSrc && (
+            {/* ── AI Command card（預覽模式與手動筆刷模式隱藏；手動模式不走 AI 指令，
+                隱藏後畫布 flex-1 會自動撐滿多出的空間，不留空白） ── */}
+            {!previewImageSrc && editMode !== 'pixel' && (
               <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex gap-4 flex-shrink-0 img-editor-prompt transition-all">
                 {/* Left: textarea + reference */}
                 <div className="flex-1 flex flex-col gap-3 min-w-0">
@@ -1526,50 +2033,330 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
           </div>
 
           {/* ── Right: params panel ── */}
-          <div className="w-[320px] bg-white border-l border-gray-100 flex flex-col flex-shrink-0">
-            <div className="px-5 py-4 flex items-center justify-between border-b border-gray-50 flex-shrink-0">
-              <h2 className="text-[14px] font-bold text-gray-800">調整參數</h2>
-              <button onClick={() => setAdjustments(defaultAdjustments)} className="text-[12px] font-medium text-blue-500 hover:text-blue-700 transition-colors">重置所有</button>
+          {editMode === 'pixel' ? (
+            <div className="w-[320px] bg-white border-l border-gray-100 flex flex-col flex-shrink-0">
+              <div className="px-5 py-4 flex items-center justify-between border-b border-gray-50 flex-shrink-0">
+                <h2 className="text-[14px] font-bold text-gray-800">手繪編輯</h2>
+                <span className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded font-bold">本地端</span>
+              </div>
+
+              {/* Scrollable paint options */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 img-editor-scrollbar space-y-6">
+                
+                {/* 1. 工具選擇 */}
+                <div className="space-y-2">
+                  <h3 className="text-[11px] font-bold text-gray-400 tracking-widest uppercase">修補工具</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setPaintTool('brush')}
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-[12px] font-bold transition-all ${
+                        paintTool === 'brush'
+                          ? 'bg-black text-white border-black'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {/* 對標下方共用工具列的筆刷 icon（不用 Material Symbols，維持風格一致） */}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.4 2.245 4.5 4.5 0 0 0 8.4-2.245c0-.399-.078-.78-.22-1.128Zm0 0a15.998 15.998 0 0 0 3.388-1.62m-5.043-.025a15.994 15.994 0 0 1 1.622-3.395m3.42 3.42a15.995 15.995 0 0 0 4.764-4.648l3.876-5.814a1.151 1.151 0 0 0-1.597-1.597L14.146 6.32a15.996 15.996 0 0 0-4.649 4.763m3.42 3.42a6.776 6.776 0 0 0-3.42-3.42"/></svg>
+                      畫筆
+                    </button>
+                    <button
+                      onClick={() => setPaintTool('eraser')}
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-[12px] font-bold transition-all ${
+                        paintTool === 'eraser'
+                          ? 'bg-black text-white border-black'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      }`}
+                      title="橡皮擦擦除像素，可用於背景去背"
+                    >
+                      {/* 對標下方共用工具列的橡皮擦 icon */}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg>
+                      橡皮擦
+                    </button>
+                    <button
+                      onClick={() => setPaintTool('rect')}
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-[12px] font-bold transition-all ${
+                        paintTool === 'rect'
+                          ? 'bg-black text-white border-black'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon name="crop_square" size={14} />
+                      矩形色塊
+                    </button>
+                    <button
+                      onClick={() => setPaintTool('circle')}
+                      title="拖曳畫橢圓；按住 Shift 鎖定正圓"
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-[12px] font-bold transition-all ${
+                        paintTool === 'circle'
+                          ? 'bg-black text-white border-black'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon name="panorama_fish_eye" size={14} />
+                      橢圓色塊
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. 工具屬性（筆刷/橡皮擦：大小+硬度；矩形/圓形：實心/邊框/透明度/羽化） */}
+                <div className="space-y-4 pt-4 border-t border-gray-100">
+                  <h3 className="text-[11px] font-bold text-gray-400 tracking-widest uppercase">
+                    {(paintTool === 'rect' || paintTool === 'circle') ? '色塊屬性' : '筆刷屬性'}
+                  </h3>
+
+                  {/* 大小 + 硬度：只有筆刷/橡皮擦適用（色塊大小由拖曳決定） */}
+                  {(paintTool === 'brush' || paintTool === 'eraser') && (
+                    <>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] font-bold text-gray-600">
+                          <span>大小 (Size)</span>
+                          <span className="text-gray-900">{paintSize}px</span>
+                        </div>
+                        <input
+                          type="range" min={4} max={120} value={paintSize}
+                          onChange={e => setPaintSize(Number(e.target.value))}
+                          className="w-full accent-black cursor-pointer"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] font-bold text-gray-600">
+                          <span>硬度 (Hardness)</span>
+                          <span className="text-gray-900">{paintHardness}%</span>
+                        </div>
+                        <input
+                          type="range" min={0} max={100} value={paintHardness}
+                          onChange={e => setPaintHardness(Number(e.target.value))}
+                          className="w-full accent-black cursor-pointer"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* 矩形/圓形色塊：實心/邊框 + 透明度 + 羽化 */}
+                  {(paintTool === 'rect' || paintTool === 'circle') && (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={shapeFill}
+                            onChange={e => {
+                              // 實心與邊框至少要留一個，否則畫不出東西
+                              if (!e.target.checked && !shapeStroke) return;
+                              setShapeFill(e.target.checked);
+                            }}
+                            className="rounded border-gray-300 text-black focus:ring-black"
+                          />
+                          <span className="text-[12px] font-semibold text-gray-700">實心填色</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={shapeStroke}
+                            onChange={e => {
+                              if (!e.target.checked && !shapeFill) return;
+                              setShapeStroke(e.target.checked);
+                            }}
+                            className="rounded border-gray-300 text-black focus:ring-black"
+                          />
+                          <span className="text-[12px] font-semibold text-gray-700">邊框</span>
+                        </label>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] font-bold text-gray-600">
+                          <span>透明度 (Opacity)</span>
+                          <span className="text-gray-900">{shapeOpacity}%</span>
+                        </div>
+                        <input
+                          type="range" min={5} max={100} value={shapeOpacity}
+                          onChange={e => setShapeOpacity(Number(e.target.value))}
+                          className="w-full accent-black cursor-pointer"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] font-bold text-gray-600">
+                          <span>邊緣羽化 (Feather)</span>
+                          <span className="text-gray-900">{shapeFeather}px</span>
+                        </div>
+                        <input
+                          type="range" min={0} max={40} value={shapeFeather}
+                          onChange={e => setShapeFeather(Number(e.target.value))}
+                          className="w-full accent-black cursor-pointer"
+                        />
+                        <p className="text-[10px] text-gray-400">羽化在放開滑鼠時套用（預覽為硬邊+虛線框）</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* 3. 顏色選擇 */}
+                {paintTool !== 'eraser' && (
+                  <div className="space-y-3 pt-4 border-t border-gray-100">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-[11px] font-bold text-gray-400 tracking-widest uppercase">選取顏色</h3>
+                      <button
+                        onClick={triggerEyeDropper}
+                        className={`flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border transition-colors ${
+                          paintTool === 'picker'
+                            ? 'bg-purple-600 border-purple-600 text-white'
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                        title="吸取畫面顏色"
+                      >
+                        <Icon name="colorize" size={12} />
+                        吸管吸色
+                      </button>
+                    </div>
+
+                    {/* Color inputs */}
+                    <div className="flex items-center gap-3">
+                      {/* 自訂點擊色塊，解決瀏覽器原生 input[type="color"] 在圓角內包矩形色塊的醜陋問題 */}
+                      <div 
+                        className="relative w-8 h-8 rounded-xl overflow-hidden cursor-pointer border border-gray-200 shadow-sm flex-shrink-0 select-none transition-all hover:scale-105 hover:shadow"
+                        style={{
+                          backgroundImage: `linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)`,
+                          backgroundSize: '8px 8px',
+                          backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0'
+                        }}
+                        title="開啟色彩選取器"
+                        onClick={() => colorInputRef.current?.click()}
+                      >
+                        <div 
+                          className="absolute inset-0 w-full h-full" 
+                          style={{ backgroundColor: paintColor }}
+                        />
+                        {/* 隱藏的原生色彩選擇器 */}
+                        <input
+                          ref={colorInputRef}
+                          type="color"
+                          value={paintColor.startsWith('rgba') ? '#000000' : paintColor}
+                          onChange={e => setPaintColor(e.target.value)}
+                          className="absolute inset-0 opacity-0 w-full h-full pointer-events-none"
+                        />
+                      </div>
+                      
+                      <div className="flex-1 relative flex items-center">
+                        <input
+                          type="text"
+                          value={paintColor}
+                          onChange={e => setPaintColor(e.target.value)}
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-3 pr-8 py-1.5 text-[12px] font-bold text-gray-800 focus:outline-none focus:bg-white focus:ring-1 focus:ring-purple-500/20 focus:border-purple-500 transition-all font-mono"
+                          placeholder="#000000"
+                        />
+                        {/* 顯示顏色代碼的提示小圓點 */}
+                        <span className="absolute right-3 w-2.5 h-2.5 rounded-full border border-gray-300 shadow-sm" style={{ backgroundColor: paintColor }} />
+                      </div>
+                    </div>
+
+                    {/* Quick colors */}
+                    <div className="grid grid-cols-8 gap-1.5 pt-1">
+                      {['#000000', '#ffffff', '#ef4444', '#22c55e', '#3b82f6', '#eab308', 'rgba(0,0,0,0.5)', 'rgba(239,68,68,0.5)'].map((col, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setPaintColor(col)}
+                          className={`w-6 h-6 rounded-full cursor-pointer border border-gray-200 relative transition-all hover:scale-110 ${
+                            paintColor === col ? 'ring-2 ring-purple-500 ring-offset-1' : ''
+                          }`}
+                          style={{
+                            backgroundColor: col.includes('rgba') ? 'transparent' : col,
+                            backgroundImage: col.includes('rgba') ? `linear-gradient(45deg,#ccc 25%,transparent 25%),linear-gradient(-45deg,#ccc 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ccc 75%),linear-gradient(-45deg,transparent 75%,#ccc 75%)` : col === '#ffffff' ? 'none' : 'none',
+                            backgroundSize: '4px 4px',
+                          }}
+                        >
+                          {col.includes('rgba') && (
+                            <div className="absolute inset-0 rounded-full" style={{ backgroundColor: col }} />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. 歷史與操作 */}
+                <div className="pt-4 border-t border-gray-100 flex gap-2">
+                  <button
+                    onClick={pixelUndo}
+                    disabled={!canPixelUndo}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-[12px] font-bold hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Icon name="undo" size={13} />
+                    復原
+                  </button>
+                  <button
+                    onClick={pixelRedo}
+                    disabled={!canPixelRedo}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-[12px] font-bold hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Icon name="redo" size={13} />
+                    重做
+                  </button>
+                </div>
+
+              </div>
+
+              {/* Footer: Discard & Apply */}
+              <div className="p-5 border-t border-gray-100 bg-gray-50/50 flex gap-3 flex-shrink-0">
+                <button
+                  onClick={() => setEditMode('ai')}
+                  className="flex-1 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 text-[13px] font-bold rounded-xl transition-colors"
+                >
+                  捨棄
+                </button>
+                <button
+                  onClick={handleApplyPixelChanges}
+                  className="flex-1 py-3 bg-black hover:bg-gray-800 text-white text-[13px] font-bold rounded-xl shadow-md transition-all hover:shadow-lg flex items-center justify-center gap-1.5"
+                >
+                  <Icon name="check" size={14} />
+                  套用修改
+                </button>
+              </div>
             </div>
+          ) : (
+            <div className="w-[320px] bg-white border-l border-gray-100 flex flex-col flex-shrink-0">
+              <div className="px-5 py-4 flex items-center justify-between border-b border-gray-50 flex-shrink-0">
+                <h2 className="text-[14px] font-bold text-gray-800">調整參數</h2>
+                <button onClick={() => setAdjustments(defaultAdjustments)} className="text-[12px] font-medium text-blue-500 hover:text-blue-700 transition-colors">重置所有</button>
+              </div>
 
-            {/* Scrollable sliders */}
-            <div className="flex-1 overflow-y-auto px-5 py-1 img-editor-scrollbar">
-              <CollapsibleSection title="基本" defaultOpen={true}>
-                <AdjustmentSlider label="亮度 (Brightness)" value={adjustments.brightness} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({ ...a, brightness: val }))} onReset={() => setAdjustments(a => ({ ...a, brightness: 100 }))} />
-                <AdjustmentSlider label="對比 (Contrast)" value={adjustments.contrast} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({ ...a, contrast: val }))} onReset={() => setAdjustments(a => ({ ...a, contrast: 100 }))} />
-                <AdjustmentSlider label="飽和度 (Saturation)" value={adjustments.saturation} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({ ...a, saturation: val }))} onReset={() => setAdjustments(a => ({ ...a, saturation: 100 }))} />
-              </CollapsibleSection>
+              {/* Scrollable sliders */}
+              <div className="flex-1 overflow-y-auto px-5 py-1 img-editor-scrollbar">
+                <CollapsibleSection title="基本" defaultOpen={true}>
+                  <AdjustmentSlider label="亮度 (Brightness)" value={adjustments.brightness} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({ ...a, brightness: val }))} onReset={() => setAdjustments(a => ({ ...a, brightness: 100 }))} />
+                  <AdjustmentSlider label="對比 (Contrast)" value={adjustments.contrast} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({ ...a, contrast: val }))} onReset={() => setAdjustments(a => ({ ...a, contrast: 100 }))} />
+                  <AdjustmentSlider label="飽和度 (Saturation)" value={adjustments.saturation} defaultValue={100} min={0} max={200} onChange={val => setAdjustments(a => ({ ...a, saturation: val }))} onReset={() => setAdjustments(a => ({ ...a, saturation: 100 }))} />
+                </CollapsibleSection>
 
-              <CollapsibleSection title="色彩" defaultOpen={true}>
-                <AdjustmentSlider label="色溫 (Temperature)" value={adjustments.temperature} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, temperature: val }))} onReset={() => setAdjustments(a => ({ ...a, temperature: 0 }))} />
-                <AdjustmentSlider label="色調 (Tint)" value={adjustments.tint} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, tint: val }))} onReset={() => setAdjustments(a => ({ ...a, tint: 0 }))} />
-              </CollapsibleSection>
+                <CollapsibleSection title="色彩" defaultOpen={true}>
+                  <AdjustmentSlider label="色溫 (Temperature)" value={adjustments.temperature} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, temperature: val }))} onReset={() => setAdjustments(a => ({ ...a, temperature: 0 }))} />
+                  <AdjustmentSlider label="色調 (Tint)" value={adjustments.tint} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, tint: val }))} onReset={() => setAdjustments(a => ({ ...a, tint: 0 }))} />
+                </CollapsibleSection>
 
-              <CollapsibleSection title="細節" defaultOpen={false}>
-                <AdjustmentSlider label="亮部 (Highlight)" value={adjustments.highlight} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, highlight: val }))} onReset={() => setAdjustments(a => ({ ...a, highlight: 0 }))} />
-                <AdjustmentSlider label="陰影 (Shadow)" value={adjustments.shadow} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, shadow: val }))} onReset={() => setAdjustments(a => ({ ...a, shadow: 0 }))} />
-                <AdjustmentSlider label="銳化 (Sharpness)" value={adjustments.sharpness} defaultValue={0} min={0} max={100} onChange={val => setAdjustments(a => ({ ...a, sharpness: val }))} onReset={() => setAdjustments(a => ({ ...a, sharpness: 0 }))} />
-              </CollapsibleSection>
+                <CollapsibleSection title="細節" defaultOpen={false}>
+                  <AdjustmentSlider label="亮部 (Highlight)" value={adjustments.highlight} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, highlight: val }))} onReset={() => setAdjustments(a => ({ ...a, highlight: 0 }))} />
+                  <AdjustmentSlider label="陰影 (Shadow)" value={adjustments.shadow} defaultValue={0} min={-100} max={100} onChange={val => setAdjustments(a => ({ ...a, shadow: val }))} onReset={() => setAdjustments(a => ({ ...a, shadow: 0 }))} />
+                  <AdjustmentSlider label="銳化 (Sharpness)" value={adjustments.sharpness} defaultValue={0} min={0} max={100} onChange={val => setAdjustments(a => ({ ...a, sharpness: val }))} onReset={() => setAdjustments(a => ({ ...a, sharpness: 0 }))} />
+                </CollapsibleSection>
+              </div>
+
+              {/* Footer: 取消 + 儲存 */}
+              <div className="p-5 border-t border-gray-100 bg-gray-50/50 flex gap-3 flex-shrink-0">
+                <button
+                  onClick={onClose}
+                  className="flex-1 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 text-[13px] font-bold rounded-xl transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={isBaking}
+                  className="flex-1 py-3 bg-black hover:bg-gray-800 text-white text-[13px] font-bold rounded-xl shadow-md transition-all hover:shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <Icon name="save" size={14} />
+                  儲存圖片
+                </button>
+              </div>
             </div>
-
-            {/* Footer: 取消 + 儲存 */}
-            <div className="p-5 border-t border-gray-100 bg-gray-50/50 flex gap-3 flex-shrink-0">
-              <button
-                onClick={onClose}
-                className="flex-1 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 text-[13px] font-bold rounded-xl transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isBaking}
-                className="flex-1 py-3 bg-black hover:bg-gray-800 text-white text-[13px] font-bold rounded-xl shadow-md transition-all hover:shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                <Icon name="save" size={14} />
-                儲存圖片
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 

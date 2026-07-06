@@ -70,7 +70,7 @@ const FEATURE_DOCS = [
     category: "5. 圖片編輯 (IMAGE EDITING)",
     color: "text-yohaku-text-main",
     items: [
-      { title: "局部重繪與移除物件", desc: "塗抹遮罩並輸入提示詞替換物體。移除物件（橡皮擦）採用 Split Button 設計，預設為雲端模式，亦支援本機 LaMa 與 MI-GAN WASM/WebGPU 推理（支援自動下載快取與 WebGPU 加速，且移除後會自動觸發 4x 局部超分縫合，極致還原高頻細節與清晰度）。" },
+      { title: "局部重繪與手繪編輯", desc: "支援雙模式切換。1) AI 重繪：塗抹遮罩並替換或移除物體，支援 LaMa/MI-GAN 本機推理與自動超分；2) 手繪編輯：本機直接像素塗改，支援軟硬筆刷、去背橡皮擦（擦除為透明 PNG）、吸管吸色與拉幾何色塊覆蓋，並具備獨立的 Undo/Redo 歷史堆疊。" },
       { title: "基礎/進階調整", desc: "亮度、對比、飽和度、色溫、亮部、陰影、銳化。" },
       { title: "圖片裁剪", desc: "非破壞性裁剪，可自由調整裁切範圍與旋轉角度。" },
       { title: "混合模式", desc: "支援正常、色彩增值、濾色、覆蓋、柔光等多種混合模式。" },
@@ -474,7 +474,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                                       </div>
                                       {subStatus === 'downloading' && (
                                           <div className="w-full bg-purple-50 rounded-full h-1 overflow-hidden">
-                                              <div className="bg-purple-600 h-1 rounded-full transition-all duration-300" style={{ width: `${subProgress}%` }} />
+                                              <div className="bg-purple-600 animate-progress-bar h-1 rounded-full transition-all duration-300" style={{ width: `${subProgress}%` }} />
                                           </div>
                                       )}
                                   </div>
@@ -486,8 +486,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
 
               {/* Single model progress bar */}
               {!subItems && status === 'downloading' && (
-                  <div className="w-full bg-purple-50 rounded-full h-1 overflow-hidden pt-1">
-                      <div className="bg-purple-600 h-1 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                  <div className="w-full bg-purple-50 rounded-full h-1 overflow-hidden mt-1.5">
+                      <div className="bg-purple-600 animate-progress-bar h-1 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
                   </div>
               )}
           </div>
@@ -855,7 +855,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">5. 圖片編輯</h3>
                       <div className="space-y-4">
                         {[
-                          { t: '局部重繪與移除物件', d: '塗抹遮罩以重繪或擦除。擦除物件（橡皮擦）為 Split Button 設計，支援雲端模式與本機 LaMa/MI-GAN WebGPU 極速推理，移除後會自動觸發 4x 局部超分細節縫合以防止模糊。' },
+                          { t: '局部重繪與手繪編輯', d: '支援雙模式切換：1) AI 重繪：塗抹遮罩以替換或移除物件，支援本機 LaMa/MI-GAN WebGPU 極速推理與 4x 局部超分縫合；2) 手繪編輯：直接像素塗抹改色，提供軟硬筆刷、背景去背橡皮擦（直接擦除為透明格底）、吸管吸色、拉幾何色塊與獨立的 Undo/Redo 操作。' },
                           { t: '基礎與進階調整', d: '亮度、對比、飽和度、色溫、亮部、陰影、銳化等細節調整。' },
                           { t: '混合模式 & 淡出', d: '色彩增值、濾色等混合模式。方向性淡出 (上下左右/放射) 柔和邊緣。' },
                           { t: '邊距裁剪', d: '非破壞性裁剪。數值面板支援直觀的「上、下、左、右」邊距輸入，支援失焦或回車防呆約束，並動態呈現裁剪後的最終解析度。' },
