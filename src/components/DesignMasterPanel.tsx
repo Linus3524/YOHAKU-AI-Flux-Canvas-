@@ -51,7 +51,7 @@ interface DesignMasterPanelProps {
   hasAtlasKey: boolean;
   apiKey: string;
   showToast: (msg: string) => void;
-  onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string, imageSize?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean) => void;
+  onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string, imageSize?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean, customSeed?: number) => void;
   onClose: () => void;
   /** 便利貼本身的參考圖插槽（最多4張），讓所有 skill 模式都能用同一份參考圖生成 */
   referenceImages?: (string | null)[];
@@ -69,6 +69,8 @@ export interface DesignMasterPersistState {
   count: 1 | 2 | 3 | 4;
   model: string;
   content: string;
+  useCustomSeed?: boolean;
+  customSeedValue?: number | '';
 }
 
 const MODEL_OPTIONS: { id: string; label: string; needsAtlas: boolean }[] = [
@@ -140,9 +142,11 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   const [count, setCount] = useState<1 | 2 | 3 | 4>(initialState?.count ?? 1);
   const [content, setContent] = useState(initialState?.content ?? noteContent);
   const [model, setModel] = useState(initialState?.model ?? 'gemini');
+  const [useCustomSeed, setUseCustomSeed] = useState(initialState?.useCustomSeed ?? false);
+  const [customSeedValue, setCustomSeedValue] = useState<number | ''>(initialState?.customSeedValue ?? '');
 
   // 回存目前設定（生成或關閉時呼叫），供下次進入同一張便利貼還原
-  const persistState = () => onPersistState?.({ activeSkill, configs, count, model, content });
+  const persistState = () => onPersistState?.({ activeSkill, configs, count, model, content, useCustomSeed, customSeedValue });
   // 關閉前先回存
   const handleClose = () => { persistState(); onClose(); };
   const [isBrainstorming, setIsBrainstorming] = useState(false); // AI 發想子主題進行中（驅動輸入框動畫）
@@ -291,7 +295,8 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
         return;
       }
     }
-    onGenerate(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder);
+    const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
+    onGenerate(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder, seedParam);
   };
 
   return (
@@ -1498,6 +1503,51 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                 </div>
               );
             })}
+          {/* 進階選項 (Seed 設定) */}
+          <div className="mt-6 pt-5 border-t border-gray-100/80 pb-2">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-bold text-gray-700">🎨 進階風格控制 (Seed)</span>
+                <span className="text-[10px] bg-purple-50 text-purple-600 px-1.5 py-px rounded font-semibold">隨機數</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={useCustomSeed}
+                  onChange={(e) => setUseCustomSeed(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600"></div>
+                <span className="ml-2 text-[10px] font-bold text-gray-500">自訂 Seed</span>
+              </label>
+            </div>
+            
+            {useCustomSeed && (
+              <div className="bg-[#f8fafc] border border-gray-200 rounded-xl p-3 flex items-center gap-2 animate-fade-in-down">
+                <input
+                  type="number"
+                  placeholder="請貼上或輸入種子碼 (例如 123456)"
+                  value={customSeedValue}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCustomSeedValue(v === '' ? '' : Math.max(0, parseInt(v, 10)));
+                  }}
+                  className="flex-1 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-gray-800 focus:outline-none focus:border-purple-500 font-mono"
+                />
+                <button
+                  onClick={() => setCustomSeedValue(Math.floor(Math.random() * 2147483647))}
+                  className="px-2 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-500 text-[10px] font-bold transition-all active:scale-95"
+                  title="生成隨機 Seed"
+                >
+                  🎲 隨機
+                </button>
+              </div>
+            )}
+            <p className="text-[10px] text-gray-400 mt-1 leading-normal">
+              固定 Seed 能讓您在微調 Prompt 提示詞時，維持生成人物長相、背景架構與視覺風格的一致性。
+            </p>
+          </div>
+
           </div>
 
         </div>

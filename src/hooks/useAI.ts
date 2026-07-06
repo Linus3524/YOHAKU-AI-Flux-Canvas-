@@ -125,6 +125,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [genProgress, setGenProgress] = useState<number | null>(null);
     const [genOpType, setGenOpType] = useState<'upscale' | 'rmbg' | null>(null);
     const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
+    const [generatedImagesMetadata, setGeneratedImagesMetadata] = useState<{ seed: number; model: string; prompt: string }[]>([]);
     const [outpaintingState, setOutpaintingState] = useState<OutpaintingState | null>(null);
     const [copiedStyle, setCopiedStyle] = useState<{ analysis: import('../components/StylePasteModal').StyleAnalysisResult } | null>(null);
     const [imageStyle, setImageStyle] = useState<string>('Default');
@@ -1345,8 +1346,9 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast]);
 
-    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean) => {
+    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean, customSeed?: number) => {
         const generationModel = modelOverride || generationModelGlobal;
+        const baseSeed = customSeed !== undefined ? customSeed : Math.floor(Math.random() * 2147483647);
         // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定
         const effImageSize = imageSizeOverride || imageSize;
         setPendingAutoDebg(autoRemoveBg);
@@ -1420,18 +1422,28 @@ CONSTRAINTS:
                 setGeneratedImages(null);
                 const atlasQualityFrame = effImageSize === '4K' ? '4K' : '2K';
                 try {
-                    const generatePromises = frameElements.map(async (frame) => {
+                    const generatePromises = frameElements.map(async (frame, idx) => {
                         let frameRatio = frame.aspectRatioLabel;
                         if (!['1:1', '3:4', '4:3', '9:16', '16:9'].includes(frameRatio)) frameRatio = '1:1';
                         let imgs: string[];
+                        const frameSeed = baseSeed + idx;
                         if (hasNoteRefs && canDoImg2Img) {
                             // 有便利貼參考圖 → 用 img2img，以第一張參考圖為主
-                            imgs = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: getTransparentBg(atlasPrompt || '') }, noteRefImgs.slice(1)));
+                            imgs = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: getTransparentBg(atlasPrompt || ''), seed: frameSeed }, noteRefImgs.slice(1)));
                         } else {
-                            imgs = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: getTransparentBg(atlasPrompt || '') }));
+                            imgs = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: getTransparentBg(atlasPrompt || ''), seed: frameSeed }));
                         }
                         if (imgs.length === 0) throw new Error('未收到圖片');
-                        const newImageElement: ImageElement = { ...frame, type: 'image', src: imgs[0] };
+                        const newImageElement: ImageElement = { 
+                            ...frame, 
+                            type: 'image', 
+                            src: imgs[0],
+                            metadata: {
+                                seed: frameSeed,
+                                model: generationModel,
+                                prompt: atlasPrompt
+                            }
+                        };
                         return newImageElement;
                     });
                     const results = await Promise.allSettled(generatePromises);
@@ -1478,13 +1490,18 @@ CONSTRAINTS:
                 const atlasRatio = resolvedAtlasRatio;
                 try {
                     // 便利貼參考圖追加在畫布圖片之後
-                    const rawImages = await withAtlasWaitToast(() => callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, count, { ratio: atlasRatio, quality: atlasQuality, transparentBg: getTransparentBg(atlasPrompt || '') }, hasNoteRefs ? noteRefImgs : undefined));
+                    const rawImages = await withAtlasWaitToast(() => callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, count, { ratio: atlasRatio, quality: atlasQuality, transparentBg: getTransparentBg(atlasPrompt || ''), seed: baseSeed }, hasNoteRefs ? noteRefImgs : undefined));
                     if (rawImages.length === 0) throw new Error('未收到任何圖片');
                     // 若來源有透明背景，生成後自動還原透明
                     const images = refHadTransparency
                         ? await Promise.all(rawImages.map(img => restoreTransparencyFn(img, refBgColor).catch(() => img)))
                         : rawImages;
                     setGeneratedImages(images);
+                    setGeneratedImagesMetadata(images.map((_, idx) => ({
+                        seed: baseSeed + idx,
+                        model: generationModel,
+                        prompt: img2imgPrompt
+                    })));
                 } catch (e: any) {
                     showToast(`圖生圖失敗：${e.message}`);
                 } finally {
@@ -1506,9 +1523,14 @@ CONSTRAINTS:
                 const atlasQualityR = effImageSize === '4K' ? '4K' : '2K';
                 const atlasRatioR = resolvedAtlasRatio;
                 try {
-                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], count, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: getTransparentBg(atlasPrompt || '') }, noteRefImgs.slice(1)));
+                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], count, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: getTransparentBg(atlasPrompt || ''), seed: baseSeed }, noteRefImgs.slice(1)));
                     if (images.length === 0) throw new Error('未收到任何圖片');
                     setGeneratedImages(images);
+                    setGeneratedImagesMetadata(images.map((_, idx) => ({
+                        seed: baseSeed + idx,
+                        model: generationModel,
+                        prompt: atlasPrompt
+                    })));
                 } catch (e: any) {
                     showToast(`生成失敗：${e.message}`);
                 } finally {
@@ -1529,9 +1551,14 @@ CONSTRAINTS:
             const atlasQuality2 = effImageSize === '4K' ? '4K' : '2K';
             const atlasRatio2 = (resolvedAtlasRatio === 'Original' || !resolvedAtlasRatio) ? '1:1' : resolvedAtlasRatio;
             try {
-                const images = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, count, { ratio: atlasRatio2, quality: atlasQuality2, transparentBg: getTransparentBg(atlasPrompt || '') }));
+                const images = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, count, { ratio: atlasRatio2, quality: atlasQuality2, transparentBg: getTransparentBg(atlasPrompt || ''), seed: baseSeed }));
                 if (images.length === 0) throw new Error('未收到任何圖片');
                 setGeneratedImages(images);
+                setGeneratedImagesMetadata(images.map((_, idx) => ({
+                    seed: baseSeed + idx,
+                    model: generationModel,
+                    prompt: atlasPrompt
+                })));
             } catch (e: any) {
                 showToast(`生成失敗：${e.message}`);
             } finally {
@@ -1588,22 +1615,32 @@ CONSTRAINTS:
 
           if (frameElements.length > 0) {
               setGeneratingElementIds(frameElements.map(f => f.id));
-              const generatePromises = frameElements.map(async (frame) => {
+              const generatePromises = frameElements.map(async (frame, idx) => {
                   const promptText = `Generate an image based on this description: "${promptWithRefHint}".`;
                   const refParts = noteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
                   const textPart = { text: promptText };
                   let targetRatio = frame.aspectRatioLabel;
                   if (!['1:1', '3:4', '4:3', '9:16', '16:9'].includes(targetRatio)) targetRatio = '1:1'; 
                   
+                  const frameSeed = baseSeed + idx;
                   const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                     model: imageModel,
                     contents: { parts: [...refParts, textPart] },
-                    config: { imageConfig: { aspectRatio: targetRatio, imageSize: effImageSize } },
+                    config: { imageConfig: { aspectRatio: targetRatio, imageSize: effImageSize, seed: frameSeed } },
                   }));
                   const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                   if (part?.inlineData) {
                       const generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
-                      const newImageElement: ImageElement = { ...frame, type: 'image', src: generatedSrc };
+                      const newImageElement: ImageElement = { 
+                          ...frame, 
+                          type: 'image', 
+                          src: generatedSrc,
+                          metadata: {
+                              seed: frameSeed,
+                              model: 'gemini',
+                              prompt: promptWithRefHint
+                          }
+                      };
                       return newImageElement;
                   }
                   return null;
@@ -1680,11 +1717,17 @@ CONSTRAINTS:
               parts = [...noteRefParts, textPart];
           }
 
-          const generateSingleImage = async () => {
+          const generateSingleImage = async (seedValue?: number) => {
             const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                 model: imageModel,
                 contents: { parts },
-                config: { imageConfig: { aspectRatio: targetAspectRatio, imageSize: effImageSize } },
+                config: { 
+                    imageConfig: { 
+                        aspectRatio: targetAspectRatio, 
+                        imageSize: effImageSize,
+                        ...(seedValue !== undefined ? { seed: seedValue } : {})
+                    } 
+                },
             }));
             for (const part of response.candidates?.[0]?.content?.parts || []) {
                 if (part.inlineData) {
@@ -1704,10 +1747,15 @@ CONSTRAINTS:
             return null;
           };
     
-          const tasks = Array.from({ length: count }, () => generateSingleImage());
+          const tasks = Array.from({ length: count }, (_, idx) => generateSingleImage(baseSeed + idx));
           const results = await Promise.all(tasks);
           let validImages = results.filter((img): img is string => img !== null);
           setGeneratedImages(validImages);
+          setGeneratedImagesMetadata(validImages.map((_, idx) => ({
+              seed: baseSeed + idx,
+              model: 'gemini',
+              prompt: imageElements.length > 0 ? (promptWithRefHint || "Creatively reimagine and enhance the image(s).") : (noteRefImages.length > 0 ? promptWithRefHint : finalInstructions)
+          })));
 
         } catch (error: any) {
           handleAIError(error, "圖片生成");
@@ -2310,6 +2358,8 @@ CONSTRAINTS:
         setGeneratingElementIds,
         generatedImages,
         setGeneratedImages,
+        generatedImagesMetadata,
+        setGeneratedImagesMetadata,
         pendingAutoDebg,
         setPendingAutoDebg,
         pendingStickerBorder,

@@ -475,6 +475,7 @@ const App: React.FC = () => {
       genOpType,
       generatedImages,
       setGeneratedImages,
+      generatedImagesMetadata,
       pendingAutoDebg,
       pendingStickerBorder,
       restoreTransparencyFn,
@@ -1298,6 +1299,9 @@ const App: React.FC = () => {
 
   const addGeneratedImageToCanvas = useCallback(async (imageUrl: string) => {
     if (!imageUrl) return;
+    const imgIndex = generatedImages?.indexOf(imageUrl) ?? -1;
+    const meta = imgIndex > -1 ? generatedImagesMetadata?.[imgIndex] : undefined;
+
     // 確保存入畫布的一定是 base64（避免 Atlas CDN URL 過期後無法給 Gemini 使用）
     const originalSrc = imageUrl.startsWith('data:') ? imageUrl : await downloadImageAsBase64(imageUrl);
     const img = new Image();
@@ -1309,7 +1313,15 @@ const App: React.FC = () => {
         if (width > height) { height = (height / width) * MAX_DIMENSION; width = MAX_DIMENSION; }
         else { width = (width / height) * MAX_DIMENSION; height = MAX_DIMENSION; }
       }
-      const elementId = addElement({ type: 'image', position: getCenterOfViewport(), src: originalSrc, width, height, rotation: 0, });
+      const elementId = addElement({ 
+        type: 'image', 
+        position: getCenterOfViewport(), 
+        src: originalSrc, 
+        width, 
+        height, 
+        rotation: 0,
+        metadata: meta ? { seed: meta.seed, model: meta.model, prompt: meta.prompt } : undefined
+      });
       if (!elementId) return;
 
       // Cache the base64 image in IndexedDB so it survives page reload even if Atlas CDN URL expires
@@ -1367,7 +1379,7 @@ const App: React.FC = () => {
       }
     };
     img.src = originalSrc;
-  }, [addElement, getCenterOfViewport, pendingAutoDebg, pendingStickerBorder, restoreTransparencyFn, showToast, setGeneratingElementIds, setGeneratingLabels, setElements]);
+  }, [addElement, getCenterOfViewport, pendingAutoDebg, pendingStickerBorder, restoreTransparencyFn, showToast, setGeneratingElementIds, setGeneratingLabels, setElements, generatedImages, generatedImagesMetadata]);
 
   const downloadGeneratedImage = (imageUrl: string) => {
       if (!imageUrl) return;
@@ -1384,7 +1396,7 @@ const App: React.FC = () => {
     setEditingDrawing(null);
   }, [setElements]);
 
-  const handleSaveImageEdit = useCallback((elementId: string, dataUrl: string, originalElement?: ImageElement) => {
+  const handleSaveImageEdit = useCallback((elementId: string, dataUrl: string, originalElement?: ImageElement, metadata?: any) => {
     if (elementId === '') {
       // Create a new element
       const img = new Image();
@@ -1414,12 +1426,13 @@ const App: React.FC = () => {
           width,
           height,
           rotation: 0,
+          metadata: metadata || originalElement?.metadata,
         });
       };
       img.src = dataUrl;
     } else {
       // Update existing element
-      setElements(prev => prev.map(el => el.id === elementId ? { ...el, src: dataUrl } : el));
+      setElements(prev => prev.map(el => el.id === elementId ? { ...el, src: dataUrl, metadata: metadata || el.metadata } : el));
     }
     setEditingImage(null);
   }, [setElements, addElement, getCenterOfViewport]);

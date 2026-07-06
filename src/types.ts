@@ -40,6 +40,11 @@ export interface ImageElement extends BaseElement {
   shadowOffsetY?: number;
   flipX?: boolean;
   flipY?: boolean;
+  metadata?: {
+    seed?: number;
+    model?: string;
+    prompt?: string;
+  };
   /** 語意編輯器的編輯紀錄（隨圖片一起存入 JSON/檔案，換電腦也能繼續編輯） */
   semanticState?: {
     compositeBase64: string;

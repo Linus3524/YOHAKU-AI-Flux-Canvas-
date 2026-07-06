@@ -38,7 +38,7 @@ const useDebounce = (callback: (...args: any[]) => void, delay: number) => {
 
 interface ImageEditModalProps {
   element: ImageElement;
-  onSave: (elementId: string, dataUrl: string, originalElement?: ImageElement) => void;
+  onSave: (elementId: string, dataUrl: string, originalElement?: ImageElement, metadata?: any) => void;
   onClose: () => void;
   apiKey: string | null;
   imageModel?: string;
@@ -210,6 +210,9 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
   const brushCursorRef = useRef<HTMLDivElement>(null);
   const [pixelHistory, setPixelHistory] = useState<ImageData[]>([]);
   const [pixelHistoryIndex, setPixelHistoryIndex] = useState<number>(-1);
+  const [lockSeed, setLockSeed] = useState<boolean>(true);
+  const [customSeed, setCustomSeed] = useState<number | ''>((element as any).metadata?.seed ?? '');
+  const [generationMetadata, setGenerationMetadata] = useState<{ seed?: number; model?: string; prompt?: string } | null>(null);
   const pixelCanvasRef = useRef<HTMLCanvasElement>(null);
   // 手動模式下 <img ref={imageRef}> 已 unmount（imageRef.current = null），
   // 外層容器尺寸必須改用這份 state，否則會 fallback 到 800×600 → 圖被壓縮 + 筆刷座標錯位
@@ -1282,6 +1285,10 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
   }, []);
 
   const runGeneration = async (context: GenerationContext) => {
+    const activeSeed = lockSeed
+      ? (customSeed !== '' ? Number(customSeed) : Math.floor(Math.random() * 2147483647))
+      : Math.floor(Math.random() * 2147483647);
+
     // ── 準備黑白遮罩（兩條路都需要） ──────────────────────────
     setIsLoading(true);
     try {
@@ -1297,6 +1304,11 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
           const restoredResult = await restoreDetailWithUpscale(context.baseImageSrc, result, bwMaskBase64Url);
           const composited = await compositeImagesPixelPerfect(context.baseImageSrc, restoredResult, bwMaskBase64Url);
           setPreviewImageSrc(composited);
+          setGenerationMetadata({
+              seed: activeSeed,
+              model: 'lama',
+              prompt: 'Remove object'
+          });
           return;
         }
 
@@ -1332,12 +1344,20 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
           atlasKey,
           referenceImages.length > 0 ? referenceImages : undefined,
           surroundingContext || undefined,
+          undefined,
+          undefined,
+          activeSeed
         );
 
         // GPT Image 2 Edit 原生支援透明遮罩 inpainting，
         // 回傳的整張圖遮罩外區域已由模型自行保留，不需要再做 pixel composite。
         // 強制 composite 反而會因兩張圖透視/色調細微差異造成拼縫變形。
         setPreviewImageSrc(generatedBase64);
+        setGenerationMetadata({
+            seed: activeSeed,
+            model: 'gpt-image-2',
+            prompt: fluxPrompt
+        });
         return;
       }
 
@@ -1403,6 +1423,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
       const response = await callGeminiWithRetry(() => ai.models.generateContent({
         model: imageModel,
         contents: { parts: [originalImagePart, maskImagePart, ...refParts, { text: textPrompt + refHint }] },
+        config: { imageConfig: { seed: activeSeed } }
       }));
 
       for (const part of response.candidates[0].content.parts) {
@@ -1411,6 +1432,11 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
           // 避免兩張圖色調/紋理細微差異造成的拼縫（理由同 GPT 路線）。
           const generatedBase64 = `data:image/png;base64,${part.inlineData.data}`;
           setPreviewImageSrc(generatedBase64);
+          setGenerationMetadata({
+              seed: activeSeed,
+              model: 'gemini',
+              prompt: context.prompt
+          });
           return;
         }
       }
@@ -1513,11 +1539,11 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
         const baseImageForSave = previewImageSrc || currentImageSrc;
         const adjustedImage = await applyAdjustmentsToImage(baseImageForSave, adjustments);
         // Pass empty string as ID to signal creation of a new element, and pass the original element for positioning
-        onSave('', adjustedImage, element);
+        onSave('', adjustedImage, element, generationMetadata || element.metadata);
     } catch (error) {
         console.error("Error applying adjustments:", error);
         alert("Failed to save image with adjustments. Saving original.");
-        onSave('', previewImageSrc || currentImageSrc, element);
+        onSave('', previewImageSrc || currentImageSrc, element, generationMetadata || element.metadata);
     } finally {
         setIsBaking(false);
     }
@@ -1933,6 +1959,43 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                         ? `${referenceImages.length}/${MAX_REFERENCE_IMAGES} 張・AI 將把遮罩區替換成參考圖的物件或風格`
                         : '可上傳參考圖，讓 AI 將遮罩區替換成指定物件或套用風格'}
                     </span>
+                  </div>
+
+                  {/* Seed control row */}
+                  <div className="flex items-center gap-2 flex-wrap border-t border-gray-50 pt-2.5">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex-shrink-0">隨機種子</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={lockSeed}
+                        onChange={(e) => setLockSeed(e.target.checked)}
+                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 w-3.5 h-3.5"
+                      />
+                      <span className="text-[11.5px] font-medium text-gray-700">預設鎖定 Seed (減少畫風色差突變)</span>
+                    </label>
+                    
+                    {lockSeed && (
+                      <div className="flex items-center gap-1.5 bg-[#f8fafc] border border-gray-200 rounded-lg px-2 py-1 ml-2 animate-fade-in-down">
+                        <span className="text-[10px] font-bold text-gray-500 font-mono">SEED:</span>
+                        <input
+                          type="number"
+                          placeholder="自動隨機"
+                          value={customSeed}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setCustomSeed(v === '' ? '' : Math.max(0, parseInt(v, 10)));
+                          }}
+                          className="w-24 bg-transparent border-none text-[10px] font-bold text-gray-800 focus:outline-none font-mono p-0"
+                        />
+                        <button
+                          onClick={() => setCustomSeed(Math.floor(Math.random() * 2147483647))}
+                          className="text-[10px] text-purple-500 hover:text-purple-600 font-bold ml-1 transition-all active:scale-95"
+                          title="重新生成隨機 seed"
+                        >
+                          🎲 隨機
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 

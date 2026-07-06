@@ -252,6 +252,49 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ element, onUpd
           )}
         </div>
       )}
+
+      {/* AI 生成資訊（圖片限定，若有 seed 則顯示） */}
+      {element.type === 'image' && (element as any).metadata?.seed !== undefined && (
+        <div className="pt-3 border-t border-gray-100 mt-2">
+          <label className="text-[11px] font-bold text-gray-400 tracking-wider uppercase block mb-2">AI 生成資訊</label>
+          <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-3 space-y-2">
+            {(element as any).metadata.model && (
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="text-gray-500 font-medium">生成模型</span>
+                <span className="text-gray-900 font-bold bg-purple-50 text-purple-600 px-2 py-0.5 rounded font-sans uppercase">{(element as any).metadata.model}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center text-[11px]">
+              <span className="text-gray-500 font-medium">種子碼 (Seed)</span>
+              <div className="flex items-center gap-1.5 font-mono text-gray-700">
+                <span className="font-bold">{(element as any).metadata.seed}</span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(String((element as any).metadata.seed));
+                    alert(`📋 已複製種子碼: ${(element as any).metadata.seed}`);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200/50 transition-colors"
+                  title="複製種子碼"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            {(element as any).metadata.prompt && (
+              <div className="pt-1.5 border-t border-gray-200/60">
+                <span className="text-gray-400 text-[10px] block font-medium mb-1">提示詞</span>
+                <p className="text-[10px] text-gray-600 leading-normal line-clamp-2 hover:line-clamp-none transition-all cursor-help" title={(element as any).metadata.prompt}>
+                  {(element as any).metadata.prompt}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

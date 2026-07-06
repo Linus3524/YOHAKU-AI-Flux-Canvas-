@@ -57,9 +57,9 @@ export const LOGO_STYLES: SkillOption[] = [
   { id: '3d', name: '3D / Dimensional', name_zh: '立體', desc: '具光澤與深度的三維效果', promptModifier: 'VISUAL STYLE: Three-dimensional rendering with realistic lighting, soft shadows, and volumetric depth. Glossy or matte material surfaces.' },
   { id: 'line-art', name: 'Line Art', name_zh: '線條', desc: '僅用線條描繪，無填滿色', promptModifier: 'VISUAL STYLE: Pure line art — single-weight or variable-weight outlines only, NO color fills. Clean continuous strokes.' },
   { id: 'geometric', name: 'Geometric', name_zh: '幾何', desc: '以精準的幾何基本形構成', promptModifier: 'VISUAL STYLE: Geometric construction from precise primitives — circles, triangles, squares, golden ratio spirals. Mathematical precision.' },
-  { id: 'hand-drawn', name: 'Hand-Drawn', name_zh: '手繪', desc: '帶有手工、職人溫度的筆觸', promptModifier: 'VISUAL STYLE: Hand-drawn, organic quality with visible human touch. Slightly imperfect strokes, natural texture, variable line weight.' },
-  { id: 'vintage', name: 'Vintage / Retro', name_zh: '復古', desc: '做舊紋理與經典排版風', promptModifier: 'VISUAL STYLE: Vintage/retro aesthetic with aged textures, distressed edges, and worn patina. Classic typography with decorative serifs.' },
-  { id: 'pixel', name: 'Pixel Art', name_zh: '像素', desc: '刻意以網格像素對齊的設計', promptModifier: 'VISUAL STYLE: Pixel art — deliberately pixelated, grid-aligned design with visible square pixels. Limited color palette.' },
+  { id: 'hand-drawn', name: 'Hand-Drawn', name_zh: '手繪', desc: '帶有手工、職人溫度的筆觸', promptModifier: 'VISUAL STYLE: Hand-drawn, organic quality with visible human touch. Slightly imperfect strokes, natural texture applied ONLY to the logo lines, variable line weight. The background must remain clean and white.' },
+  { id: 'vintage', name: 'Vintage / Retro', name_zh: '復古', desc: '做舊紋理與經典排版風', promptModifier: 'VISUAL STYLE: Vintage/retro aesthetic with aged textures, distressed edges, and worn patina applied ONLY to the logo graphics itself, NEVER to the background. Classic typography with decorative serifs. The background must remain clean and white.' },
+  { id: 'pixel', name: 'Pixel Art', name_zh: '像素', desc: '刻意以網格像素對齊的設計', promptModifier: 'VISUAL STYLE: Pixel art — deliberately pixelated, grid-aligned logo design with visible square pixels. Limited color palette. Grid lines or squares must NOT render on the background.' },
 ];
 
 export const LOGO_PALETTES: SkillOption[] = [
@@ -141,10 +141,11 @@ OUTPUT SIZE: ${config.size} (${sizeMod})
 
 REQUIREMENTS:
 - Clean, scalable vector-style output
-- The logo should work on both light and dark backgrounds
 - Ensure the brand name is legible and well-integrated
-- Output as a single centered logo on a clean white background
-- No mockups, no background scenes — just the logo mark itself
+- Output as a single centered logo mark strictly isolated on a solid, uniform, 100% pure white background (#ffffff)
+- Absolutely NO gradients, NO shadows, NO background scene gradients, NO paper textures, NO noise, NO grids, and NO tiled watermark patterns in the background
+- Absolutely NO mockups, NO background scenes — just the logo mark itself on pure white background
+- Do NOT show variations or multiple options on the same canvas (no side-by-side versions)
 
 ${content ? `ADDITIONAL CONTEXT:\n${content}` : ''}
   `.trim();

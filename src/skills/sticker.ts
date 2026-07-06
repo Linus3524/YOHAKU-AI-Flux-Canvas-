@@ -93,7 +93,7 @@ export const STICKER_STYLES: SkillOption[] = [
   {
     id: 'vintage', name: 'Vintage Retro', name_zh: '復古懷舊', desc: '做舊紋理、復古色',
     promptModifier:
-      'Style: Vintage retro sticker with distressed worn edges, faded retro color palette (mustard, teal, burnt orange), subtle paper texture, halftone dot patterns, aged and nostalgic feel, like a well-loved travel souvenir from the 1970s-80s.',
+      'Style: Vintage retro sticker with distressed worn edges, faded retro color palette (mustard, teal, burnt orange), subtle paper texture applied ONLY to the sticker surface (NEVER to the background), halftone dot patterns, aged and nostalgic feel, like a well-loved travel souvenir from the 1970s-80s.',
   },
 ];
 

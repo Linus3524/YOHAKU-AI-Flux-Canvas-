@@ -335,9 +335,13 @@ export async function callAtlasGenerate(
 ): Promise<string[]> {
     const config = MODEL_CONFIGS[model];
     const submitResults = await Promise.allSettled(
-        Array.from({ length: count }, () =>
-            postGeneration(buildT2IBody(config, prompt, options), atlasKey)
-        )
+        Array.from({ length: count }, (_, idx) => {
+            const finalOptions = options ? {
+                ...options,
+                seed: options.seed !== undefined ? options.seed + idx : undefined
+            } : undefined;
+            return postGeneration(buildT2IBody(config, prompt, finalOptions), atlasKey);
+        })
     );
     const predIds = submitResults
         .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
@@ -471,9 +475,13 @@ export async function callAtlasImg2Img(
     const allImages = await Promise.all(rawImages.map(img => compressForAtlas(img, 1024, 0.85, options?.keepAlpha)));
 
     const submitResults = await Promise.allSettled(
-        Array.from({ length: count }, () =>
-            postGeneration(buildI2IBody(config, prompt, allImages, resolvedOptions), atlasKey)
-        )
+        Array.from({ length: count }, (_, idx) => {
+            const finalOptions = resolvedOptions ? {
+                ...resolvedOptions,
+                seed: resolvedOptions.seed !== undefined ? resolvedOptions.seed + idx : undefined
+            } : undefined;
+            return postGeneration(buildI2IBody(config, prompt, allImages, finalOptions), atlasKey);
+        })
     );
     const predIds = submitResults
         .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
@@ -573,6 +581,7 @@ export async function callAtlasInpaint(
     surroundingContext?: string,
     signal?: AbortSignal,    // ← 傳入後可中止輪詢
     size?: string,           // ← 指定輸出尺寸（外擴必填，e.g. '1024x1536'）；同尺寸 inpaint 可省略
+    seed?: number,           // ← 隨機種子碼
 ): Promise<string> {
     // 透明遮罩圖：讓 GPT Image 2 Edit 知道哪裡需要重新生成
     const transparentImage = await createTransparentMaskedImage(imageBase64, maskBase64);
@@ -603,6 +612,7 @@ export async function callAtlasInpaint(
         enable_base64_output: true,
         output_format: 'png',
         ...(size ? { size } : {}),
+        ...(seed !== undefined ? { seed } : {}),
     };
     const predId = await postGeneration(body, atlasKey);
     const results = await pollPrediction(predId, atlasKey, signal);
