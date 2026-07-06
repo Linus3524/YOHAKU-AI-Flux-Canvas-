@@ -244,7 +244,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
     const isIcon = activeSkill === 'icon';
     const autoRemoveBg = (isSticker && configs.sticker.background === 'transparent') 
       || (isIcon && configs.icon.background === 'transparent')
-      || (activeSkill === 'logo'); // Logo 模式一律強制去背，以重組剔除髒背景
+      || (activeSkill === 'logo' && configs.logo.background === 'transparent');
     
     // Resolve aspect ratio for the generation call
     let aspect: string | undefined;

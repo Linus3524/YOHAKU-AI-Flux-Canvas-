@@ -44,34 +44,34 @@ export const LOGO_DEFAULT_CONFIG: LogoSkillConfig = {
 };
 
 export const LOGO_TYPES: SkillOption[] = [
-  { id: 'wordmark', name: 'Wordmark', name_zh: '文字標識', desc: '品牌名稱即為標識，注重自訂字體', promptModifier: 'Design a WORDMARK logo where the brand name itself IS the logo. Focus on custom lettering with unique letterforms, precise kerning, and strong typographic personality. No icon or symbol.' },
-  { id: 'lettermark', name: 'Lettermark', name_zh: '字母標識', desc: '品牌縮寫，1-3個字母，極簡精緻', promptModifier: 'Design a LETTERMARK / MONOGRAM logo using only 1-3 initials. The letters should be compact, geometric or decoratively treated. Emphasize clever negative space or interlocking forms.' },
-  { id: 'icon', name: 'Icon / Symbol', name_zh: '圖標標識', desc: '獨立的圖案標記，不含文字', promptModifier: 'Design a standalone PICTORIAL MARK / ICON logo with NO text whatsoever. Create a single recognizable symbol or object. The symbol should be simple, memorable, and work as a single-color silhouette.' },
-  { id: 'combination', name: 'Combination Mark', name_zh: '組合標識', desc: '圖案加上文字的排版組合', promptModifier: 'Design a COMBINATION MARK logo with both an icon/symbol AND the brand name text arranged as a cohesive lockup. Ensure clear visual hierarchy between mark and text.' },
-  { id: 'emblem', name: 'Emblem', name_zh: '徽章標識', desc: '文字包覆在形狀中（印章、盾牌）', promptModifier: 'Design an EMBLEM logo where text is enclosed within or integrated into a containing shape — badge, seal, crest, or shield. The emblem should feel authoritative, established, and work well as a stamp.' },
-  { id: 'mascot', name: 'Mascot', name_zh: '吉祥物', desc: '具個性的插畫角色/動物', promptModifier: 'Design a MASCOT logo featuring an illustrated character or creature that represents the brand. The character should be friendly, approachable, and have a distinctive personality.' },
-  { id: 'abstract', name: 'Abstract Mark', name_zh: '抽象標識', desc: '非具象的幾何造形', promptModifier: 'Design an ABSTRACT MARK logo — a non-representational geometric form that does not depict any real-world object. Convey brand feeling through pure form, color, and movement.' },
+  { id: 'wordmark', name: 'Wordmark', name_zh: '文字標識', desc: '品牌名稱即為標識，注重自訂字體', promptModifier: 'A flat 2D WORDMARK logo graphic centered on a solid flat background. Focus on typography lettering with unique letterforms and precise kerning. Pure flat graphic.' },
+  { id: 'lettermark', name: 'Lettermark', name_zh: '字母標識', desc: '品牌縮寫，1-3個字母，極簡精緻', promptModifier: 'A flat 2D LETTERMARK / MONOGRAM logo graphic using 1-3 initials on a solid flat background. Compact, geometric lines and shapes. Pure flat graphic.' },
+  { id: 'icon', name: 'Icon / Symbol', name_zh: '圖標標識', desc: '獨立的圖案標記，不含文字', promptModifier: 'A standalone flat 2D icon symbol graphic with no text whatsoever. Simple, clean, and recognizable emblem shape on a solid flat background.' },
+  { id: 'combination', name: 'Combination Mark', name_zh: '組合標識', desc: '圖案加上文字的排版組合', promptModifier: 'A flat 2D COMBINATION MARK graphic combining a simple symbol and typography text on a solid flat background.' },
+  { id: 'emblem', name: 'Emblem', name_zh: '徽章標識', desc: '文字包覆在形狀中（印章、盾牌）', promptModifier: 'A flat 2D EMBLEM badge graphic with text enclosed within a clean geometric outline shape.' },
+  { id: 'mascot', name: 'Mascot', name_zh: '吉祥物', desc: '具個性的插畫角色/動物', promptModifier: 'A flat 2D MASCOT cartoon character graphic on a solid flat background.' },
+  { id: 'abstract', name: 'Abstract Mark', name_zh: '抽象標識', desc: '非具象的幾何造形', promptModifier: 'A flat 2D ABSTRACT MARK graphic composed of geometric vectors on a solid flat background.' },
 ];
 
 export const LOGO_STYLES: SkillOption[] = [
-  { id: 'flat', name: 'Flat / Minimal', name_zh: '扁平', desc: '乾淨的扁平設計，純色填滿', promptModifier: 'VISUAL STYLE: Clean flat design. No gradients, no shadows, no textures, no 3D effects. Use solid color fills only with uniform stroke weights.' },
-  { id: 'gradient', name: 'Gradient', name_zh: '漸變', desc: '現代的漸變色彩過渡', promptModifier: 'VISUAL STYLE: Modern gradient design. Smooth, vibrant color transitions within shapes creating depth and dimension without 3D modeling.' },
-  { id: '3d', name: '3D / Dimensional', name_zh: '立體', desc: '具光澤與深度的三維效果', promptModifier: 'VISUAL STYLE: Three-dimensional rendering with realistic lighting, soft shadows, and volumetric depth. Glossy or matte material surfaces.' },
-  { id: 'line-art', name: 'Line Art', name_zh: '線條', desc: '僅用線條描繪，無填滿色', promptModifier: 'VISUAL STYLE: Pure line art — single-weight or variable-weight outlines only, NO color fills. Clean continuous strokes.' },
-  { id: 'geometric', name: 'Geometric', name_zh: '幾何', desc: '以精準的幾何基本形構成', promptModifier: 'VISUAL STYLE: Geometric construction from precise primitives — circles, triangles, squares, golden ratio spirals. Mathematical precision.' },
-  { id: 'hand-drawn', name: 'Hand-Drawn', name_zh: '手繪', desc: '帶有手工、職人溫度的筆觸', promptModifier: 'VISUAL STYLE: Hand-drawn, organic quality with visible human touch. Slightly imperfect strokes, natural texture applied ONLY to the logo lines, variable line weight. The background must remain clean and white.' },
-  { id: 'vintage', name: 'Vintage / Retro', name_zh: '復古', desc: '做舊紋理與經典排版風', promptModifier: 'VISUAL STYLE: Vintage/retro aesthetic with aged textures, distressed edges, and worn patina applied ONLY to the logo graphics itself, NEVER to the background. Classic typography with decorative serifs. The background must remain clean and white.' },
-  { id: 'pixel', name: 'Pixel Art', name_zh: '像素', desc: '刻意以網格像素對齊的設計', promptModifier: 'VISUAL STYLE: Pixel art — deliberately pixelated, grid-aligned logo design with visible square pixels. Limited color palette. Grid lines or squares must NOT render on the background.' },
+  { id: 'flat', name: 'Flat / Minimal', name_zh: '扁平', desc: '乾淨的扁平設計，純色填滿', promptModifier: 'VISUAL STYLE: Flat vector art style. Clean solid color fills only. Uniform stroke weights. Pure digital graphics.' },
+  { id: 'gradient', name: 'Gradient', name_zh: '漸變', desc: '現代的漸變色彩過渡', promptModifier: 'VISUAL STYLE: Flat vector style with modern color gradients. Smooth, vibrant color transitions within shapes. Pure 2D graphic.' },
+  { id: '3d', name: '3D / Dimensional', name_zh: '立體', desc: '具光澤與深度的三維效果', promptModifier: 'VISUAL STYLE: 3D volumetric effect graphic on a solid flat background.' },
+  { id: 'line-art', name: 'Line Art', name_zh: '線條', desc: '僅用線條描繪，無填滿色', promptModifier: 'VISUAL STYLE: Pure line art style. Outlines only on a flat solid background. Clean digital strokes.' },
+  { id: 'geometric', name: 'Geometric', name_zh: '幾何', desc: '以精準的幾何基本形構成', promptModifier: 'VISUAL STYLE: Precision geometric construction from simple mathematical primitives on a flat solid background.' },
+  { id: 'hand-drawn', name: 'Hand-Drawn', name_zh: '手繪', desc: '帶有手工、職人溫度的筆觸', promptModifier: 'VISUAL STYLE: Digital hand-drawn vector sketch style. Imperfect stroke outlines. Pure flat background.' },
+  { id: 'vintage', name: 'Vintage / Retro', name_zh: '復古', desc: '做舊紋理與經典排版風', promptModifier: 'VISUAL STYLE: Retro style vector logo. Classic typography with serifs. The background must remain 100% solid flat color.' },
+  { id: 'pixel', name: 'Pixel Art', name_zh: '像素', desc: '刻意以網格像素對齊的設計', promptModifier: 'VISUAL STYLE: Pixel art style. Square pixels on a solid flat background. Do not render grid lines.' },
 ];
 
 export const LOGO_PALETTES: SkillOption[] = [
-  { id: 'monochrome', name: 'Monochrome', name_zh: '單色', desc: '單一品牌色加上黑/白', promptModifier: 'COLOR SCHEME: Monochrome — use only pure black on white background, or a single brand color on white. The logo must work perfectly in single-color reproduction.' },
-  { id: 'dual-tone', name: 'Dual Tone', name_zh: '雙色', desc: '主色搭配一輔助/強調色', promptModifier: 'COLOR SCHEME: Dual tone — exactly two colors plus white. One primary brand color and one accent color with strong contrast.' },
-  { id: 'colorful', name: 'Colorful', name_zh: '多彩', desc: '3-5種活潑的配色組合', promptModifier: 'COLOR SCHEME: Colorful — use 3-5 distinct, vibrant colors. Playful, inclusive, dynamic energy. Balanced and harmonious.' },
-  { id: 'gradient-colors', name: 'Gradient Colors', name_zh: '漸變色', desc: '2-3色的流暢漸變 transitions', promptModifier: 'COLOR SCHEME: Gradient colors — smooth transitions between 2-3 vibrant colors. Modern, fluid, digital-native feel.' },
-  { id: 'earth-tones', name: 'Earth Tones', name_zh: '大地色', desc: '溫暖的棕色、橄欖綠、土色', promptModifier: 'COLOR SCHEME: Earth tones — warm browns, olive greens, terracotta, sand, forest green. Natural, organic, grounded, sustainable.' },
-  { id: 'pastel', name: 'Pastel', name_zh: '柔和色', desc: '柔和、低飽和的粉嫩配色', promptModifier: 'COLOR SCHEME: Pastel — soft, desaturated colors. Light pink, mint, lavender, butter yellow, sky blue. Gentle, approachable.' },
-  { id: 'bold-contrast', name: 'Bold Contrast', name_zh: '高對比', desc: '高飽和度的主色配強烈對比', promptModifier: 'COLOR SCHEME: Bold contrast — high-saturation primary colors with maximum contrast. Red, blue, yellow, black. Confident and energetic.' },
+  { id: 'monochrome', name: 'Monochrome', name_zh: '單色', desc: '單一品牌色加上黑/白', promptModifier: 'COLOR SCHEME: Monochrome. Pure solid black on a solid flat white background, or a single solid color on a solid flat background.' },
+  { id: 'dual-tone', name: 'Dual Tone', name_zh: '雙色', desc: '主色搭配一輔助/強調色', promptModifier: 'COLOR SCHEME: Dual tone. Exactly two solid colors on a solid flat background.' },
+  { id: 'colorful', name: 'Colorful', name_zh: '多彩', desc: '3-5種活潑的配色組合', promptModifier: 'COLOR SCHEME: Colorful. 3-5 distinct, vibrant solid colors on a solid flat background.' },
+  { id: 'gradient-colors', name: 'Gradient Colors', name_zh: '漸變色', desc: '2-3色的流暢漸變 transitions', promptModifier: 'COLOR SCHEME: Gradient colors. Dynamic solid gradient transitions between 2-3 vibrant colors on a solid flat background.' },
+  { id: 'earth-tones', name: 'Earth Tones', name_zh: '大地色', desc: '溫暖的棕色、橄欖綠、土色', promptModifier: 'COLOR SCHEME: Earth tones. Warm solid brown, olive green, terracotta, sand on a solid flat background.' },
+  { id: 'pastel', name: 'Pastel', name_zh: '柔和色', desc: '柔和、低飽和的粉嫩配色', promptModifier: 'COLOR SCHEME: Pastel. Soft desaturated colors on a solid flat background.' },
+  { id: 'bold-contrast', name: 'Bold Contrast', name_zh: '高對比', desc: '高飽和度的主色配強烈對比', promptModifier: 'COLOR SCHEME: Bold contrast. High saturation solid primary colors with strong contrast on a solid flat background.' },
 ];
 
 export const LOGO_INDUSTRIES: SkillOption[] = [
@@ -104,9 +104,9 @@ export const LOGO_SIZES: SkillOption[] = [
 ];
 
 export const LOGO_BACKGROUNDS: SkillOption[] = [
-  { id: 'transparent', name: 'Transparent', name_zh: '透明背景', desc: '生成後自動去背', promptModifier: 'Background: A single FLAT, FULLY-SATURATED solid chroma-key background color. YOU choose the exact color using this rule: pick whichever vivid, fully-saturated color is VISUALLY FARTHEST from EVERY color used in the subject (good options: vivid green, magenta/hot-pink, cyan, or electric blue) — e.g. for a warm/red subject use green, for a green subject use magenta. The background must be plain and evenly lit: no scenery, gradients, patterns, texture, or shading. The logo mark (INCLUDING any white text or elements) must stay pure and clearly distinct from the background. Do NOT render a checkerboard or fake-transparency pattern.' },
-  { id: 'white', name: 'White', name_zh: '白色背景', desc: '乾淨純白背景', promptModifier: 'Background: Strictly isolated on a solid, uniform, 100% pure white background (#ffffff). Absolutely NO gradients, NO shadows, NO background scene gradients, NO paper textures, NO noise, NO grids, and NO tiled watermark patterns in the background.' },
-  { id: 'black', name: 'Black', name_zh: '黑色背景', desc: '乾淨純黑背景', promptModifier: 'Background: Strictly isolated on a solid, uniform, 100% pure black background (#000000). The logo should be visible and high contrast against the dark background. Absolutely NO textures, shadows, or gradients in the background.' }
+  { id: 'transparent', name: 'Transparent', name_zh: '透明背景', desc: '生成後自動去背', promptModifier: 'Background: A single FLAT, FULLY-SATURATED solid chroma-key background color. The background must be a 100% plain solid flat tone: no scenery, gradients, patterns, texture, shadows, grid lines, or shading. Do NOT render a checkerboard or fake-transparency pattern.' },
+  { id: 'white', name: 'White', name_zh: '白色背景', desc: '乾淨純白背景', promptModifier: 'Background: The entire image background MUST be a single, uniform, 100% solid flat white color (#ffffff). The background must be completely blank, flat, and featureless, with zero variations in tone, lighting, or texture.' },
+  { id: 'black', name: 'Black', name_zh: '黑色背景', desc: '乾淨純黑背景', promptModifier: 'Background: The entire image background MUST be a single, uniform, 100% solid flat black color (#000000). The background must be completely blank, flat, and featureless.' }
 ];
 
 export const LOGO_OPTION_GROUPS = [
@@ -154,12 +154,11 @@ ${moodMod}
 OUTPUT SIZE: ${config.size} (${sizeMod})
 
 REQUIREMENTS:
-- Clean, scalable vector-style output
-- Ensure the brand name is legible and well-integrated
-- Output as a single centered logo mark
-- The logo mark must be strictly isolated on the specified background
-- Absolutely NO mockups, NO background scenes — just the logo mark itself ${isTransparent ? 'on a solid chroma-key background' : ''}
-- Do NOT show variations or multiple options on the same canvas (no side-by-side versions)
+- Output only a flat typography graphic centered on a solid flat background
+- Ensure the brand name is completely legible and well-integrated
+- The entire background frame MUST be a single, uniform, flat solid color with zero variations in texture, zero shading, and zero gradients
+- Isolated typography design only
+- Do NOT show side-by-side variations, do not show booklets, and do not show presentation cards
 
 ${content ? `ADDITIONAL CONTEXT:\n${content}` : ''}
   `.trim();
