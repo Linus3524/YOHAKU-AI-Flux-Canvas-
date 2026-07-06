@@ -242,7 +242,9 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
     const prompt = buildSkillPrompt(activeSkill, content, configs[activeSkill], referenceImages);
     const isSticker = activeSkill === 'sticker';
     const isIcon = activeSkill === 'icon';
-    const autoRemoveBg = (isSticker && configs.sticker.background === 'transparent') || (isIcon && configs.icon.background === 'transparent');
+    const autoRemoveBg = (isSticker && configs.sticker.background === 'transparent') 
+      || (isIcon && configs.icon.background === 'transparent')
+      || (activeSkill === 'logo' && configs.logo.background === 'transparent');
     
     // Resolve aspect ratio for the generation call
     let aspect: string | undefined;

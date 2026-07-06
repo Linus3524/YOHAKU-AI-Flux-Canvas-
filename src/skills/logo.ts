@@ -5,6 +5,7 @@ export interface LogoSkillConfig {
   type: string;
   style: string;
   palette: string;
+  background: string;
   industry: string;
   mood: string;
   size: string;
@@ -25,6 +26,7 @@ export const LOGO_DEFAULT_CONFIG: LogoSkillConfig = {
   type: 'wordmark',
   style: 'flat',
   palette: 'monochrome',
+  background: 'transparent',
   industry: 'general',
   mood: 'minimal',
   size: '1:1',
@@ -101,10 +103,17 @@ export const LOGO_SIZES: SkillOption[] = [
   { id: '3:4', name: '3:4', name_zh: '3:4', desc: '直向比例', promptModifier: 'aspect ratio 3:4' },
 ];
 
+export const LOGO_BACKGROUNDS: SkillOption[] = [
+  { id: 'transparent', name: 'Transparent', name_zh: '透明背景', desc: '生成後自動去背', promptModifier: 'Background: A single FLAT, FULLY-SATURATED solid chroma-key background color. YOU choose the exact color using this rule: pick whichever vivid, fully-saturated color is VISUALLY FARTHEST from EVERY color used in the subject (good options: vivid green, magenta/hot-pink, cyan, or electric blue) — e.g. for a warm/red subject use green, for a green subject use magenta. The background must be plain and evenly lit: no scenery, gradients, patterns, texture, or shading. The logo mark (INCLUDING any white text or elements) must stay pure and clearly distinct from the background. Do NOT render a checkerboard or fake-transparency pattern.' },
+  { id: 'white', name: 'White', name_zh: '白色背景', desc: '乾淨純白背景', promptModifier: 'Background: Strictly isolated on a solid, uniform, 100% pure white background (#ffffff). Absolutely NO gradients, NO shadows, NO background scene gradients, NO paper textures, NO noise, NO grids, and NO tiled watermark patterns in the background.' },
+  { id: 'black', name: 'Black', name_zh: '黑色背景', desc: '乾淨純黑背景', promptModifier: 'Background: Strictly isolated on a solid, uniform, 100% pure black background (#000000). The logo should be visible and high contrast against the dark background. Absolutely NO textures, shadows, or gradients in the background.' }
+];
+
 export const LOGO_OPTION_GROUPS = [
   { key: 'type' as const, label: '類型', options: LOGO_TYPES },
   { key: 'style' as const, label: '視覺風格', options: LOGO_STYLES },
   { key: 'palette' as const, label: '配色方案', options: LOGO_PALETTES },
+  { key: 'background' as const, label: '背景', options: LOGO_BACKGROUNDS },
   { key: 'industry' as const, label: '行業背景', options: LOGO_INDUSTRIES },
   { key: 'mood' as const, label: '品牌調性', options: LOGO_MOODS },
   { key: 'size' as const, label: '比例', options: LOGO_SIZES },
@@ -117,6 +126,8 @@ export function buildLogoPrompt(content: string, config: LogoSkillConfig): strin
   const industryMod = LOGO_INDUSTRIES.find(o => o.id === config.industry)?.promptModifier ?? '';
   const moodMod = LOGO_MOODS.find(o => o.id === config.mood)?.promptModifier ?? '';
   const sizeMod = LOGO_SIZES.find(o => o.id === config.size)?.promptModifier ?? '';
+  const backgroundMod = LOGO_BACKGROUNDS.find(o => o.id === config.background)?.promptModifier ?? '';
+  const isTransparent = config.background === 'transparent';
 
   return `
 Design a professional logo for the brand "${config.brandName || 'My Brand'}".
@@ -131,6 +142,9 @@ ${styleMod}
 COLOR PALETTE: ${config.palette}
 ${paletteMod}
 
+BACKGROUND: ${config.background}
+${backgroundMod}
+
 INDUSTRY: ${config.industry}
 ${industryMod}
 
@@ -142,9 +156,9 @@ OUTPUT SIZE: ${config.size} (${sizeMod})
 REQUIREMENTS:
 - Clean, scalable vector-style output
 - Ensure the brand name is legible and well-integrated
-- Output as a single centered logo mark strictly isolated on a solid, uniform, 100% pure white background (#ffffff)
-- Absolutely NO gradients, NO shadows, NO background scene gradients, NO paper textures, NO noise, NO grids, and NO tiled watermark patterns in the background
-- Absolutely NO mockups, NO background scenes — just the logo mark itself on pure white background
+- Output as a single centered logo mark
+- The logo mark must be strictly isolated on the specified background
+- Absolutely NO mockups, NO background scenes — just the logo mark itself ${isTransparent ? 'on a solid chroma-key background' : ''}
 - Do NOT show variations or multiple options on the same canvas (no side-by-side versions)
 
 ${content ? `ADDITIONAL CONTEXT:\n${content}` : ''}
