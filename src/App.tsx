@@ -2527,6 +2527,7 @@ const App: React.FC = () => {
           hasHiddenElements={elements.some(el => !el.isVisible)}
           snapToObjects={snapToObjects}
           showImageSizes={showImageSizes}
+          selectedElement={contextMenuElement || undefined}
         />
       )}
 
