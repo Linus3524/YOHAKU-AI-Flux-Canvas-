@@ -1360,11 +1360,45 @@ const App: React.FC = () => {
               const detectedBg = await detectBackgroundColor(originalSrc);
               debgSrc = await restoreTransparencyFn(originalSrc, detectedBg);
             }
-            setElements(prev => prev.map(el => el.id === elementId && el.type === 'image' ? { ...el, src: debgSrc } : el));
-            if (debgSrc.startsWith('data:')) {
-              cacheImage(elementId, debgSrc);
+            const applySolidBackground = (pngDataUrl: string, bgColor: string): Promise<string> => {
+              return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = img.width;
+                  canvas.height = img.height;
+                  const ctx = canvas.getContext('2d');
+                  if (ctx) {
+                    ctx.fillStyle = bgColor;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    resolve(canvas.toDataURL('image/png'));
+                  } else {
+                    resolve(pngDataUrl);
+                  }
+                };
+                img.onerror = () => resolve(pngDataUrl);
+                img.src = pngDataUrl;
+              });
+            };
+
+            let finalSrc = debgSrc;
+            if (meta?.prompt) {
+              const isWhitePrompt = meta.prompt.includes('BACKGROUND: white') || meta.prompt.includes('Background: Strictly isolated on a solid, uniform, 100% pure white background');
+              const isBlackPrompt = meta.prompt.includes('BACKGROUND: black') || meta.prompt.includes('Background: Strictly isolated on a solid, uniform, 100% pure black background');
+              if (isWhitePrompt) {
+                finalSrc = await applySolidBackground(debgSrc, '#ffffff');
+              } else if (isBlackPrompt) {
+                finalSrc = await applySolidBackground(debgSrc, '#000000');
+              }
             }
-            showToast('✅ 自動去背完成！');
+
+            setElements(prev => prev.map(el => el.id === elementId && el.type === 'image' ? { ...el, src: finalSrc } : el));
+            if (finalSrc.startsWith('data:')) {
+              cacheImage(elementId, finalSrc);
+            }
+            showToast('✅ 自動去背與背景優化完成！');
           } catch (e) {
             showToast('去背失敗，已保留原圖');
           } finally {
