@@ -732,7 +732,6 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         { t: '智慧去背', d: '右鍵「智慧去背」，由 Gemini AI 分析並去除背景，不需額外 API Key。' },
                         { t: '本機 AI 去背', d: '選取圖片後於編輯面板點擊「本機 AI 去背 (ISNet)」，推論完全在本機離線執行，免 API 額度（需下載本機 ISNet 模型）。' },
                         { t: '擴展圖片 (Outpainting)', d: '拖曳定義邊界，AI 自動進行擴圖與漸降 Poisson 拼接融合，100% 無縫保留原圖像素無痕接合（支援自動發想提示詞）。' },
-                        { t: '局部重繪與手繪編輯', d: '支援雙模式切換：1) AI 重繪：塗抹遮罩以替換或移除物件，支援本機 LaMa/MI-GAN WebGPU 極速推理與 4x 局部超分縫合；2) 手繪編輯：直接像素塗抹改色，提供軟硬筆刷、背景去背橡皮擦（直接擦除為透明格底）、吸管吸色、拉幾何色塊與獨立的 Undo/Redo 操作。' },
                         { t: '影像調和', d: '選取多張圖片，AI 調整光影色調融合為自然畫面（支援 2K 高清）。' },
                         { t: '原圖比例輸出', d: '生成設定選「原圖比例」，AI 依據參考圖的寬高比輸出，結果更貼合原始構圖。' },
                         { t: '視角轉換 & 智能放大', d: '改變拍攝角度。2x/4x 放大，智慧保持透明背景邊緣清晰。' },
@@ -813,6 +812,25 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       </div>
                       <div className="text-[11px] text-cyan-800 bg-white/80 px-3 py-2 rounded-lg">✔ 語意分層需 <code className="font-mono bg-cyan-50 px-1 rounded">Gemini Key</code>；物件重繪最佳品質需 <code className="font-mono bg-cyan-50 px-1 rounded">Atlas Key</code>（GPT Image 2）或 <code className="font-mono bg-cyan-50 px-1 rounded">Gemini Key</code>；SAM2 分割需 <code className="font-mono bg-cyan-50 px-1 rounded">fal.ai Key</code> 或下載本機模型。</div>
                     </div>
+
+                    {/* 局部重繪與手繪編輯 */}
+                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 局部重繪與手繪編輯</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">支援雙模式切換，整合 AI 智慧填充與經典數位繪圖工具：</p>
+                      <div className="grid grid-cols-2 gap-1.5 mb-2">
+                        {[
+                          { label: 'AI 重繪', desc: '塗抹遮罩以替換或移除物件，支援本機 LaMa/MI-GAN WebGPU 極速推理與 4x 局部超分縫合。' },
+                          { label: '手繪編輯', desc: '直接像素塗抹改色，提供軟硬筆刷、去背橡皮擦（直接擦除為透明格底）、吸管吸色、拉幾何色塊與獨立 Undo/Redo。' },
+                        ].map((m, i) => (
+                          <div key={i} className="bg-white/80 border border-purple-100/50 rounded-lg px-2.5 py-2">
+                            <div className="font-bold text-purple-700 text-[11px] mb-0.5">{m.label}</div>
+                            <div className="text-gray-500 text-[10px] leading-snug">{m.desc}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 本機 LaMa / MI-GAN WebGPU 推理完全在瀏覽器端執行，流暢且無耗能限制。</div>
+                    </div>
+
                     {/* 快速去背 */}
                     <div className="bg-orange-50/40 border border-orange-100 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-orange-900 text-[13px] mb-1">✦ 快速去背（BiRefNet）</h4>
