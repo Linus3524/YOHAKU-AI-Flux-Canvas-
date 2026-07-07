@@ -732,6 +732,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         { t: '智慧去背', d: '右鍵「智慧去背」，由 Gemini AI 分析並去除背景，不需額外 API Key。' },
                         { t: '本機 AI 去背', d: '選取圖片後於編輯面板點擊「本機 AI 去背 (ISNet)」，推論完全在本機離線執行，免 API 額度（需下載本機 ISNet 模型）。' },
                         { t: '擴展圖片 (Outpainting)', d: '拖曳定義邊界，AI 自動進行擴圖與漸降 Poisson 拼接融合，100% 無縫保留原圖像素無痕接合（支援自動發想提示詞）。' },
+                        { t: '局部重繪與手繪編輯', d: '支援雙模式切換：1) AI 重繪：塗抹遮罩以替換或移除物件，支援本機 LaMa/MI-GAN WebGPU 極速推理與 4x 局部超分縫合；2) 手繪編輯：直接像素塗抹改色，提供軟硬筆刷、背景去背橡皮擦（直接擦除為透明格底）、吸管吸色、拉幾何色塊與獨立的 Undo/Redo 操作。' },
                         { t: '影像調和', d: '選取多張圖片，AI 調整光影色調融合為自然畫面（支援 2K 高清）。' },
                         { t: '原圖比例輸出', d: '生成設定選「原圖比例」，AI 依據參考圖的寬高比輸出，結果更貼合原始構圖。' },
                         { t: '視角轉換 & 智能放大', d: '改變拍攝角度。2x/4x 放大，智慧保持透明背景邊緣清晰。' },
@@ -853,42 +854,41 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     </div>
                   </div>
 
-                  {/* 5+6 圖片編輯 & 圖層管理 */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white/80 rounded-xl p-6 border border-gray-100 shadow-sm">
-                      <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">5. 圖片編輯</h3>
-                      <div className="space-y-4">
-                        {[
-                          { t: '局部重繪與手繪編輯', d: '支援雙模式切換：1) AI 重繪：塗抹遮罩以替換或移除物件，支援本機 LaMa/MI-GAN WebGPU 極速推理與 4x 局部超分縫合；2) 手繪編輯：直接像素塗抹改色，提供軟硬筆刷、背景去背橡皮擦（直接擦除為透明格底）、吸管吸色、拉幾何色塊與獨立的 Undo/Redo 操作。' },
-                          { t: '基礎與進階調整', d: '亮度、對比、飽和度、色溫、亮部、陰影、銳化等細節調整。' },
-                          { t: '混合模式 & 淡出', d: '色彩增值、濾色等混合模式。方向性淡出 (上下左右/放射) 柔和邊緣。' },
-                          { t: '邊距裁剪', d: '非破壞性裁剪。數值面板支援直觀的「上、下、左、右」邊距輸入，支援失焦或回車防呆約束，並動態呈現裁剪後的最終解析度。' },
-                          { t: '陰影效果', d: '投影跟隨像素形狀，下載或合併均能完美保留去背圖層的陰影邊界。' },
-                          { t: '精準尺寸調整', d: '右鍵點擊圖片選「調整圖片尺寸」，可直接輸入寬高數值，支援比例鎖定鈕 🔗（防止拉伸）或解鎖，並提供 50%/150%/200% 與「還原原圖大小」快捷鍵。' },
-                          { t: '下載圖片', d: '右鍵點擊圖片選「下載圖片」，存為 PNG，透明背景完整保留。多選圖片後右鍵可批次下載，自動逐一匯出所有選取圖片。' },
-                        ].map((item, i) => (
-                          <div key={i}>
-                            <h4 className="font-bold text-gray-800 text-[12px] mb-0.5">{item.t}</h4>
-                            <p className="text-[11px] text-gray-500 leading-relaxed">{item.d}</p>
-                          </div>
-                        ))}
-                      </div>
+                  {/* 5. 圖片編輯 */}
+                  <div className="bg-white/80 rounded-xl p-6 border border-gray-100 shadow-sm">
+                    <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">5. 圖片編輯 (Image Editing)</h3>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                      {[
+                        { t: '基礎與進階調整', d: '亮度、對比、飽和度、色溫、亮部、陰影、銳化等細節調整。' },
+                        { t: '混合模式 & 淡出', d: '色彩增值、濾色等混合模式。方向性淡出 (上下左右/放射) 柔和邊緣。' },
+                        { t: '邊距裁剪', d: '非破壞性裁剪。數值面板支援直觀的「上、下、左、右」邊距輸入，支援失焦或回車防呆約束，並動態呈現裁剪後的最終解析度。' },
+                        { t: '陰影效果', d: '投影跟隨像素形狀，下載或合併均能完美保留去背圖層的陰影邊界。' },
+                        { t: '精準尺寸調整', d: '右鍵點擊圖片選「調整圖片尺寸」，可直接輸入寬高數值，支援比例鎖定鈕 🔗（防止拉伸）或解鎖，並提供 50%/150%/200% 與「還原原圖大小」快捷鍵。' },
+                        { t: '下載圖片', d: '右鍵點擊圖片選「下載圖片」，存為 PNG，透明背景完整保留。多選圖片後右鍵可批次下載，自動逐一匯出所有選取圖片。' },
+                      ].map((item, i) => (
+                        <div key={i}>
+                          <h4 className="font-bold text-gray-800 text-[12px] mb-0.5">{item.t}</h4>
+                          <p className="text-[11px] text-gray-500 leading-relaxed">{item.d}</p>
+                        </div>
+                      ))}
                     </div>
-                    <div className="bg-white/80 rounded-xl p-6 border border-gray-100 shadow-sm">
-                      <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">6. 圖層管理</h3>
-                      <div className="space-y-4">
-                        {[
-                          { t: '圖層面板 / 群組', d: '拖曳排序、隱藏/鎖定。Ctrl+G 綁定多物件為群組。' },
-                          { t: '對齊與分佈', d: '選取 2 個以上物件，選取框上方浮現對齊列：靠左/置中/靠右、靠上/置中/靠下。3 個以上可水平/垂直等距分佈。鎖定物件與工作區域不受影響，可復原。' },
-                          { t: '合併圖層', d: '選取多物件壓平為 PNG，自動裁切透明邊界，3x 高清渲染，保留陰影淡出效果。' },
-                          { t: '保留透明背景', d: '風格轉換時先壓平為安全底色，完成後 BiRefNet → Gemini → ChromaKey 依序還原透明通道。' },
-                        ].map((item, i) => (
-                          <div key={i}>
-                            <h4 className="font-bold text-gray-800 text-[12px] mb-0.5">{item.t}</h4>
-                            <p className="text-[11px] text-gray-500 leading-relaxed">{item.d}</p>
-                          </div>
-                        ))}
-                      </div>
+                  </div>
+
+                  {/* 6. 圖層管理 */}
+                  <div className="bg-white/80 rounded-xl p-6 border border-gray-100 shadow-sm">
+                    <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">6. 圖層管理 (Layer Management)</h3>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                      {[
+                        { t: '圖層面板 / 群組', d: '拖曳排序、隱藏/鎖定。Ctrl+G 綁定多物件為群組。' },
+                        { t: '對齊與分佈', d: '選取 2 個以上物件，選取框上方浮現對齊列：靠左/置中/靠右、靠上/置中/靠下。3 個以上可水平/垂直等距分佈。鎖定物件與工作區域不受影響，可復原。' },
+                        { t: '合併圖層', d: '選取多物件壓平為 PNG，自動裁切透明邊界，3x 高清渲染，保留陰影淡出效果。' },
+                        { t: '保留透明背景', d: '風格轉換時先壓平為安全底色，完成後 BiRefNet → Gemini → ChromaKey 依序還原透明通道。' },
+                      ].map((item, i) => (
+                        <div key={i}>
+                          <h4 className="font-bold text-gray-800 text-[12px] mb-0.5">{item.t}</h4>
+                          <p className="text-[11px] text-gray-500 leading-relaxed">{item.d}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
