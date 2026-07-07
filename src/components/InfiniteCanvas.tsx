@@ -4,6 +4,7 @@ import type { Point, CanvasElement, ImageElement, ShapeType, ShapeElement } from
 import type { AlignMode } from '../hooks/useCanvas';
 import type { OutpaintingState } from '../types';
 import { TransformableElement } from './TransformableElement';
+import { computeDragSnap, SnapGuideline } from '../utils/snapping';
 import { AppearancePanel } from './AppearancePanel';
 import { getModelSizes } from '../utils/atlasImage';
 import { Icon } from './Icon';
@@ -654,6 +655,8 @@ interface InfiniteCanvasProps {
   onAlign?: (mode: AlignMode) => void;
   activeGuidelines?: { type: 'h' | 'v'; x?: number; y?: number }[];
   showImageSizes?: boolean;
+  /** 拖曳 live 路徑的物件吸附開關（與 useCanvas 的 snapToObjects 同源） */
+  snapToObjects?: boolean;
 }
 
 // ... (MarqueeRect, CanvasApi, Constants, CameraIcons, SelectionMenuIcons, CAMERA_ANGLES, ASPECT_RATIOS) ...
@@ -786,9 +789,197 @@ const loadSavedViewport = (): { pan: Point; zoom: number } | null => {
   return null;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ElementsLayer：畫布元素層（含拖曳 fast path 的 liveDrag state）。
+// 把 liveDrag 下沉到這個小元件的目的：拖曳每幀只重渲染「元素層」，
+// InfiniteCanvas 本體（選單、工具列、外框等大量 JSX 與 useMemo）完全不參與每幀更新。
+// followers 規則與 useCanvas.updateElements 一致：同 groupId 或同選取、未鎖定；箭頭連動 start/end。
+// ─────────────────────────────────────────────────────────────────────────────
+interface ElementsLayerProps {
+  sortedElements: CanvasElement[];
+  elements: CanvasElement[];
+  selectedElementIds: string[];
+  selectedIdSet: Set<string>;
+  qMinX: number; qMinY: number; qMaxX: number; qMaxY: number;
+  groupActive: boolean;
+  croppingElementId?: string | null;
+  outpaintingState?: OutpaintingState | null;
+  zoom: number;
+  activeGuidelines: SnapGuideline[];
+  snapToObjects: boolean;
+  interactionMode: 'select' | 'hand';
+  showImageSizes: boolean;
+  screenToWorld: (p: Point) => Point;
+  onSelectElement: (id: string, shiftKey: boolean) => void;
+  onUpdateElement: (element: CanvasElement, dragDelta?: Point) => void;
+  onUpdateMultipleElements?: (elements: CanvasElement[]) => void;
+  onInteractionStart?: () => void;
+  onInteractionEnd: () => void;
+  onContextMenu: (e: React.MouseEvent, screenPoint: Point, id: string | null) => void;
+  onEditDrawing: (elementId: string) => void;
+  onDuplicateInPlace?: (activeId: string, isShift: boolean) => { [oldId: string]: CanvasElement };
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  /** 手勢起迄各呼叫一次，父層用來隱藏拖曳中不跟動的 overlay */
+  onDragActiveChange: (dragging: boolean) => void;
+}
+
+const ElementsLayerInner: React.FC<ElementsLayerProps> = ({
+  sortedElements, elements, selectedElementIds, selectedIdSet,
+  qMinX, qMinY, qMaxX, qMaxY,
+  groupActive, croppingElementId, outpaintingState, zoom,
+  activeGuidelines, snapToObjects, interactionMode, showImageSizes, screenToWorld,
+  onSelectElement, onUpdateElement, onUpdateMultipleElements,
+  onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing,
+  onDuplicateInPlace, onDragStart, onDragEnd, onDragActiveChange,
+}) => {
+  // 拖曳期間不進全域 state（App/InfiniteCanvas 皆不重渲染），改以 local override 呈現位置，
+  // mouseup 才呼叫 onUpdateMultipleElements 一次 commit（配合 onInteractionStart
+  // 的首幀標記 → 整段拖曳只留一筆歷史）。
+  const [liveDrag, setLiveDrag] = useState<{ overrides: Map<string, CanvasElement>; guidelines: SnapGuideline[] } | null>(null);
+  const liveDragRef = useRef<typeof liveDrag>(null);
+
+  const handleLiveDrag = useCallback((updatedLeader: CanvasElement) => {
+      const orig = elements.find(el => el.id === updatedLeader.id);
+      if (!orig) return;
+      const selectedSet = new Set(selectedElementIds);
+      let leader = updatedLeader;
+      let guidelines: SnapGuideline[] = [];
+      if (snapToObjects) {
+          const otherEls = elements.filter(el =>
+              el.isVisible && el.id !== leader.id && !selectedSet.has(el.id)
+          );
+          const snapped = computeDragSnap(leader, otherEls, 5);
+          if (leader.type === 'arrow') {
+              const sdx = snapped.x - leader.position.x;
+              const sdy = snapped.y - leader.position.y;
+              leader = {
+                  ...leader,
+                  position: { x: snapped.x, y: snapped.y },
+                  start: { x: (leader as any).start.x + sdx, y: (leader as any).start.y + sdy },
+                  end:   { x: (leader as any).end.x + sdx,   y: (leader as any).end.y + sdy },
+              } as CanvasElement;
+          } else {
+              leader = { ...leader, position: { x: snapped.x, y: snapped.y } };
+          }
+          guidelines = snapped.guidelines;
+      }
+      // followers 以「手勢起點狀態（elements prop，拖曳期間凍結）」加總位移
+      const delta = { x: leader.position.x - orig.position.x, y: leader.position.y - orig.position.y };
+      const overrides = new Map<string, CanvasElement>();
+      overrides.set(leader.id, leader);
+      const gid = leader.groupId;
+      for (const el of elements) {
+          if (el.id === leader.id) continue;
+          const follows = ((gid && el.groupId === gid && el.isVisible) || selectedSet.has(el.id)) && !el.isLocked;
+          if (!follows) continue;
+          if (el.type === 'arrow') {
+              overrides.set(el.id, {
+                  ...el,
+                  position: { x: el.position.x + delta.x, y: el.position.y + delta.y },
+                  start: { x: el.start.x + delta.x, y: el.start.y + delta.y },
+                  end:   { x: el.end.x + delta.x,   y: el.end.y + delta.y },
+              });
+          } else {
+              overrides.set(el.id, { ...el, position: { x: el.position.x + delta.x, y: el.position.y + delta.y } });
+          }
+      }
+      const next = { overrides, guidelines };
+      liveDragRef.current = next;
+      setLiveDrag(next);
+  }, [elements, selectedElementIds, snapToObjects]);
+
+  const handleDragStart = useCallback(() => {
+      onDragActiveChange(true);
+      onDragStart?.();
+  }, [onDragActiveChange, onDragStart]);
+
+  const handleElementDragEnd = useCallback(() => {
+      const cur = liveDragRef.current;
+      liveDragRef.current = null;
+      setLiveDrag(null);
+      onDragActiveChange(false);
+      if (cur && cur.overrides.size > 0 && onUpdateMultipleElements) {
+          // 無實際位移就不 commit（避免點一下就多一筆冗餘歷史）
+          const finals: CanvasElement[] = [];
+          let changed = false;
+          cur.overrides.forEach(ov => {
+              finals.push(ov);
+              const orig = elements.find(el => el.id === ov.id);
+              if (!orig || orig.position.x !== ov.position.x || orig.position.y !== ov.position.y) changed = true;
+          });
+          if (changed) onUpdateMultipleElements(finals);
+      }
+      onDragEnd?.();
+  }, [elements, onUpdateMultipleElements, onDragEnd, onDragActiveChange]);
+
+  // 視口虛擬化：只渲染「可視範圍 + 緩衝」內的元素
+  const visibleElements = useMemo(() => {
+      return sortedElements.filter(el => {
+          // 永遠保留：artboard 底板、選取中、live 拖曳中、正在 outpaint/crop 的元素
+          if (el.type === 'artboard') return true;
+          if (selectedIdSet.has(el.id)) return true;
+          if (liveDrag?.overrides.has(el.id)) return true;
+          if (outpaintingState?.element.id === el.id) return true;
+          if (croppingElementId === el.id) return true;
+          const halfW = el.width / 2, halfH = el.height / 2;
+          return el.position.x + halfW >= qMinX &&
+                 el.position.x - halfW <= qMaxX &&
+                 el.position.y + halfH >= qMinY &&
+                 el.position.y - halfH <= qMaxY;
+      });
+  }, [sortedElements, qMinX, qMinY, qMaxX, qMaxY, selectedIdSet, outpaintingState, croppingElementId, liveDrag]);
+
+  return (
+    <>
+      {visibleElements.map(el => (
+        <TransformableElement
+          key={el.id}
+          element={liveDrag?.overrides.get(el.id) ?? el}
+          isSelected={selectedIdSet.has(el.id) && croppingElementId !== el.id && !groupActive}
+          isOutpainting={!!outpaintingState && outpaintingState.element.id === el.id}
+          zoom={zoom}
+          onSelect={onSelectElement}
+          onUpdate={onUpdateElement}
+          onLiveDrag={onUpdateMultipleElements ? handleLiveDrag : undefined}
+          onInteractionStart={onInteractionStart}
+          onInteractionEnd={onInteractionEnd}
+          onContextMenu={onContextMenu}
+          onEditDrawing={onEditDrawing}
+          onDuplicateInPlace={onDuplicateInPlace}
+          onDragStart={handleDragStart}
+          onDragEnd={onUpdateMultipleElements ? handleElementDragEnd : onDragEnd}
+          interactionMode={interactionMode}
+          screenToWorld={screenToWorld}
+          disableResizeHandles={false}
+          showImageSizes={showImageSizes}
+        />
+      ))}
+
+      {/* 對齊輔助線（含 live 拖曳中的吸附線） */}
+      {[...activeGuidelines, ...(liveDrag?.guidelines ?? [])].map((gl, idx) => (
+        gl.type === 'h' ? (
+          <div
+            key={`gl-h-${idx}`}
+            className="absolute border-t border-dashed border-red-500/80 pointer-events-none"
+            style={{ left: -100000, right: -100000, top: gl.y, height: 0, zIndex: 9999999 }}
+          />
+        ) : (
+          <div
+            key={`gl-v-${idx}`}
+            className="absolute border-l border-dashed border-red-500/80 pointer-events-none"
+            style={{ top: -100000, bottom: -100000, left: gl.x, width: 0, zIndex: 9999999 }}
+          />
+        )
+      ))}
+    </>
+  );
+};
+const ElementsLayer = React.memo(ElementsLayerInner);
+
 export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
-  elements, 
-  selectedElementIds, 
+  elements,
+  selectedElementIds,
   onSelectElement,
   onMarqueeSelect, 
   onUpdateElement,
@@ -844,6 +1035,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onAlign,
   activeGuidelines = [],
   showImageSizes = false,
+  snapToObjects = false,
 }, ref) => {
   const [pan, setPan] = useState<Point>(() => loadSavedViewport()?.pan ?? { x: 0, y: 0 });
   const [zoom, setZoom] = useState(() => loadSavedViewport()?.zoom ?? 1);
@@ -900,6 +1092,10 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
     initBounds: { x: number; y: number; w: number; h: number };
     deg: number;
   } | null>(null);
+
+  // 拖曳 fast path 進行中（liveDrag 已下沉到 ElementsLayer；此旗標只在手勢起迄各更新一次，
+  // 用來隱藏拖曳期間位置不會跟動的 overlay：群組邊框、選取動作選單）
+  const [isElementDragging, setIsElementDragging] = useState(false);
 
   // 只在所有選取元素都屬同一個 groupId 時顯示群組邊框
   const groupBounds = useMemo(() => {
@@ -1356,13 +1552,25 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
 
   // 多圖時效能優化：選取查找用 Set（O(1)），排序清單 memoize（避免每次拖曳都對全部元素重新排序）
   const selectedIdSet = useMemo(() => new Set(selectedElementIds), [selectedElementIds]);
-  const sortedElements = useMemo(() =>
+  // 排序只跟 id/type/zIndex 的「順序」有關：先算 orderKey（O(n) 字串，便宜），
+  // 只有順序真的變了才重排 O(n log n)。拖曳/縮放只動 position/size → 不重排，
+  // 但仍需把排好的 id 映射回最新的元素物件（位置要吃到當幀更新）。
+  const orderKey = useMemo(
+      () => elements.map(e => `${e.id} ${e.type === 'artboard' ? 0 : 1} ${e.zIndex}`).join('|'),
+      [elements]
+  );
+  const sortedIds = useMemo(() =>
       [...elements].sort((a, b) => {
           if (a.type === 'artboard' && b.type !== 'artboard') return -1;
           if (a.type !== 'artboard' && b.type === 'artboard') return 1;
           return a.zIndex - b.zIndex;
-      })
-  , [elements]);
+      }).map(e => e.id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  , [orderKey]);
+  const sortedElements = useMemo(() => {
+      const byId = new Map(elements.map(e => [e.id, e]));
+      return sortedIds.map(id => byId.get(id)!).filter(Boolean);
+  }, [elements, sortedIds]);
 
   // ── 視口虛擬化：只渲染「可視範圍 + 緩衝」內的元素，畫面外的不掛 DOM ──
   // 可視世界矩形由 pan/zoom/容器尺寸反推；MARGIN 給足半螢幕以上，避免捲動邊緣白閃。
@@ -1380,20 +1588,6 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const qMinY = Math.floor(rawMinY / VIRT_QUANT) * VIRT_QUANT;
   const qMaxX = Math.ceil(rawMaxX / VIRT_QUANT) * VIRT_QUANT;
   const qMaxY = Math.ceil(rawMaxY / VIRT_QUANT) * VIRT_QUANT;
-  const visibleElements = useMemo(() => {
-      return sortedElements.filter(el => {
-          // 永遠保留：artboard 底板、選取中、正在 outpaint/crop 的元素（避免飄出視口就消失/中斷操作）
-          if (el.type === 'artboard') return true;
-          if (selectedIdSet.has(el.id)) return true;
-          if (outpaintingState?.element.id === el.id) return true;
-          if (croppingElementId === el.id) return true;
-          const halfW = el.width / 2, halfH = el.height / 2;
-          return el.position.x + halfW >= qMinX &&
-                 el.position.x - halfW <= qMaxX &&
-                 el.position.y + halfH >= qMinY &&
-                 el.position.y - halfH <= qMaxY;
-      });
-  }, [sortedElements, qMinX, qMinY, qMaxX, qMaxY, selectedIdSet, outpaintingState, croppingElementId]);
 
   return (
     <div 
@@ -1421,16 +1615,24 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
         className="absolute inset-0 origin-top-left"
         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, willChange: 'transform' }}
       >
-        {
-          visibleElements.map(el => (
-          <TransformableElement
-            key={el.id}
-            element={el}
-            isSelected={selectedIdSet.has(el.id) && croppingElementId !== el.id && !groupBounds}
-            isOutpainting={!!outpaintingState && outpaintingState.element.id === el.id}
+        <ElementsLayer
+            sortedElements={sortedElements}
+            elements={elements}
+            selectedElementIds={selectedElementIds}
+            selectedIdSet={selectedIdSet}
+            qMinX={qMinX} qMinY={qMinY} qMaxX={qMaxX} qMaxY={qMaxY}
+            groupActive={!!groupBounds}
+            croppingElementId={croppingElementId}
+            outpaintingState={outpaintingState}
             zoom={zoom}
-            onSelect={onSelectElement}
-            onUpdate={onUpdateElement}
+            activeGuidelines={activeGuidelines}
+            snapToObjects={snapToObjects}
+            interactionMode={interactionMode}
+            showImageSizes={showImageSizes}
+            screenToWorld={screenToWorld}
+            onSelectElement={onSelectElement}
+            onUpdateElement={onUpdateElement}
+            onUpdateMultipleElements={onUpdateMultipleElements}
             onInteractionStart={onInteractionStart}
             onInteractionEnd={onInteractionEnd}
             onContextMenu={handleElementContextMenu}
@@ -1438,15 +1640,11 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
             onDuplicateInPlace={onDuplicateInPlace}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
-            interactionMode={interactionMode}
-            screenToWorld={screenToWorld}
-            disableResizeHandles={false}
-            showImageSizes={showImageSizes}
-          />
-        ))}
+            onDragActiveChange={setIsElementDragging}
+        />
 
-        {/* ── 群組邊框（含旋轉鈕 + zoom 補償 handle）── */}
-        {groupBounds && !croppingElementId && (() => {
+        {/* ── 群組邊框（含旋轉鈕 + zoom 補償 handle）；live 拖曳中隱藏（位置不會跟動）── */}
+        {groupBounds && !croppingElementId && !isElementDragging && (() => {
           const { x, y, w, h, gid } = groupBounds;
           const cx = x + w / 2;
           const cy = y + h / 2;
@@ -1655,34 +1853,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                 onUpdateFrame={onUpdateOutpaintingFrame} 
             />
         )}
-        {/* 對齊輔助線 */}
-        {activeGuidelines.map((gl, idx) => (
-          gl.type === 'h' ? (
-            <div
-              key={`gl-h-${idx}`}
-              className="absolute border-t border-dashed border-red-500/80 pointer-events-none"
-              style={{
-                left: -100000,
-                right: -100000,
-                top: gl.y,
-                height: 0,
-                zIndex: 9999999,
-              }}
-            />
-          ) : (
-            <div
-              key={`gl-v-${idx}`}
-              className="absolute border-l border-dashed border-red-500/80 pointer-events-none"
-              style={{
-                top: -100000,
-                bottom: -100000,
-                left: gl.x,
-                width: 0,
-                zIndex: 9999999,
-              }}
-            />
-          )
-        ))}
+        {/* 對齊輔助線改由 ElementsLayer 渲染（含 live 拖曳中的吸附線） */}
       </div>
 
       {outpaintingState && (
@@ -1805,7 +1976,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
           );
       })()}
 
-      {!outpaintingState && !croppingElementId && selectedElementIds.length > 0 && !isArtboardSelected && !isOnlyArrowSelected && !shouldHideMenu && menuPosition && (
+      {!outpaintingState && !croppingElementId && !isElementDragging && selectedElementIds.length > 0 && !isArtboardSelected && !isOnlyArrowSelected && !shouldHideMenu && menuPosition && (
           <div style={{
               position: 'absolute',
               left: menuPosition.left,

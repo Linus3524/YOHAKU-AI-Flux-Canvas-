@@ -1337,6 +1337,29 @@ const App: React.FC = () => {
     })();
   }, [generatedImages, generatedImagesMetadata, restoreTransparencyFn, setGeneratedImages, setPendingAutoDebg, showToast]);
 
+  // LayerPanel 效能：props 全走穩定參考，讓 React.memo 生效（拖曳/縮放時面板不重渲染）
+  const elementsRef = useRef(elements);
+  useEffect(() => { elementsRef.current = elements; });
+  const handleLayerPanelSelect = useCallback((id: string, shiftKey: boolean) => {
+    // 圖層面板直接選取單一物件，不走群組展開邏輯
+    // 這樣才能在圖層面板點選群組成員來單獨選取並解散群組
+    setSelectedElementIds(prev => {
+      if (shiftKey) {
+        return prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id];
+      }
+      if (prev.length === 1 && prev[0] === id) return prev;
+      return [id];
+    });
+  }, [setSelectedElementIds]);
+  const handleLayerPanelExport = useCallback((ids: string[]) => {
+    const els = elementsRef.current;
+    const artboardsToExport = ids
+      .map(id => els.find(el => el.id === id))
+      .filter((el): el is ArtboardElement => el?.type === 'artboard')
+      .sort((a, b) => b.zIndex - a.zIndex);
+    downloadMultipleArtboards(artboardsToExport, els);
+  }, []);
+
   const addGeneratedImageToCanvas = useCallback(async (imageUrl: string) => {
     if (!imageUrl) return;
     const imgIndex = generatedImages?.indexOf(imageUrl) ?? -1;
@@ -2205,6 +2228,7 @@ const App: React.FC = () => {
         onDragEnd={() => setIsDraggingOnCanvas(false)}
         activeGuidelines={activeGuidelines}
         showImageSizes={showImageSizes}
+        snapToObjects={snapToObjects}
       />
 
       {!isFocusMode && !semanticEditorTarget && (
@@ -2248,17 +2272,7 @@ const App: React.FC = () => {
         <LayerPanel
             elements={elements}
             selectedElementIds={selectedElementIds}
-            onSelect={(id, shiftKey) => {
-                // 圖層面板直接選取單一物件，不走群組展開邏輯
-                // 這樣才能在圖層面板點選群組成員來單獨選取並解散群組
-                setSelectedElementIds(prev => {
-                    if (shiftKey) {
-                        return prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id];
-                    }
-                    if (prev.length === 1 && prev[0] === id) return prev;
-                    return [id];
-                });
-            }}
+            onSelect={handleLayerPanelSelect}
             onToggleVisibility={handleToggleVisibility}
             onToggleLock={handleToggleLock}
             onToggleGroupVisibility={handleToggleGroupVisibility}
@@ -2270,13 +2284,7 @@ const App: React.FC = () => {
             onUngroup={handleUngroup}
             onDelete={handleDeleteLayerWithCache}
             onMerge={handleMergeLayersOverride}
-            onExportMultiple={(ids) => {
-                const artboardsToExport = ids
-                    .map(id => elements.find(el => el.id === id))
-                    .filter((el): el is ArtboardElement => el?.type === 'artboard')
-                    .sort((a, b) => b.zIndex - a.zIndex);
-                downloadMultipleArtboards(artboardsToExport, elements);
-            }}
+            onExportMultiple={handleLayerPanelExport}
             isDraggingOnCanvas={isDraggingOnCanvas}
         />
       )}

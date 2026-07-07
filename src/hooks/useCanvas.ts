@@ -19,6 +19,8 @@ import { trimCanvas, wrapTextCanvas, loadImage, createShapeDataUrl, createArrowD
 import { drawTextOnCanvas } from '../utils/textCanvas'; // ✅ 修改
 import type { CanvasApi } from '../components/InfiniteCanvas';
 import { saveFileHandle, loadFileHandle, clearFileHandle, verifyHandlePermission } from '../utils/fileHandleStore';
+import { computeDragSnap } from '../utils/snapping';
+import { persistCanvasSplit, resolveLightElements, hasPayloadMarkers } from '../utils/canvasPersistence';
 
 export type AlignMode = 'left' | 'h-center' | 'right' | 'top' | 'v-center' | 'bottom' | 'distribute-h' | 'distribute-v';
 
@@ -50,13 +52,15 @@ const loadInitialElements = (): CanvasElement[] => {
 };
 
 // IndexedDB 非同步讀取，會在 mount 後觸發 setElements 更新
+// 新版 meta JSON 是輕量版（圖片 payload 拆存），resolveLightElements 會取回還原；
+// 舊版完整 JSON 也相容（無標記時原樣回傳）。
 const loadFromIndexedDB = async (): Promise<CanvasElement[] | null> => {
     try {
         const { get } = await import('idb-keyval');
         const saved = await get<string>(STORAGE_KEY + '_idb');
         if (saved) {
             const parsed = JSON.parse(saved) as CanvasElement[];
-            if (parsed.length > 0) return parsed;
+            if (parsed.length > 0) return await resolveLightElements(parsed);
         }
     } catch {}
     return null;
@@ -167,15 +171,16 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastIDBSaveRef = useRef<string>(''); // 上次寫入 IndexedDB 的內容（內容沒變則略過）
 
-    // 實際寫入 IndexedDB（+ localStorage 降級備援）；內容未變則略過，避免重複寫大檔
+    // 實際寫入 IndexedDB（+ localStorage 降級備援）。
+    // 拆分存檔：圖片 payload 只在變更時增量寫入，meta JSON 輕量（不再整包 stringify 所有 base64，
+    // 消除圖多時存檔造成的主執行緒凍結）。內容未變則略過。
     const persistToIDB = useCallback(async () => {
-        const json = JSON.stringify(elementsRef.current);
-        if (json === lastIDBSaveRef.current) { setStorageStatus('saved'); return; }
         try {
-            const { set } = await import('idb-keyval');
-            await set(STORAGE_KEY + '_idb', json);
+            const json = await persistCanvasSplit(STORAGE_KEY + '_idb', elementsRef.current);
+            if (json === lastIDBSaveRef.current) { setStorageStatus('saved'); return; }
             lastIDBSaveRef.current = json;
             setStorageStatus('saved');
+            // localStorage 備援只存輕量 meta（舊版整包常爆 5MB 配額）
             try { localStorage.setItem(STORAGE_KEY, json); } catch {}
         } catch {
             setStorageStatus('error');
@@ -194,7 +199,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                     const parsed = JSON.parse(saved) as CanvasElement[];
                     if (Array.isArray(parsed) && parsed.length > 0 &&
                         !(parsed.length === 1 && parsed[0].id === 'welcome-note')) {
-                        setElements(parsed);
+                        // 輕量 meta（含拆分標記）需先從 IDB 取回 payload 還原
+                        setElements(hasPayloadMarkers(saved) ? await resolveLightElements(parsed) : parsed);
                         return;
                     }
                 }
@@ -565,120 +571,15 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 let snappedGuidelines: { type: 'h' | 'v'; x?: number; y?: number }[] = [];
 
                 if (snapToObjects) {
-                    const snapThreshold = 5; // world pixels
-                    const w = currentSnappedElement.width;
-                    const h = currentSnappedElement.height;
-                    const cx = currentSnappedElement.position.x;
-                    const cy = currentSnappedElement.position.y;
-
-                    // Dragged element axes
-                    const myL = cx - w / 2;
-                    const myR = cx + w / 2;
-                    const myC = cx;
-                    const myT = cy - h / 2;
-                    const myB = cy + h / 2;
-                    const myM = cy;
-
                     const selectedIds = selectedElementIdsRef.current;
                     const otherEls = prevElements.filter(el =>
                         el.isVisible &&
                         el.id !== currentSnappedElement.id &&
                         !selectedIds.includes(el.id)
                     );
-
-                    let bestDiffX = snapThreshold;
-                    let bestDiffY = snapThreshold;
-                    let snapX: number | undefined;
-                    let snapY: number | undefined;
-
-                    for (const el of otherEls) {
-                        const ow = el.width;
-                        const oh = el.height;
-                        const ocx = el.position.x;
-                        const ocy = el.position.y;
-
-                        const itsL = ocx - ow / 2;
-                        const itsR = ocx + ow / 2;
-                        const itsC = ocx;
-                        const itsT = ocy - oh / 2;
-                        const itsB = ocy + oh / 2;
-                        const itsM = ocy;
-
-                        // Check horizontal alignment (X snapping, draws a vertical line)
-                        const myXAxes = [
-                            { val: myL, offset: w / 2 },
-                            { val: myC, offset: 0 },
-                            { val: myR, offset: -w / 2 }
-                        ];
-                        const itsXAxes = [itsL, itsC, itsR];
-
-                        for (const myX of myXAxes) {
-                            for (const itsX of itsXAxes) {
-                                const diff = Math.abs(myX.val - itsX);
-                                if (diff < bestDiffX) {
-                                    bestDiffX = diff;
-                                    snapX = itsX + myX.offset;
-                                }
-                            }
-                        }
-
-                        // Check vertical alignment (Y snapping, draws a horizontal line)
-                        const myYAxes = [
-                            { val: myT, offset: h / 2 },
-                            { val: myM, offset: 0 },
-                            { val: myB, offset: -h / 2 }
-                        ];
-                        const itsYAxes = [itsT, itsM, itsB];
-
-                        for (const myY of myYAxes) {
-                            for (const itsY of itsYAxes) {
-                                const diff = Math.abs(myY.val - itsY);
-                                if (diff < bestDiffY) {
-                                    bestDiffY = diff;
-                                    snapY = itsY + myY.offset;
-                                }
-                            }
-                        }
-                    }
-
-                    // Apply snap corrections and record guidelines
-                    if (snapX !== undefined) {
-                        currentSnappedElement.position.x = snapX;
-                        const finalL = snapX - w / 2;
-                        const finalR = snapX + w / 2;
-                        const finalC = snapX;
-                        
-                        let matchedX = finalC;
-                        let minD = snapThreshold;
-                        for (const el of otherEls) {
-                            const itsXAxes = [el.position.x - el.width/2, el.position.x, el.position.x + el.width/2];
-                            for (const itsX of itsXAxes) {
-                                if (Math.abs(finalL - itsX) < minD) { minD = Math.abs(finalL - itsX); matchedX = itsX; }
-                                if (Math.abs(finalR - itsX) < minD) { minD = Math.abs(finalR - itsX); matchedX = itsX; }
-                                if (Math.abs(finalC - itsX) < minD) { minD = Math.abs(finalC - itsX); matchedX = itsX; }
-                            }
-                        }
-                        snappedGuidelines.push({ type: 'v', x: matchedX });
-                    }
-
-                    if (snapY !== undefined) {
-                        currentSnappedElement.position.y = snapY;
-                        const finalT = snapY - h / 2;
-                        const finalB = snapY + h / 2;
-                        const finalM = snapY;
-
-                        let matchedY = finalM;
-                        let minD = snapThreshold;
-                        for (const el of otherEls) {
-                            const itsYAxes = [el.position.y - el.height/2, el.position.y, el.position.y + el.height/2];
-                            for (const itsY of itsYAxes) {
-                                if (Math.abs(finalT - itsY) < minD) { minD = Math.abs(finalT - itsY); matchedY = itsY; }
-                                if (Math.abs(finalB - itsY) < minD) { minD = Math.abs(finalB - itsY); matchedY = itsY; }
-                                if (Math.abs(finalM - itsY) < minD) { minD = Math.abs(finalM - itsY); matchedY = itsY; }
-                            }
-                        }
-                        snappedGuidelines.push({ type: 'h', y: matchedY });
-                    }
+                    const snapped = computeDragSnap(currentSnappedElement, otherEls, 5);
+                    currentSnappedElement.position = { x: snapped.x, y: snapped.y };
+                    snappedGuidelines = snapped.guidelines;
                 }
 
                 // Update guidelines state

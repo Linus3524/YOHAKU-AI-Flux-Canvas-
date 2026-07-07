@@ -70,7 +70,7 @@ const ElementIcon = ({ type }: { type: string }) => {
     }
 }
 
-export const LayerPanel: React.FC<LayerPanelProps> = ({
+const LayerPanelInner: React.FC<LayerPanelProps> = ({
     elements,
     selectedElementIds,
     onSelect,
@@ -682,3 +682,6 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({
         </div>
     );
 };
+
+// memo：拖曳/縮放手勢期間 App 每幀重渲染，面板 props 未變時直接跳過整棵子樹
+export const LayerPanel = React.memo(LayerPanelInner);

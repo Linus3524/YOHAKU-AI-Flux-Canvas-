@@ -1,6 +1,7 @@
 // src/components/TransformableElement.tsx
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useDisplaySrc } from '../utils/displayThumb';
 import type { CanvasElement, Point, ArrowElement, NoteElement, TextElement, ShapeElement } from '../types';
 import { wrapTextCanvas, getArrowHeadPath, isCJK, measureTextVisualBounds, getTextBoxPadding, consumeTextAutoEdit } from '../utils/helpers';
 import { getLayerColor } from './LayerPanel';
@@ -14,6 +15,8 @@ interface TransformableElementProps {
   zoom: number;
   onSelect: (id: string, shiftKey: boolean) => void;
   onUpdate: (element: CanvasElement, dragDelta?: Point) => void;
+  /** 拖曳 fast path：提供時，drag 期間改走此路（不進全域 state），mouseup 由外層一次 commit */
+  onLiveDrag?: (element: CanvasElement) => void;
   onInteractionStart?: () => void;
   onInteractionEnd: () => void;
   onContextMenu: (e: React.MouseEvent, worldPoint: Point, elementId: string) => void;
@@ -240,7 +243,7 @@ const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, noteW
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TransformableElementInner: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld, disableResizeHandles, showImageSizes = false }) => {
+const TransformableElementInner: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onLiveDrag, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld, disableResizeHandles, showImageSizes = false }) => {
   const [interaction, setInteraction] = useState<Interaction>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [galleryHovered, setGalleryHovered] = useState(false);
@@ -248,6 +251,12 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
   const elementRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasMovedRef = useRef(false);
+
+  // 顯示用縮圖代理：畫布上的 <img> 用 ~1600px 縮圖，元素 src 原圖不動
+  //（AI/匯出/效果全部照常讀原圖）。非圖片元素傳 undefined，hook 無條件呼叫以符合 hooks 規則。
+  const displaySrc = useDisplaySrc(
+      (element.type === 'image' || element.type === 'drawing') ? (element as any).src : undefined
+  );
 
   // 讀取圖片原始像素尺寸
   useEffect(() => {
@@ -444,7 +453,7 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
       setInteraction(interactionDetails);
     }, [element, onSelect, isOutpainting, onInteractionStart]);
 
-    const handleInteractionMove = useCallback((e: MouseEvent) => {
+    const processInteractionMove = useCallback((e: MouseEvent) => {
         if (!interaction) return;
 
         const { type, startPoint, startElement } = interaction;
@@ -470,7 +479,12 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
             } else {
                 updatedElement = { ...startElement, position: newPosition };
             }
-            onUpdate(updatedElement, delta);
+            if (onLiveDrag) {
+                // fast path：拖曳期間不進全域 state，由 InfiniteCanvas 以 local override 呈現
+                onLiveDrag(updatedElement);
+            } else {
+                onUpdate(updatedElement, delta);
+            }
         } else if (type === 'resize') {
             const handle = interaction.resizeHandle ?? 'se';
             const { ws, hs, px, py } = HANDLE_CFG[handle];
@@ -600,9 +614,29 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
                 rotation: newRotation,
             });
         }
-    }, [interaction, onUpdate, zoom, element.position.x, element.position.y, element]);
+    }, [interaction, onUpdate, onLiveDrag, zoom, element.position.x, element.position.y, element]);
+
+    // rAF 節流：高回報率滑鼠（125~1000Hz）一幀可能塞進多個 mousemove，
+    // 只保留最新事件、每幀最多處理一次，避免一幀內多次 React commit。
+    const moveRafRef = useRef(0);
+    const lastMoveEventRef = useRef<MouseEvent | null>(null);
+    const handleInteractionMove = useCallback((e: MouseEvent) => {
+        lastMoveEventRef.current = e;
+        if (moveRafRef.current) return;
+        moveRafRef.current = requestAnimationFrame(() => {
+            moveRafRef.current = 0;
+            if (lastMoveEventRef.current) processInteractionMove(lastMoveEventRef.current);
+        });
+    }, [processInteractionMove]);
 
     const handleInteractionEnd = useCallback(() => {
+        // 沖掉還沒跑的最後一幀，確保 mouseup 前的位移不遺失
+        if (moveRafRef.current) {
+            cancelAnimationFrame(moveRafRef.current);
+            moveRafRef.current = 0;
+            if (lastMoveEventRef.current) processInteractionMove(lastMoveEventRef.current);
+        }
+        lastMoveEventRef.current = null;
         if (interaction?.type === 'drag') {
             onDragEnd?.();
         }
@@ -611,7 +645,7 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
         }
         hasMovedRef.current = false;
         setInteraction(null);
-    }, [interaction, onDragEnd, onInteractionEnd]);
+    }, [interaction, onDragEnd, onInteractionEnd, processInteractionMove]);
 
     const handleDoubleClick = useCallback((e: React.MouseEvent) => {
         if (isOutpainting || element.isLocked || interactionMode === 'hand') return;
@@ -654,6 +688,11 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
             window.removeEventListener('mouseup', handleInteractionEnd);
         };
     }, [interaction, handleInteractionMove, handleInteractionEnd]);
+
+    // 只在 unmount 時取消殘留的 rAF（不能放上面的 effect：它每幀重跑，會誤殺進行中的排程）
+    useEffect(() => () => {
+        if (moveRafRef.current) cancelAnimationFrame(moveRafRef.current);
+    }, []);
     
     if (!element.isVisible) return null;
 
@@ -1494,7 +1533,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                     filter: imgDropShadow,
                                     transform: flipTransform,
                                 }}>
-                                    <img src={el.src} alt="Canvas element" style={{ width: '100%', height: '100%', objectFit: 'fill' }} className="pointer-events-none" draggable={false} />
+                                    <img src={displaySrc ?? el.src} alt="Canvas element" style={{ width: '100%', height: '100%', objectFit: 'fill' }} className="pointer-events-none" draggable={false} />
                                 </div>
                             </div>
                         );
@@ -1508,7 +1547,7 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                         return (
                             <div style={style} className="rounded-xl flex items-center justify-center">
                                 {el.src ? (
-                                    <img src={el.src} alt="User drawing" style={style} className="rounded-xl object-contain drop-shadow-xl" draggable="false" />
+                                    <img src={displaySrc ?? el.src} alt="User drawing" style={style} className="rounded-xl object-contain drop-shadow-xl" draggable="false" />
                                 ) : (
                                     <span
                                         className="text-[#86868B] text-center bg-white/50 rounded-lg backdrop-blur-sm border border-black/5 whitespace-nowrap"
