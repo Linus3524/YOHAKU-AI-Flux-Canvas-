@@ -471,6 +471,72 @@ export const repairStickerTransparency = async (
   return canvas.toDataURL("image/png");
 };
 
+/**
+ * 不透明背景「原地正規化」：把邊緣連通的背景區（含 AI 亂加的紙紋 / 影印髒污 / 漸層）
+ * 直接重新塗成指定純色，主體不動。
+ *
+ * 為什麼不用「去背→補色」：分割式去背(BiRefNet/Gemini)分不清「模型加的淺色紋理」與
+ * 「真正的主體」，會把髒污當主體留下 → 補白後髒污還在。這裡改用「邊緣 flood-fill +
+ * 色距容差」的確定性演算法：從四邊往內灌，凡與目標色夠接近的連通像素一律塗成目標色。
+ * 主體（深色字/彩色標誌）色距遠 → 不被波及；被主體包住的內部區塊也因非邊緣連通而受保護。
+ *
+ * @param targetHex 目標純色（如 '#ffffff' / '#000000'）
+ * @param tolerance 每通道容差；越大越能吃掉髒污，但也越可能啃到與底色相近的主體邊緣
+ */
+export const flattenBackgroundToColor = async (
+  dataUrl: string,
+  targetHex: string,
+  tolerance = 96,
+): Promise<string> => {
+  const { canvas, ctx, imageData, width, height } = await loadImageSnapshot(dataUrl);
+  const { data } = imageData;
+
+  const target = parseCssColor(targetHex) ?? { r: 255, g: 255, b: 255 };
+  const visited = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
+  let head = 0, tail = 0;
+
+  const isBg = (position: number) => {
+    const idx = position * 4;
+    return (
+      Math.abs(data[idx]     - target.r) <= tolerance &&
+      Math.abs(data[idx + 1] - target.g) <= tolerance &&
+      Math.abs(data[idx + 2] - target.b) <= tolerance
+    );
+  };
+  const enqueue = (position: number) => {
+    if (visited[position] || !isBg(position)) return;
+    visited[position] = 1;
+    queue[tail++] = position;
+  };
+
+  getEdgePixelPositions(width, height).forEach(enqueue);
+
+  while (head < tail) {
+    const position = queue[head++];
+    const idx = position * 4;
+    data[idx] = target.r;
+    data[idx + 1] = target.g;
+    data[idx + 2] = target.b;
+    data[idx + 3] = 255;
+
+    const x = position % width;
+    const y = (position - x) / width;
+    if (x > 0) enqueue(position - 1);
+    if (x < width - 1) enqueue(position + 1);
+    if (y > 0) enqueue(position - width);
+    if (y < height - 1) enqueue(position + width);
+  }
+
+  // 輸出為完全不透明（主體保留原色，背景已統一為目標純色）
+  for (let position = 0; position < width * height; position += 1) {
+    data[position * 4 + 3] = 255;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL("image/png");
+};
+
 const findOpaqueComponents = (snapshot: CanvasSnapshot): ComponentBox[] => {
   const { imageData, width, height } = snapshot;
   const { data } = imageData;

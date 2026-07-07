@@ -40,7 +40,7 @@ import { gptLayerSegment } from './utils/gptLayerSplit';
 import { detectTextBlocks } from './utils/ocrService';
 import { SVGExportModal } from './components/SVGExportModal';
 import { SemanticEditorView } from './components/SemanticEditor';
-import { splitStickerCollectionDetailed, detectBackgroundColor, repairStickerTransparency } from './utils/imageProcessing';
+import { splitStickerCollectionDetailed, detectBackgroundColor, repairStickerTransparency, flattenBackgroundToColor } from './utils/imageProcessing';
 import type {
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
@@ -1336,6 +1336,15 @@ const App: React.FC = () => {
 
         (async () => {
           try {
+            const wantWhiteBg = !!meta?.prompt && (meta.prompt.includes('BACKGROUND: white') || meta.prompt.includes('Background: Strictly isolated on a solid, uniform, 100% pure white background'));
+            const wantBlackBg = !!meta?.prompt && (meta.prompt.includes('BACKGROUND: black') || meta.prompt.includes('Background: Strictly isolated on a solid, uniform, 100% pure black background'));
+
+            let finalSrc: string;
+            if (wantWhiteBg || wantBlackBg) {
+              // 不透明白/黑背景：原地把「邊緣連通的背景區(含髒污/紙紋)」重塗成純色，主體不動。
+              // 不走「去背→補色」，避免分割式去背把模型亂加的淺色紋理誤當主體留下。
+              finalSrc = await flattenBackgroundToColor(originalSrc, wantWhiteBg ? '#ffffff' : '#000000');
+            } else {
             let debgSrc: string;
             if (pendingStickerBorder !== null) {
               // LINE 貼圖：背景已控制成純黑(有白邊)/純白(無白邊) → 泛洪 chroma 為主路。
@@ -1360,38 +1369,7 @@ const App: React.FC = () => {
               const detectedBg = await detectBackgroundColor(originalSrc);
               debgSrc = await restoreTransparencyFn(originalSrc, detectedBg);
             }
-            const applySolidBackground = (pngDataUrl: string, bgColor: string): Promise<string> => {
-              return new Promise((resolve) => {
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                img.onload = () => {
-                  const canvas = document.createElement('canvas');
-                  canvas.width = img.width;
-                  canvas.height = img.height;
-                  const ctx = canvas.getContext('2d');
-                  if (ctx) {
-                    ctx.fillStyle = bgColor;
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0);
-                    resolve(canvas.toDataURL('image/png'));
-                  } else {
-                    resolve(pngDataUrl);
-                  }
-                };
-                img.onerror = () => resolve(pngDataUrl);
-                img.src = pngDataUrl;
-              });
-            };
-
-            let finalSrc = debgSrc;
-            if (meta?.prompt) {
-              const isWhitePrompt = meta.prompt.includes('BACKGROUND: white') || meta.prompt.includes('Background: Strictly isolated on a solid, uniform, 100% pure white background');
-              const isBlackPrompt = meta.prompt.includes('BACKGROUND: black') || meta.prompt.includes('Background: Strictly isolated on a solid, uniform, 100% pure black background');
-              if (isWhitePrompt) {
-                finalSrc = await applySolidBackground(debgSrc, '#ffffff');
-              } else if (isBlackPrompt) {
-                finalSrc = await applySolidBackground(debgSrc, '#000000');
-              }
+            finalSrc = debgSrc;
             }
 
             setElements(prev => prev.map(el => el.id === elementId && el.type === 'image' ? { ...el, src: finalSrc } : el));
