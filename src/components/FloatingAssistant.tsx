@@ -769,6 +769,43 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 內建 60+ 種藝術風格與 50+ 品牌預設。支援 <code className="font-mono bg-purple-50 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等比例與多種手機/平板/桌面/瀏覽器解析度。各模式均支援「✨ AI 提示詞優化」重寫最佳指令。</div>
                     </div>
 
+                    {/* 局部重繪與手繪編輯 */}
+                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 局部重繪與手繪編輯</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">支援雙模式切換，整合 AI 智慧填充與經典數位繪圖工具：</p>
+                      <div className="grid grid-cols-2 gap-1.5 mb-2">
+                        {[
+                          { label: 'AI 重繪', desc: '塗抹遮罩以替換或移除物件，支援本機 LaMa/MI-GAN WebGPU 極速推理與 4x 局部超分縫合。' },
+                          { label: '手繪編輯', desc: '直接像素塗抹改色，提供軟硬筆刷、去背橡皮擦（直接擦除為透明格底）、吸管吸色、拉幾何色塊與獨立 Undo/Redo。' },
+                        ].map((m, i) => (
+                          <div key={i} className="bg-white/80 border border-purple-100/50 rounded-lg px-2.5 py-2">
+                            <div className="font-bold text-purple-700 text-[11px] mb-0.5">{m.label}</div>
+                            <div className="text-gray-500 text-[10px] leading-snug">{m.desc}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 本機 LaMa / MI-GAN WebGPU 推理完全在瀏覽器端執行，流暢且無耗能限制。</div>
+                    </div>
+
+                    {/* 魔法分層 */}
+                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 魔法分層</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 10 個物件層。</p>
+                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-purple-50 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-purple-50 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
+                    </div>
+
+                    {/* 一鍵拆分貼圖 */}
+                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 一鍵拆分貼圖</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed">右鍵點擊圖片選「一鍵拆分貼圖」，可自動將套組中相鄰的多張貼圖獨立分割。支援彈出對話框手動輸入預估數量（進行高精度的網格谷底均分），或直接點擊確定進行智慧自動偵測。拆分後會自動為每張子貼圖去背並個別存入本地快取。</p>
+                    </div>
+
+                    {/* Magic Style */}
+                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ Magic Style 風格庫</h4>
+                      <p className="text-[11px] text-gray-600 leading-relaxed">內建 150+ 種藝術風格，涵蓋 12 大分類：繪畫插畫、動漫漫畫、攝影底片、數位藝術、特殊材質、次文化少女暗黑、新世代潮流、節慶限定、歷史宗教、稀有新趨勢、經典數位相機與CCD模擬、光學硬體與AI氛圍。一鍵套用至選取圖片，生成設定面板也可預設參考風格。</p>
+                    </div>
+
                     {/* 品牌與行銷工具組 */}
                     <div className="bg-blue-50/20 border border-blue-100/80 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-blue-900 text-[13px] mb-1.5">✦ 品牌與行銷工具組 (Brand & Marketing)</h4>
@@ -813,26 +850,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <div className="text-[11px] text-cyan-800 bg-white/80 px-3 py-2 rounded-lg">✔ 語意分層需 <code className="font-mono bg-cyan-50 px-1 rounded">Gemini Key</code>；物件重繪最佳品質需 <code className="font-mono bg-cyan-50 px-1 rounded">Atlas Key</code>（GPT Image 2）或 <code className="font-mono bg-cyan-50 px-1 rounded">Gemini Key</code>；SAM2 分割需 <code className="font-mono bg-cyan-50 px-1 rounded">fal.ai Key</code> 或下載本機模型。</div>
                     </div>
 
-                    {/* 局部重繪與手繪編輯 */}
-                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
-                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 局部重繪與手繪編輯</h4>
-                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">支援雙模式切換，整合 AI 智慧填充與經典數位繪圖工具：</p>
-                      <div className="grid grid-cols-2 gap-1.5 mb-2">
-                        {[
-                          { label: 'AI 重繪', desc: '塗抹遮罩以替換或移除物件，支援本機 LaMa/MI-GAN WebGPU 極速推理與 4x 局部超分縫合。' },
-                          { label: '手繪編輯', desc: '直接像素塗抹改色，提供軟硬筆刷、去背橡皮擦（直接擦除為透明格底）、吸管吸色、拉幾何色塊與獨立 Undo/Redo。' },
-                        ].map((m, i) => (
-                          <div key={i} className="bg-white/80 border border-purple-100/50 rounded-lg px-2.5 py-2">
-                            <div className="font-bold text-purple-700 text-[11px] mb-0.5">{m.label}</div>
-                            <div className="text-gray-500 text-[10px] leading-snug">{m.desc}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 本機 LaMa / MI-GAN WebGPU 推理完全在瀏覽器端執行，流暢且無耗能限制。</div>
-                    </div>
-
                     {/* 快速去背 */}
-                    <div className="bg-orange-50/40 border border-orange-100 rounded-xl p-4 mb-3">
+                    <div className="bg-orange-50/40 border border-orange-100 rounded-xl p-4">
                       <h4 className="font-bold text-orange-900 text-[13px] mb-1">✦ 快速去背（BiRefNet）</h4>
                       <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵點擊圖片選「快速去背」，精度優於智慧去背。提供 6 種專用模式，依圖片類型選擇最佳結果。</p>
                       <div className="grid grid-cols-2 gap-1.5 mb-2">
@@ -851,24 +870,6 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         ))}
                       </div>
                       <div className="text-[11px] text-orange-800 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-orange-100 px-1 rounded">fal.ai Key</code>；未設定時右鍵選單不顯示此功能。</div>
-                    </div>
-
-                    {/* 魔法分層 */}
-                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
-                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 魔法分層</h4>
-                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 10 個物件層。</p>
-                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-purple-50 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-purple-50 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
-                    </div>
-
-                    {/* 一鍵拆分貼圖 */}
-                    <div className="bg-emerald-50/20 border border-emerald-100 rounded-xl p-4 mb-3">
-                      <h4 className="font-bold text-emerald-900 text-[13px] mb-1">✦ 一鍵拆分貼圖</h4>
-                      <p className="text-[11px] text-gray-700 leading-relaxed">右鍵點擊圖片選「一鍵拆分貼圖」，可自動將套組中相鄰的多張貼圖獨立分割。支援彈出對話框手動輸入預估數量（進行高精度的網格谷底均分），或直接點擊確定進行智慧自動偵測。拆分後會自動為每張子貼圖去背並個別存入本地快取。</p>
-                    </div>
-                    {/* Magic Style */}
-                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4">
-                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ Magic Style 風格庫</h4>
-                      <p className="text-[11px] text-gray-600 leading-relaxed">內建 150+ 種藝術風格，涵蓋 12 大分類：繪畫插畫、動漫漫畫、攝影底片、數位藝術、特殊材質、次文化少女暗黑、新世代潮流、節慶限定、歷史宗教、稀有新趨勢、經典數位相機與CCD模擬、光學硬體與AI氛圍。一鍵套用至選取圖片，生成設定面板也可預設參考風格。</p>
                     </div>
                   </div>
 
