@@ -8,7 +8,7 @@ const ATLAS_BASE_URL = 'https://api.atlascloud.ai/api/v1';
 const POLL_INTERVAL_MS = 2500;
 const MAX_WAIT_MS = 600000; // 10 minutes（參考圖模式需要更長時間）
 
-export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'qwen-image-2';
+export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'qwen-image-2' | 'flux-2-pro';
 
 /** Seedream v4.5 / v5 — 8 種比例 × 2K/4K（使用 * 分隔符） */
 export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
@@ -52,7 +52,7 @@ export const GPT_SIZES: { ratio: string; label: string; w2k: string; w4k: string
 /** 依模型取對應的尺寸表（供 UI 使用） */
 export function getModelSizes(model: AtlasGenerationModel) {
     if (model === 'gpt-image-2') return GPT_SIZES;
-    if (model === 'qwen-image-2') return QWEN_SIZES;
+    if (model === 'qwen-image-2' || model === 'flux-2-pro') return QWEN_SIZES;
     return ATLAS_SIZES;
 }
 
@@ -114,6 +114,17 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         useQwenSizes: true,
         supportsBase64Output: true,
         img2imgId: 'qwen/qwen-image-2.0/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
+    },
+    'flux-2-pro': {
+        id: 'black-forest-labs/flux-2-pro/text-to-image',
+        useInputWrapper: false,
+        sizeParam: 'size',
+        useQwenSizes: true,
+        supportsBase64Output: true,
+        img2imgId: 'black-forest-labs/flux-2-pro/edit',
         img2imgUseInputWrapper: false,
         img2imgImageParam: 'images',
         img2imgImageIsArray: true,

@@ -470,53 +470,51 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                 {selectedElement?.metadata?.seed !== undefined && (
                                     <>
                                         <div className="border-t my-0.5 border-gray-100/50" />
-                                        <div className="px-3 py-1.5 text-[9px] font-bold text-[#AF52DE] uppercase tracking-wider opacity-90 flex items-center gap-1">
+                                        <div className="px-3 py-1 text-[10px] font-bold text-[#AF52DE] uppercase tracking-wider opacity-90 flex items-center gap-1">
                                             <span className="w-1.5 h-1.5 rounded-full bg-[#AF52DE] animate-pulse" />
                                             AI 生成資訊
                                         </div>
-                                        <div className="px-3 py-2 bg-purple-50/40 mx-2 mb-1.5 rounded-xl border border-purple-100/50 space-y-1 text-left">
+                                        <div className="px-3 py-2 space-y-2 text-left">
                                             {selectedElement.metadata.model && (
-                                                <div className="flex justify-between items-center text-[10px]">
-                                                    <span className="text-gray-400 font-medium">模型:</span>
-                                                    <span className="text-purple-600 font-bold font-sans uppercase bg-purple-100/60 px-1.5 py-px rounded-md">
+                                                <div className="flex justify-between items-center text-[11px]">
+                                                    <span className="text-gray-400">生圖模型</span>
+                                                    <span className="px-1.5 py-0.5 bg-purple-50 text-[#AF52DE] rounded text-[10px] font-bold uppercase">
                                                         {selectedElement.metadata.model}
                                                     </span>
                                                 </div>
                                             )}
-                                            <div className="flex justify-between items-center text-[10px]">
-                                                <span className="text-gray-400 font-medium">種子碼 (Seed):</span>
-                                                <div className="flex items-center gap-1 font-mono text-gray-700">
-                                                    <span className="font-bold">{selectedElement.metadata.seed}</span>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            navigator.clipboard.writeText(String(selectedElement.metadata.seed));
-                                                            alert(`📋 已複製種子碼: ${selectedElement.metadata.seed}`);
-                                                        }}
-                                                        className="p-0.5 rounded text-purple-400 hover:text-purple-700 hover:bg-purple-100/50 transition-colors"
-                                                        title="複製種子碼"
-                                                    >
-                                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
-                                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                                        </svg>
-                                                    </button>
-                                                </div>
+                                            <div className="flex justify-between items-center text-[11px]">
+                                                <span className="text-gray-400">種子碼 (Seed)</span>
+                                                <span 
+                                                    className="font-mono font-bold text-gray-700 hover:text-[#AF52DE] flex items-center gap-1 cursor-pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        navigator.clipboard.writeText(String(selectedElement.metadata.seed));
+                                                        alert(`📋 已複製種子碼: ${selectedElement.metadata.seed}`);
+                                                    }}
+                                                    title="點擊複製種子碼"
+                                                >
+                                                    {selectedElement.metadata.seed}
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                                </span>
                                             </div>
                                             {selectedElement.metadata.prompt && (
-                                                <div className="pt-1 border-t border-purple-100/30 flex flex-col gap-0.5">
-                                                    <span className="text-gray-400 text-[9px] font-medium">提示詞 (點擊複製):</span>
-                                                    <p 
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            navigator.clipboard.writeText(String(selectedElement.metadata.prompt));
-                                                            alert(`📋 已複製提示詞！`);
-                                                        }}
-                                                        className="text-[9px] text-gray-500 leading-normal line-clamp-2 hover:line-clamp-none transition-all cursor-copy hover:text-purple-600 bg-white/60 p-1 rounded border border-gray-100 select-none"
-                                                        title="點擊複製完整提示詞"
-                                                    >
+                                                <div 
+                                                    className="group relative bg-gray-50 border border-gray-100 rounded-lg p-2 mt-1 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        navigator.clipboard.writeText(String(selectedElement.metadata.prompt));
+                                                        alert(`📋 已複製提示詞！`);
+                                                    }}
+                                                    title="點擊複製完整提示詞"
+                                                >
+                                                    <p className="text-[10px] text-gray-400 font-semibold mb-1">PROMPT (點擊複製)</p>
+                                                    <p className="text-[11px] text-gray-600 leading-normal line-clamp-2 hover:line-clamp-none transition-all">
                                                         {selectedElement.metadata.prompt}
                                                     </p>
+                                                    <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                                                        <span className="text-[10px] bg-white px-2 py-1 rounded shadow-sm text-gray-700 font-bold">複製提示詞</span>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>

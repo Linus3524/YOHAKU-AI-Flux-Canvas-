@@ -6,6 +6,7 @@ import {
 const MODEL_OPTIONS: { id: string; label: string; needsAtlas: boolean }[] = [
   { id: 'gemini', label: 'Gemini 3 Flash / Pro（預設）', needsAtlas: false },
   { id: 'gpt-image-2', label: 'GPT Image 2', needsAtlas: true },
+  { id: 'flux-2-pro', label: 'FLUX.2 Pro', needsAtlas: true },
   { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', needsAtlas: true },
   { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', needsAtlas: true },
   { id: 'qwen-image-2', label: '通義千問 Qwen Image 2.0', needsAtlas: true },
@@ -19,7 +20,7 @@ const SIZE_OPTIONS: { id: '2K' | '4K'; label: string }[] = [
 interface BrandKitModalProps {
   imageName?: string;
   hasAtlas?: boolean;
-  onGenerate: (brief: LogoSkillConfig, model: string, resolution: '1K' | '2K' | '4K', selectedAssetIds: string[]) => void;
+  onGenerate: (brief: LogoSkillConfig, model: string, resolution: '1K' | '2K' | '4K', selectedAssetIds: string[], customSeed?: number) => void;
   onClose: () => void;
 }
 
@@ -37,6 +38,8 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
   const [slogan, setSlogan] = useState('');
   const [model, setModel] = useState('gemini');
   const [imageSize, setImageSize] = useState<'2K' | '4K'>('2K');
+  const [useCustomSeed, setUseCustomSeed] = useState(false);
+  const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
   const [selectedAssets, setSelectedAssets] = useState<string[]>([]); // 預設全部沒勾，使用者自己挑
   const [isMouseDownOnBackdrop, setIsMouseDownOnBackdrop] = useState(false);
 
@@ -107,7 +110,8 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
       brandKitResolution: imageSize,
       customAssets: activeCustom,
     };
-    onGenerate(brief, model, imageSize, activeBuiltIn);
+    const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
+    onGenerate(brief, model, imageSize, activeBuiltIn, seedParam);
     onClose();
   };
 
@@ -344,6 +348,39 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
           >
             ＋新增
           </button>
+        </div>
+
+        {/* 進階風格控制 (Seed) */}
+        <div className="mb-4 pt-3 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide">進階風格控制 (Seed)</span>
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input type="checkbox" checked={useCustomSeed} onChange={e => setUseCustomSeed(e.target.checked)}
+                className="rounded border-[#cbd5e1] text-[#AF52DE] focus:ring-[#AF52DE] w-3 h-3 cursor-pointer" />
+              <span className="text-[11px] font-semibold text-gray-500">自訂 Seed</span>
+            </label>
+          </div>
+          {useCustomSeed && (
+            <div className="bg-[#f8fafc] border border-[#E2E8F0] rounded-xl p-2.5 flex items-center gap-2 animate-fade-in-down">
+              <input
+                type="number"
+                placeholder="請輸入種子碼 (例如 123456)"
+                value={customSeedValue}
+                onChange={e => {
+                  const v = e.target.value;
+                  setCustomSeedValue(v === '' ? '' : Math.max(0, parseInt(v, 10)));
+                }}
+                className="flex-1 bg-white border border-[#E2E8F0] rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-gray-800 focus:outline-none focus:border-[#AF52DE] font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setCustomSeedValue(Math.floor(Math.random() * 2147483647))}
+                className="px-2 py-1.5 rounded-lg border border-[#E2E8F0] bg-white hover:bg-gray-50 text-gray-500 text-[10px] font-bold transition-all active:scale-95"
+              >
+                🎲 隨機
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 按鈕 */}

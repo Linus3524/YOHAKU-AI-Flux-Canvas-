@@ -8,6 +8,7 @@ import {
 const MODEL_OPTIONS: { id: string; label: string; needsAtlas: boolean }[] = [
   { id: 'gemini', label: 'Gemini 3 Flash / Pro（預設）', needsAtlas: false },
   { id: 'gpt-image-2', label: 'GPT Image 2', needsAtlas: true },
+  { id: 'flux-2-pro', label: 'FLUX.2 Pro', needsAtlas: true },
   { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', needsAtlas: true },
   { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', needsAtlas: true },
   { id: 'qwen-image-2', label: '通義千問 Qwen Image 2.0', needsAtlas: true },
@@ -21,7 +22,7 @@ const SIZE_OPTIONS: { id: '2K' | '4K'; label: string }[] = [
 interface ProductMarketingModalProps {
   imageName?: string;
   hasAtlas?: boolean;
-  onGenerate: (brief: ProductMarketingBrief, model: string, resolution: '1K' | '2K' | '4K', selectedRecipeIds: string[], platformId: string) => void;
+  onGenerate: (brief: ProductMarketingBrief, model: string, resolution: '1K' | '2K' | '4K', selectedRecipeIds: string[], platformId: string, customSeed?: number) => void;
   onClose: () => void;
 }
 
@@ -40,6 +41,8 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
   const [targetAudience, setTargetAudience] = useState('');
   const [visualTone, setVisualTone] = useState('乾淨專業');
   const [lockStyleConsistency, setLockStyleConsistency] = useState(true);
+  const [useCustomSeed, setUseCustomSeed] = useState(false);
+  const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
   const [model, setModel] = useState('gemini');
   const [imageSize, setImageSize] = useState<'2K' | '4K'>('2K');
 
@@ -158,7 +161,8 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
       lockStyleConsistency,
     };
 
-    onGenerate(brief, model, imageSize, activeBuiltIn, activePlatform);
+    const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
+    onGenerate(brief, model, imageSize, activeBuiltIn, activePlatform, seedParam);
     onClose();
   };
 
@@ -211,7 +215,7 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
           </summary>
           <div className="space-y-3 mt-2 p-2.5 bg-white rounded-lg border border-gray-100/50">
             {/* 風格一致性鎖定 */}
-            <div className="flex items-center gap-2 mb-1 bg-purple-50/20 p-2.5 rounded-xl border border-purple-100/50">
+            <div className="flex flex-col gap-2 mb-1 bg-purple-50/20 p-2.5 rounded-xl border border-purple-100/50">
               <label className="flex items-center gap-2.5 cursor-pointer select-none w-full">
                 <input
                   type="checkbox"
@@ -224,6 +228,40 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
                   <span className="text-[9px] text-[#86868B] font-normal leading-tight mt-0.5">鎖定種子碼與智慧配色分析，使系列圖極具一致感</span>
                 </div>
               </label>
+
+              {lockStyleConsistency && (
+                <div className="pt-2 border-t border-purple-100/50 mt-1 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-gray-500">自訂風格種子碼 (Seed)</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" checked={useCustomSeed} onChange={e => setUseCustomSeed(e.target.checked)}
+                        className="rounded border-[#cbd5e1] text-[#AF52DE] focus:ring-[#AF52DE] w-3 h-3 cursor-pointer" />
+                      <span className="text-[10px] font-semibold text-gray-500">啟用</span>
+                    </label>
+                  </div>
+                  {useCustomSeed && (
+                    <div className="bg-white border border-[#E2E8F0] rounded-xl p-2 flex items-center gap-2 animate-fade-in-down">
+                      <input
+                        type="number"
+                        placeholder="輸入固定的 Seed (例如 123456)"
+                        value={customSeedValue}
+                        onChange={e => {
+                          const v = e.target.value;
+                          setCustomSeedValue(v === '' ? '' : Math.max(0, parseInt(v, 10)));
+                        }}
+                        className="flex-1 bg-white border-0 rounded-lg px-2 py-1 text-[10px] font-bold text-gray-800 focus:outline-none focus:ring-0 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setCustomSeedValue(Math.floor(Math.random() * 2147483647))}
+                        className="px-2 py-1 rounded-lg border border-[#E2E8F0] bg-white hover:bg-gray-50 text-gray-500 text-[9px] font-bold transition-all active:scale-95 whitespace-nowrap"
+                      >
+                        🎲 隨機
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 核心賣點 */}

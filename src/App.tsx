@@ -491,6 +491,10 @@ const App: React.FC = () => {
       setImageSize,
       preserveTransparency,
       setPreserveTransparency,
+      useCustomSeed,
+      setUseCustomSeed,
+      customSeedValue,
+      setCustomSeedValue,
       showStyleLibrary,
       setShowStyleLibrary,
       handleCopyStyle,
@@ -1169,14 +1173,15 @@ const App: React.FC = () => {
     const hasNotes = selectedElements.some(el => el.type === 'note' || el.type === 'text');
     const hasImages = selectedElements.some(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
     const hasStyle = imageStyle && imageStyle !== 'Default';
+    const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
     // 只有圖片、沒有便利貼、沒有風格 → 詢問意圖
     if (hasImages && !hasNotes && !hasStyle) {
       setIntentText('');
       setIntentModal({ elements: selectedElements, count });
       return;
     }
-    handleGenerate(selectedElements, count);
-  }, [handleGenerate, imageStyle]);
+    handleGenerate(selectedElements, count, undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam);
+  }, [handleGenerate, imageStyle, useCustomSeed, customSeedValue]);
 
   // 新畫布時（只有歡迎便利貼）自動 fit to screen 對齊畫面
   useEffect(() => {
@@ -2035,7 +2040,8 @@ const App: React.FC = () => {
                   e.preventDefault();
                   const { elements: els, count } = intentModal;
                   setIntentModal(null);
-                  handleGenerate(els, count, intentText.trim() || undefined);
+                  const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
+                  handleGenerate(els, count, intentText.trim() || undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam);
                 }
               }}
               placeholder="例如：轉成油畫風格、把背景換成日落、加強細節品質..."
@@ -2047,7 +2053,8 @@ const App: React.FC = () => {
                 onClick={() => {
                   const { elements: els, count } = intentModal;
                   setIntentModal(null);
-                  handleGenerate(els, count, undefined);
+                  const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
+                  handleGenerate(els, count, undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam);
                 }}
                 className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors"
               >
@@ -2057,7 +2064,8 @@ const App: React.FC = () => {
                 onClick={() => {
                   const { elements: els, count } = intentModal;
                   setIntentModal(null);
-                  handleGenerate(els, count, intentText.trim() || undefined);
+                  const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
+                  handleGenerate(els, count, intentText.trim() || undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-[13px] font-medium hover:bg-gray-700 transition-colors"
               >
@@ -2192,6 +2200,10 @@ const App: React.FC = () => {
         onSetImageSize={setImageSize}
         preserveTransparency={preserveTransparency}
         onSetPreserveTransparency={setPreserveTransparency}
+        useCustomSeed={useCustomSeed}
+        onSetUseCustomSeed={setUseCustomSeed}
+        customSeedValue={customSeedValue}
+        onSetCustomSeedValue={setCustomSeedValue}
         generationModel={generationModel}
         onSetGenerationModel={handleSetGenerationModel}
         hasAtlasKey={!!atlasApiKey}
@@ -2498,9 +2510,9 @@ const App: React.FC = () => {
         <BrandKitModal
           imageName={brandKitTarget.name}
           hasAtlas={!!atlasApiKey}
-          onGenerate={(brief, model, resolution, selectedAssetIds) => {
+          onGenerate={(brief, model, resolution, selectedAssetIds, customSeed) => {
             const id = brandKitTarget.elementId;
-            handleExtendBrandKit(id, brief, model, resolution, selectedAssetIds).catch((e: any) =>
+            handleExtendBrandKit(id, brief, model, resolution, selectedAssetIds, customSeed).catch((e: any) =>
               showToast(`❌ 品牌視覺延伸失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`)
             );
           }}
@@ -2512,9 +2524,9 @@ const App: React.FC = () => {
         <ProductMarketingModal
           imageName={productMarketingTarget.name}
           hasAtlas={!!atlasApiKey}
-          onGenerate={(brief, model, resolution, selectedRecipeIds, platformId) => {
+          onGenerate={(brief, model, resolution, selectedRecipeIds, platformId, customSeed) => {
             const id = productMarketingTarget.elementId;
-            handleProductMarketingSet(id, brief, model, resolution, selectedRecipeIds, platformId).catch((e: any) =>
+            handleProductMarketingSet(id, brief, model, resolution, selectedRecipeIds, platformId, customSeed).catch((e: any) =>
               showToast(`❌ 產品行銷組圖生成失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`)
             );
           }}
@@ -2638,9 +2650,9 @@ const App: React.FC = () => {
             apiKey={effectiveApiKey}
             showToast={showToast}
             onClose={() => setDesignMasterTargetId(null)}
-            onGenerate={(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder) => {
+            onGenerate={(prompt, count, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder, customSeed) => {
               setDesignMasterTargetId(null);
-              handleGenerate([el], count, prompt, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder);
+              handleGenerate([el], count, prompt, model, autoRemoveBg, aspect, imageSizeOverride, refStyleIndex, refStyleScope, stickerDebgBorder, customSeed);
             }}
             onGenerateBrandKit={(brief, model, resolution) => {
               setDesignMasterTargetId(null);

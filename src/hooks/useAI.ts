@@ -132,6 +132,8 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [imageAspectRatio, setImageAspectRatio] = useState<string>('Original');
     const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('1K');
     const [preserveTransparency, setPreserveTransparency] = useState(true);
+    const [useCustomSeed, setUseCustomSeed] = useState<boolean>(false);
+    const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
     // 透明背景一律改用「生成後去背」流程處理。
     // Atlas 的 gpt-image-2 端點不接受 background:transparent 參數（會直接打回失敗），
     // 故所有模型都不再透過 API 參數要求透明背景。
@@ -1773,7 +1775,7 @@ CONSTRAINTS:
     const handleCrossPlatformAdapt = useCallback(async (
         elementId: string,
         platformIds: string[],
-        opts: { preserveSubject?: boolean; keepText?: boolean; model?: string; imageSize?: '2K' | '4K' } = {},
+        opts: { preserveSubject?: boolean; keepText?: boolean; model?: string; imageSize?: '2K' | '4K'; seed?: number } = {},
     ) => {
         const el = elements.find(e => e.id === elementId);
         if (!el || el.type !== 'image') { showToast('⚠️ 請先選擇一張圖片'); return; }
@@ -1816,7 +1818,7 @@ CONSTRAINTS:
                         // Atlas quality 只接受 2K/4K,1K（快）就近用 2K（沒有更低檔位）。
                         const quality = opts.imageSize === '4K' ? '4K' : '2K';
                         const images = await withAtlasWaitToast(() =>
-                            callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, src, 1, { ratio: spec.atlasRatio, quality }));
+                            callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, src, 1, { ratio: spec.atlasRatio, quality, seed: opts.seed }));
                         if (images.length > 0) resultSrc = images[0];
                     } else {
                         const genAI = new GoogleGenAI({ apiKey: apiKey! });
@@ -1825,7 +1827,10 @@ CONSTRAINTS:
                         const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                             model: imageModel,
                             contents: { parts: [{ inlineData: { data, mimeType } }, { text: `${prompt}\nOutput aspect ratio: ${spec.atlasRatio}.` }] },
-                            config: { imageConfig: { aspectRatio: spec.atlasRatio, imageSize: opts.imageSize || imageSize } },
+                            config: {
+                                ...(opts.seed !== undefined ? { seed: opts.seed } : {}),
+                                imageConfig: { aspectRatio: spec.atlasRatio, imageSize: opts.imageSize || imageSize }
+                            },
                         }));
                         const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                         if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
@@ -2035,6 +2040,7 @@ CONSTRAINTS:
         modelOverride?: string,
         imageSizeOverride?: '1K' | '2K' | '4K',
         selectedAssetIds?: string[],
+        customSeed?: number,
     ) => {
         const el = elements.find(e => e.id === elementId);
         if (!el || el.type !== 'image') { showToast('⚠️ 無法定位主 Logo 圖片'); return; }
@@ -2125,12 +2131,12 @@ CONSTRAINTS:
                     if (useAtlas) {
                         if (atlasModelSupportsImg2Img(atlasModel)) {
                             const images = await withAtlasWaitToast(() =>
-                                callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, logoSrc, 1, { ratio: spec.aspectRatio, quality }));
+                                callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, logoSrc, 1, { ratio: spec.aspectRatio, quality, seed: customSeed }));
                             if (images.length > 0) resultSrc = images[0];
                         } else {
                             // 模型不支援圖生圖 → 退回純文字
                             const images = await withAtlasWaitToast(() =>
-                                callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality }));
+                                callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality, seed: customSeed }));
                             if (images.length > 0) resultSrc = images[0];
                         }
                     } else {
@@ -2145,7 +2151,10 @@ CONSTRAINTS:
                         const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                             model: imageModel,
                             contents: { parts },
-                            config: { imageConfig: { aspectRatio: spec.aspectRatio, imageSize: imageSizeOverride || imageSize } },
+                            config: {
+                                ...(customSeed !== undefined ? { seed: customSeed } : {}),
+                                imageConfig: { aspectRatio: spec.aspectRatio, imageSize: imageSizeOverride || imageSize }
+                            },
                         }));
                         const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                         if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
@@ -2181,6 +2190,7 @@ CONSTRAINTS:
         imageSizeOverride?: '1K' | '2K' | '4K',
         selectedRecipeIds?: string[],
         platformId: string = 'general_ecommerce',
+        customSeed?: number,
     ) => {
         const el = elements.find(e => e.id === elementId);
         if (!el || el.type !== 'image') { showToast('⚠️ 無法定位產品圖片'); return; }
@@ -2219,9 +2229,9 @@ CONSTRAINTS:
         }
 
         // 3. 風格一致性隨機種子碼
-        const consistencySeed = brief.lockStyleConsistency
-            ? Math.floor(Math.random() * 2147483647)
-            : undefined;
+        const consistencySeed = customSeed !== undefined
+            ? customSeed
+            : (brief.lockStyleConsistency ? Math.floor(Math.random() * 2147483647) : undefined);
 
         // 排成一列放原產品圖片右側, 固定顯示高度
         const ROW_H = 220;
@@ -2375,6 +2385,10 @@ CONSTRAINTS:
         setImageSize,
         preserveTransparency,
         setPreserveTransparency,
+        useCustomSeed,
+        setUseCustomSeed,
+        customSeedValue,
+        setCustomSeedValue,
         showStyleLibrary,
         setShowStyleLibrary,
         handleCopyStyle,

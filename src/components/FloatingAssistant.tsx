@@ -725,6 +725,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-4">
                       {[
                         { t: '一鍵生成圖片', d: '框選圖片、手繪或便利貼，AI 生成高品質圖片。生成中畫布不鎖定。' },
+                        { t: '風格參考圖', d: '圖生圖時，AI 能參考圖片的視覺風格與主體。支援三種搭配方式：1) 便利貼內直接上傳參考圖（最多 4 張）。2) 同時選取便利貼與畫布上的多張圖片一起生成（上限 8 張）。3) 混合參考（例如：便利貼內 4 張 + 畫布 4 張，最多支援 8 張圖進行特徵融合）。' },
+                        { t: '隨機種子 (Seed)', d: '支援開啟自訂 Seed 隨機碼。便於鎖定特定光影特徵或構圖結構，進行連續性的一致畫面生成。' },
                         { t: '圖片逆向分析', d: '右鍵「提取提示詞」，AI 生成中英對照的詠唱咒語。' },
                         { t: '風格複製', d: 'AI 解構色彩、光影、畫風等 10 個維度，紋理/藝術樣式/手動三種貼上方式。' },
                         { t: '智慧去背', d: '右鍵「智慧去背」，由 Gemini AI 分析並去除背景，不需額外 API Key。' },
@@ -785,12 +787,6 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       </div>
                     </div>
 
-                    {/* 魔法分層 */}
-                    <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 mb-3">
-                      <h4 className="font-bold text-slate-800 text-[13px] mb-1">✦ 魔法分層</h4>
-                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 10 個物件層。</p>
-                      <div className="text-[11px] text-slate-700 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-slate-100 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-slate-100 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
-                    </div>
                     {/* 物件感知編輯 */}
                     <div className="bg-cyan-50/20 border border-cyan-100 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-cyan-900 text-[13px] mb-1">✦ 物件感知編輯</h4>
@@ -837,6 +833,14 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       </div>
                       <div className="text-[11px] text-orange-800 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-orange-100 px-1 rounded">fal.ai Key</code>；未設定時右鍵選單不顯示此功能。</div>
                     </div>
+
+                    {/* 魔法分層 */}
+                    <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-slate-800 text-[13px] mb-1">✦ 魔法分層</h4>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 10 個物件層。</p>
+                      <div className="text-[11px] text-slate-700 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-slate-100 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-slate-100 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
+                    </div>
+
                     {/* 一鍵拆分貼圖 */}
                     <div className="bg-emerald-50/20 border border-emerald-100 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-emerald-900 text-[13px] mb-1">✦ 一鍵拆分貼圖</h4>

@@ -621,6 +621,10 @@ interface InfiniteCanvasProps {
   onSetImageSize: (size: '1K' | '2K' | '4K') => void;
   preserveTransparency: boolean;
   onSetPreserveTransparency: (preserve: boolean) => void;
+  useCustomSeed?: boolean;
+  onSetUseCustomSeed?: (val: boolean) => void;
+  customSeedValue?: number | '';
+  onSetCustomSeedValue?: (val: number | '') => void;
   outpaintingState: OutpaintingState | null;
   onUpdateOutpaintingFrame: (newFrame: { position: Point; width: number; height: number; }) => void;
   onCancelOutpainting: () => void;
@@ -1031,6 +1035,10 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   generationModel = 'gemini',
   onSetGenerationModel,
   hasAtlasKey = false,
+  useCustomSeed = false,
+  onSetUseCustomSeed,
+  customSeedValue = '',
+  onSetCustomSeedValue,
   onUpdateMultipleElements,
   onAlign,
   activeGuidelines = [],
@@ -1060,6 +1068,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [showTools, setShowTools] = useState(true);
   const [showCamera, setShowCamera] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const menuDragStartRef = useRef<Point>({ x: 0, y: 0 });
   const [upscaleFactor, setUpscaleFactor] = useState<number>(2);
   const [birefnetModel, setBirefnetModel] = useState<string>('Matting');
@@ -1068,6 +1077,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [upscaleOpen, setUpscaleOpen] = useState(false);
   const [ratioOpen, setRatioOpen] = useState(false);
   const ratioRef = useRef<HTMLDivElement>(null);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
 
   // ── 群組等比縮放 ──────────────────────────────────────────────
   const groupResizeRef = useRef<{
@@ -1153,6 +1164,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   useEffect(() => {
     const h = (e: MouseEvent) => {
         if (ratioRef.current && !ratioRef.current.contains(e.target as Node)) setRatioOpen(false);
+        if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) setModelDropdownOpen(false);
     };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
@@ -2044,43 +2056,77 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                             {showGen && (
                                 <div className="px-5 pb-4 flex flex-col gap-3">
                                     {/* 生圖模型 */}
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[11px] font-medium text-gray-500">生圖模型</label>
-                                        <div className="relative">
-                                            <select
-                                                value={generationModel}
-                                                onChange={(e) => onSetGenerationModel?.(e.target.value)}
-                                                className="w-full bg-[#f8fafc] border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-700 cursor-pointer appearance-none hover:bg-[#f1f5f9] focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100 transition-colors"
-                                            >
-                                                <option value="gemini">Gemini 3 Flash / Pro（預設）</option>
-                                                <option value="gpt-image-2" disabled={!hasAtlasKey}>GPT Image 2{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
-                                                <option value="seedream-v4.5" disabled={!hasAtlasKey}>即夢 Seedream v4.5{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
-                                                <option value="seedream-v5" disabled={!hasAtlasKey}>即夢 Seedream v5 Lite{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
-                                                <option value="qwen-image-2" disabled={!hasAtlasKey}>通義千問 Qwen Image 2.0{!hasAtlasKey ? '（需 Atlas Key）' : ''}</option>
-                                            </select>
-                                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-gray-400">
-                                                <Icon name="expand_more" size={16} />
-                                            </div>
-                                        </div>
-                                        {!hasAtlasKey && (
-                                            <p className="text-[10px] text-gray-400">輸入 Atlas Cloud Key 後可使用 GPT Image 2 / 即夢模型</p>
-                                        )}
-                                    </div>
+                                    {(() => {
+                                        const MODEL_OPTIONS_DETAILS = [
+                                            { id: 'gemini', label: 'Gemini 3 Flash / Pro', badge: 'Gemini Key', needsAtlas: false },
+                                            { id: 'gpt-image-2', label: 'GPT Image 2', badge: 'Atlas Cloud', needsAtlas: true },
+                                            { id: 'flux-2-pro', label: 'FLUX.2 Pro', badge: 'Atlas Cloud', needsAtlas: true },
+                                            { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', badge: 'Atlas Cloud', needsAtlas: true },
+                                            { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', badge: 'Atlas Cloud', needsAtlas: true },
+                                            { id: 'qwen-image-2', label: '通義千問 Qwen Image 2.0', badge: 'Atlas Cloud', needsAtlas: true },
+                                        ];
+                                        const selectedModelOpt = MODEL_OPTIONS_DETAILS.find(opt => opt.id === generationModel) || MODEL_OPTIONS_DETAILS[0];
+                                        return (
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-[11px] font-medium text-gray-500">生圖模型</label>
+                                                <div className="relative" ref={modelDropdownRef}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setModelDropdownOpen(v => !v)}
+                                                        className={`w-full flex items-center justify-between px-3 py-2 bg-[#f8fafc] border ${modelDropdownOpen ? 'border-purple-300 ring-2 ring-purple-100' : 'border-gray-200'} rounded-lg text-[13px] text-gray-700 cursor-pointer hover:bg-[#f1f5f9] transition-all`}
+                                                    >
+                                                        <span className="font-medium text-gray-700 truncate text-left mr-2">{selectedModelOpt.label}</span>
+                                                        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${selectedModelOpt.needsAtlas ? 'bg-indigo-50 text-indigo-600' : 'bg-purple-50 text-purple-600'}`}>
+                                                                {selectedModelOpt.badge}
+                                                            </span>
+                                                            <Icon name="expand_more" size={16} style={{ color: '#94a3b8', transition: 'transform 0.15s', transform: modelDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                                                        </div>
+                                                    </button>
 
-
-                                    {hasImageOrDrawingOrShape && (
-                                        <div className="flex flex-col gap-1">
-                                            <div className="flex items-center justify-between">
-                                                <label className="text-xs font-semibold text-[#1D1D1F]">保留透明背景</label>
-                                                <div
-                                                    className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
-                                                    onClick={() => onSetPreserveTransparency(!preserveTransparency)}
-                                                >
-                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${preserveTransparency ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                    {modelDropdownOpen && (
+                                                        <div
+                                                            className="absolute top-full left-0 right-0 mt-1 bg-white border border-black/10 rounded-xl shadow-lg py-1 z-[300] max-h-64 overflow-y-auto"
+                                                            onWheel={e => e.stopPropagation()}
+                                                        >
+                                                            {MODEL_OPTIONS_DETAILS.map(opt => {
+                                                                const isDisabled = opt.needsAtlas && !hasAtlasKey;
+                                                                const isSelected = opt.id === generationModel;
+                                                                return (
+                                                                    <button
+                                                                        key={opt.id}
+                                                                        type="button"
+                                                                        disabled={isDisabled}
+                                                                        onClick={() => {
+                                                                            onSetGenerationModel?.(opt.id);
+                                                                            setModelDropdownOpen(false);
+                                                                        }}
+                                                                        className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors ${isSelected ? 'bg-[#F5F5F7]' : 'hover:bg-[#F5F5F7]'} ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} gap-3`}
+                                                                    >
+                                                                        <span className={`text-[13px] truncate ${isSelected ? 'text-[#5B5BF6] font-medium' : 'text-[#1D1D1F]'}`}>
+                                                                            {opt.label}
+                                                                        </span>
+                                                                        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                                                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${opt.needsAtlas ? 'bg-indigo-50 text-indigo-600' : 'bg-purple-50 text-purple-600'}`}>
+                                                                                {opt.badge}
+                                                                            </span>
+                                                                            <div className="w-4 h-4 flex items-center justify-center">
+                                                                                {isSelected && <Icon name="check" size={14} style={{ color: '#5B5BF6' }} />}
+                                                                            </div>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
                                                 </div>
+                                                {!hasAtlasKey && (
+                                                    <p className="text-[10px] text-gray-400">輸入 Atlas Cloud Key 後可使用 GPT Image 2 / 即夢模型</p>
+                                                )}
                                             </div>
-                                        </div>
-                                    )}
+                                        );
+                                    })()}
+
 
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-[11px] font-medium text-gray-500">參考風格</label>
@@ -2185,17 +2231,17 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
 
                                         return (
                                             <div className="flex flex-col gap-1.5">
-                                                <label className="text-xs font-semibold text-[#1D1D1F]">輸出比例</label>
+                                                <label className="text-[11px] font-medium text-gray-500">輸出比例</label>
                                                 <div className="relative" ref={ratioRef}>
-                                                    {/* 觸發按鈕 — 跟其他 select 同樣灰底樣式 */}
+                                                    {/* 觸發按鈕 ── 跟其他 select 同樣樣式 */}
                                                     <button
                                                         onClick={() => setRatioOpen(v => !v)}
-                                                        className="w-full flex items-center gap-2 px-3 py-2 bg-[#F5F5F7] rounded-lg text-sm cursor-pointer"
+                                                        className={`w-full flex items-center gap-2 px-3 py-2 bg-[#f8fafc] border ${ratioOpen ? 'border-purple-300 ring-2 ring-purple-100' : 'border-gray-200'} rounded-lg text-[13px] text-gray-700 cursor-pointer hover:bg-[#f1f5f9] transition-all`}
                                                     >
                                                         <RatioSVG ratio={triggerRatio} selected={true} />
-                                                        <span className="font-medium text-[#1D1D1F]">{triggerRatio}</span>
-                                                        <span className="text-[#86868B] text-xs">{triggerDims}</span>
-                                                        <Icon name="expand_more" size={16} className="ml-auto flex-shrink-0" style={{ color: '#86868B', transition: 'transform 0.15s', transform: ratioOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                                                        <span className="font-medium text-gray-700">{triggerRatio}</span>
+                                                        <span className="text-[#86868B] text-[11px] font-medium">{triggerDims}</span>
+                                                        <Icon name="expand_more" size={16} className="ml-auto flex-shrink-0" style={{ color: '#94a3b8', transition: 'transform 0.15s', transform: ratioOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
                                                     </button>
 
                                                     {/* 下拉列表 — 往下展開，阻止滾輪冒泡到畫布 */}
@@ -2460,10 +2506,72 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         </div>
                                     )}
 
-                                    {/* 外觀區塊 - 灰底背景區隔 */}
-                                    <div className="mt-2 bg-[#f8fafc] border-t border-gray-100">
+                                    {/* 進階設定 */}
+                                    <div className="border-t border-gray-100">
                                       <div
-                                        className="flex justify-between items-center px-5 py-3 cursor-pointer hover:bg-gray-100/60"
+                                        className="flex justify-between items-center px-5 py-3 cursor-pointer hover:bg-gray-50/80"
+                                        onClick={() => setShowAdvanced(!showAdvanced)}
+                                      >
+                                        <span className="text-[12px] font-bold text-gray-900">進階設定</span>
+                                        <Icon name="expand_more" size={14} style={{ color: '#94a3b8', transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+                                      </div>
+                                      {showAdvanced && (
+                                        <div className="px-5 pb-4 flex flex-col gap-3">
+                                          {/* 保留透明背景 */}
+                                          {hasImageOrDrawingOrShape && (
+                                              <div className="flex items-center justify-between">
+                                                  <span className="text-xs font-semibold text-[#1D1D1F]">保留透明背景</span>
+                                                  <div
+                                                      className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
+                                                      onClick={() => onSetPreserveTransparency(!preserveTransparency)}
+                                                  >
+                                                      <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${preserveTransparency ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                  </div>
+                                              </div>
+                                          )}
+
+                                          {/* 自訂風格種子 (Seed) */}
+                                          <div className="flex flex-col gap-1.5">
+                                              <div className="flex items-center justify-between">
+                                                  <span className="text-xs font-semibold text-[#1D1D1F]">自訂風格種子 (Seed)</span>
+                                                  <div
+                                                      className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${useCustomSeed ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
+                                                      onClick={() => onSetUseCustomSeed?.(!useCustomSeed)}
+                                                  >
+                                                      <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${useCustomSeed ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                  </div>
+                                              </div>
+                                              {useCustomSeed && (
+                                                  <div className="bg-white border border-gray-200/80 rounded-xl p-2 flex items-center gap-2 mt-0.5 animate-fade-in-down">
+                                                      <input
+                                                          type="number"
+                                                          placeholder="請輸入種子碼 (例如 123456)"
+                                                          value={customSeedValue}
+                                                          onChange={(e) => {
+                                                              const v = e.target.value;
+                                                              onSetCustomSeedValue?.(v === '' ? '' : Math.max(0, parseInt(v, 10)));
+                                                          }}
+                                                          className="flex-1 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-800 focus:outline-none focus:border-purple-400 font-mono"
+                                                      />
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => onSetCustomSeedValue?.(Math.floor(Math.random() * 2147483647))}
+                                                          className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-500 text-[11px] font-bold transition-all active:scale-95"
+                                                          title="生成隨機 Seed"
+                                                      >
+                                                          🎲 隨機
+                                                      </button>
+                                                  </div>
+                                              )}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* 外觀區塊 - 灰底背景區隔 */}
+                                    <div className="border-t border-gray-100">
+                                      <div
+                                        className="flex justify-between items-center px-5 py-3 cursor-pointer hover:bg-gray-50/80"
                                         onClick={() => setShowAppearance(!showAppearance)}
                                       >
                                         <span className="text-[12px] font-bold text-gray-900">外觀</span>
