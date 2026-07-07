@@ -2520,7 +2520,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                           {/* 保留透明背景 */}
                                           {hasImageOrDrawingOrShape && (
                                               <div className="flex items-center justify-between">
-                                                  <span className="text-xs font-semibold text-[#1D1D1F]">保留透明背景</span>
+                                                  <span className="text-[11px] font-medium text-gray-500">保留透明背景</span>
                                                   <div
                                                       className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
                                                       onClick={() => onSetPreserveTransparency(!preserveTransparency)}
@@ -2533,7 +2533,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                           {/* 自訂風格種子 (Seed) */}
                                           <div className="flex flex-col gap-1.5">
                                               <div className="flex items-center justify-between">
-                                                  <span className="text-xs font-semibold text-[#1D1D1F]">自訂風格種子 (Seed)</span>
+                                                  <span className="text-[11px] font-medium text-gray-500">自訂風格種子 (Seed)</span>
                                                   <div
                                                       className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${useCustomSeed ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
                                                       onClick={() => onSetUseCustomSeed?.(!useCustomSeed)}

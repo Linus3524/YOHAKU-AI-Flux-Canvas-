@@ -131,7 +131,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [imageStyle, setImageStyle] = useState<string>('Default');
     const [imageAspectRatio, setImageAspectRatio] = useState<string>('Original');
     const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('1K');
-    const [preserveTransparency, setPreserveTransparency] = useState(true);
+    const [preserveTransparency, setPreserveTransparency] = useState(false);
     const [useCustomSeed, setUseCustomSeed] = useState<boolean>(false);
     const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
     // 透明背景一律改用「生成後去背」流程處理。
