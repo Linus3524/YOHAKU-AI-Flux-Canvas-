@@ -854,10 +854,10 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     </div>
 
                     {/* 魔法分層 */}
-                    <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 mb-3">
-                      <h4 className="font-bold text-slate-800 text-[13px] mb-1">✦ 魔法分層</h4>
+                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
+                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 魔法分層</h4>
                       <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 10 個物件層。</p>
-                      <div className="text-[11px] text-slate-700 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-slate-100 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-slate-100 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
+                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-purple-50 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-purple-50 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
                     </div>
 
                     {/* 一鍵拆分貼圖 */}
@@ -866,8 +866,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <p className="text-[11px] text-gray-700 leading-relaxed">右鍵點擊圖片選「一鍵拆分貼圖」，可自動將套組中相鄰的多張貼圖獨立分割。支援彈出對話框手動輸入預估數量（進行高精度的網格谷底均分），或直接點擊確定進行智慧自動偵測。拆分後會自動為每張子貼圖去背並個別存入本地快取。</p>
                     </div>
                     {/* Magic Style */}
-                    <div className="bg-rose-50/20 border border-rose-100 rounded-xl p-4">
-                      <h4 className="font-bold text-rose-900 text-[13px] mb-1">✦ Magic Style 風格庫</h4>
+                    <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4">
+                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ Magic Style 風格庫</h4>
                       <p className="text-[11px] text-gray-600 leading-relaxed">內建 150+ 種藝術風格，涵蓋 12 大分類：繪畫插畫、動漫漫畫、攝影底片、數位藝術、特殊材質、次文化少女暗黑、新世代潮流、節慶限定、歷史宗教、稀有新趨勢、經典數位相機與CCD模擬、光學硬體與AI氛圍。一鍵套用至選取圖片，生成設定面板也可預設參考風格。</p>
                     </div>
                   </div>
