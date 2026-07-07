@@ -477,6 +477,7 @@ const App: React.FC = () => {
       setGeneratedImages,
       generatedImagesMetadata,
       pendingAutoDebg,
+      setPendingAutoDebg,
       pendingStickerBorder,
       restoreTransparencyFn,
       outpaintingState,
@@ -1296,6 +1297,45 @@ const App: React.FC = () => {
       if (!selectedArrowElement) return;
       setElements(prev => prev.map(el => (el.id === selectedArrowElement.id && el.type === 'arrow') ? { ...el, ...updates } : el));
   };
+
+  // 設計大師 Logo：生成完成後、顯示結果前，先把背景處理成使用者選的樣子
+  // （白→平整純白、黑→平整純黑、透明→自動去背），結果畫面直接呈現最終版，
+  // 加入畫布時不再二次處理。
+  const logoBgProcessedRef = useRef<string[] | null>(null);
+  useEffect(() => {
+    if (!generatedImages || generatedImages.length === 0) return;
+    if (logoBgProcessedRef.current === generatedImages) return; // 已是處理後的結果
+    const prompt = generatedImagesMetadata?.[0]?.prompt || '';
+    if (!prompt.includes('Design a professional logo for the brand')) return;
+    const wantWhite = prompt.includes('BACKGROUND: white');
+    const wantBlack = prompt.includes('BACKGROUND: black');
+    const wantTransparent = prompt.includes('BACKGROUND: transparent');
+    if (!wantWhite && !wantBlack && !wantTransparent) return;
+
+    const sourceImages = generatedImages;
+    (async () => {
+      showToast(wantTransparent ? '🪄 Logo 自動去背中…' : '🪄 Logo 背景純化中…');
+      const processed = await Promise.all(sourceImages.map(async (url) => {
+        try {
+          const src = url.startsWith('data:') ? url : await downloadImageAsBase64(url);
+          if (wantWhite || wantBlack) {
+            // 白/黑背景：原地把「邊緣連通的背景區(含髒污/紙紋)」重塗成純色，主體不動
+            return await flattenBackgroundToColor(src, wantWhite ? '#ffffff' : '#000000');
+          }
+          // 透明背景：量測邊緣底色後走語意去背流程
+          const detectedBg = await detectBackgroundColor(src);
+          return await restoreTransparencyFn(src, detectedBg);
+        } catch {
+          return url; // 單張失敗保留原圖
+        }
+      }));
+      logoBgProcessedRef.current = processed;
+      setGeneratedImages(prev => (prev === sourceImages ? processed : prev));
+      // 已在結果階段處理完，加入畫布時不要再跑一次去背
+      setPendingAutoDebg(false);
+      showToast('✅ Logo 背景處理完成！');
+    })();
+  }, [generatedImages, generatedImagesMetadata, restoreTransparencyFn, setGeneratedImages, setPendingAutoDebg, showToast]);
 
   const addGeneratedImageToCanvas = useCallback(async (imageUrl: string) => {
     if (!imageUrl) return;
@@ -2349,13 +2389,23 @@ const App: React.FC = () => {
 
             {/* 圖片區域 */}
             <div className={`overflow-y-auto ${generatedImages.length > 1 ? 'grid grid-cols-2 gap-4 items-start' : ''}`}>
-              {generatedImages.map((imgSrc, index) => (
+              {generatedImages.map((imgSrc, index) => {
+                // 透明背景 Logo 已去背 → 用棋盤格底呈現透明區域
+                const isTransparentResult = logoBgProcessedRef.current === generatedImages
+                  && (generatedImagesMetadata?.[index]?.prompt || '').includes('BACKGROUND: transparent');
+                return (
                 <div
                   key={index}
                   className="result-img-card relative overflow-hidden bg-[#F0F0F0]"
                   style={{
                     boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
                     borderRadius: '12px',
+                    ...(isTransparentResult ? {
+                      backgroundImage: 'linear-gradient(45deg, #e2e2e6 25%, transparent 25%), linear-gradient(-45deg, #e2e2e6 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e2e6 75%), linear-gradient(-45deg, transparent 75%, #e2e2e6 75%)',
+                      backgroundSize: '20px 20px',
+                      backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0',
+                      backgroundColor: '#ffffff',
+                    } : {}),
                   }}
                 >
                   <img
@@ -2389,7 +2439,8 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* 底部提示 */}

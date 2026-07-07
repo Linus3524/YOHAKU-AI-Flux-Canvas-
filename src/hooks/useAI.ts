@@ -1626,7 +1626,7 @@ CONSTRAINTS:
                   const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
                     model: imageModel,
                     contents: { parts: [...refParts, textPart] },
-                    config: { imageConfig: { aspectRatio: targetRatio, imageSize: effImageSize, seed: frameSeed } },
+                    config: { seed: frameSeed, imageConfig: { aspectRatio: targetRatio, imageSize: effImageSize } },
                   }));
                   const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
                   if (part?.inlineData) {

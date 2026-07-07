@@ -1423,7 +1423,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
       const response = await callGeminiWithRetry(() => ai.models.generateContent({
         model: imageModel,
         contents: { parts: [originalImagePart, maskImagePart, ...refParts, { text: textPrompt + refHint }] },
-        config: { imageConfig: { seed: activeSeed } }
+        config: { seed: activeSeed }
       }));
 
       for (const part of response.candidates[0].content.parts) {

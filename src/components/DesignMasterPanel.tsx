@@ -275,8 +275,10 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
       }
     }
     
-    // 預設設計大師內所有模型均以最高解析度（4K）輸出
-    const imageSizeOverride: '4K' = '4K';
+    // 預設設計大師內所有模型均以最高解析度（4K）輸出。
+    // 例外：Logo 是平面色塊圖形，4K 的分塊放大管線會在背景拼出格狀紙紋髒污，
+    // 改用 2K 從源頭消除該 artifact（需要大圖時平面圖形事後放大不失真）。
+    const imageSizeOverride: '1K' | '2K' | '4K' = activeSkill === 'logo' ? '2K' : '4K';
     
     // 找出選定的參考圖風格索引與範圍
     const styleKey = SKILL_STYLE_KEYS[activeSkill];
