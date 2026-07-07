@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { CROSS_PLATFORM_SPECS } from '../skills/crossPlatform';
 
-const MODEL_OPTIONS: { id: string; label: string; needsAtlas: boolean }[] = [
-  { id: 'gemini', label: 'Gemini 3 Flash / Pro（預設）', needsAtlas: false },
-  { id: 'gpt-image-2', label: 'GPT Image 2', needsAtlas: true },
-  { id: 'flux-2-pro', label: 'FLUX.2 Pro', needsAtlas: true },
-  { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', needsAtlas: true },
-  { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', needsAtlas: true },
-  { id: 'qwen-image-2', label: '通義千問 Qwen Image 2.0', needsAtlas: true },
+const MODEL_OPTIONS: { id: string; label: string; badge: string; needsAtlas: boolean }[] = [
+  { id: 'gemini', label: 'Gemini 3 Flash / Pro', badge: 'Gemini Key', needsAtlas: false },
+  { id: 'gpt-image-2', label: 'GPT Image 2', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'flux-2-pro', label: 'FLUX.2 Pro', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'qwen-image-2', label: '通義千問 Qwen Image 2.0', badge: 'Atlas Cloud', needsAtlas: true },
 ];
 
 interface CrossPlatformModalProps {
@@ -33,6 +33,7 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
   const [keepText, setKeepText] = useState(false);
   const [imageSize, setImageSize] = useState<'2K' | '4K'>('2K');
   const [model, setModel] = useState<string>('gemini');
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [useCustomSeed, setUseCustomSeed] = useState(false);
   const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
   const isGemini = model === 'gemini';
@@ -64,17 +65,76 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
         </div>
 
         <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">生成模型</div>
-        <select
-          value={model}
-          onChange={e => setModel(e.target.value)}
-          className="w-full mb-4 bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-[12px] font-semibold text-[#1E293B] focus:outline-none focus:border-[#AF52DE] cursor-pointer"
-        >
-          {MODEL_OPTIONS.map(o => (
-            <option key={o.id} value={o.id} disabled={o.needsAtlas && !hasAtlas}>
-              {o.label}{o.needsAtlas && !hasAtlas ? '（需 Atlas Key）' : ''}
-            </option>
-          ))}
-        </select>
+        <div className="relative w-full mb-4">
+          {(() => {
+            const selectedModelOpt = MODEL_OPTIONS.find(o => o.id === model) || MODEL_OPTIONS[0];
+            return (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsModelDropdownOpen(v => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2 bg-white border border-[#E2E8F0] rounded-xl text-[12px] font-semibold text-[#1E293B] cursor-pointer hover:bg-[#F8FAFC] transition-all"
+                >
+                  <span className="truncate text-left mr-2">{selectedModelOpt.label}</span>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${selectedModelOpt.needsAtlas ? 'bg-indigo-50 text-indigo-600' : 'bg-purple-50 text-purple-600'}`}>
+                      {selectedModelOpt.badge}
+                    </span>
+                    <svg
+                      className={`w-3.5 h-3.5 text-[#64748B] transition-transform duration-150 ${isModelDropdownOpen ? 'rotate-180' : 'rotate-0'}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      strokeWidth="2.5"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </button>
+
+                {isModelDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[290]" onClick={() => setIsModelDropdownOpen(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-black/10 rounded-xl shadow-lg py-1 z-[300] max-h-60 overflow-y-auto">
+                      {MODEL_OPTIONS.map(opt => {
+                        const isDisabled = opt.needsAtlas && !hasAtlas;
+                        const isSelected = opt.id === model;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => {
+                              setModel(opt.id);
+                              setIsModelDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs transition-colors ${
+                              isSelected ? 'bg-[#F5F5F7] text-[#AF52DE] font-semibold' : 'text-[#1D1D1F] hover:bg-[#F5F5F7]'
+                            } ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} gap-3`}
+                          >
+                            <span className="truncate">{opt.label}</span>
+                            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${opt.needsAtlas ? 'bg-indigo-50 text-indigo-600' : 'bg-purple-50 text-purple-600'}`}>
+                                {opt.badge}
+                              </span>
+                              <div className="w-3.5 h-3.5 flex items-center justify-center">
+                                {isSelected && (
+                                  <svg className="w-3 h-3 text-[#AF52DE]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </>
+            );
+          })()}
+        </div>
 
         <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">輸出解析度</div>
         <div className="grid grid-cols-2 gap-1.5 bg-[#F1F5F9] p-0.5 rounded-xl mb-1">

@@ -73,13 +73,13 @@ export interface DesignMasterPersistState {
   customSeedValue?: number | '';
 }
 
-const MODEL_OPTIONS: { id: string; label: string; needsAtlas: boolean }[] = [
-  { id: 'gemini', label: 'Gemini 3 Flash / Pro（預設）', needsAtlas: false },
-  { id: 'gpt-image-2', label: 'GPT Image 2', needsAtlas: true },
-  { id: 'flux-2-pro', label: 'FLUX.2 Pro', needsAtlas: true },
-  { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', needsAtlas: true },
-  { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', needsAtlas: true },
-  { id: 'qwen-image-2', label: '通義千問 Qwen Image 2.0', needsAtlas: true },
+const MODEL_OPTIONS: { id: string; label: string; badge: string; needsAtlas: boolean }[] = [
+  { id: 'gemini', label: 'Gemini 3 Flash / Pro', badge: 'Gemini Key', needsAtlas: false },
+  { id: 'gpt-image-2', label: 'GPT Image 2', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'flux-2-pro', label: 'FLUX.2 Pro', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'qwen-image-2', label: '通義千問 Qwen Image 2.0', badge: 'Atlas Cloud', needsAtlas: true },
 ];
 
 export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
@@ -143,6 +143,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   const [count, setCount] = useState<1 | 2 | 3 | 4>(initialState?.count ?? 1);
   const [content, setContent] = useState(initialState?.content ?? noteContent);
   const [model, setModel] = useState(initialState?.model ?? 'gemini');
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [useCustomSeed, setUseCustomSeed] = useState(initialState?.useCustomSeed ?? false);
   const [customSeedValue, setCustomSeedValue] = useState<number | ''>(initialState?.customSeedValue ?? '');
 
@@ -482,22 +483,76 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
           {/* 生圖模型 */}
           <div>
             <div className="text-[12px] font-bold text-[#475569] mb-2">生圖模型</div>
-            <select
-              value={model}
-              onChange={e => setModel(e.target.value)}
-              className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-4 py-2.5 text-[13px] text-[#1E293B] cursor-pointer appearance-none focus:outline-none focus:bg-white focus:border-[#AF52DE] focus:ring-4 focus:ring-[#AF52DE]/10 transition-all font-semibold"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 16px center'
-              }}
-            >
-              {MODEL_OPTIONS.map(m => (
-                <option key={m.id} value={m.id} disabled={m.needsAtlas && !hasAtlasKey}>
-                  {m.label}{m.needsAtlas && !hasAtlasKey ? '（需 Atlas Key）' : ''}
-                </option>
-              ))}
-            </select>
+            <div className="relative w-full">
+              {(() => {
+                const selectedModelOpt = MODEL_OPTIONS.find(o => o.id === model) || MODEL_OPTIONS[0];
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsModelDropdownOpen(v => !v)}
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] font-semibold text-[#1E293B] cursor-pointer hover:bg-[#F1F5F9] transition-all"
+                    >
+                      <span className="truncate text-left mr-2">{selectedModelOpt.label}</span>
+                      <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${selectedModelOpt.needsAtlas ? 'bg-indigo-50 text-indigo-600' : 'bg-purple-50 text-purple-600'}`}>
+                          {selectedModelOpt.badge}
+                        </span>
+                        <svg
+                          className={`w-3.5 h-3.5 text-[#64748B] transition-transform duration-150 ${isModelDropdownOpen ? 'rotate-180' : 'rotate-0'}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          strokeWidth="2.5"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+
+                    {isModelDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-[290]" onClick={() => setIsModelDropdownOpen(false)} />
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-black/10 rounded-xl shadow-lg py-1 z-[300] max-h-60 overflow-y-auto">
+                          {MODEL_OPTIONS.map(opt => {
+                            const isDisabled = opt.needsAtlas && !hasAtlasKey;
+                            const isSelected = opt.id === model;
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                disabled={isDisabled}
+                                onClick={() => {
+                                  setModel(opt.id);
+                                  setIsModelDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-3.5 py-2.5 text-left text-xs transition-colors ${
+                                  isSelected ? 'bg-[#F5F5F7] text-[#AF52DE] font-semibold' : 'text-[#1D1D1F] hover:bg-[#F5F5F7]'
+                                } ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} gap-3`}
+                              >
+                                <span className="truncate">{opt.label}</span>
+                                <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${opt.needsAtlas ? 'bg-indigo-50 text-indigo-600' : 'bg-purple-50 text-purple-600'}`}>
+                                    {opt.badge}
+                                  </span>
+                                  <div className="w-3.5 h-3.5 flex items-center justify-center">
+                                    {isSelected && (
+                                      <svg className="w-3 h-3 text-[#AF52DE]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           </div>
 
           {/* 核心 Skill 專用文字輸入 */}
