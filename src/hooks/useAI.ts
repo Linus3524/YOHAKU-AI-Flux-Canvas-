@@ -446,14 +446,18 @@ ALWAYS PRESERVE:
                         }
 
                         // 結果放在原圖右側 30px
-                        setElements(prev => [...prev, {
-                            ...element,
-                            id: `${element.id}_style_${Date.now()}`,
-                            src: finalSrc,
-                            position: { x: element.position.x + element.width / 2 + 30 + element.width / 2, y: element.position.y },
-                            name: `${element.name || '圖片'} 風格`,
-                            zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
-                        } as ImageElement]);
+                        setElements(prev => {
+                            // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
+                            const anchor = prev.find(e => e.id === element.id) ?? element;
+                            return [...prev, {
+                                ...element,
+                                id: `${element.id}_style_${Date.now()}`,
+                                src: finalSrc,
+                                position: { x: anchor.position.x + anchor.width / 2 + 30 + element.width / 2, y: anchor.position.y },
+                                name: `${element.name || '圖片'} 風格`,
+                                zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
+                            } as ImageElement];
+                        });
                     }
                 } catch (err: any) {
                     throw err;
@@ -516,14 +520,18 @@ ALWAYS PRESERVE:
                                 }
                             }
                             // Atlas 風格結果放在原圖右側 30px
-                            setElements(prev => [...prev, {
-                                ...element,
-                                id: `${element.id}_style_${Date.now()}`,
-                                src: finalSrc,
-                                position: { x: element.position.x + element.width / 2 + 30 + element.width / 2, y: element.position.y },
-                                name: `${element.name || '圖片'} 風格`,
-                                zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
-                            } as ImageElement]);
+                            setElements(prev => {
+                                // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
+                                const anchor = prev.find(e => e.id === element.id) ?? element;
+                                return [...prev, {
+                                    ...element,
+                                    id: `${element.id}_style_${Date.now()}`,
+                                    src: finalSrc,
+                                    position: { x: anchor.position.x + anchor.width / 2 + 30 + element.width / 2, y: anchor.position.y },
+                                    name: `${element.name || '圖片'} 風格`,
+                                    zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
+                                } as ImageElement];
+                            });
                         }
                     } catch (err: any) {
                         throw err;
@@ -565,14 +573,18 @@ ALWAYS PRESERVE:
                             }
 
                             // Gemini 風格結果放在原圖右側 30px
-                            setElements(prev => [...prev, {
-                                ...element,
-                                id: `${element.id}_style_${Date.now()}`,
-                                src: finalSrc,
-                                position: { x: element.position.x + element.width / 2 + 30 + element.width / 2, y: element.position.y },
-                                name: `${element.name || '圖片'} 風格`,
-                                zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
-                            } as ImageElement]);
+                            setElements(prev => {
+                                // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
+                                const anchor = prev.find(e => e.id === element.id) ?? element;
+                                return [...prev, {
+                                    ...element,
+                                    id: `${element.id}_style_${Date.now()}`,
+                                    src: finalSrc,
+                                    position: { x: anchor.position.x + anchor.width / 2 + 30 + element.width / 2, y: anchor.position.y },
+                                    name: `${element.name || '圖片'} 風格`,
+                                    zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
+                                } as ImageElement];
+                            });
                         }
                     } catch (err: any) {
                         throw err;
@@ -909,14 +921,12 @@ CONSTRAINTS:
                 const maxZ = Math.max(0, ...elements.map(e => e.zIndex));
 
                 // 結果放在 bounding box 右側 30px，原圖保留不動
-                const allX = visualElements.map(el => el.position.x + el.width / 2);
-                const rightEdge = Math.max(...allX);
                 const GAP = 30;
                 const newElement: ImageElement = {
                     id: newId,
                     type: 'image',
                     src: finalSrc,
-                    position: { x: rightEdge + GAP + width / 2, y: baseElement.position.y },
+                    position: { x: 0, y: 0 }, // 佔位：實際位置在插入時以畫布當下的來源位置計算
                     width: width,
                     height: height,
                     rotation: baseElement.rotation,
@@ -926,7 +936,16 @@ CONSTRAINTS:
                     name: 'Harmonized Image',
                     groupId: null
                 };
-                setElements(prev => [...prev, newElement]);
+                setElements(prev => {
+                    // 調和期間原圖可能已被移動/刪除 → 以畫布「當下」的來源位置重算擺放點；已刪除者退回捕獲值
+                    const liveVisual = visualElements.map(v => prev.find(e => e.id === v.id) ?? v);
+                    const rightEdge = Math.max(...liveVisual.map(el => el.position.x + el.width / 2));
+                    const liveBase = prev.find(e => e.id === baseElement.id) ?? baseElement;
+                    return [...prev, {
+                        ...newElement,
+                        position: { x: rightEdge + GAP + width / 2, y: liveBase.position.y },
+                    }];
+                });
                 showToast("影像調和完成！✨");
             }
         } catch (error: any) {
@@ -1236,7 +1255,11 @@ CONSTRAINTS:
                     name: `Upscaled Image (${requestedResolution})`,
                     groupId: null
                 };
-                setElements(prev => [...prev, newElement]);
+                setElements(prev => {
+                    // 放大期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
+                    const anchor = prev.find(e => e.id === element.id) ?? element;
+                    return [...prev, { ...newElement, position: { x: anchor.position.x + 50, y: anchor.position.y + 50 } }];
+                });
                 showToast("放大完成！✨");
             }
         } catch (e: any) {
@@ -1292,7 +1315,11 @@ CONSTRAINTS:
                 name: `${element.name}（高清 ${factor}x）`,
                 groupId: null,
             };
-            setElements(prev => [...prev, newElement]);
+            setElements(prev => {
+                // 放大期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
+                const anchor = prev.find(e => e.id === element.id) ?? element;
+                return [...prev, { ...newElement, position: { x: anchor.position.x + 30, y: anchor.position.y + 30 } }];
+            });
             showToast('高清放大完成！✨');
         } catch (e: any) {
             handleAIError(e, '高清放大');

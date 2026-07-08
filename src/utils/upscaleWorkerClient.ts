@@ -2,6 +2,7 @@
  * 高清放大 Worker 主執行緒呼叫介面
  * Worker 單例（跨呼叫共用，session 依 cacheKey 在 Worker 內快取）
  */
+import { createIdleReaper } from './workerIdleReaper';
 
 let worker: Worker | null = null;
 let pending: ((result: string) => void) | null = null;
@@ -21,6 +22,9 @@ export function terminateUpscaleWorker(): void {
     onProgress = null;
 }
 
+// 閒置回收：任務結束後閒置逾時自動 terminate 釋放 WASM heap / session（下次用再冷啟重建）
+const reaper = createIdleReaper(terminateUpscaleWorker);
+
 function settleReject(err: Error) {
     const rej = pendingReject;
     pending = null;
@@ -37,6 +41,7 @@ function settleResolve(result: string) {
     pendingReject = null;
     onProgress = null;
     if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+    reaper.arm();
     res?.(result);
 }
 
@@ -81,6 +86,7 @@ export function runUpscaleInWorker(
         pending = resolve;
         pendingReject = reject;
         onProgress = progress ?? null;
+        reaper.cancel(); // 任務進行中不回收
         watchdog = setTimeout(() => {
             settleReject(new Error('放大推論逾時（可能記憶體不足），已重設'));
         }, UPSCALE_TIMEOUT_MS);

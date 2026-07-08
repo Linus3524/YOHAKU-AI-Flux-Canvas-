@@ -2,6 +2,7 @@
  * LaMa Worker 主執行緒呼叫介面
  * Worker 單例（跨呼叫共用，session 只載入一次）
  */
+import { createIdleReaper } from './workerIdleReaper';
 
 let worker: Worker | null = null;
 let pending: ((result: string) => void) | null = null;
@@ -28,6 +29,9 @@ export function terminateLamaWorker(): void {
     warmUpReject = null;
 }
 
+// 閒置回收：任務結束後閒置逾時自動 terminate 釋放 WASM heap / session（下次用再冷啟重建）
+const reaper = createIdleReaper(terminateLamaWorker);
+
 function settleReject(err: Error) {
     const rej = pendingReject;
     pending = null;
@@ -43,6 +47,7 @@ function settleResolve(result: string) {
     pending = null;
     pendingReject = null;
     if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+    reaper.arm();
     res?.(result);
 }
 
@@ -61,6 +66,7 @@ function getWorker(): Worker {
             warmUpResolve?.(_resolvedBackend);
             warmUpResolve = null;
             warmUpReject = null;
+            if (!pending) reaper.arm(); // 預載完成後若沒有任務接手，照樣起算閒置
         } else if (e.data?.type === 'error') {
             // warm-up 階段的 error
             if (warmUpReject) {
@@ -100,6 +106,7 @@ export function warmUpLamaWorker(): Promise<'webgpu' | 'wasm'> {
     return new Promise<'webgpu' | 'wasm'>((resolve, reject) => {
         warmUpResolve = resolve;
         warmUpReject = reject;
+        reaper.cancel();
         try {
             getWorker().postMessage({ type: 'warm-up' });
         } catch (e) {
@@ -129,6 +136,7 @@ export function runLamaInWorker(
         }
         pending = resolve;
         pendingReject = reject;
+        reaper.cancel(); // 任務進行中不回收
         watchdog = setTimeout(() => {
             settleReject(new Error('LaMa 推論逾時（可能記憶體不足），已重設'));
         }, LAMA_TIMEOUT_MS);

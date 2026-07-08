@@ -1352,8 +1352,13 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
     }
   }, [marqueeRect, elements, onMarqueeSelect]);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    // 縮放手勢（Ctrl/⌘ + 滾輪）永遠作用於畫布，不管滑鼠停在哪
+  // Wheel 用「原生 non-passive」監聽：React 18 的合成 onWheel 掛在 root 且為 passive，
+  // preventDefault 無效（console 曾出現 "Unable to preventDefault inside passive event
+  // listener"）→ 觸控板 pinch 會同時觸發瀏覽器頁面縮放。原生掛載才能真正攔截。
+  // handler 存 ref 每 render 更新，監聽器只掛一次（不因 zoom/pan 變動反覆解綁）。
+  const wheelHandlerRef = useRef<(e: WheelEvent, root: HTMLElement) => void>(() => {});
+  wheelHandlerRef.current = (e: WheelEvent, root: HTMLElement) => {
+    // 縮放手勢（Ctrl/⌘ + 滾輪，觸控板 pinch 也帶 ctrlKey）永遠作用於畫布
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       const zoomSensitivity = 0.001;
@@ -1373,7 +1378,6 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
     // 平移前先讓位給內層可捲動元素（便利貼文字、選單捲軸等）：
     // 若滑鼠所在元素還能往該滾動方向捲，就交給它原生捲動、不平移畫布；
     // 捲到邊界後才換畫布接手。
-    const root = e.currentTarget as HTMLElement;
     let node = e.target as HTMLElement | null;
     while (node && node !== root) {
       const oy = getComputedStyle(node).overflowY;
@@ -1385,8 +1389,18 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
       node = node.parentElement;
     }
 
+    // 畫布接手平移：preventDefault 阻止 macOS 橫向 overscroll 觸發「上一頁」手勢與頁面彈跳
+    e.preventDefault();
     setPan(prev => ({ x: prev.x - e.deltaX, y: prev.y - e.deltaY }));
-  }, [zoom, pan]);
+  };
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => wheelHandlerRef.current(e, el);
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   const handleMenuMouseDown = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -1611,7 +1625,6 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
       onContextMenu={(e) => handleContextMenu(e, null)}
     >
       <div 

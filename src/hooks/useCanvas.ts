@@ -170,6 +170,31 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     const hasMountedRef = useRef(false);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastIDBSaveRef = useRef<string>(''); // 上次寫入 IndexedDB 的內容（內容沒變則略過）
+    const idbErrorNotifiedRef = useRef(false); // 存檔失敗 toast 只提示一次（debounce 高頻觸發，避免洗版）
+
+    // 存檔資料安全（mount 時一次性執行）：
+    //  1) 申請 persistent storage：未申請時瀏覽器在磁碟壓力下「可清除」IndexedDB → 作品整批消失
+    //  2) 用量預警：接近配額時提前告知，別等寫入失敗才發現
+    useEffect(() => {
+        (async () => {
+            try {
+                if (navigator.storage?.persist) {
+                    const persisted = await navigator.storage.persisted?.();
+                    if (!persisted) {
+                        const granted = await navigator.storage.persist();
+                        console.log(`[Storage] persistent storage ${granted ? '已授予' : '未授予（瀏覽器策略）'}`);
+                    }
+                }
+                if (navigator.storage?.estimate) {
+                    const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+                    if (quota > 0 && usage / quota > 0.8) {
+                        showToast(`⚠️ 瀏覽器儲存空間已用 ${Math.round((usage / quota) * 100)}%，建議匯出備份或清理不用的本機模型`);
+                    }
+                }
+            } catch { /* 不支援的瀏覽器忽略 */ }
+        })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // 實際寫入 IndexedDB（+ localStorage 降級備援）。
     // 拆分存檔：圖片 payload 只在變更時增量寫入，meta JSON 輕量（不再整包 stringify 所有 base64，
@@ -180,11 +205,19 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             if (json === lastIDBSaveRef.current) { setStorageStatus('saved'); return; }
             lastIDBSaveRef.current = json;
             setStorageStatus('saved');
+            idbErrorNotifiedRef.current = false; // 恢復成功後，之後再失敗要重新提示
             // localStorage 備援只存輕量 meta（舊版整包常爆 5MB 配額）
             try { localStorage.setItem(STORAGE_KEY, json); } catch {}
-        } catch {
+        } catch (e) {
             setStorageStatus('error');
+            // 顯性告知（僅一次）：Safari 隱私模式 / 磁碟滿 / 配額耗盡時，靜默失敗 = 使用者以為有存到
+            if (!idbErrorNotifiedRef.current) {
+                idbErrorNotifiedRef.current = true;
+                console.error('[Storage] IndexedDB 自動存檔失敗:', e);
+                showToast('⚠️ 自動存檔失敗！請立即用「匯出 .json」備份作品（可能是儲存空間不足或隱私模式）');
+            }
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Mount 時 hydrate：IndexedDB（權威）→ 舊版 localStorage 遷移 → 全新使用者歡迎便利貼。
