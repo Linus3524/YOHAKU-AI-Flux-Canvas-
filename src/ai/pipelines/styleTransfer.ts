@@ -31,6 +31,8 @@ export interface StyleTransferOpts {
     atlasRatio?: string;
     /** true = Gemini 不帶 imageConfig（視角轉換的原始行為：完全交給模型） */
     omitImageConfig?: boolean;
+    /** Gemini imageConfig 額外帶 aspectRatio（智能放大用：鎖定輸出比例防變形） */
+    geminiAspectRatio?: string;
 }
 
 /**
@@ -66,7 +68,14 @@ export async function generateStyledImage(
         const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
             model: engine.geminiImageModel,
             contents: { parts: [{ inlineData: { data, mimeType } }, { text: prompt }] },
-            ...(opts.omitImageConfig ? {} : { config: { imageConfig: { imageSize: engine.imageSize } } }),
+            ...(opts.omitImageConfig ? {} : {
+                config: {
+                    imageConfig: {
+                        imageSize: engine.imageSize,
+                        ...(opts.geminiAspectRatio ? { aspectRatio: opts.geminiAspectRatio } : {}),
+                    },
+                },
+            }),
         }));
         const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         if (part?.inlineData) result = `data:image/png;base64,${part.inlineData.data}`;

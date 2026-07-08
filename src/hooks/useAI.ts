@@ -19,7 +19,7 @@ import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
 import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
 import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
 import { generateStyledImage } from '../ai/pipelines/styleTransfer';
-import { optimizePromptWithAI, analyzeImageStyleFull, analyzeProductStyleAnchor } from '../ai/pipelines/analysis';
+import { optimizePromptWithAI, analyzeImageStyleFull, analyzeProductStyleAnchor, analyzeBaseImageForCompositing } from '../ai/pipelines/analysis';
 import { atlasBatch, geminiGenerateImage } from '../ai/pipelines/generate';
 import { checkLocalModelReady, runLocalUpscalePipeline, runLocalRmbgPipeline } from '../ai/pipelines/localModels';
 import { type OnnxModelKey } from '../utils/onnxModelCache';
@@ -528,32 +528,10 @@ STRICT RULES:
             const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
             const imagePart = { inlineData: { data, mimeType } };
     
-            // ── Pass 1：用 Flash Lite 分析底圖視覺特徵（快速免費）────────
-            const [baseHeader, baseData] = baseElement.src.split(',');
-            const baseMime = baseHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
-            const baseImagePart = { inlineData: { data: baseData, mimeType: baseMime } };
-
+            // ── Pass 1：分析底圖視覺特徵（後台呼叫在 src/ai/pipelines/analysis.ts）──
             let baseAnalysis = '';
             try {
-                const liteClient = createAiClient();
-                const analysisRes = await callGeminiWithRetry<GenerateContentResponse>(() =>
-                    liteClient.models.generateContent({
-                        model: 'gemini-3.1-flash',
-                        contents: {
-                            parts: [
-                                baseImagePart,
-                                { text: `Analyze this image's visual characteristics for VFX compositing. Be brief and technical. Report:
-- Light source: direction, angle, soft/hard quality
-- Color temperature: warm/cool, dominant color cast
-- Exposure & contrast level
-- Shadow: direction, intensity, color
-- Overall color grade and mood
-- Any atmospheric effects (haze, glow, vignette)` }
-                            ]
-                        },
-                    })
-                );
-                baseAnalysis = analysisRes.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || '';
+                baseAnalysis = await analyzeBaseImageForCompositing(baseElement.src, apiKey);
             } catch {
                 // 分析失敗不影響調和流程，跳過
             }
@@ -598,25 +576,22 @@ CONSTRAINTS:
             // 是否走 Atlas（非 Gemini 模型 + 有 key + 支援 img2img，如 GPT Image 2 / Seedream / Qwen）
             const useAtlas = generationModelGlobal !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModelGlobal as AtlasGenerationModel);
 
+            // ── Pass 2：引擎葉子統一走 src/ai/pipelines/generate.ts ──
             let aiResultSrc = '';
             if (useAtlas) {
-                // ── Atlas img2img 調和路徑 ──────────────────────────
-                const atlasModel = generationModelGlobal as AtlasGenerationModel;
-                const quality = imageSize === '4K' ? '4K' : '2K';
-                const images = await withAtlasWaitToast(() => callAtlasImg2Img(promptText, atlasModel, atlasApiKey!, base64, 1, { ratio: 'Original', quality }));
+                // Atlas img2img 調和路徑
+                const images = await atlasBatch(
+                    { prompt: promptText, count: 1, ratio: 'Original', imageSize, refImage: base64 },
+                    { model: generationModelGlobal as AtlasGenerationModel, apiKey: atlasApiKey!, wait: withAtlasWaitToast },
+                );
                 if (images.length > 0) aiResultSrc = images[0];
             } else {
-                // ── Gemini 調和路徑 ─────────────────────────────────
-                const genAI = createAiClient();
-                const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                    model: imageModel,
-                    contents: { parts: [imagePart, { text: promptText }] },
-                    config: {
-                        imageConfig: { aspectRatio: targetAspectRatio, imageSize }
-                    },
-                }));
-                const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                if (part?.inlineData) aiResultSrc = `data:image/png;base64,${part.inlineData.data}`;
+                // Gemini 調和路徑（無 key 早退行為由 createAiClient 驗證）
+                createAiClient();
+                aiResultSrc = (await geminiGenerateImage(
+                    { parts: [imagePart, { text: promptText }], aspectRatio: targetAspectRatio, imageSize },
+                    { apiKey, model: imageModel },
+                )) ?? '';
             }
 
             if (aiResultSrc) {
@@ -894,9 +869,6 @@ CONSTRAINTS:
         showToast(`AI 正在運算中... 正在提升 ${factor} 倍解析度 (目標: ${requestedResolution})`);
 
         try {
-            const genAI = useAtlas ? null : createAiClient();
-            const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
-
             // UPDATED PROMPT: Strict instructions to prevent distortion
             const prompt = `Task: High-fidelity image upscaling.
             Action: Upscale the image by ${factor}x.
@@ -905,51 +877,26 @@ CONSTRAINTS:
             If the container ratio differs slightly, extend the background naturally instead of distorting the subject.
             Enhance details and sharpness significantly while keeping the structure identical.`;
 
-            let resultSrc = '';
-
-            if (useAtlas) {
-                // ── Atlas img2img 放大路徑（GPT Image 2 等）──────────────
-                const atlasModel = generationModelGlobal as AtlasGenerationModel;
-                let refImage = flatSrc;
-                if (!refImage.startsWith('data:')) refImage = await downloadImageAsBase64(refImage);
-                const quality = factor >= 4 ? '4K' : '2K';
-                const images = await withAtlasWaitToast(() => callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, refImage, 1, { ratio: 'Original', quality }));
-                if (images.length > 0) resultSrc = images[0];
-            } else {
-                // ── Gemini 放大路徑 ─────────────────────────────────────
-                const [header, data] = flatSrc.split(',');
-                const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                const imagePart = { inlineData: { data, mimeType } };
-
-                // Calculate aspect ratio to enforce input shape
-                const targetAspectRatio = getClosestAspectRatio(element.width, element.height);
-
-                const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI!.models.generateContent({
-                    model: imageModel,
-                    contents: { parts: [imagePart, { text: prompt }] },
-                    config: {
-                        imageConfig: {
-                            imageSize: requestedResolution,
-                            aspectRatio: targetAspectRatio
-                        }
-                    }
-                }));
-
-                const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
-            }
+            // 單張後台流程（壓平→img2img→透明還原）在 src/ai/pipelines/styleTransfer.ts
+            const engine: ImageEngineConfig = {
+                model: useAtlas ? generationModelGlobal : 'gemini',
+                geminiApiKey: apiKey,
+                atlasApiKey: useAtlas ? atlasApiKey : null,
+                geminiImageModel: imageModel,
+                imageSize: requestedResolution,
+                atlasWait: withAtlasWaitToast,
+            };
+            const resultSrc = await generateStyledImage({
+                srcImage: element.src,
+                stylePrompt: prompt,
+                preserveTransparency,
+                transparencyKeys: { falApiKey, geminiApiKey: apiKey, imageModel },
+                atlasRatio: 'Original',
+                geminiAspectRatio: getClosestAspectRatio(element.width, element.height), // 鎖比例防變形
+            }, engine);
 
             if (resultSrc) {
-                if (hadTransparency) {
-                    try {
-                        showToast("正在為放大後的圖片還原透明背景...");
-                        resultSrc = await restoreTransparencyFn(resultSrc, bgColor);
-                    } catch(e) {
-                        console.warn("Transparency processing for upscale failed", e);
-                    }
-                }
-
-                // 2. Strict dimension control: 
+                // 2. Strict dimension control:
                 // We ignore the AI's naturalWidth/Height for display purposes.
                 // We strictly scale the visual bounding box by the factor (e.g., 500px -> 1000px).
                 // The underlying image data (src) will be 2K/4K, providing "Retina" density.
@@ -983,7 +930,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, preserveTransparency, prepareForGeneration, restoreTransparencyFn]);
+    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, preserveTransparency, falApiKey, withAtlasWaitToast]);
 
     // ── 本機 ONNX 高清放大（pipeline 實作在 src/ai/pipelines/localModels.ts）──
     const handleLocalUpscale = useCallback(async (modelKey: OnnxModelKey, factor: number = 4) => {

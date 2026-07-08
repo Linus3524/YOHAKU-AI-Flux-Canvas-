@@ -68,6 +68,28 @@ export async function analyzeImageStyleFull(
     return JSON.parse(rawText);
 }
 
+/** 影像調和 Pass 1：分析底圖的 VFX 合成視覺特徵（光源/色溫/曝光/陰影/氛圍）。未回文字時回傳 ''。 */
+export async function analyzeBaseImageForCompositing(src: string, geminiApiKey?: string | null): Promise<string> {
+    const genAI = createGeminiClient(geminiApiKey);
+    const { data, mimeType } = splitDataUrl(src);
+    const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+        model: 'gemini-3.1-flash',
+        contents: {
+            parts: [
+                { inlineData: { data, mimeType } },
+                { text: `Analyze this image's visual characteristics for VFX compositing. Be brief and technical. Report:
+- Light source: direction, angle, soft/hard quality
+- Color temperature: warm/cool, dominant color cast
+- Exposure & contrast level
+- Shadow: direction, intensity, color
+- Overall color grade and mood
+- Any atmospheric effects (haze, glow, vignette)` },
+            ],
+        },
+    }));
+    return response.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || '';
+}
+
 /** 行銷組圖鎖風格：抽取商品圖的配色/打光/材質設計語言錨點。未回文字時回傳 ''。 */
 export async function analyzeProductStyleAnchor(src: string, geminiApiKey?: string | null): Promise<string> {
     const genAI = createGeminiClient(geminiApiKey);
