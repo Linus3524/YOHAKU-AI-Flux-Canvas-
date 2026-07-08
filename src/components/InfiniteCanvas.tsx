@@ -1763,6 +1763,43 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                             </p>
                                         )}
                                     </div>}
+
+                                    {/* 自訂風格種子 (Seed) - 僅便利貼選取時顯示在生成設定 */}
+                                    {!hasImageOrDrawingOrShape && hasNote && (
+                                        <div className="flex flex-col gap-1.5 mt-1 border-t border-gray-100 pt-3">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[11px] font-medium text-gray-500">自訂風格種子 (Seed)</span>
+                                                <div
+                                                    className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${useCustomSeed ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
+                                                    onClick={() => onSetUseCustomSeed?.(!useCustomSeed)}
+                                                >
+                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${useCustomSeed ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </div>
+                                            </div>
+                                            {useCustomSeed && (
+                                                <div className="bg-white border border-gray-200/80 rounded-xl p-2 flex items-center gap-2 mt-0.5 animate-fade-in-down">
+                                                    <input
+                                                        type="number"
+                                                        placeholder="請輸入種子碼 (例如 123456)"
+                                                        value={customSeedValue}
+                                                        onChange={(e) => {
+                                                            const v = e.target.value;
+                                                            onSetCustomSeedValue?.(v === '' ? '' : Math.max(0, parseInt(v, 10)));
+                                                        }}
+                                                        className="flex-1 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-800 focus:outline-none focus:border-purple-400 font-mono"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onSetCustomSeedValue?.(Math.floor(Math.random() * 2147483647))}
+                                                        className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-500 text-[11px] font-bold transition-all active:scale-95"
+                                                        title="生成隨機 Seed"
+                                                    >
+                                                        🎲 隨機
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -1957,40 +1994,42 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                               </div>
                                           )}
 
-                                          {/* 自訂風格種子 (Seed) */}
-                                          <div className="flex flex-col gap-1.5">
-                                              <div className="flex items-center justify-between">
-                                                  <span className="text-[11px] font-medium text-gray-500">自訂風格種子 (Seed)</span>
-                                                  <div
-                                                      className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${useCustomSeed ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
-                                                      onClick={() => onSetUseCustomSeed?.(!useCustomSeed)}
-                                                  >
-                                                      <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${useCustomSeed ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                  </div>
-                                              </div>
-                                              {useCustomSeed && (
-                                                  <div className="bg-white border border-gray-200/80 rounded-xl p-2 flex items-center gap-2 mt-0.5 animate-fade-in-down">
-                                                      <input
-                                                          type="number"
-                                                          placeholder="請輸入種子碼 (例如 123456)"
-                                                          value={customSeedValue}
-                                                          onChange={(e) => {
-                                                              const v = e.target.value;
-                                                              onSetCustomSeedValue?.(v === '' ? '' : Math.max(0, parseInt(v, 10)));
-                                                          }}
-                                                          className="flex-1 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-800 focus:outline-none focus:border-purple-400 font-mono"
-                                                      />
-                                                      <button
-                                                          type="button"
-                                                          onClick={() => onSetCustomSeedValue?.(Math.floor(Math.random() * 2147483647))}
-                                                          className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-500 text-[11px] font-bold transition-all active:scale-95"
-                                                          title="生成隨機 Seed"
+                                          {/* 自訂風格種子 (Seed) - 如果是單純便利貼，已移至生成設定，這裡隱藏 */}
+                                          {(!hasNote || hasImageOrDrawingOrShape) && (
+                                              <div className="flex flex-col gap-1.5">
+                                                  <div className="flex items-center justify-between">
+                                                      <span className="text-[11px] font-medium text-gray-500">自訂風格種子 (Seed)</span>
+                                                      <div
+                                                          className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${useCustomSeed ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
+                                                          onClick={() => onSetUseCustomSeed?.(!useCustomSeed)}
                                                       >
-                                                          🎲 隨機
-                                                      </button>
+                                                          <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${useCustomSeed ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                      </div>
                                                   </div>
-                                              )}
-                                          </div>
+                                                  {useCustomSeed && (
+                                                      <div className="bg-white border border-gray-200/80 rounded-xl p-2 flex items-center gap-2 mt-0.5 animate-fade-in-down">
+                                                          <input
+                                                              type="number"
+                                                              placeholder="請輸入種子碼 (例如 123456)"
+                                                              value={customSeedValue}
+                                                              onChange={(e) => {
+                                                                  const v = e.target.value;
+                                                                  onSetCustomSeedValue?.(v === '' ? '' : Math.max(0, parseInt(v, 10)));
+                                                              }}
+                                                              className="flex-1 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-800 focus:outline-none focus:border-purple-400 font-mono"
+                                                          />
+                                                          <button
+                                                              type="button"
+                                                              onClick={() => onSetCustomSeedValue?.(Math.floor(Math.random() * 2147483647))}
+                                                              className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-500 text-[11px] font-bold transition-all active:scale-95"
+                                                              title="生成隨機 Seed"
+                                                          >
+                                                              🎲 隨機
+                                                          </button>
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          )}
                                         </div>
                                       )}
                                     </div>
