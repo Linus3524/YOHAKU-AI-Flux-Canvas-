@@ -17,6 +17,7 @@ import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
 import { callAtlasGenerate, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
 import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
 import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
+import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
 import { checkLocalModelReady, runLocalUpscalePipeline, runLocalRmbgPipeline } from '../ai/pipelines/localModels';
 import { type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
@@ -1655,35 +1656,25 @@ CONSTRAINTS:
         const baseTop = imgEl.position.y - imgEl.height / 2;
 
         try {
+            // 引擎設定組裝一次，單張生成統一走 src/ai/generateImage.ts 原語
+            const engine: ImageEngineConfig = {
+                model: chosenModel,
+                geminiApiKey: apiKey,
+                atlasApiKey: useAtlas ? atlasApiKey : null, // 本 handler 的 Atlas 閘門（需支援 img2img）
+                geminiImageModel: imageModel,
+                imageSize: opts.imageSize || imageSize,
+                atlasWait: withAtlasWaitToast,
+            };
             for (let i = 0; i < specs.length; i++) {
                 const spec = specs[i];
                 showToast(`🎯 跨平台適配：${spec.name}（${i + 1}/${specs.length}）...`);
                 const prompt = buildCrossPlatformPrompt(spec, opts);
                 let resultSrc = '';
                 try {
-                    if (useAtlas) {
-                        const atlasModel = chosenModel as AtlasGenerationModel;
-                        // 跨平台適配用面板自己的解析度設定,不跟全域 imageSize。
-                        // Atlas quality 只接受 2K/4K,1K（快）就近用 2K（沒有更低檔位）。
-                        const quality = opts.imageSize === '4K' ? '4K' : '2K';
-                        const images = await withAtlasWaitToast(() =>
-                            callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, src, 1, { ratio: spec.atlasRatio, quality, seed: opts.seed }));
-                        if (images.length > 0) resultSrc = images[0];
-                    } else {
-                        const genAI = new GoogleGenAI({ apiKey: apiKey! });
-                        const [header, data] = src.split(',');
-                        const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                        const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                            model: imageModel,
-                            contents: { parts: [{ inlineData: { data, mimeType } }, { text: `${prompt}\nOutput aspect ratio: ${spec.atlasRatio}.` }] },
-                            config: {
-                                ...(opts.seed !== undefined ? { seed: opts.seed } : {}),
-                                imageConfig: { aspectRatio: spec.atlasRatio, imageSize: opts.imageSize || imageSize }
-                            },
-                        }));
-                        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                        if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
-                    }
+                    resultSrc = await generateOneImage(
+                        { prompt, aspectRatio: spec.atlasRatio, refImage: src, seed: opts.seed },
+                        engine,
+                    );
                 } catch (e) {
                     console.warn('[crossPlatform] 生成失敗', spec.id, e);
                     showToast(`⚠️ ${spec.name} 生成失敗,略過`);
@@ -1754,8 +1745,15 @@ CONSTRAINTS:
         const noteEl = el as NoteElement | TextElement;
         let cursorX = noteEl.position.x + noteEl.width / 2 + 60;
         const baseTop = noteEl.position.y - noteEl.height / 2;
-        const atlasModel = chosenModel as AtlasGenerationModel;
-        const quality: '2K' | '4K' = imageSizeOverride === '4K' ? '4K' : '2K';
+        // 引擎設定組裝一次，單張生成統一走 src/ai/generateImage.ts 原語
+        const engine: ImageEngineConfig = {
+            model: chosenModel,
+            geminiApiKey: apiKey,
+            atlasApiKey: useAtlas ? atlasApiKey : null,
+            geminiImageModel: imageModel,
+            imageSize: imageSizeOverride || imageSize,
+            atlasWait: withAtlasWaitToast,
+        };
 
         // 把一張結果圖放上畫布（依實際像素比例定寬高），回傳是否成功
         const placeAsset = async (resultSrc: string, title: string, fallbackRatio: number, key: string): Promise<boolean> => {
@@ -1793,20 +1791,7 @@ CONSTRAINTS:
             const logoPrompt = buildLogoPrompt(content, brief);
             let logoSrc = '';
             try {
-                if (useAtlas) {
-                    const images = await withAtlasWaitToast(() =>
-                        callAtlasGenerate(logoPrompt, atlasModel, atlasApiKey!, 1, { ratio: logoAspect, quality }));
-                    if (images.length > 0) logoSrc = images[0];
-                } else {
-                    const genAI = new GoogleGenAI({ apiKey: apiKey! });
-                    const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                        model: imageModel,
-                        contents: { parts: [{ text: `${logoPrompt}\nOutput aspect ratio: ${logoAspect}.` }] },
-                        config: { imageConfig: { aspectRatio: logoAspect, imageSize: imageSizeOverride || imageSize } },
-                    }));
-                    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                    if (part?.inlineData) logoSrc = `data:image/png;base64,${part.inlineData.data}`;
-                }
+                logoSrc = await generateOneImage({ prompt: logoPrompt, aspectRatio: logoAspect }, engine);
             } catch (e) {
                 console.warn('[logoBrandKit] 主 Logo 生成失敗', e);
             }
@@ -1829,34 +1814,11 @@ CONSTRAINTS:
                 let resultSrc = '';
 
                 try {
-                    if (useAtlas) {
-                        if (atlasModelSupportsImg2Img(atlasModel)) {
-                            const images = await withAtlasWaitToast(() =>
-                                callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, logoSrc, 1, { ratio: spec.aspectRatio, quality }));
-                            if (images.length > 0) resultSrc = images[0];
-                        } else {
-                            // 模型不支援圖生圖 → 退回純文字（無法錨定同一標誌，至少能出圖）
-                            const images = await withAtlasWaitToast(() =>
-                                callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality }));
-                            if (images.length > 0) resultSrc = images[0];
-                        }
-                    } else {
-                        const genAI = new GoogleGenAI({ apiKey: apiKey! });
-                        const parts: any[] = [];
-                        if (logoSrc.startsWith('data:')) {
-                            const [header, data] = logoSrc.split(',');
-                            const mime = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                            parts.push({ inlineData: { data, mimeType: mime } });
-                        }
-                        parts.push({ text: `${prompt}\nOutput aspect ratio: ${spec.aspectRatio}.` });
-                        const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                            model: imageModel,
-                            contents: { parts },
-                            config: { imageConfig: { aspectRatio: spec.aspectRatio, imageSize: imageSizeOverride || imageSize } },
-                        }));
-                        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                        if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
-                    }
+                    // 以主 Logo 為參考圖錨定同一標誌；Atlas 不支援 img2img 時原語自動退回純文字生成
+                    resultSrc = await generateOneImage(
+                        { prompt, aspectRatio: spec.aspectRatio, refImage: logoSrc },
+                        engine,
+                    );
                 } catch (e) {
                     console.warn('[logoBrandKit] 生成失敗', spec.id, e);
                     showToast(`⚠️ ${spec.title} 生成失敗,略過`);
@@ -1909,8 +1871,15 @@ CONSTRAINTS:
         const logoImgEl = el as ImageElement;
         let cursorX = logoImgEl.position.x + logoImgEl.width / 2 + 60;
         const baseTop = logoImgEl.position.y - logoImgEl.height / 2;
-        const atlasModel = chosenModel as AtlasGenerationModel;
-        const quality: '2K' | '4K' = imageSizeOverride === '4K' ? '4K' : '2K';
+        // 引擎設定組裝一次，單張生成統一走 src/ai/generateImage.ts 原語
+        const engine: ImageEngineConfig = {
+            model: chosenModel,
+            geminiApiKey: apiKey,
+            atlasApiKey: useAtlas ? atlasApiKey : null,
+            geminiImageModel: imageModel,
+            imageSize: imageSizeOverride || imageSize,
+            atlasWait: withAtlasWaitToast,
+        };
 
         // 把一張結果圖放上畫布（依實際像素比例定寬高），回傳是否成功
         const placeAsset = async (resultSrc: string, title: string, fallbackRatio: number, key: string): Promise<boolean> => {
@@ -1977,37 +1946,11 @@ CONSTRAINTS:
                 let resultSrc = '';
 
                 try {
-                    if (useAtlas) {
-                        if (atlasModelSupportsImg2Img(atlasModel)) {
-                            const images = await withAtlasWaitToast(() =>
-                                callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, logoSrc, 1, { ratio: spec.aspectRatio, quality, seed: customSeed }));
-                            if (images.length > 0) resultSrc = images[0];
-                        } else {
-                            // 模型不支援圖生圖 → 退回純文字
-                            const images = await withAtlasWaitToast(() =>
-                                callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality, seed: customSeed }));
-                            if (images.length > 0) resultSrc = images[0];
-                        }
-                    } else {
-                        const genAI = new GoogleGenAI({ apiKey: apiKey! });
-                        const parts: any[] = [];
-                        if (logoSrc.startsWith('data:')) {
-                            const [header, data] = logoSrc.split(',');
-                            const mime = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                            parts.push({ inlineData: { data, mimeType: mime } });
-                        }
-                        parts.push({ text: `${prompt}\nOutput aspect ratio: ${spec.aspectRatio}.` });
-                        const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                            model: imageModel,
-                            contents: { parts },
-                            config: {
-                                ...(customSeed !== undefined ? { seed: customSeed } : {}),
-                                imageConfig: { aspectRatio: spec.aspectRatio, imageSize: imageSizeOverride || imageSize }
-                            },
-                        }));
-                        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                        if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
-                    }
+                    // 以主 Logo 為參考圖錨定同一標誌；Atlas 不支援 img2img 時原語自動退回純文字生成
+                    resultSrc = await generateOneImage(
+                        { prompt, aspectRatio: spec.aspectRatio, refImage: logoSrc, seed: customSeed },
+                        engine,
+                    );
                 } catch (e) {
                     console.warn('[logoBrandKit] 延伸生成失敗', spec.id, e);
                     showToast(`⚠️ ${spec.title} 生成失敗,略過`);
@@ -2088,8 +2031,15 @@ CONSTRAINTS:
         const prodImgEl = el as ImageElement;
         let cursorX = prodImgEl.position.x + prodImgEl.width / 2 + 60;
         const baseTop = prodImgEl.position.y - prodImgEl.height / 2;
-        const atlasModel = chosenModel as AtlasGenerationModel;
-        const quality: '2K' | '4K' = imageSizeOverride === '4K' ? '4K' : '2K';
+        // 引擎設定組裝一次，單張生成統一走 src/ai/generateImage.ts 原語
+        const engine: ImageEngineConfig = {
+            model: chosenModel,
+            geminiApiKey: apiKey,
+            atlasApiKey: useAtlas ? atlasApiKey : null,
+            geminiImageModel: imageModel,
+            imageSize: imageSizeOverride || imageSize,
+            atlasWait: withAtlasWaitToast,
+        };
 
         // 把一張結果圖放上畫布（依實際像素比例定寬高），回傳是否成功
         const placeAsset = async (resultSrc: string, title: string, fallbackRatio: number, key: string): Promise<boolean> => {
@@ -2154,40 +2104,12 @@ CONSTRAINTS:
                 let resultSrc = '';
 
                 try {
-                    if (useAtlas) {
-                        if (atlasModelSupportsImg2Img(atlasModel)) {
-                            const images = await withAtlasWaitToast(() =>
-                                callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, productSrc, 1, { ratio: spec.aspectRatio, quality, seed: consistencySeed }));
-                            if (images.length > 0) resultSrc = images[0];
-                        } else {
-                            // 降級退回純文字生成
-                            const images = await withAtlasWaitToast(() =>
-                                callAtlasGenerate(prompt, atlasModel, atlasApiKey!, 1, { ratio: spec.aspectRatio, quality, seed: consistencySeed }));
-                            if (images.length > 0) resultSrc = images[0];
-                        }
-                    } else {
-                        const genAI = new GoogleGenAI({ apiKey: apiKey! });
-                        const parts: any[] = [];
-                        if (productSrc.startsWith('data:')) {
-                            const [header, data] = productSrc.split(',');
-                            const mime = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                            parts.push({ inlineData: { data, mimeType: mime } });
-                        }
-                        parts.push({ text: `${prompt}\nOutput aspect ratio: ${spec.aspectRatio}.` });
-                        const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                            model: imageModel,
-                            contents: { parts },
-                            config: {
-                                imageConfig: {
-                                    aspectRatio: spec.aspectRatio,
-                                    imageSize: imageSizeOverride || imageSize,
-                                    ...(consistencySeed !== undefined ? { seed: consistencySeed } : {})
-                                }
-                            },
-                        }));
-                        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                        if (part?.inlineData) resultSrc = `data:image/png;base64,${part.inlineData.data}`;
-                    }
+                    // 以產品圖為參考圖；原語內 seed 一律放 config 頂層（修正舊版塞在
+                    // imageConfig 內層被 SDK 靜默忽略 → 風格一致性 seed 實際無效的 bug）
+                    resultSrc = await generateOneImage(
+                        { prompt, aspectRatio: spec.aspectRatio, refImage: productSrc, seed: consistencySeed },
+                        engine,
+                    );
                 } catch (e) {
                     console.warn('[productMarketingSet] 延伸生成失敗', spec.id, e);
                     showToast(`⚠️ ${spec.title} 生成失敗,略過`);
