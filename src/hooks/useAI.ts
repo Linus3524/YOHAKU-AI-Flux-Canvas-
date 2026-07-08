@@ -19,6 +19,7 @@ import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
 import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
 import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
 import { generateStyledImage } from '../ai/pipelines/styleTransfer';
+import { optimizePromptWithAI, analyzeImageStyleFull, analyzeProductStyleAnchor } from '../ai/pipelines/analysis';
 import { checkLocalModelReady, runLocalUpscalePipeline, runLocalRmbgPipeline } from '../ai/pipelines/localModels';
 import { type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
@@ -143,22 +144,9 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
 
     const handleAskAI = useCallback(async (userPrompt: string): Promise<string> => {
         try {
-            const genAI = createAiClient();
-            const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-3.1-flash-lite',
-                contents: { parts: [{ text: userPrompt }] },
-                config: {
-                    systemInstruction: `You are a professional Creative Director and Prompt Engineer.
-User input is a vague idea. You must output **ONLY** the concrete, high-quality prompt for AI image generation.
-**Rules:**
-1. Do NOT chat. Do NOT say 'Here is a suggestion'.
-2. Output format: A single paragraph of descriptive visual keywords.
-3. If user speaks Chinese keep it in rich, descriptive Chinese based on user language.
-4. Keep it concise but detailed.`,
-                }
-            }));
-
-            return response.text ? response.text.trim() : "抱歉，我現在無法思考。";
+            // 後台呼叫在 src/ai/pipelines/analysis.ts
+            const optimized = await optimizePromptWithAI(userPrompt, apiKey);
+            return optimized || "抱歉，我現在無法思考。";
         } catch (error: any) {
             handleAIError(error, "AI 助手");
             return "請先設定 API Key 才能使用此功能。";
@@ -174,34 +162,8 @@ User input is a vague idea. You must output **ONLY** the concrete, high-quality 
         showToast("正在全面分析圖片風格...");
 
         try {
-            const genAI = createAiClient();
-            const [header, data] = element.src.split(',');
-            const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-            const imagePart = { inlineData: { data, mimeType } };
-
-            const prompt = `Analyze this image comprehensively across all visual dimensions. Return ONLY a raw JSON object (no markdown, no code block) with exactly these keys:
-{
-  "color": "2-3 sentences about color tone and palette (dominant colors, temperature, saturation)",
-  "lighting": "2-3 sentences about lighting quality (light source, direction, shadows, contrast)",
-  "artStyle": "2-3 sentences about art style and medium (illustration style, brushwork, rendering technique)",
-  "composition": "2-3 sentences about composition and camera angle (framing, perspective, focal point)",
-  "texture": "2-3 sentences about surface texture and detail quality (material feel, finish, detail level)",
-  "pose": "2-3 sentences about character pose and action. Write 'Not applicable' if no character present.",
-  "expression": "2-3 sentences about facial expression and emotion. Write 'Not applicable' if no face present.",
-  "clothing": "2-3 sentences about clothing and outfit style. Write 'Not applicable' if no character present.",
-  "background": "2-3 sentences about background environment (setting, depth, atmosphere)",
-  "hair": "2-3 sentences about hairstyle design. Write 'Not applicable' if no character present.",
-  "typography": "2-3 sentences about text or font style visible in the image. Write 'Not applicable' if no text present."
-}`;
-
-            const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-3.1-flash',
-                contents: { parts: [imagePart, { text: prompt }] },
-                config: { responseMimeType: 'application/json' },
-            }));
-
-            const rawText = response.text?.trim() || '{}';
-            const analysis = JSON.parse(rawText);
+            // 11 維度風格分析在 src/ai/pipelines/analysis.ts（回傳鍵集與 StyleAnalysisResult 對齊）
+            const analysis = await analyzeImageStyleFull(element.src, apiKey) as unknown as import('../components/StylePasteModal').StyleAnalysisResult;
             setCopiedStyle({ analysis });
             showToast("✅ 風格已複製！右鍵選「貼上風格」套用。");
 
@@ -420,70 +382,48 @@ STRICT RULES:
             const newH = (dims.w > 0 && dims.h > 0)
                 ? Math.round(newW * dims.h / dims.w)
                 : element.height;
-            const newX = element.position.x + element.width / 2 + GAP + newW / 2;
-            setElements(prev => [
-                ...prev,
-                {
+            setElements(prev => {
+                // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
+                const anchor = prev.find(e => e.id === element.id) ?? element;
+                return [...prev, {
                     ...element,
                     id: `${element.id}_angle_${Date.now()}`,
                     src: finalSrc,
-                    position: { x: newX, y: element.position.y },
+                    position: { x: anchor.position.x + anchor.width / 2 + GAP + newW / 2, y: anchor.position.y },
                     width: newW,
                     height: newH,
                     name: `${element.name || '圖片'} 視角`,
-                    zIndex: Math.max(...prev.map(e => e.zIndex)) + 1,
-                } as ImageElement,
-            ]);
+                    zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
+                } as ImageElement];
+            });
         };
 
         // 是否走 Atlas（非 Gemini 模型 + 有 key + 支援 img2img）
         const useAtlas = generationModelGlobal !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModelGlobal as AtlasGenerationModel);
 
         try {
-            const genAI = useAtlas ? null : createAiClient();
+            // 單張後台流程（壓平→img2img→透明還原）在 src/ai/pipelines/styleTransfer.ts；
+            // prompt 以函式延後組裝：需對「壓平後」的圖做插畫偵測再決定內容
+            const engine: ImageEngineConfig = {
+                model: useAtlas ? generationModelGlobal : 'gemini',
+                geminiApiKey: apiKey,
+                atlasApiKey: useAtlas ? atlasApiKey : null,
+                geminiImageModel: imageModel,
+                imageSize,
+                atlasWait: withAtlasWaitToast,
+            };
+            const transparencyKeys = { falApiKey, geminiApiKey: apiKey, imageModel };
 
             for (const element of targetElements) {
-                // 透明背景：先壓平成純色底（AI 無法處理 alpha），生成後再還原透明
-                const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
-                const isIllustration = await detectIfIllustration(flatSrc);
-                const prompt = buildAnglePrompt(anglePrompt, isIllustration);
-
-                let generatedSrc = '';
-
-                if (useAtlas) {
-                    // ── Atlas img2img 路徑 ──────────────────────────────
-                    const atlasModel = generationModelGlobal as AtlasGenerationModel;
-                    let refImage = flatSrc;
-                    if (!refImage.startsWith('data:')) refImage = await downloadImageAsBase64(refImage);
-                    const ratio = imageAspectRatio || 'Original';
-                    const quality = imageSize === '4K' ? '4K' : '2K';
-                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(prompt, atlasModel, atlasApiKey!, refImage, 1, { ratio, quality }));
-                    if (images.length > 0) generatedSrc = images[0];
-                } else {
-                    // ── Gemini 路徑（單次生成）──────────────────────────
-                    const [header, data] = flatSrc.split(',');
-                    const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                    const imagePart = { inlineData: { data, mimeType } };
-                    const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI!.models.generateContent({
-                        model: imageModel,
-                        contents: { parts: [imagePart, { text: prompt }] },
-                    }));
-                    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                    if (part?.inlineData) generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
-                }
-
-                if (generatedSrc) {
-                    let finalSrc = generatedSrc;
-                    // 還原透明背景（BiRefNet → Gemini 去背 → Chroma Key）
-                    if (hadTransparency) {
-                        try {
-                            finalSrc = await restoreTransparencyFn(finalSrc, bgColor);
-                        } catch (e) {
-                            console.warn("Transparency processing failed", e);
-                        }
-                    }
-                    await placeResult(element, finalSrc);
-                }
+                const finalSrc = await generateStyledImage({
+                    srcImage: element.src,
+                    stylePrompt: async (flatSrc) => buildAnglePrompt(anglePrompt, await detectIfIllustration(flatSrc)),
+                    preserveTransparency,
+                    transparencyKeys,
+                    atlasRatio: imageAspectRatio || 'Original',
+                    omitImageConfig: true, // 視角轉換原始行為：Gemini 不帶 imageConfig
+                }, engine);
+                if (finalSrc) await placeResult(element, finalSrc);
             }
             showToast("視角轉換完成！✨");
         } catch (error) {
@@ -492,7 +432,7 @@ STRICT RULES:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [selectedElementIds, elements, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, imageAspectRatio, imageSize, prepareForGeneration, restoreTransparencyFn]);
+    }, [selectedElementIds, elements, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, imageAspectRatio, imageSize, preserveTransparency, falApiKey, withAtlasWaitToast]);
 
     const handleRemoveBackground = useCallback(async (mode: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
@@ -1924,20 +1864,12 @@ CONSTRAINTS:
             try { productSrc = await downloadImageAsBase64(productSrc); } catch { /* 失敗則維持原樣 */ }
         }
 
-        // 2. 進行風格預分析以抽取配色與氛圍錨點
+        // 2. 進行風格預分析以抽取配色與氛圍錨點（後台呼叫在 src/ai/pipelines/analysis.ts）
         let sharedStyleAnchor = '';
         if (brief.lockStyleConsistency && apiKey && productSrc.startsWith('data:')) {
             showToast('🔍 正在分析商品風格，為成套行銷圖鎖定風格與色調...');
             try {
-                const genAI = createAiClient();
-                const [header, data] = productSrc.split(',');
-                const mime = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                const styleAnalysisPrompt = `Analyze this product image. In 2-3 concise bullet points, describe a suitable commercial visual design language for it. Specify: 1. A harmonious color palette (give 2-3 colors with hex codes if applicable). 2. Studio lighting style (e.g. soft diffuse, high contrast). 3. Background materials or visual textures (e.g. marble, matte wood, plain studio). Keep it short and in English. Output ONLY the bullet points.`;
-                const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                    model: 'gemini-3.1-flash-lite',
-                    contents: { parts: [{ inlineData: { data, mimeType: mime } }, { text: styleAnalysisPrompt }] }
-                }));
-                sharedStyleAnchor = response.text ? response.text.trim() : '';
+                sharedStyleAnchor = await analyzeProductStyleAnchor(productSrc, apiKey);
             } catch (e) {
                 console.warn('[productStyleAnalysis] 風格分析失敗，將使用默認風格設定進行生成', e);
             }

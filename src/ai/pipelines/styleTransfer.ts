@@ -18,11 +18,19 @@ import { isAtlasEngine, type ImageEngineConfig } from '../generateImage';
 export interface StyleTransferOpts {
     /** 原圖（data URL 或 http URL；Atlas 分支非 data: 時自動轉 base64） */
     srcImage: string;
-    stylePrompt: string;
+    /**
+     * 風格/轉換提示詞。可傳函式：以「壓平後」的圖為輸入延後組 prompt
+     * （視角轉換需要對壓平圖做插畫偵測再決定 prompt 內容）。
+     */
+    stylePrompt: string | ((flatSrc: string) => Promise<string> | string);
     /** 開啟時：生成前壓平透明底、生成後三級去背還原 */
     preserveTransparency: boolean;
     /** 透明還原鏈用的 keys（BiRefNet / Gemini） */
     transparencyKeys: RestoreTransparencyKeys;
+    /** Atlas 的 ratio 參數（預設 '1:1'；視角轉換傳面板比例如 'Original'） */
+    atlasRatio?: string;
+    /** true = Gemini 不帶 imageConfig（視角轉換的原始行為：完全交給模型） */
+    omitImageConfig?: boolean;
 }
 
 /**
@@ -36,6 +44,10 @@ export async function generateStyledImage(
     const { src: flatSrc, hadTransparency, bgColor } =
         await prepareImageForGeneration(opts.srcImage, opts.preserveTransparency);
 
+    const prompt = typeof opts.stylePrompt === 'function'
+        ? await opts.stylePrompt(flatSrc)
+        : opts.stylePrompt;
+
     let result = '';
     if (isAtlasEngine(engine)) {
         let refImage = flatSrc;
@@ -43,8 +55,8 @@ export async function generateStyledImage(
         const quality: '2K' | '4K' = engine.imageSize === '4K' ? '4K' : '2K';
         const wait = engine.atlasWait ?? (<T,>(fn: () => Promise<T>) => fn());
         const images = await wait(() => callAtlasImg2Img(
-            opts.stylePrompt, engine.model as AtlasGenerationModel, engine.atlasApiKey!,
-            refImage, 1, { ratio: '1:1', quality },
+            prompt, engine.model as AtlasGenerationModel, engine.atlasApiKey!,
+            refImage, 1, { ratio: opts.atlasRatio ?? '1:1', quality },
         ));
         result = images[0] ?? '';
     } else {
@@ -53,8 +65,8 @@ export async function generateStyledImage(
         const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
         const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
             model: engine.geminiImageModel,
-            contents: { parts: [{ inlineData: { data, mimeType } }, { text: opts.stylePrompt }] },
-            config: { imageConfig: { imageSize: engine.imageSize } },
+            contents: { parts: [{ inlineData: { data, mimeType } }, { text: prompt }] },
+            ...(opts.omitImageConfig ? {} : { config: { imageConfig: { imageSize: engine.imageSize } } }),
         }));
         const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         if (part?.inlineData) result = `data:image/png;base64,${part.inlineData.data}`;
