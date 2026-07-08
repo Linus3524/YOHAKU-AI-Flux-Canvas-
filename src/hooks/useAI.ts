@@ -18,6 +18,7 @@ import { callAtlasGenerate, callAtlasImg2Img, callAtlasInpaint, atlasModelSuppor
 import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
 import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
 import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
+import { generateStyledImage } from '../ai/pipelines/styleTransfer';
 import { checkLocalModelReady, runLocalUpscalePipeline, runLocalRmbgPipeline } from '../ai/pipelines/localModels';
 import { type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
@@ -269,49 +270,30 @@ ALWAYS PRESERVE:
 - Overall composition and spatial relationships between elements`;
 
         try {
-            const genAI = createAiClient();
+            // 單張後台流程（壓平→img2img→透明還原）在 src/ai/pipelines/styleTransfer.ts
+            const engine: ImageEngineConfig = {
+                model: 'gemini', geminiApiKey: apiKey, geminiImageModel: imageModel, imageSize,
+            };
+            const transparencyKeys = { falApiKey, geminiApiKey: apiKey, imageModel };
             for (const element of targetElements) {
-                try {
-                    const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
-                    const [header, data] = flatSrc.split(',');
-                    const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                    const imagePart = { inlineData: { data, mimeType } };
-
-                    const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                        model: imageModel,
-                        contents: { parts: [imagePart, { text: basePrompt }] },
-                        config: { imageConfig: { imageSize: imageSize } },
-                    }));
-
-                    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                    if (part?.inlineData) {
-                        const generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
-                        let finalSrc = generatedSrc;
-
-                        if (hadTransparency) {
-                            try {
-                                finalSrc = await restoreTransparencyFn(finalSrc, bgColor);
-                            } catch (e) {
-                                console.warn("Failed to restore transparency:", e);
-                            }
-                        }
-
-                        // 結果放在原圖右側 30px
-                        setElements(prev => {
-                            // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
-                            const anchor = prev.find(e => e.id === element.id) ?? element;
-                            return [...prev, {
-                                ...element,
-                                id: `${element.id}_style_${Date.now()}`,
-                                src: finalSrc,
-                                position: { x: anchor.position.x + anchor.width / 2 + 30 + element.width / 2, y: anchor.position.y },
-                                name: `${element.name || '圖片'} 風格`,
-                                zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
-                            } as ImageElement];
-                        });
-                    }
-                } catch (err: any) {
-                    throw err;
+                const finalSrc = await generateStyledImage(
+                    { srcImage: element.src, stylePrompt: basePrompt, preserveTransparency, transparencyKeys },
+                    engine,
+                );
+                if (finalSrc) {
+                    // 結果放在原圖右側 30px
+                    setElements(prev => {
+                        // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
+                        const anchor = prev.find(e => e.id === element.id) ?? element;
+                        return [...prev, {
+                            ...element,
+                            id: `${element.id}_style_${Date.now()}`,
+                            src: finalSrc,
+                            position: { x: anchor.position.x + anchor.width / 2 + 30 + element.width / 2, y: anchor.position.y },
+                            name: `${element.name || '圖片'} 風格`,
+                            zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
+                        } as ImageElement];
+                    });
                 }
             }
             showToast("風格應用完成！✨");
@@ -321,7 +303,7 @@ ALWAYS PRESERVE:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, prepareForGeneration, restoreTransparencyFn]);
+    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, falApiKey, imageModel, imageSize]);
 
     // handlePasteStyle: 僅供 Style Library 預設風格使用（styleOverride 一定存在）
     // 優先順序：非 Gemini 模型且有 Atlas key → Atlas img2img；否則 → Gemini
@@ -345,101 +327,42 @@ ALWAYS PRESERVE:
         const useAtlas = generationModelGlobal !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModelGlobal as AtlasGenerationModel);
 
         try {
-            if (useAtlas) {
-                // ── Atlas img2img 風格套用 ──────────────────────────────
-                const atlasModel = generationModelGlobal as AtlasGenerationModel;
-                const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
-                const stylePrompt = presetMatch?.prompt
-                    ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
-                    : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
+            // 單張後台流程（壓平→img2img→透明還原）在 src/ai/pipelines/styleTransfer.ts；
+            // Atlas / Gemini 兩條分支收斂為同一迴圈，引擎由 useAtlas 決定
+            const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
+            const stylePrompt = presetMatch?.prompt
+                ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
+                : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
 
-                for (const element of targetElements) {
-                    try {
-                        const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
-                        let refImage = flatSrc;
-                        if (!refImage.startsWith('data:')) {
-                            refImage = await downloadImageAsBase64(refImage);
-                        }
-                        const images = await withAtlasWaitToast(() => callAtlasImg2Img(stylePrompt, atlasModel, atlasApiKey, refImage, 1, { ratio: '1:1', quality: imageSize === '4K' ? '4K' : '2K' }));
-                        if (images.length > 0) {
-                            let finalSrc = images[0];
-                            if (hadTransparency) {
-                                try {
-                                    finalSrc = await restoreTransparencyFn(finalSrc, bgColor);
-                                } catch (e) {
-                                    console.warn("Failed to restore transparency (Atlas style):", e);
-                                }
-                            }
-                            // Atlas 風格結果放在原圖右側 30px
-                            setElements(prev => {
-                                // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
-                                const anchor = prev.find(e => e.id === element.id) ?? element;
-                                return [...prev, {
-                                    ...element,
-                                    id: `${element.id}_style_${Date.now()}`,
-                                    src: finalSrc,
-                                    position: { x: anchor.position.x + anchor.width / 2 + 30 + element.width / 2, y: anchor.position.y },
-                                    name: `${element.name || '圖片'} 風格`,
-                                    zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
-                                } as ImageElement];
-                            });
-                        }
-                    } catch (err: any) {
-                        throw err;
-                    }
-                }
-            } else {
-                // ── Gemini img2img 風格套用（原有邏輯）─────────────────
-                const genAI = createAiClient();
+            const engine: ImageEngineConfig = {
+                model: useAtlas ? generationModelGlobal : 'gemini',
+                geminiApiKey: apiKey,
+                atlasApiKey: useAtlas ? atlasApiKey : null,
+                geminiImageModel: imageModel,
+                imageSize,
+                atlasWait: withAtlasWaitToast,
+            };
+            const transparencyKeys = { falApiKey, geminiApiKey: apiKey, imageModel };
 
-                for (const element of targetElements) {
-                    try {
-                        const { src: flatSrc, hadTransparency, bgColor } = await prepareForGeneration(element.src);
-                        const [header, data] = flatSrc.split(',');
-                        const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                        const imagePart = { inlineData: { data, mimeType } };
-
-                        const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
-                        const prompt = presetMatch?.prompt
-                            ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
-                            : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
-
-                        const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                            model: imageModel,
-                            contents: { parts: [imagePart, { text: prompt }] },
-                            config: { imageConfig: { imageSize: imageSize } },
-                        }));
-
-                        const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                        if (part?.inlineData) {
-                            const generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
-                            let finalSrc = generatedSrc;
-
-                            if (hadTransparency) {
-                                try {
-                                    finalSrc = await restoreTransparencyFn(finalSrc, bgColor);
-                                } catch (e) {
-                                    console.warn("Failed to restore transparency for style transfer:", e);
-                                }
-                            }
-
-                            // Gemini 風格結果放在原圖右側 30px
-                            setElements(prev => {
-                                // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
-                                const anchor = prev.find(e => e.id === element.id) ?? element;
-                                return [...prev, {
-                                    ...element,
-                                    id: `${element.id}_style_${Date.now()}`,
-                                    src: finalSrc,
-                                    position: { x: anchor.position.x + anchor.width / 2 + 30 + element.width / 2, y: anchor.position.y },
-                                    name: `${element.name || '圖片'} 風格`,
-                                    zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
-                                } as ImageElement];
-                            });
-                        }
-                    } catch (err: any) {
-                        throw err;
-                    }
+            for (const element of targetElements) {
+                const finalSrc = await generateStyledImage(
+                    { srcImage: element.src, stylePrompt, preserveTransparency, transparencyKeys },
+                    engine,
+                );
+                if (finalSrc) {
+                    // 風格結果放在原圖右側 30px
+                    setElements(prev => {
+                        // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
+                        const anchor = prev.find(e => e.id === element.id) ?? element;
+                        return [...prev, {
+                            ...element,
+                            id: `${element.id}_style_${Date.now()}`,
+                            src: finalSrc,
+                            position: { x: anchor.position.x + anchor.width / 2 + 30 + element.width / 2, y: anchor.position.y },
+                            name: `${element.name || '圖片'} 風格`,
+                            zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
+                        } as ImageElement];
+                    });
                 }
             }
             showToast("風格應用完成！✨");
@@ -450,7 +373,7 @@ ALWAYS PRESERVE:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModelGlobal, atlasApiKey, imageSize, prepareForGeneration, restoreTransparencyFn]);
+    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModelGlobal, atlasApiKey, imageSize, imageModel, falApiKey, withAtlasWaitToast]);
 
     const handleCameraAngle = useCallback(async (anglePrompt: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
