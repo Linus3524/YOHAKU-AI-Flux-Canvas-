@@ -14,12 +14,13 @@ import {
     checkCompositionSimilarity
 } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
-import { callAtlasGenerate, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
+import { callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
 import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
 import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
 import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
 import { generateStyledImage } from '../ai/pipelines/styleTransfer';
 import { optimizePromptWithAI, analyzeImageStyleFull, analyzeProductStyleAnchor } from '../ai/pipelines/analysis';
+import { atlasBatch, geminiGenerateImage } from '../ai/pipelines/generate';
 import { checkLocalModelReady, runLocalUpscalePipeline, runLocalRmbgPipeline } from '../ai/pipelines/localModels';
 import { type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
@@ -1125,6 +1126,8 @@ CONSTRAINTS:
             }
             const hasNoteRefs = noteRefImgs.length > 0;
             const canDoImg2Img = atlasModelSupportsImg2Img(atlasModel);
+            // 引擎葉子統一走 src/ai/pipelines/generate.ts 的 atlasBatch
+            const atlasEngine = { model: atlasModel, apiKey: atlasApiKey, wait: withAtlasWaitToast };
 
             // 畫框模式：每個畫框獨立生成並填入
             if (frameElements.length > 0) {
@@ -1135,19 +1138,18 @@ CONSTRAINTS:
                 setGeneratingElementIds(frameElements.map(f => f.id));
                 setIsGenerating(true);
                 setGeneratedImages(null);
-                const atlasQualityFrame = effImageSize === '4K' ? '4K' : '2K';
                 try {
                     const generatePromises = frameElements.map(async (frame, idx) => {
                         let frameRatio = frame.aspectRatioLabel;
                         if (!['1:1', '3:4', '4:3', '9:16', '16:9'].includes(frameRatio)) frameRatio = '1:1';
-                        let imgs: string[];
                         const frameSeed = baseSeed + idx;
-                        if (hasNoteRefs && canDoImg2Img) {
-                            // 有便利貼參考圖 → 用 img2img，以第一張參考圖為主
-                            imgs = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: getTransparentBg(atlasPrompt || ''), seed: frameSeed }, noteRefImgs.slice(1)));
-                        } else {
-                            imgs = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, 1, { ratio: frameRatio, quality: atlasQualityFrame, transparentBg: getTransparentBg(atlasPrompt || ''), seed: frameSeed }));
-                        }
+                        // 有便利貼參考圖且支援 img2img → 以第一張參考圖為主
+                        const imgs = await atlasBatch({
+                            prompt: atlasPrompt, count: 1, ratio: frameRatio, imageSize: effImageSize,
+                            seed: frameSeed, transparentBg: getTransparentBg(atlasPrompt || ''),
+                            refImage: (hasNoteRefs && canDoImg2Img) ? noteRefImgs[0] : undefined,
+                            extraRefImages: (hasNoteRefs && canDoImg2Img) ? noteRefImgs.slice(1) : undefined,
+                        }, atlasEngine);
                         if (imgs.length === 0) throw new Error('未收到圖片');
                         const newImageElement: ImageElement = { 
                             ...frame, 
@@ -1201,11 +1203,13 @@ CONSTRAINTS:
                 setGeneratingElementIds(firstImg ? [firstImg.id] : []);
                 setIsGenerating(true);
                 setGeneratedImages(null);
-                const atlasQuality = effImageSize === '4K' ? '4K' : '2K';
-                const atlasRatio = resolvedAtlasRatio;
                 try {
                     // 便利貼參考圖追加在畫布圖片之後
-                    const rawImages = await withAtlasWaitToast(() => callAtlasImg2Img(img2imgPrompt, atlasModel, atlasApiKey, refImage, count, { ratio: atlasRatio, quality: atlasQuality, transparentBg: getTransparentBg(atlasPrompt || ''), seed: baseSeed }, hasNoteRefs ? noteRefImgs : undefined));
+                    const rawImages = await atlasBatch({
+                        prompt: img2imgPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
+                        seed: baseSeed, transparentBg: getTransparentBg(atlasPrompt || ''),
+                        refImage, extraRefImages: hasNoteRefs ? noteRefImgs : undefined,
+                    }, atlasEngine);
                     if (rawImages.length === 0) throw new Error('未收到任何圖片');
                     // 若來源有透明背景，生成後自動還原透明
                     const images = refHadTransparency
@@ -1235,10 +1239,12 @@ CONSTRAINTS:
                 setGeneratingElementIds([]);
                 setIsGenerating(true);
                 setGeneratedImages(null);
-                const atlasQualityR = effImageSize === '4K' ? '4K' : '2K';
-                const atlasRatioR = resolvedAtlasRatio;
                 try {
-                    const images = await withAtlasWaitToast(() => callAtlasImg2Img(atlasPrompt, atlasModel, atlasApiKey, noteRefImgs[0], count, { ratio: atlasRatioR, quality: atlasQualityR, transparentBg: getTransparentBg(atlasPrompt || ''), seed: baseSeed }, noteRefImgs.slice(1)));
+                    const images = await atlasBatch({
+                        prompt: atlasPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
+                        seed: baseSeed, transparentBg: getTransparentBg(atlasPrompt || ''),
+                        refImage: noteRefImgs[0], extraRefImages: noteRefImgs.slice(1),
+                    }, atlasEngine);
                     if (images.length === 0) throw new Error('未收到任何圖片');
                     setGeneratedImages(images);
                     setGeneratedImagesMetadata(images.map((_, idx) => ({
@@ -1263,10 +1269,13 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(true);
             setGeneratedImages(null);
-            const atlasQuality2 = effImageSize === '4K' ? '4K' : '2K';
-            const atlasRatio2 = (resolvedAtlasRatio === 'Original' || !resolvedAtlasRatio) ? '1:1' : resolvedAtlasRatio;
             try {
-                const images = await withAtlasWaitToast(() => callAtlasGenerate(atlasPrompt, atlasModel, atlasApiKey, count, { ratio: atlasRatio2, quality: atlasQuality2, transparentBg: getTransparentBg(atlasPrompt || ''), seed: baseSeed }));
+                const images = await atlasBatch({
+                    prompt: atlasPrompt, count,
+                    ratio: (resolvedAtlasRatio === 'Original' || !resolvedAtlasRatio) ? '1:1' : resolvedAtlasRatio,
+                    imageSize: effImageSize,
+                    seed: baseSeed, transparentBg: getTransparentBg(atlasPrompt || ''),
+                }, atlasEngine);
                 if (images.length === 0) throw new Error('未收到任何圖片');
                 setGeneratedImages(images);
                 setGeneratedImagesMetadata(images.map((_, idx) => ({
@@ -1289,7 +1298,7 @@ CONSTRAINTS:
         setGeneratedImages(null);
         
         try {
-          const genAI = createAiClient();
+          createAiClient(); // 驗證 API Key（無 key 丟 MISSING_API_KEY → handleAIError 統一提示）
           const instructions = intentOverride || noteElements.map(note => note.type === 'note' ? note.content : note.text).join(' \n');
           let finalInstructions = instructions;
           if (imageStyle && imageStyle !== 'Default') {
@@ -1338,15 +1347,12 @@ CONSTRAINTS:
                   if (!['1:1', '3:4', '4:3', '9:16', '16:9'].includes(targetRatio)) targetRatio = '1:1'; 
                   
                   const frameSeed = baseSeed + idx;
-                  const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                    model: imageModel,
-                    contents: { parts: [...refParts, textPart] },
-                    config: { seed: frameSeed, imageConfig: { aspectRatio: targetRatio, imageSize: effImageSize } },
-                  }));
-                  const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-                  if (part?.inlineData) {
-                      const generatedSrc = `data:image/png;base64,${part.inlineData.data}`;
-                      const newImageElement: ImageElement = { 
+                  const generatedSrc = await geminiGenerateImage(
+                      { parts: [...refParts, textPart], aspectRatio: targetRatio, imageSize: effImageSize, seed: frameSeed },
+                      { apiKey, model: imageModel },
+                  );
+                  if (generatedSrc) {
+                      const newImageElement: ImageElement = {
                           ...frame, 
                           type: 'image', 
                           src: generatedSrc,
@@ -1433,33 +1439,20 @@ CONSTRAINTS:
           }
 
           const generateSingleImage = async (seedValue?: number) => {
-            const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: imageModel,
-                contents: { parts },
-                config: { 
-                    imageConfig: { 
-                        aspectRatio: targetAspectRatio, 
-                        imageSize: effImageSize,
-                        ...(seedValue !== undefined ? { seed: seedValue } : {})
-                    } 
-                },
-            }));
-            for (const part of response.candidates?.[0]?.content?.parts || []) {
-                if (part.inlineData) {
-                    let resultSrc = `data:image/png;base64,${part.inlineData.data}`;
-
-                    if (firstElHadTransparency && imageElements.length === 1) {
-                        try {
-                            resultSrc = await restoreTransparencyFn(resultSrc, firstElBgColor);
-                        } catch (e) {
-                            console.warn("Failed to restore alpha for generated image", e);
-                        }
-                    }
-
-                    return resultSrc;
+            // 引擎葉子在 src/ai/pipelines/generate.ts；seed 由內層 imageConfig 移到
+            // config 頂層（舊位置被 SDK 靜默忽略 → 自訂 seed / 每張 seed 一直無效）
+            let resultSrc = await geminiGenerateImage(
+                { parts, aspectRatio: targetAspectRatio, imageSize: effImageSize, seed: seedValue },
+                { apiKey, model: imageModel },
+            );
+            if (resultSrc && firstElHadTransparency && imageElements.length === 1) {
+                try {
+                    resultSrc = await restoreTransparencyFn(resultSrc, firstElBgColor);
+                } catch (e) {
+                    console.warn("Failed to restore alpha for generated image", e);
                 }
             }
-            return null;
+            return resultSrc;
           };
     
           const tasks = Array.from({ length: count }, (_, idx) => generateSingleImage(baseSeed + idx));
