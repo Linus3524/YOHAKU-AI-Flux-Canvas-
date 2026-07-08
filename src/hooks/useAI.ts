@@ -7,21 +7,18 @@ import {
     loadImage,
     restoreOriginalAlpha,
     createShapeDataUrl,
-    hasTransparency,
     getClosestAspectRatio,
     STYLE_PRESETS,
     calculateImageDifference,
     detectIfIllustration,
-    checkCompositionSimilarity,
-    processChromaKey
+    checkCompositionSimilarity
 } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
 import { callAtlasGenerate, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
-import { birefnetRemoveBg } from '../utils/geminiLayer';
-import { repairStickerTransparency } from '../utils/imageProcessing';
-import { runUpscaleInWorker } from '../utils/upscaleWorkerClient';
-import { runLocalRmbgInWorker } from '../utils/briaRmbgWorkerClient';
-import { MODEL_CONFIGS, getModelStatus, type OnnxModelKey } from '../utils/onnxModelCache';
+import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
+import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
+import { checkLocalModelReady, runLocalUpscalePipeline, runLocalRmbgPipeline } from '../ai/pipelines/localModels';
+import { type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
 import { crossPlatformSpec, buildCrossPlatformPrompt, type CrossPlatformSpec } from '../skills/crossPlatform';
 import { LogoSkillConfig, LOGO_BRAND_OUTPUTS, LogoBrandOutputSpec, buildLogoPrompt, buildLogoBrandPrompt } from '../skills/logo';
@@ -40,59 +37,6 @@ interface UseAIProps {
     generationModel?: string;
 
     falApiKey?: string | null;
-}
-
-/** 根據主體主色調選最佳 Chroma Key 底色 */
-function findBestChromaColor(base64: string): Promise<string> {
-    return new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const size = 80;
-            canvas.width = size; canvas.height = size;
-            const ctx = canvas.getContext('2d')!;
-            ctx.drawImage(img, 0, 0, size, size);
-            const data = ctx.getImageData(0, 0, size, size).data;
-            let r = 0, g = 0, b = 0, count = 0;
-            for (let i = 0; i < data.length; i += 4) {
-                if (data[i + 3] > 50) { r += data[i]; g += data[i + 1]; b += data[i + 2]; count++; }
-            }
-            if (count === 0) { resolve('#00BB44'); return; }
-            r /= count; g /= count; b /= count;
-            const candidates = [
-                { hex: '#00FF00', r: 0, g: 255, b: 0 },   // 純綠（螢光綠）
-                { hex: '#0000FF', r: 0, g: 0, b: 255 },   // 純藍
-                { hex: '#FF0000', r: 255, g: 0, b: 0 },   // 純紅
-                { hex: '#FF00FF', r: 255, g: 0, b: 255 }, // 洋紅
-            ];
-            let best = '#00BB44', maxDist = 0;
-            for (const c of candidates) {
-                const dist = Math.sqrt((r - c.r) ** 2 + (g - c.g) ** 2 + (b - c.b) ** 2);
-                if (dist > maxDist) { maxDist = dist; best = c.hex; }
-            }
-            resolve(best);
-        };
-        img.onerror = () => resolve('#FFFFFF');
-        img.src = base64;
-    });
-}
-
-/** 把透明背景壓平成純色底（避免 GPT Edit 把透明當遮罩） */
-function flattenTransparentImage(base64: string, bgColor: string): Promise<string> {
-    return new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-            const ctx = canvas.getContext('2d')!;
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
-            resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = () => resolve(base64);
-        img.src = base64;
-    });
 }
 
 /** 根據便利貼 prompt 關鍵字判斷是否需要透明背景（僅 GPT Image 2 支援） */
@@ -169,124 +113,30 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
         }
     }, [showToast]);
 
-    /** 生成前準備：若來源有透明且開啟 preserveTransparency → 壓平並記錄底色 */
-    const prepareForGeneration = useCallback(async (src: string): Promise<{
-        src: string; hadTransparency: boolean; bgColor: string;
-    }> => {
-        if (!preserveTransparency) return { src, hadTransparency: false, bgColor: '#FFFFFF' };
-        const transparent = await hasTransparency(src);
-        if (!transparent) return { src, hadTransparency: false, bgColor: '#FFFFFF' };
-        const bgColor = await findBestChromaColor(src);
-        const flatSrc = await flattenTransparentImage(src, bgColor);
-        return { src: flatSrc, hadTransparency: true, bgColor };
-    }, [preserveTransparency]);
+    /** 生成前準備（薄包裝 → src/ai/transparency.ts 純函式；只綁 preserveTransparency 開關） */
+    const prepareForGeneration = useCallback(
+        (src: string) => prepareImageForGeneration(src, preserveTransparency),
+        [preserveTransparency],
+    );
 
-    /** 生成後還原透明背景
-     *  優先順序：1) BiRefNet（fal key）→ 2) Gemini AI 去背（executeDynamicRemoval）→ 3) Chroma Key（基本備用）
-     */
-    const restoreTransparencyFn = useCallback(async (resultSrc: string, bgColor: string): Promise<string> => {
+    /** 生成後還原透明背景（薄包裝 → src/ai/transparency.ts；keys 由 hook 狀態注入） */
+    const restoreTransparencyFn = useCallback(
+        (resultSrc: string, bgColor: string) =>
+            restoreTransparency(resultSrc, bgColor, { falApiKey, geminiApiKey: apiKey, imageModel }),
+        [falApiKey, apiKey, imageModel],
+    );
 
-        // 1. BiRefNet（品質最佳）
-        // 貼圖是硬邊+實心+白模切框，用 General Use (Heavy)：最高精度的一般分割，
-        // 邊緣乾淨有把握；Matting 偏軟 alpha 是給毛髮/半透明用的，反而會羽化白框、挖淺色洞。
-        if (falApiKey) {
-            try {
-                return await birefnetRemoveBg(resultSrc, falApiKey, 'General Use (Heavy)');
-            } catch (e) {
-                console.warn('[restoreTransparency] BiRefNet failed, trying Gemini...', e);
-            }
-        }
-        // 2. Gemini AI 去背（無 fal key 時）
-        if (apiKey) {
-            try {
-                const genAI = new GoogleGenAI({ apiKey });
-                return await executeDynamicRemoval(resultSrc, genAI, undefined, imageModel);
-            } catch (e) {
-                console.warn('[restoreTransparency] Gemini removal failed, fallback chroma key', e);
-            }
-        }
-        // 3. Chroma Key / Flood-fill 去背（本機最後備用，品質比一般 chroma key 更好）
-        try {
-            return await repairStickerTransparency(resultSrc, { backgroundColor: bgColor });
-        } catch (e) {
-            console.warn('[restoreTransparency] Flood-fill repair failed, fallback basic chroma key', e);
-            return processChromaKey(resultSrc, bgColor);
-        }
-    }, [falApiKey, apiKey, imageModel]);
+    // Helper to create client or throw error immediately（實作在 src/ai/geminiClient.ts）
+    // Note: 這裡不 setHasApiKey(false)，避免 render-phase 副作用；錯誤由 handleAIError 統一處理。
+    const createAiClient = () => createGeminiClient(apiKey);
 
-    // Helper to create client or throw error immediately
-    const createAiClient = () => {
-        if (!apiKey) {
-            // Note: We do NOT setHasApiKey(false) here to avoid render-phase side effects.
-            // The error will be caught by handlers below.
-            throw new Error("MISSING_API_KEY");
-        }
-        return new GoogleGenAI({ apiKey: apiKey });
-    };
-
-    // Centralized error handler for AI calls
+    // Centralized error handler：分類邏輯在 src/ai/geminiClient.ts（純函式），
+    // 這裡只執行 UI 副作用（toast / 標記 key 無效）
     const handleAIError = (error: any, contextMsg: string) => {
         console.error(`${contextMsg}:`, error);
-        
-        const errorMsg = (error.message || "").toLowerCase();
-        const status = error.status || error.code || 0;
-
-        // 1. API Key 完全無效（格式錯誤或不存在）
-        const isInvalidKey = 
-            errorMsg === "missing_api_key" || 
-            errorMsg.includes("api key not valid") ||
-            errorMsg.includes("api_key_invalid") ||
-            errorMsg.includes("invalid api key");
-
-        // 2. 有 Key 但沒有權限（未在 GCP 啟用該 API）
-        const isNoPermission =
-            (status === 403 || errorMsg.includes("403")) &&
-            (errorMsg.includes("permission_denied") || errorMsg.includes("forbidden"));
-
-        // 3. 帳單未啟用
-        const isBillingIssue =
-            errorMsg.includes("billing") ||
-            errorMsg.includes("payment");
-
-        // 4. 配額用完（每分鐘 or 每日上限）
-        const isQuotaExceeded =
-            status === 429 ||
-            errorMsg.includes("429") ||
-            errorMsg.includes("quota") ||
-            errorMsg.includes("resource_exhausted") ||
-            errorMsg.includes("rate limit") ||
-            errorMsg.includes("too many requests");
-
-        // 5. 伺服器過載（非你的問題，稍後重試即可）
-        const isOverloaded =
-            status === 503 ||
-            errorMsg.includes("503") ||
-            errorMsg.includes("overloaded") ||
-            errorMsg.includes("service unavailable");
-
-        // 6. 模型名稱錯誤
-        const isModelNotFound =
-            status === 404 ||
-            errorMsg.includes("404") ||
-            errorMsg.includes("not found") ||
-            errorMsg.includes("model");
-
-        if (isInvalidKey) {
-            setHasApiKey(false);
-            showToast("🔑 API Key 無效或格式錯誤，請重新輸入。");
-        } else if (isNoPermission) {
-            showToast("🚫 權限不足：請到 Google Cloud Console 啟用 Gemini API。");
-        } else if (isBillingIssue) {
-            showToast("💳 帳單未啟用：請確認您的 GCP 專案已開啟計費功能。");
-        } else if (isQuotaExceeded) {
-            showToast("⏰ 配額已用完：今日 API 使用量已達上限，請明天再試或升級方案。");
-        } else if (isOverloaded) {
-            showToast("⏳ Gemini 伺服器暫時過載，已自動重試 3 次仍失敗，請稍後 1-2 分鐘再試。");
-        } else if (isModelNotFound) {
-            showToast("❌ 模型不存在或名稱錯誤，請確認模型版本。");
-        } else {
-            showToast(`${contextMsg}失敗：${error.message?.slice(0, 60) || "未知錯誤"}`);
-        }
+        const classified = classifyAIError(error, contextMsg);
+        if (classified.invalidatesKey) setHasApiKey(false);
+        showToast(classified.userMessage);
     };
 
     const handleAskAI = useCallback(async (userPrompt: string): Promise<string> => {
@@ -1270,38 +1120,20 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, preserveTransparency, prepareForGeneration, restoreTransparencyFn]);
 
-    // ── 本機 ONNX 高清放大（純像素超解析，結構 100% 保留，不走雲端、免額度） ──
+    // ── 本機 ONNX 高清放大（pipeline 實作在 src/ai/pipelines/localModels.ts）──
     const handleLocalUpscale = useCallback(async (modelKey: OnnxModelKey, factor: number = 4) => {
         const element = elements.find(el => el.id === selectedElementIds[0]);
         if (!element || element.type !== 'image') return;
 
-        const cfg = MODEL_CONFIGS[modelKey];
-        const status = await getModelStatus(modelKey);
-        if (status !== 'ready') {
-            showToast(`請先在「功能助手 → 本機 AI 模型」下載「${cfg.name}」(${cfg.sizeMB}MB)`);
-            return;
-        }
+        const notReadyMsg = await checkLocalModelReady(modelKey);
+        if (notReadyMsg) { showToast(notReadyMsg); return; }
 
         setGeneratingElementIds([element.id]);
         setGenProgress(0);   // 在元素 badge 上顯示確定進度條（取代每幾趴跳 toast）
         setGenOpType('upscale');
         setIsGenerating(true);
         try {
-            // 模型原生 4x；factor=2 時於 worker 內把 4x 結果降回 2x（仍享 4x 細節重構）
-            // 進度節流：每跨越一個 5% 級距才更新 state，避免每塊都觸發整張畫布重繪
-            let lastBucket = -1;
-            const resultSrc = await runUpscaleInWorker(
-                element.src,
-                cfg.cacheKey,
-                factor,
-                (pct) => {
-                    const bucket = Math.floor(pct / 5);
-                    if (bucket !== lastBucket || pct >= 100) {
-                        lastBucket = bucket;
-                        setGenProgress(pct);
-                    }
-                },
-            );
+            const resultSrc = await runLocalUpscalePipeline(element.src, modelKey, factor, setGenProgress);
 
             // 顯示尺寸放大 factor 倍（與「智能放大」一致），底層解析度同步 → 清晰不糊
             const newElement: ImageElement = {
@@ -1331,17 +1163,13 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast]);
 
-    // ── 本機 ONNX 去背（ISNet 模型，不走雲端、免額度） ──
+    // ── 本機 ONNX 去背（pipeline 實作在 src/ai/pipelines/localModels.ts）──
     const handleLocalRemoveBackground = useCallback(async () => {
         const element = elements.find(el => el.id === selectedElementIds[0]);
         if (!element || element.type !== 'image') return;
 
-        const cfg = MODEL_CONFIGS['bria_rmbg'];
-        const status = await getModelStatus('bria_rmbg');
-        if (status !== 'ready') {
-            showToast(`請先在「功能助手 → 本機 AI 模型」下載「${cfg.name}」(${cfg.sizeMB}MB)`);
-            return;
-        }
+        const notReadyMsg = await checkLocalModelReady('bria_rmbg');
+        if (notReadyMsg) { showToast(notReadyMsg); return; }
 
         setGeneratingElementIds([element.id]);
         setIsGenerating(true);
@@ -1350,13 +1178,7 @@ CONSTRAINTS:
         showToast('🔍 本機 AI 去背中 (ISNet)...');
 
         try {
-            const resultSrc = await runLocalRmbgInWorker(
-                element.src,
-                cfg.cacheKey,
-                (pct) => {
-                    setGenProgress(pct);
-                }
-            );
+            const resultSrc = await runLocalRmbgPipeline(element.src, setGenProgress);
 
             // 更新原圖 src
             setElements(prev => prev.map(e => e.id === element.id ? { ...e, src: resultSrc } : e));
