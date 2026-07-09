@@ -1,13 +1,13 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, NodeGraphData, NodeRunStatus, ImageGenParams, RemoveBgParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams, RemoveBgParams } from '../types';
 import type { Part } from '@google/genai';
 import { runLocalRmbgPipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
 import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
-import { birefnetRemoveBg } from '../../../utils/geminiLayer';
+import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
 import { isImageSrc } from '../mediaSrc';
 
 const ATLAS_MODELS = ['seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
@@ -117,6 +117,20 @@ async function runRemoveBg(
   return await runLocalRmbgPipeline(input);
 }
 
+/** layerSplit 節點：Gemini 語意偵測 + BiRefNet 去背 → 多張圖層（多輸出）。 */
+async function runLayerSplit(
+  input: string,
+  engine: ExecutorEngine,
+  onProgress?: (message: string) => void,
+): Promise<string[]> {
+  if (!engine.geminiApiKey) throw new Error('圖層分離需要 Gemini API Key');
+  if (!engine.falApiKey) throw new Error('圖層分離需要 fal.ai API Key');
+  const layers = await geminiLayerSegment(input, engine.geminiApiKey, engine.falApiKey, onProgress);
+  const srcs = layers.map(l => l.base64).filter(isImageSrc);
+  if (srcs.length === 0) throw new Error('圖層分離沒有產生任何圖層');
+  return srcs;
+}
+
 export interface ExecutorEngine {
   geminiApiKey?: string | null;
   atlasApiKey?: string | null;
@@ -128,6 +142,8 @@ export interface ExecutorCallbacks {
   onNodeStatus?: (id: string, status: NodeRunStatus, message?: string) => void;
   /** 節點跑出結果時回報（每個動作節點自己顯示結果縮圖用）。 */
   onNodeResult?: (id: string, src: string) => void;
+  /** 多輸出節點跑出「一組」結果時回報（可折疊 Batch 節點展開用）。 */
+  onNodeBatchResult?: (id: string, srcs: string[]) => void;
   /** 整張圖跑完後的錯誤彙總；不影響已成功節點的結果展示。 */
   onRunError?: (message: string) => void;
 }
@@ -176,16 +192,46 @@ function topoSort(graph: NodeGraphData): GraphNode[] | null {
   return order.length === graph.nodes.length ? order : null;
 }
 
-/** 找某節點的上游輸入圖（線性鏈：取第一條指向它的 edge 的來源結果）。 */
-function upstreamSrc(nodeId: string, graph: NodeGraphData, results: Map<string, string>): string | undefined {
-  const edge = graph.edges.find(e => e.target === nodeId);
-  return edge ? results.get(edge.source) : undefined;
+/**
+ * 解析單條 edge 帶來的值：
+ * - 來源是多輸出節點（batchResults 有它）：sourceHandle `item-N` 取第 N 個；未指定則取第 0 個（代表）。
+ * - 一般單輸出節點：取 results 的值。
+ */
+function resolveEdgeValue(
+  edge: GraphEdge,
+  results: Map<string, string>,
+  batchResults: Map<string, string[]>,
+): string | undefined {
+  const batch = batchResults.get(edge.source);
+  if (batch) {
+    const match = /^item-(\d+)$/.exec(edge.sourceHandle ?? '');
+    const index = match ? Number(match[1]) : 0;
+    return batch[index];
+  }
+  return results.get(edge.source);
 }
 
-function upstreamSrcs(nodeId: string, graph: NodeGraphData, results: Map<string, string>): string[] {
+/** 找某節點的第一條上游輸入值（單輸入節點用）。 */
+function upstreamSrc(
+  nodeId: string,
+  graph: NodeGraphData,
+  results: Map<string, string>,
+  batchResults: Map<string, string[]>,
+): string | undefined {
+  const edge = graph.edges.find(e => e.target === nodeId);
+  return edge ? resolveEdgeValue(edge, results, batchResults) : undefined;
+}
+
+/** 找某節點的全部上游輸入值（多輸入節點用，如 imageGen 多參考圖）。 */
+function upstreamSrcs(
+  nodeId: string,
+  graph: NodeGraphData,
+  results: Map<string, string>,
+  batchResults: Map<string, string[]>,
+): string[] {
   return graph.edges
     .filter(e => e.target === nodeId)
-    .map(e => results.get(e.source))
+    .map(e => resolveEdgeValue(e, results, batchResults))
     .filter((src): src is string => !!src);
 }
 
@@ -219,8 +265,16 @@ export async function executeGraph(
   if (!order) throw new Error('節點圖有環路，無法執行');
 
   const results = new Map<string, string>();
+  const batchResults = new Map<string, string[]>();
   const status = (id: string, s: NodeRunStatus, msg?: string) => callbacks.onNodeStatus?.(id, s, msg);
   const emitResult = (id: string, src: string) => { results.set(id, src); callbacks.onNodeResult?.(id, src); };
+  // 多輸出節點：存整組結果供下游依 item-N 取用；同時把第 0 個當「代表值」寫進 results，
+  // 讓單值消費端（outputSrc fallback／整節點拖出／未指定 handle 的下游）也能運作。
+  const emitBatch = (id: string, srcs: string[]) => {
+    batchResults.set(id, srcs);
+    callbacks.onNodeBatchResult?.(id, srcs);
+    if (srcs[0]) emitResult(id, srcs[0]);
+  };
   const terminals = terminalNodeIds(graph);
   const unavailableNodeIds = new Set<string>();
   const errors: { id: string; message: string }[] = [];
@@ -243,8 +297,9 @@ export async function executeGraph(
           continue;
         }
 
-        const input = upstreamSrc(node.id, graph, results);
-        const needsUpstream = node.kind === 'removeBg' || node.kind === 'style' || node.kind === 'output';
+        const input = upstreamSrc(node.id, graph, results, batchResults);
+        const needsUpstream = node.kind === 'removeBg' || node.kind === 'style'
+          || node.kind === 'output' || node.kind === 'layerSplit';
         if (needsUpstream && !input) {
           unavailableNodeIds.add(node.id);
           status(node.id, 'idle', '無上游輸入');
@@ -253,6 +308,16 @@ export async function executeGraph(
 
         status(node.id, 'running');
         throwIfAborted(options.signal);
+
+        // 多輸出節點：產出「一組」結果，走 emitBatch，不進單值路徑。
+        if (node.kind === 'layerSplit') {
+          const srcs = await runLayerSplit(input, engine, message => status(node.id, 'running', message));
+          throwIfAborted(options.signal);
+          emitBatch(node.id, srcs);
+          status(node.id, 'done');
+          continue;
+        }
+
         let result: string;
         switch (node.kind) {
           case 'removeBg': {
@@ -267,7 +332,7 @@ export async function executeGraph(
           case 'imageGen':
             result = await runImageGen(
               (node.data.params ?? {}) as Partial<ImageGenParams>,
-              upstreamSrcs(node.id, graph, results),
+              upstreamSrcs(node.id, graph, results, batchResults),
               engine,
             );
             break;

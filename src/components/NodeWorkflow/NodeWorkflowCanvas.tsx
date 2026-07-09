@@ -25,6 +25,8 @@ import { RemoveBgNode } from './nodes/RemoveBgNode';
 import { ImageGenNode } from './nodes/ImageGenNode';
 import { StyleNode } from './nodes/StyleNode';
 import { OutputNode } from './nodes/OutputNode';
+import { LayerSplitNode } from './nodes/LayerSplitNode';
+import { NodeWorkflowContext } from './NodeWorkflowContext';
 import { executeGraph, type ExecutorEngine } from './executor/nodeGraphExecutor';
 import type { GraphEdge, GraphNode, NodeKind } from './types';
 
@@ -34,6 +36,7 @@ const nodeTypes = {
   removeBg: RemoveBgNode,
   imageGen: ImageGenNode,
   style: StyleNode,
+  layerSplit: LayerSplitNode,
 };
 
 function DeletableEdge({
@@ -98,6 +101,7 @@ const DEFAULT_LABEL: Record<NodeKind, string> = {
   removeBg: '去背',
   imageGen: '生成圖片',
   style: '風格轉換',
+  layerSplit: '圖層分離',
 };
 
 type FlowNodeData = Record<string, unknown> & {
@@ -145,6 +149,7 @@ const toFlowEdge = (edge: GraphEdge, onDelete?: (id: string) => void): FlowEdge 
   id: edge.id,
   source: edge.source,
   target: edge.target,
+  sourceHandle: edge.sourceHandle ?? undefined,
   type: 'deletable',
   data: { onDelete },
 });
@@ -153,6 +158,7 @@ const toGraphEdge = (edge: FlowEdge): GraphEdge => ({
   id: edge.id,
   source: edge.source,
   target: edge.target,
+  sourceHandle: edge.sourceHandle ?? undefined,
 });
 
 interface NodeWorkflowCanvasProps {
@@ -172,6 +178,7 @@ const ADDABLE: { kind: NodeKind; label: string }[] = [
   { kind: 'removeBg', label: '＋ 去背' },
   { kind: 'imageGen', label: '＋ 生圖' },
   { kind: 'style', label: '＋ 風格' },
+  { kind: 'layerSplit', label: '＋ 圖層分離' },
   { kind: 'output', label: '＋ 輸出' },
 ];
 
@@ -183,6 +190,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   const replaceGraph = useNodeGraphStore(state => state.syncGraph);
   const setNodeStatus = useNodeGraphStore(state => state.setNodeStatus);
   const setNodeResult = useNodeGraphStore(state => state.setNodeResult);
+  const setNodeBatchResult = useNodeGraphStore(state => state.setNodeBatchResult);
   const resetRuntime = useNodeGraphStore(state => state.resetRuntime);
   const resetRunningStatuses = useNodeGraphStore(state => state.resetRunningStatuses);
   const [nodes, setNodes, onNodesChange] = useNodesState(
@@ -272,6 +280,9 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
         onNodeResult: (id, src) => {
           setNodeResult(id, src);
         },
+        onNodeBatchResult: (id, srcs) => {
+          setNodeBatchResult(id, srcs);
+        },
         onRunError,
       }, { signal: abortController.signal });
       if (outputSrc) onOutputChange?.(outputSrc);
@@ -285,7 +296,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
       resetRunningStatuses();
       setIsRunning(false);
     }
-  }, [isRunning, resetRuntime, resetRunningStatuses, nodes, edges, engine, setNodes, setEdges, setNodeStatus, setNodeResult, onOutputChange, onRunError]);
+  }, [isRunning, resetRuntime, resetRunningStatuses, nodes, edges, engine, setNodes, setEdges, setNodeStatus, setNodeResult, setNodeBatchResult, onOutputChange, onRunError]);
 
   // 把本地編輯結果鏡像回 store，讓關閉時 exportGraph() 拿到最新拓撲（存回 NodeGroupElement）。
   useEffect(() => {
@@ -352,6 +363,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   }, [onDetachImage]);
 
   return (
+    <NodeWorkflowContext.Provider value={{ detachImage: onDetachImage }}>
     <div className="absolute inset-0">
       <ReactFlow
         nodes={nodes}
@@ -471,5 +483,6 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
         拖到這裡 → 移出到畫布
       </div>
     </div>
+    </NodeWorkflowContext.Provider>
   );
 }

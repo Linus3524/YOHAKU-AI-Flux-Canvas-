@@ -8,6 +8,8 @@ interface NodeGraphState {
   nodeStatus: Record<string, NodeRunStatus>;
   /** 各節點執行後的結果（runtime-only；每個動作節點自己顯示結果縮圖用） */
   nodeResults: Record<string, string>;
+  /** 多輸出節點執行後的「一組」結果（runtime-only；可折疊 Batch 節點展開用） */
+  nodeBatchResults: Record<string, string[]>;
   loadGraph: (data: NodeGraphData) => void;
   /** 同步拓撲（不清 runtime 狀態），給 React Flow → store 鏡像用 */
   syncGraph: (data: NodeGraphData) => void;
@@ -18,6 +20,7 @@ interface NodeGraphState {
   removeNode: (id: string) => void;
   setNodeStatus: (id: string, status: NodeRunStatus) => void;
   setNodeResult: (id: string, src: string) => void;
+  setNodeBatchResult: (id: string, srcs: string[]) => void;
   resetRunningStatuses: () => void;
   resetRuntime: () => void;
   exportGraph: () => NodeGraphData;
@@ -28,11 +31,13 @@ export const useNodeGraphStore = create<NodeGraphState>((set, get) => ({
   edges: [],
   nodeStatus: {},
   nodeResults: {},
+  nodeBatchResults: {},
   loadGraph: (data) => set({
     nodes: data.nodes.map(node => ({ ...node, data: { ...node.data }, position: { ...node.position } })),
     edges: data.edges.map(edge => ({ ...edge })),
     nodeStatus: {},
     nodeResults: {},
+    nodeBatchResults: {},
   }),
   syncGraph: (data) => set({
     nodes: data.nodes.map(node => ({ ...node, data: { ...node.data }, position: { ...node.position } })),
@@ -67,12 +72,15 @@ export const useNodeGraphStore = create<NodeGraphState>((set, get) => ({
   setNodeResult: (id, src) => set(state => ({
     nodeResults: { ...state.nodeResults, [id]: src },
   })),
+  setNodeBatchResult: (id, srcs) => set(state => ({
+    nodeBatchResults: { ...state.nodeBatchResults, [id]: srcs },
+  })),
   resetRunningStatuses: () => set(state => ({
     nodeStatus: Object.fromEntries(
       Object.entries(state.nodeStatus).map(([id, status]) => [id, status === 'running' ? 'idle' : status]),
     ),
   })),
-  resetRuntime: () => set({ nodeStatus: {}, nodeResults: {} }),
+  resetRuntime: () => set({ nodeStatus: {}, nodeResults: {}, nodeBatchResults: {} }),
   exportGraph: () => {
     const { nodes, edges } = get();
     return {
