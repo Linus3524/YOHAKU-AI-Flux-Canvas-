@@ -4,10 +4,18 @@
 import type { GraphNode, NodeGraphData, NodeRunStatus, ImageGenParams } from '../types';
 import { runLocalRmbgPipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
+import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { isImageSrc } from '../mediaSrc';
 
 const ATLAS_MODELS = ['seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
+const STYLE_PRESET_BY_KEY: Record<string, string> = {
+  pixel: 'Pixel Art 8-bit / 16-bit',
+  watercolor: 'Watercolor Bleed',
+  anime: 'Japanese Anime Style',
+  cyberpunk: 'Cyberpunk',
+  clay: 'Claymation',
+};
 
 /** imageGen 節點：便利貼文字→提示詞、上游圖→參考圖，呼叫既有生圖 pipeline（Gemini / Atlas）。 */
 async function runImageGen(
@@ -46,6 +54,37 @@ async function runImageGen(
     { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image-preview' },
   );
   if (!src) throw new Error('生圖沒有回傳圖片');
+  return src;
+}
+
+async function runStyleTransfer(
+  styleKey: string | undefined,
+  upstream: string,
+  engine: ExecutorEngine,
+): Promise<string> {
+  if (!styleKey || styleKey === 'none') return upstream;
+  if (!isImageSrc(upstream)) throw new Error('風格轉換節點需要上游圖片');
+  if (!engine.geminiApiKey) throw new Error('風格轉換需要 Gemini API Key');
+
+  const styleName = STYLE_PRESET_BY_KEY[styleKey] ?? styleKey;
+  const src = await generateStyledImage(
+    {
+      srcImage: upstream,
+      stylePrompt: buildPresetStylePrompt(styleName),
+      preserveTransparency: true,
+      transparencyKeys: {
+        geminiApiKey: engine.geminiApiKey,
+        imageModel: engine.geminiImageModel,
+      },
+    },
+    {
+      model: 'gemini',
+      geminiApiKey: engine.geminiApiKey,
+      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
+      imageSize: '1K',
+    },
+  );
+  if (!src) throw new Error('風格轉換沒有回傳圖片');
   return src;
 }
 
@@ -155,7 +194,13 @@ export async function executeGraph(
             // 輸出節點：直接傳遞上游輸入，並作為最終結果展示
             result = input;
             break;
-          // style 待接 styleTransfer；先原樣傳遞，不中斷整條鏈。
+          case 'style':
+            result = await runStyleTransfer(
+              typeof node.data.params?.styleKey === 'string' ? node.data.params.styleKey : undefined,
+              input,
+              engine,
+            );
+            break;
           default:
             result = input;
             break;
