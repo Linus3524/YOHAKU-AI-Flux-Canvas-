@@ -245,6 +245,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
           console.log('[handleRun] onNodeResult writing result for:', id, 'src length:', src?.length);
           setNodeResult(id, src);
         },
+        onRunError,
       });
       console.log('[handleRun] executeGraph finished. outputSrc exists:', !!outputSrc);
       if (outputSrc) onOutputChange?.(outputSrc);

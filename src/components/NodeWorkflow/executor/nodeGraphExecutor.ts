@@ -113,6 +113,8 @@ export interface ExecutorCallbacks {
   onNodeStatus?: (id: string, status: NodeRunStatus, message?: string) => void;
   /** 節點跑出結果時回報（每個動作節點自己顯示結果縮圖用）。 */
   onNodeResult?: (id: string, src: string) => void;
+  /** 整張圖跑完後的錯誤彙總；不影響已成功節點的結果展示。 */
+  onRunError?: (message: string) => void;
 }
 
 export interface ExecuteResult {
@@ -150,6 +152,15 @@ function upstreamSrc(nodeId: string, graph: NodeGraphData, results: Map<string, 
   return edge ? results.get(edge.source) : undefined;
 }
 
+function blockedByFailedUpstream(
+  nodeId: string,
+  graph: NodeGraphData,
+  unavailableNodeIds: Set<string>,
+): string | null {
+  const edge = graph.edges.find(e => e.target === nodeId && unavailableNodeIds.has(e.source));
+  return edge ? `上游節點 ${edge.source} 失敗或未產生結果` : null;
+}
+
 /** 終端節點 = 沒有任何 edge 以它為 source（鏈的末端）。 */
 function terminalNodeIds(graph: NodeGraphData): Set<string> {
   const hasOutgoing = new Set(graph.edges.map(e => e.source));
@@ -173,6 +184,8 @@ export async function executeGraph(
   const status = (id: string, s: NodeRunStatus, msg?: string) => callbacks.onNodeStatus?.(id, s, msg);
   const emitResult = (id: string, src: string) => { results.set(id, src); callbacks.onNodeResult?.(id, src); };
   const terminals = terminalNodeIds(graph);
+  const unavailableNodeIds = new Set<string>();
+  const errors: { id: string; message: string }[] = [];
 
   let outputSrc: string | null = null;
 
@@ -183,9 +196,20 @@ export async function executeGraph(
         emitResult(node.id, src);
         status(node.id, 'done');
       } else {
+        const blockedReason = blockedByFailedUpstream(node.id, graph, unavailableNodeIds);
+        if (blockedReason) {
+          unavailableNodeIds.add(node.id);
+          status(node.id, 'idle', blockedReason);
+          continue;
+        }
+
         const input = upstreamSrc(node.id, graph, results);
         const needsUpstream = node.kind === 'removeBg' || node.kind === 'style' || node.kind === 'output';
-        if (needsUpstream && !input) { status(node.id, 'idle', '無上游輸入'); continue; }
+        if (needsUpstream && !input) {
+          unavailableNodeIds.add(node.id);
+          status(node.id, 'idle', '無上游輸入');
+          continue;
+        }
 
         status(node.id, 'running');
         let result: string;
@@ -224,8 +248,10 @@ export async function executeGraph(
         status(node.id, 'done');
       }
     } catch (err: any) {
-      status(node.id, 'error', err?.message || '執行失敗');
-      throw err;
+      const message = err?.message || '執行失敗';
+      unavailableNodeIds.add(node.id);
+      errors.push({ id: node.id, message });
+      status(node.id, 'error', message);
     }
   }
 
@@ -251,6 +277,11 @@ export async function executeGraph(
         break;
       }
     }
+  }
+
+  if (errors.length > 0) {
+    const details = errors.map(error => `${error.id}: ${error.message}`).join('；');
+    callbacks.onRunError?.(`${errors.length} 個節點失敗：${details}`);
   }
 
   return { outputSrc, results };
