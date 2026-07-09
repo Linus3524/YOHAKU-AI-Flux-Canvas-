@@ -155,10 +155,10 @@ async function runRemoveBg(
 ): Promise<string> {
   const mode = params.mode ?? 'local';
 
-  // 雲端去背：fal.ai BiRefNet v2（重用既有 pipeline，不重寫）。
+  // 雲端去背：fal.ai BiRefNet v2（重用既有 pipeline，不重寫）。可選 6 種模型。
   if (mode === 'cloud') {
     if (engine.falApiKey) {
-      return await birefnetRemoveBg(input, engine.falApiKey);
+      return await birefnetRemoveBg(input, engine.falApiKey, params.cloudModel ?? 'Matting');
     }
     onFallback?.('缺少 fal.ai API Key，暫時改用本機去背');
   }

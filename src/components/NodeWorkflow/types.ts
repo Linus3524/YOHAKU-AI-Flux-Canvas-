@@ -1,3 +1,5 @@
+import type { BiRefNetModel } from '../../utils/geminiLayer';
+
 export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'copyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing';
 
 /** 產出「一組」結果的多輸出節點種類（用可折疊 Batch 容器呈現）。 */
@@ -7,6 +9,8 @@ export const isMultiOutputKind = (kind: NodeKind): boolean => MULTI_OUTPUT_KINDS
 /** 各處理節點的參數形狀（存進 GraphNode.data.params；#2 只做設定，執行是 #3） */
 export interface RemoveBgParams {
   mode: 'local' | 'cloud';
+  /** 雲端模式下的 BiRefNet 模型（對標主畫布 6 種）；未選用預設 Matting。 */
+  cloudModel?: BiRefNetModel;
 }
 export interface ImageGenParams {
   prompt: string;
