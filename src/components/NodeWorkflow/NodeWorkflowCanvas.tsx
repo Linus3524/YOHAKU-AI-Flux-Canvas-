@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   addEdge,
   Background,
@@ -21,7 +21,7 @@ import '@xyflow/react/dist/style.css';
 import { useNodeGraphStore } from '../../store/nodeGraphStore';
 import { isImageSrc } from './mediaSrc';
 import { NodeWorkflowContext } from './NodeWorkflowContext';
-import { ADDABLE_NODES, DEFAULT_NODE_LABELS, nodeTypes } from './nodeRegistry';
+import { ADDABLE_NODES, DEFAULT_NODE_LABELS, nodeTypes, type NodeCategory } from './nodeRegistry';
 import { executeGraph, type ExecutorEngine } from './executor/nodeGraphExecutor';
 import type { GraphEdge, GraphNode, NodeKind } from './types';
 
@@ -169,6 +169,14 @@ interface NodeWorkflowCanvasProps {
 
 // 拖到畫面底部這個高度內放開 = 移出到大畫布
 const DETACH_ZONE_HEIGHT = 90;
+const NODE_CATEGORY_ORDER: NodeCategory[] = ['process', 'generate', 'analysis', 'output'];
+const NODE_CATEGORY_LABELS: Record<NodeCategory, string> = {
+  input: '輸入',
+  process: '影像處理',
+  generate: '生成資產',
+  analysis: '分析文字',
+  output: '輸出',
+};
 
 export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRunError }: NodeWorkflowCanvasProps) {
   // 進子空間前 Overlay 已 loadGraph，這裡讀一次當初始值。
@@ -188,6 +196,13 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   const [edges, setEdges, onEdgesChange] = useEdgesState(
     useNodeGraphStore.getState().edges.map(e => toFlowEdge(e))
   );
+  const groupedAddableNodes = useMemo(() => NODE_CATEGORY_ORDER
+    .map(category => ({
+      category,
+      label: NODE_CATEGORY_LABELS[category],
+      nodes: ADDABLE_NODES.filter(node => node.category === category),
+    }))
+    .filter(group => group.nodes.length > 0), []);
 
   const handleEdgeDelete = useCallback((edgeId: string) => {
     setEdges(eds => eds.filter(e => e.id !== edgeId));
@@ -429,19 +444,34 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
           .node-workflow-flow .react-flow__node textarea {
             cursor: text !important;
           }
+          .node-toolbar-summary::-webkit-details-marker {
+            display: none;
+          }
         `}</style>
         <Background color="#cbd5e1" gap={28} size={1.2} />
         <Panel position="top-left">
           <div className="flex items-center gap-px border border-black/12 bg-white shadow-sm">
-            {ADDABLE_NODES.map(({ kind, label }) => (
-              <button
-                key={kind}
-                type="button"
-                onClick={() => addNode(kind)}
-                className="px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors border-r border-black/6 last:border-r-0"
-              >
-                {label}
-              </button>
+            {groupedAddableNodes.map(group => (
+              <details key={group.category} className="relative">
+                <summary className="node-toolbar-summary list-none px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors border-r border-black/6 cursor-pointer select-none">
+                  {group.label} ▾
+                </summary>
+                <div className="absolute left-0 top-full z-20 mt-1 min-w-[132px] border border-black/12 bg-white shadow-lg py-1">
+                  {group.nodes.map(({ kind, label }) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={(event) => {
+                        addNode(kind);
+                        event.currentTarget.closest('details')?.removeAttribute('open');
+                      }}
+                      className="block w-full px-3 py-1.5 text-left text-[12px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors whitespace-nowrap"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </details>
             ))}
             <button
               type="button"
