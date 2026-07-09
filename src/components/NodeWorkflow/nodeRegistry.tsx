@@ -9,6 +9,7 @@ import { StyleNode } from './nodes/StyleNode';
 import { UpscaleNode } from './nodes/UpscaleNode';
 import { PromptOptimizeNode } from './nodes/PromptOptimizeNode';
 import { AnalyzeNode } from './nodes/AnalyzeNode';
+import { OutpaintNode } from './nodes/OutpaintNode';
 import { LayerSplitNode } from './nodes/LayerSplitNode';
 
 export type NodeIoType = 'none' | 'image' | 'text' | 'imageOrText' | 'imageBatch';
@@ -113,6 +114,17 @@ export const NODE_REGISTRY = {
     needsUpstream: true,
     input: 'image',
     output: 'text',
+  },
+  outpaint: {
+    kind: 'outpaint',
+    component: OutpaintNode,
+    label: '外擴延伸',
+    addLabel: '＋ 外擴',
+    addable: true,
+    category: 'process',
+    needsUpstream: true,
+    input: 'image',
+    output: 'image',
   },
   layerSplit: {
     kind: 'layerSplit',

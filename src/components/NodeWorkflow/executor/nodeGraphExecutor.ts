@@ -1,11 +1,13 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams, NodeKind, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams, NodeKind, OutpaintParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
+import type { ImageElement, OutpaintingState } from '../../../types';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
 import { analyzeImageStyleFull, optimizePromptWithAI } from '../../../ai/pipelines/analysis';
+import { generateOutpaintingPrompt } from '../../../ai/pipelines/outpainting';
 import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
@@ -21,6 +23,13 @@ const STYLE_PRESET_BY_KEY: Record<string, string> = {
   clay: 'Claymation',
 };
 const UPSCALE_MODEL_KEYS: UpscaleParams['modelKey'][] = ['upscale_photo', 'upscale_anime', 'upscale_art'];
+const OUTPAINT_DIRECTIONS: Record<OutpaintParams['direction'], string> = {
+  all: 'extend the image outward on all sides',
+  left: 'extend the image to the left side',
+  right: 'extend the image to the right side',
+  top: 'extend the image upward',
+  bottom: 'extend the image downward',
+};
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '執行失敗';
@@ -178,6 +187,27 @@ function formatStyleAnalysis(analysis: Record<string, string>): string {
     .join('\n');
 }
 
+function createOutpaintingStateForPrompt(input: string): OutpaintingState {
+  const element: ImageElement = {
+    id: 'node-outpaint-source',
+    type: 'image',
+    src: input,
+    position: { x: 0, y: 0 },
+    width: 1,
+    height: 1,
+    rotation: 0,
+    zIndex: 0,
+    isVisible: true,
+    isLocked: false,
+    name: 'Node outpaint source',
+    groupId: null,
+  };
+  return {
+    element,
+    frame: { position: { x: 0, y: 0 }, width: 1, height: 1 },
+  };
+}
+
 async function runAnalyze(
   input: string,
   engine: ExecutorEngine,
@@ -188,6 +218,33 @@ async function runAnalyze(
   const text = formatStyleAnalysis(analysis);
   if (!text) throw new Error('圖片分析沒有回傳文字');
   return text;
+}
+
+async function runOutpaint(
+  params: Partial<OutpaintParams>,
+  input: string,
+  engine: ExecutorEngine,
+  onProgress?: (message: string) => void,
+): Promise<string> {
+  if (!isImageSrc(input)) throw new Error('外擴節點需要上游圖片');
+  if (!engine.geminiApiKey) throw new Error('外擴需要 Gemini API Key');
+  const direction = params.direction && params.direction in OUTPAINT_DIRECTIONS ? params.direction : 'all';
+  const aspectRatio = params.aspectRatio ?? '1:1';
+  onProgress?.('分析外擴提示詞中');
+  const autoPrompt = await generateOutpaintingPrompt(createOutpaintingStateForPrompt(input), engine.geminiApiKey);
+  const prompt = [
+    `Use the attached image as the visual source and ${OUTPAINT_DIRECTIONS[direction]}. Preserve the original subject, lighting, perspective, palette, texture, and style while creating a seamless expanded composition.`,
+    autoPrompt,
+    params.prompt?.trim(),
+  ].filter(Boolean).join('\n\n');
+  const [header, data] = input.split(',');
+  const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+  const src = await geminiGenerateImage(
+    { parts: [{ inlineData: { data, mimeType } }, { text: prompt }], aspectRatio, imageSize: '1K' },
+    { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image-preview' },
+  );
+  if (!src) throw new Error('外擴沒有回傳圖片');
+  return src;
 }
 
 /** layerSplit 節點：Gemini 語意偵測 + BiRefNet 去背 → 多張圖層（多輸出）。 */
@@ -258,6 +315,12 @@ const nodeRunners: Record<NodeKind, NodeRunner> = {
   analyze: async ({ input, engine }) => singleResult(await runAnalyze(
     requireInput(input, '圖片分析'),
     engine,
+  )),
+  outpaint: async ({ node, input, engine, onProgress }) => singleResult(await runOutpaint(
+    (node.data.params ?? {}) as Partial<OutpaintParams>,
+    requireInput(input, '外擴'),
+    engine,
+    onProgress,
   )),
   layerSplit: async ({ input, engine, onProgress }) => batchResult(await runLayerSplit(
     requireInput(input, '圖層分離'),

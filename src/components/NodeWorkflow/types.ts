@@ -1,4 +1,4 @@
-export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'upscale' | 'promptOptimize' | 'analyze' | 'layerSplit';
+export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'layerSplit';
 
 /** 產出「一組」結果的多輸出節點種類（用可折疊 Batch 容器呈現）。 */
 export const MULTI_OUTPUT_KINDS: readonly NodeKind[] = ['layerSplit'];
@@ -25,6 +25,11 @@ export interface PromptOptimizeParams {
 }
 export interface AnalyzeParams {
   format: 'summary';
+}
+export interface OutpaintParams {
+  direction: 'all' | 'left' | 'right' | 'top' | 'bottom';
+  aspectRatio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16';
+  prompt: string;
 }
 export interface LayerSplitParams {
   engine: 'gemini' | 'gpt';
