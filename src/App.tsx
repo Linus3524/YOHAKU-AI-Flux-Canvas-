@@ -1701,7 +1701,7 @@ const App: React.FC = () => {
           onClose={handleCloseNodeWorkflow}
           onImportOutput={handleImportNodeWorkflowOutput}
           onDetachImage={handleDetachNodeImage}
-          engine={{ geminiApiKey: effectiveApiKey, atlasApiKey, geminiImageModel: imageModel }}
+          engine={{ geminiApiKey: effectiveApiKey, atlasApiKey, falApiKey, geminiImageModel: imageModel }}
           onOutputChange={handleNodeWorkflowOutput}
           onRunError={(msg) => showToast(`❌ ${msg}`)}
         />

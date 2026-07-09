@@ -7,6 +7,7 @@ import { runLocalRmbgPipeline, checkLocalModelReady } from '../../../ai/pipeline
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
 import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
+import { birefnetRemoveBg } from '../../../utils/geminiLayer';
 import { isImageSrc } from '../mediaSrc';
 
 const ATLAS_MODELS = ['seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
@@ -29,7 +30,8 @@ async function runImageGen(
   engine: ExecutorEngine,
 ): Promise<string> {
   const refImages = upstreams.filter(src => isImageSrc(src));
-  const upstreamPrompt = upstreams.filter(src => !isImageSrc(src)).map(src => src.trim()).filter(Boolean).join('\n');
+  const textInputs: string[] = upstreams.filter(src => !isImageSrc(src));
+  const upstreamPrompt = textInputs.map(src => src.trim()).filter(Boolean).join('\n');
   const prompt = [upstreamPrompt, params.prompt].map(part => part?.trim()).filter(Boolean).join('\n\n');
   if (!prompt) throw new Error('生圖節點需要提示詞（便利貼文字或節點輸入框）');
   const aspectRatio = params.aspectRatio || '1:1';
@@ -97,11 +99,17 @@ async function runStyleTransfer(
 async function runRemoveBg(
   params: Partial<RemoveBgParams>,
   input: string,
+  engine: ExecutorEngine,
   onFallback?: (message: string) => void,
 ): Promise<string> {
   const mode = params.mode ?? 'local';
+
+  // 雲端去背：fal.ai BiRefNet v2（重用既有 pipeline，不重寫）。
   if (mode === 'cloud') {
-    onFallback?.('雲端去背 pipeline 尚未存在，暫時改用本機去背');
+    if (engine.falApiKey) {
+      return await birefnetRemoveBg(input, engine.falApiKey);
+    }
+    onFallback?.('缺少 fal.ai API Key，暫時改用本機去背');
   }
 
   const notReady = await checkLocalModelReady('bria_rmbg');
@@ -112,6 +120,7 @@ async function runRemoveBg(
 export interface ExecutorEngine {
   geminiApiKey?: string | null;
   atlasApiKey?: string | null;
+  falApiKey?: string | null;
   geminiImageModel?: string;
 }
 
@@ -250,6 +259,7 @@ export async function executeGraph(
             result = await runRemoveBg(
               (node.data.params ?? {}) as Partial<RemoveBgParams>,
               input,
+              engine,
               message => status(node.id, 'running', message),
             );
             break;
