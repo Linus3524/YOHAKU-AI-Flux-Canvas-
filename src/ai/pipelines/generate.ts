@@ -11,7 +11,7 @@
  * excess property check、SDK 靜默忽略 → 主生成流自訂 seed / 每張 seed
  * 實際無效），收斂至此順帶修正；畫框路徑原本就正確、行為不變。
  */
-import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
+import { GoogleGenAI, GenerateContentResponse, type Part } from '@google/genai';
 import { callGeminiWithRetry } from '../../utils/helpers';
 import { callAtlasGenerate, callAtlasImg2Img, type AtlasGenerationModel } from '../../utils/atlasImage';
 
@@ -50,7 +50,7 @@ export function atlasBatch(opts: AtlasBatchOpts, engine: AtlasEngine): Promise<s
 
 export interface GeminiGenerateOpts {
     /** 已組好的 parts（參考圖 inlineData + text；順序由呼叫端決定） */
-    parts: any[];
+    parts: Part[];
     aspectRatio: string;
     imageSize?: '1K' | '2K' | '4K';
     seed?: number;

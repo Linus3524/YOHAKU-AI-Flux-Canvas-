@@ -46,7 +46,7 @@ function DeletableEdge({
   style = {},
   markerEnd,
   data,
-}: EdgeProps) {
+}: EdgeProps<FlowEdge>) {
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -56,7 +56,7 @@ function DeletableEdge({
     targetY,
   });
 
-  const onDelete = (data as any)?.onDelete;
+  const onDelete = data?.onDelete;
 
   return (
     <>
@@ -105,8 +105,16 @@ type FlowNodeData = Record<string, unknown> & {
   onDeleteNode?: (id: string) => void;
 };
 
+interface FlowEdgeData extends Record<string, unknown> {
+  onDelete?: (id: string) => void;
+}
+
 type FlowNode = Node<FlowNodeData>;
-type FlowEdge = Edge;
+type FlowEdge = Edge<FlowEdgeData>;
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '執行失敗';
+}
 
 const toFlowNode = (node: GraphNode): FlowNode => ({
   id: node.id,
@@ -227,7 +235,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
     setEdges(els => reconnectEdge(oldEdge, newConnection, els));
   }, [setEdges]);
 
-  const handleReconnectEnd = useCallback((_: any, edge: Edge) => {
+  const handleReconnectEnd = useCallback((_: MouseEvent | TouchEvent, edge: FlowEdge) => {
     if (!edgeReconnectSuccessful.current) {
       setEdges(eds => eds.filter(e => e.id !== edge.id));
     }
@@ -266,9 +274,9 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
         onRunError,
       }, { signal: abortController.signal });
       if (outputSrc) onOutputChange?.(outputSrc);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[handleRun] executeGraph error:', e);
-      onRunError?.(e?.message || '執行失敗');
+      onRunError?.(getErrorMessage(e));
     } finally {
       if (abortControllerRef.current === abortController) {
         abortControllerRef.current = null;
@@ -305,9 +313,10 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
       ? { x: selected.position.x + 240, y: selected.position.y }
       : { x: 260 + nodes.length * 24, y: 260 };
     const graphNode: GraphNode = { id, kind, position, data: { label: DEFAULT_LABEL[kind], params: {} } };
+    const flowNode = toFlowNode(graphNode);
     setNodes(nds => [
       ...nds.map(n => ({ ...n, selected: false })),
-      { ...toFlowNode(graphNode), data: { ...toFlowNode(graphNode).data, onDeleteNode: handleNodeDelete }, selected: true },
+      { ...flowNode, data: { ...flowNode.data, onDeleteNode: handleNodeDelete }, selected: true },
     ]);
     if (selected) {
       setEdges(eds => addEdge({ 

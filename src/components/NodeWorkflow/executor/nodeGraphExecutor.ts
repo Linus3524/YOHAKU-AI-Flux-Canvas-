@@ -2,6 +2,7 @@
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
 import type { GraphNode, NodeGraphData, NodeRunStatus, ImageGenParams, RemoveBgParams } from '../types';
+import type { Part } from '@google/genai';
 import { runLocalRmbgPipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
 import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
@@ -16,6 +17,10 @@ const STYLE_PRESET_BY_KEY: Record<string, string> = {
   cyberpunk: 'Cyberpunk',
   clay: 'Claymation',
 };
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '執行失敗';
+}
 
 /** imageGen 節點：便利貼文字→提示詞、上游圖→參考圖，呼叫既有生圖 pipeline（Gemini / Atlas）。 */
 async function runImageGen(
@@ -43,7 +48,7 @@ async function runImageGen(
 
   // Gemini 路徑
   if (!engine.geminiApiKey) throw new Error('生圖需要 Gemini API Key');
-  const parts: any[] = [];
+  const parts: Part[] = [];
   for (const refImage of refImages) {
     const [header, data] = refImage.split(',');
     const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
@@ -275,12 +280,12 @@ export async function executeGraph(
         emitResult(node.id, result);
         status(node.id, 'done');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof GraphExecutionAbortError) {
         status(node.id, 'idle');
         break;
       }
-      const message = err?.message || '執行失敗';
+      const message = getErrorMessage(err);
       unavailableNodeIds.add(node.id);
       errors.push({ id: node.id, message });
       status(node.id, 'error', message);
