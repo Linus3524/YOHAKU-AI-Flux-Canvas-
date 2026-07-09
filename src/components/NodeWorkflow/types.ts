@@ -1,4 +1,4 @@
-export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'layerSplit';
+export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'copyStyle' | 'layerSplit';
 
 /** 產出「一組」結果的多輸出節點種類（用可折疊 Batch 容器呈現）。 */
 export const MULTI_OUTPUT_KINDS: readonly NodeKind[] = ['layerSplit'];
@@ -31,6 +31,10 @@ export interface OutpaintParams {
   aspectRatio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16';
   prompt: string;
 }
+export interface CopyStyleParams {
+  selectedKeys: string[];
+  preserveTransparency: boolean;
+}
 export interface LayerSplitParams {
   engine: 'gemini' | 'gpt';
 }
@@ -52,6 +56,8 @@ export interface GraphEdge {
   target: string;
   /** 來源節點的輸出接口 id。多輸出節點用 `item-<index>` 指定接第幾個結果；單輸出留空。 */
   sourceHandle?: string | null;
+  /** 目標節點的輸入接口 id。雙輸入節點用它區分角色；單輸入留空。 */
+  targetHandle?: string | null;
 }
 
 /** 節點執行期狀態（runtime-only，不寫進 graph 存檔） */

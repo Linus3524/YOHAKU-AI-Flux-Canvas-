@@ -1,14 +1,14 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams, NodeKind, OutpaintParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, CopyStyleParams, ImageGenParams, NodeKind, OutpaintParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
 import type { ImageElement, OutpaintingState } from '../../../types';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
 import { analyzeImageStyleFull, optimizePromptWithAI } from '../../../ai/pipelines/analysis';
 import { generateOutpaintingPrompt } from '../../../ai/pipelines/outpainting';
-import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
+import { analyzeCopiedStyle, buildCopiedStylePrompt, buildPresetStylePrompt, generateCopiedStyleAssets, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
 import { isImageSrc } from '../mediaSrc';
@@ -23,6 +23,7 @@ const STYLE_PRESET_BY_KEY: Record<string, string> = {
   clay: 'Claymation',
 };
 const UPSCALE_MODEL_KEYS: UpscaleParams['modelKey'][] = ['upscale_photo', 'upscale_anime', 'upscale_art'];
+const COPY_STYLE_KEYS = ['color', 'lighting', 'artStyle', 'composition', 'texture', 'background'];
 const OUTPAINT_DIRECTIONS: Record<OutpaintParams['direction'], string> = {
   all: 'extend the image outward on all sides',
   left: 'extend the image to the left side',
@@ -208,6 +209,23 @@ function createOutpaintingStateForPrompt(input: string): OutpaintingState {
   };
 }
 
+function createImageElementForPipeline(src: string, name: string): ImageElement {
+  return {
+    id: `node-${name}`,
+    type: 'image',
+    src,
+    position: { x: 0, y: 0 },
+    width: 1,
+    height: 1,
+    rotation: 0,
+    zIndex: 0,
+    isVisible: true,
+    isLocked: false,
+    name,
+    groupId: null,
+  };
+}
+
 async function runAnalyze(
   input: string,
   engine: ExecutorEngine,
@@ -247,6 +265,48 @@ async function runOutpaint(
   return src;
 }
 
+async function runCopyStyle(
+  params: Partial<CopyStyleParams>,
+  inputs: string[],
+  inputsByHandle: Record<string, string[]>,
+  engine: ExecutorEngine,
+): Promise<string> {
+  if (!engine.geminiApiKey) throw new Error('拷貝風格需要 Gemini API Key');
+  const images = inputs.filter(isImageValue);
+  const styleSrc = inputsByHandle.style?.find(isImageValue) ?? images[0];
+  const contentSrc = inputsByHandle.content?.find(isImageValue) ?? images.find(src => src !== styleSrc);
+  if (!styleSrc) throw new Error('拷貝風格需要連接「風格圖」');
+  if (!contentSrc) throw new Error('拷貝風格需要連接「內容圖」');
+  const selectedKeys = Array.isArray(params.selectedKeys) && params.selectedKeys.length > 0
+    ? params.selectedKeys.filter(key => COPY_STYLE_KEYS.includes(key))
+    : COPY_STYLE_KEYS;
+  const analysis = await analyzeCopiedStyle(styleSrc, engine.geminiApiKey);
+  const stylePrompt = buildCopiedStylePrompt(analysis, selectedKeys);
+  if (!stylePrompt) throw new Error('拷貝風格沒有可套用的分析項目');
+  let result = '';
+  await generateCopiedStyleAssets({
+    targetElements: [createImageElementForPipeline(contentSrc, 'copy-style-content')],
+    stylePrompt,
+    preserveTransparency: params.preserveTransparency !== false,
+    transparencyKeys: {
+      falApiKey: engine.falApiKey,
+      geminiApiKey: engine.geminiApiKey,
+      imageModel: engine.geminiImageModel,
+    },
+    engine: {
+      model: 'gemini',
+      geminiApiKey: engine.geminiApiKey,
+      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
+      imageSize: '1K',
+    },
+    onAsset: (_source, finalSrc) => {
+      result = finalSrc;
+    },
+  });
+  if (!result) throw new Error('拷貝風格沒有回傳圖片');
+  return result;
+}
+
 /** layerSplit 節點：Gemini 語意偵測 + BiRefNet 去背 → 多張圖層（多輸出）。 */
 async function runLayerSplit(
   input: string,
@@ -269,6 +329,7 @@ interface NodeRunnerContext {
   node: GraphNode;
   input: string | undefined;
   inputs: string[];
+  inputsByHandle: Record<string, string[]>;
   engine: ExecutorEngine;
   onProgress: (message: string) => void;
 }
@@ -321,6 +382,12 @@ const nodeRunners: Record<NodeKind, NodeRunner> = {
     requireInput(input, '外擴'),
     engine,
     onProgress,
+  )),
+  copyStyle: async ({ node, inputs, inputsByHandle, engine }) => singleResult(await runCopyStyle(
+    (node.data.params ?? {}) as Partial<CopyStyleParams>,
+    inputs,
+    inputsByHandle,
+    engine,
   )),
   layerSplit: async ({ input, engine, onProgress }) => batchResult(await runLayerSplit(
     requireInput(input, '圖層分離'),
@@ -433,6 +500,24 @@ function upstreamSrcs(
     .filter((src): src is string => !!src);
 }
 
+/** 依 targetHandle 分組上游輸入值（雙輸入節點用，如 copyStyle）。 */
+function upstreamSrcsByHandle(
+  nodeId: string,
+  graph: NodeGraphData,
+  results: Map<string, string>,
+  batchResults: Map<string, string[]>,
+): Record<string, string[]> {
+  return graph.edges
+    .filter(e => e.target === nodeId)
+    .reduce<Record<string, string[]>>((acc, edge) => {
+      const src = resolveEdgeValue(edge, results, batchResults);
+      if (!src) return acc;
+      const key = edge.targetHandle ?? 'default';
+      acc[key] = [...(acc[key] ?? []), src];
+      return acc;
+    }, {});
+}
+
 function blockedByFailedUpstream(
   nodeId: string,
   graph: NodeGraphData,
@@ -504,6 +589,7 @@ export async function executeGraph(
         node,
         input,
         inputs: upstreamSrcs(node.id, graph, results, batchResults),
+        inputsByHandle: upstreamSrcsByHandle(node.id, graph, results, batchResults),
         engine,
         onProgress: message => status(node.id, 'running', message),
       });

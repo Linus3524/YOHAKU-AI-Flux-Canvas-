@@ -143,6 +143,7 @@ const toFlowEdge = (edge: GraphEdge, onDelete?: (id: string) => void): FlowEdge 
   source: edge.source,
   target: edge.target,
   sourceHandle: edge.sourceHandle ?? undefined,
+  targetHandle: edge.targetHandle ?? undefined,
   type: 'deletable',
   data: { onDelete },
 });
@@ -152,6 +153,7 @@ const toGraphEdge = (edge: FlowEdge): GraphEdge => ({
   source: edge.source,
   target: edge.target,
   sourceHandle: edge.sourceHandle ?? undefined,
+  targetHandle: edge.targetHandle ?? undefined,
 });
 
 interface NodeWorkflowCanvasProps {
@@ -184,12 +186,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   );
 
   const [edges, setEdges, onEdgesChange] = useEdgesState(
-    useNodeGraphStore.getState().edges.map(e => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      type: 'deletable',
-    }))
+    useNodeGraphStore.getState().edges.map(e => toFlowEdge(e))
   );
 
   const handleEdgeDelete = useCallback((edgeId: string) => {
