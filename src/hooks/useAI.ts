@@ -19,9 +19,11 @@ import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
 import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
 import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
 import { generateStyledImage } from '../ai/pipelines/styleTransfer';
-import { optimizePromptWithAI, analyzeImageStyleFull, analyzeProductStyleAnchor, analyzeBaseImageForCompositing } from '../ai/pipelines/analysis';
+import { analyzeImageStyleFull, analyzeProductStyleAnchor, analyzeBaseImageForCompositing } from '../ai/pipelines/analysis';
 import { atlasBatch, geminiGenerateImage } from '../ai/pipelines/generate';
 import { checkLocalModelReady, runLocalUpscalePipeline, runLocalRmbgPipeline } from '../ai/pipelines/localModels';
+import { askAI } from '../ai/pipelines/chat';
+import { generateOutpaintingPrompt } from '../ai/pipelines/outpainting';
 import { type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
 import { crossPlatformSpec, buildCrossPlatformPrompt, type CrossPlatformSpec } from '../skills/crossPlatform';
@@ -145,9 +147,8 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
 
     const handleAskAI = useCallback(async (userPrompt: string): Promise<string> => {
         try {
-            // 後台呼叫在 src/ai/pipelines/analysis.ts
-            const optimized = await optimizePromptWithAI(userPrompt, apiKey);
-            return optimized || "抱歉，我現在無法思考。";
+            // 後台呼叫在 src/ai/pipelines/chat.ts
+            return await askAI(userPrompt, apiKey);
         } catch (error: any) {
             handleAIError(error, "AI 助手");
             return "請先設定 API Key 才能使用此功能。";
@@ -835,19 +836,7 @@ CONSTRAINTS:
   
     const handleAutoPromptGenerate = useCallback(async (state: OutpaintingState): Promise<string> => {
         try {
-            const genAI = createAiClient();
-            const [header, data] = state.element.src.split(',');
-            const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-            const imagePart = { inlineData: { data, mimeType } };
-            
-            const prompt = `Analyze this image and write a detailed prompt for Outpainting in Traditional Chinese (繁體中文). Describe the scene, lighting, and style to extend the image naturally. Output ONLY the prompt text.`;
-
-            const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-                model: 'gemini-3.1-flash-lite',
-                contents: { parts: [imagePart, { text: prompt }] },
-            }));
-            
-            return response.text ? response.text.trim() : "";
+            return await generateOutpaintingPrompt(state, apiKey);
         } catch (e: any) {
             handleAIError(e, "自動發想");
             throw e;

@@ -13,12 +13,17 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { InfiniteCanvas, CanvasApi } from './components/InfiniteCanvas';
 import { ContextMenu } from './components/ContextMenu';
 import { StylePasteModal } from './components/StylePasteModal';
-import { DesignMasterPanel, DesignMasterPersistState } from './components/DesignMasterPanel';
+import { DesignMasterPanel } from './components/DesignMasterPanel';
 import { DrawingModal } from './components/DrawingModal';
 import { ImageEditModal } from './components/ImageEditModal';
 import { CrossPlatformModal } from './components/CrossPlatformModal';
 import { BrandKitModal } from './components/BrandKitModal';
 import { ProductMarketingModal } from './components/ProductMarketingModal';
+import { ApiKeyModal } from './components/ApiKeyModal';
+import { StyleLibraryPanel } from './components/StyleLibraryPanel';
+import { GeneratedResultsModal } from './components/GeneratedResultsModal';
+import { ClearStorageConfirmModal, GenerationIntentModal, ImageDropOverlay, SaveConfirmModal } from './components/AppModals';
+import { AppTopStatusBar } from './components/AppTopStatusBar';
 import { ImageResizeModal } from './components/ImageResizeModal';
 import { DraggableToolbar } from './components/DraggableToolbar';
 import { LayerPanel } from './components/LayerPanel';
@@ -29,150 +34,19 @@ import { FloatingAssistant } from './components/FloatingAssistant';
 import { ArtboardPanel, downloadArtboard, downloadMultipleArtboards, exportArtboardsAsPDF } from './features/artboard';
 import { useCanvas } from './hooks/useCanvas';
 import { useAI } from './hooks/useAI';
+import { useEditorTargets } from './hooks/useEditorTargets';
+import { useFilePersistence } from './hooks/useFilePersistence';
+import { useAppAiActions } from './hooks/useAppAiActions';
 import { STYLE_PRESETS, COLORS, isCJK, wrapTextCanvas, loadImage, createShapeDataUrl, restoreOriginalAlpha, getClosestAspectRatio, measureTextVisualBounds, renderImageElementToDataUrl } from './utils/helpers';
-import { drawTextOnCanvas } from './utils/textCanvas'; // ✅ 新增
-import { captureTextElementAsImage } from './utils/svgCapture'; // ✅ 彎曲文字轉圖片用
-import { analyzeImagePrompt } from './utils/ImageAnalysisService';
 import { downloadImageAsBase64, callAtlasImg2Img } from './utils/atlasImage';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
-import { birefnetRemoveBg } from './utils/geminiLayer';
-import { gptLayerSegment } from './utils/gptLayerSplit';
-import { detectTextBlocks } from './utils/ocrService';
 import { SVGExportModal } from './components/SVGExportModal';
 import { SemanticEditorView } from './components/SemanticEditor';
-import { splitStickerCollectionDetailed, detectBackgroundColor, repairStickerTransparency, flattenBackgroundToColor } from './utils/imageProcessing';
+import { detectBackgroundColor, repairStickerTransparency, flattenBackgroundToColor } from './utils/imageProcessing';
 import type {
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
 } from './types';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
-
-// --- API Key Modal Component ---
-const ApiKeyModal = ({
-    geminiKey: initialGeminiKey,
-    onSubmit,
-    onClose,
-    atlasKey: initialAtlasKey,
-    onSubmitAtlas,
-    falKey: initialFalKey,
-    onSubmitFal,
-}: {
-    geminiKey?: string;
-    onSubmit: (key: string) => void;
-    onClose: () => void;
-    atlasKey?: string;
-    onSubmitAtlas?: (key: string) => void;
-    falKey?: string;
-    onSubmitFal?: (key: string) => void;
-}) => {
-    const [key, setKey] = useState(initialGeminiKey || '');
-    const [atlasKey, setAtlasKey] = useState(initialAtlasKey || '');
-    const [falKey, setFalKey] = useState(initialFalKey || '');
-
-    return (
-        <div className="fixed inset-0 z-[8000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-fade-in">
-            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full border border-white/20 relative overflow-hidden">
-                {/* Close Button */}
-                <button 
-                    onClick={onClose}
-                    className="absolute top-4 right-4 p-2 text-gray-400 hover:text-[#1D1D1F] hover:bg-gray-100 rounded-full transition-all z-20"
-                    title="暫時略過 (稍後可點擊上方紅燈設定)"
-                >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-
-                {/* Decorative blobs */}
-                <div className="absolute -top-20 -right-20 w-40 h-40 bg-purple-200 rounded-full blur-3xl opacity-30 pointer-events-none"></div>
-                <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-blue-200 rounded-full blur-3xl opacity-30 pointer-events-none"></div>
-
-                <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-16 h-16 bg-gradient-to-tr from-[#AF52DE] to-[#5856D6] rounded-2xl flex items-center justify-center mb-6 shadow-lg transform -rotate-3">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" /></svg>
-                    </div>
-                    
-                    <h2 className="text-2xl font-bold text-[#1D1D1F] mb-2">Welcome to YOHAKU</h2>
-                    <p className="text-[#86868B] text-sm mb-6 leading-relaxed">
-                        這是一個使用 Gemini 3 Pro 的 AI 無限畫布。
-                        <br/>
-                        為了啟用 AI 功能，請輸入您的 Gemini API Key。
-                    </p>
-
-                    <div className="w-full space-y-3">
-                        {/* Gemini Key */}
-                        <div>
-                            <p className="text-[11px] font-medium text-gray-500 mb-1 text-left">Gemini API Key（必填）</p>
-                            <input
-                                type="password"
-                                value={key}
-                                onChange={(e) => setKey(e.target.value)}
-                                placeholder="AIza..."
-                                className="w-full px-4 py-3 bg-[#F5F5F7] border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all text-sm"
-                                autoFocus
-                            />
-                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"
-                                className="text-[10px] text-[#007AFF] hover:underline mt-1 inline-block">
-                                沒有 Gemini Key？點此免費獲取 →
-                            </a>
-                        </div>
-
-                        {/* Atlas Key */}
-                        <div>
-                            <p className="text-[11px] font-medium text-gray-500 mb-1 text-left">Atlas Cloud Key（選填・GPT Image 2 / 即夢生圖用）</p>
-                            <input
-                                type="password"
-                                value={atlasKey}
-                                onChange={(e) => setAtlasKey(e.target.value)}
-                                placeholder="apikey-..."
-                                className="w-full px-4 py-3 bg-[#F5F5F7] border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
-                            />
-                            <a href="https://www.atlascloud.ai?ref=3G2WHU" target="_blank" rel="noopener noreferrer"
-                                className="text-[10px] text-[#007AFF] hover:underline mt-1 inline-block">
-                                沒有 Atlas Key？點此取得 →
-                            </a>
-                        </div>
-
-                        {/* fal.ai Key */}
-                        <div>
-                            <p className="text-[11px] font-medium text-gray-500 mb-1 text-left">fal.ai Key（選填・BiRefNet 去背用）</p>
-                            <input
-                                type="password"
-                                value={falKey}
-                                onChange={(e) => setFalKey(e.target.value)}
-                                placeholder="fal_..."
-                                className="w-full px-4 py-3 bg-[#F5F5F7] border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all text-sm"
-                            />
-                            <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener noreferrer"
-                                className="text-[10px] text-[#007AFF] hover:underline mt-1 inline-block">
-                                沒有 fal.ai Key？點此取得 →
-                            </a>
-                        </div>
-
-                        <button
-                            onClick={() => {
-                                if (key) onSubmit(key);
-                                if (atlasKey && onSubmitAtlas) onSubmitAtlas(atlasKey);
-                                if (falKey && onSubmitFal) onSubmitFal(falKey);
-                                if (key || atlasKey || falKey) onClose();
-                            }}
-                            disabled={!key && !atlasKey && !falKey}
-                            className="w-full py-3 bg-black text-white font-bold rounded-xl shadow-lg shadow-black/10 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            儲存設定
-                        </button>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-gray-100 w-full">
-                        <p className="text-[10px] text-gray-400">
-                            您的 Key 僅儲存於本地瀏覽器，不會上傳至伺服器。
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -212,24 +86,6 @@ const App: React.FC = () => {
     setFalApiKey(key);
   };
 
-
-
-  // --- Semantic Editor state (handler defined later, after elements) ---
-  const [semanticEditorTarget, setSemanticEditorTarget] = useState<{ src: string; name: string; elementId?: string } | null>(null);
-  const [resizeImageTargetId, setResizeImageTargetId] = useState<string | null>(null);
-
-  /**
-   * 保留每張圖片的語意編輯器狀態，key = element.src（base64 前 100 字元作為識別）
-   * 退出時 save=true 就保留，下次開同一張圖可以繼續
-   */
-  const [savedSemanticStates, setSavedSemanticStates] = useState<Record<string, {
-    compositeBase64: string;
-    backgroundBase64?: string;
-    layers: import('./types').SmartLayer[];
-    originalLayers?: import('./types').SmartLayer[];
-    versions: import('./types').EditorVersion[];
-  }>>({});
-
   // --- Generation Model (Gemini / GPT Image 2 / Seedream) ---
   const [generationModel, setGenerationModel] = useState<string>(
     () => localStorage.getItem('yohaku_gen_model') || 'gemini'
@@ -243,9 +99,6 @@ const App: React.FC = () => {
   const [userApiKey, setUserApiKey] = useState<string | null>(() => localStorage.getItem('yohaku_api_key'));
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [designMasterTargetId, setDesignMasterTargetId] = useState<string | null>(null);
-  // 每張便利貼上次的設計大師設定（key = elementId）：重複進入同一張便利貼時還原設定
-  const [designMasterStates, setDesignMasterStates] = useState<Record<string, DesignMasterPersistState>>({});
   const [showSVGExportModal, setShowSVGExportModal] = useState(false);
   const [showStoragePopover, setShowStoragePopover] = useState(false);
 
@@ -362,99 +215,47 @@ const App: React.FC = () => {
       activeGuidelines,
   } = useCanvas(showToast);
 
-  // --- Semantic Editor handler (needs elements) ---
-  const handleOpenSemanticEditor = useCallback((elementId: string) => {
-    const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
-    if (!el) return;
-    // 優先從 ImageElement.semanticState 讀取（跨電腦/檔案）
-    const seedKey = semanticStateKey({ elementId: el.id, src: el.src });
-    if (el.semanticState && !savedSemanticStates[seedKey]) {
-      setSavedSemanticStates(prev => ({ ...prev, [seedKey]: el.semanticState! }));
-    }
-    setSemanticEditorTarget({ src: el.src, name: el.name || '圖片', elementId });
-  }, [elements, savedSemanticStates]);
+  const {
+    semanticEditorTarget,
+    resizeImageTargetId,
+    setResizeImageTargetId,
+    savedSemanticStates,
+    setSavedSemanticStates,
+    semanticStateKey,
+    syncSemanticStateToElement,
+    handleOpenSemanticEditor,
+    handleCloseSemanticEditor,
+    designMasterTargetId,
+    setDesignMasterTargetId,
+    designMasterStates,
+    setDesignMasterStates,
+    handleOpenDesignMaster,
+    crossPlatformTarget,
+    setCrossPlatformTarget,
+    handleOpenCrossPlatform,
+    brandKitTarget,
+    setBrandKitTarget,
+    handleOpenBrandKit,
+    productMarketingTarget,
+    setProductMarketingTarget,
+    handleOpenProductMarketing,
+  } = useEditorTargets({
+      elements,
+      setElements,
+  });
 
-  /** 狀態鍵：優先用畫布元素的唯一 id。
-   *  （不可用 src 前 80 字元：不同圖片的 base64 前綴常相同 → key 碰撞 → 不同圖片互相污染狀態）
-   *  無 elementId 時退回「完整 src」的 cyrb53 雜湊，仍能區分不同內容。 */
-  const hashStr = (s: string) => {
-    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
-    for (let i = 0; i < s.length; i++) {
-      const ch = s.charCodeAt(i);
-      h1 = Math.imul(h1 ^ ch, 2654435761);
-      h2 = Math.imul(h2 ^ ch, 1597334677);
-    }
-    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
-  };
-  const semanticStateKey = (t: { elementId?: string; src: string }) =>
-    t.elementId ? `el:${t.elementId}` : `src:${hashStr(t.src)}`;
-
-  /** 把語意狀態同步寫回 ImageElement（方向 C：跟著圖片走，JSON/檔案都能帶走） */
-  const syncSemanticStateToElement = useCallback((
-    elementId: string | undefined,
-    state: { compositeBase64: string; backgroundBase64?: string; layers: import('./types').SmartLayer[]; originalLayers?: import('./types').SmartLayer[]; versions: import('./types').EditorVersion[] }
-  ) => {
-    if (!elementId) return;
-    setElements(prev => prev.map(el =>
-      el.id === elementId && el.type === 'image'
-        ? { ...el, semanticState: {
-            compositeBase64: state.compositeBase64,
-            backgroundBase64: state.backgroundBase64 ?? state.compositeBase64,
-            layers: state.layers,
-            originalLayers: state.originalLayers ?? state.layers,
-            versions: state.versions,
-          } } as ImageElement
-        : el
-    ));
-  }, [setElements]);
-
-  /** 退出語意編輯器：save=true 保留紀錄，save=false 清除 */
-  const handleCloseSemanticEditor = useCallback((
-    save: boolean,
-    savedState?: { compositeBase64: string; backgroundBase64?: string; layers: import('./types').SmartLayer[]; originalLayers?: import('./types').SmartLayer[]; versions: import('./types').EditorVersion[] }
-  ) => {
-    if (save && savedState && semanticEditorTarget) {
-      const key = semanticStateKey(semanticEditorTarget);
-      setSavedSemanticStates(prev => ({ ...prev, [key]: savedState }));
-      // 同時寫回 ImageElement（持久化）
-      syncSemanticStateToElement(semanticEditorTarget.elementId, savedState);
-    } else if (!save && semanticEditorTarget) {
-      const key = semanticStateKey(semanticEditorTarget);
-      setSavedSemanticStates(prev => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      // 清除 ImageElement 上的語意狀態
-      syncSemanticStateToElement(semanticEditorTarget.elementId, { compositeBase64: semanticEditorTarget.src, layers: [], versions: [] });
-    }
-    setSemanticEditorTarget(null);
-  }, [semanticEditorTarget, syncSemanticStateToElement]);
-
-  // ── 存檔確認 Modal ──────────────────────────────────────────
-  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
-
-  // 有既有 handle 時先跳確認，否則直接開 Save As
-  const handleSaveFileWithConfirm = useCallback(() => {
-    if (currentFileName) {
-      setSaveConfirmOpen(true);
-    } else {
-      handleSaveFile();
-    }
-  }, [currentFileName, handleSaveFile]);
-
-  const handleSaveConfirmProceed = useCallback(async () => {
-    setSaveConfirmOpen(false);
-    await handleSaveFile();
-  }, [handleSaveFile]);
-
-  const handleSaveConfirmDiscard = useCallback(async () => {
-    setSaveConfirmOpen(false);
-    await handleNewCanvas(); // 清除 handle，下次存檔會開 Save As
-    showToast('已中斷連結，下次存檔將另存新檔');
-  }, [handleNewCanvas, showToast]);
+  const {
+    saveConfirmOpen,
+    setSaveConfirmOpen,
+    handleSaveFileWithConfirm,
+    handleSaveConfirmProceed,
+    handleSaveConfirmDiscard,
+  } = useFilePersistence({
+      currentFileName,
+      handleSaveFile,
+      handleNewCanvas,
+      showToast,
+  });
 
   // Wrap handleDeleteLayer to also clean up IndexedDB cache
   const handleDeleteLayerWithCache = useCallback((id: string) => {
@@ -528,306 +329,29 @@ const App: React.FC = () => {
       falApiKey,
   });
 
-  // --- BiRefNet v2 去背 ---
-  const handleBiRefNetRemoveBackground = useCallback(async (model: string = 'Matting') => {
-      if (!falApiKey) { showToast('需要 fal.ai API Key，請在設定中輸入'); setShowKeyModal(true); return; }
-      const targets = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
-      if (targets.length === 0) return;
-      setIsGenerating(true);
-      setGeneratingElementIds(targets.map(el => el.id));
-      showToast(`🔍 BiRefNet v2 去背中（${model}）...`);
-      try {
-          for (const el of targets) {
-              const result = await birefnetRemoveBg(el.src, falApiKey, model as any);
-              setElements(prev => prev.map(e => e.id === el.id ? { ...e, src: result } : e));
-              if (result.startsWith('data:')) cacheImage(el.id, result);
-          }
-          showToast('✅ BiRefNet 去背完成！');
-      } catch (e: any) {
-          showToast(`❌ BiRefNet 去背失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
-      } finally {
-          setIsGenerating(false);
-          setGeneratingElementIds([]);
-      }
-  }, [falApiKey, elements, selectedElementIds, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
-
-
-  // --- 魔法分層：語意提取 + 背景補圖（GPT Image 2 優先；無 Atlas Key 降級 Gemini）---
-  const handleMagicLayer = useCallback(async (elementId: string) => {
-      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
-      if (!el) return;
-
-      setIsGenerating(true);
-      setGeneratingElementIds([elementId]);
-      const modeLabel = atlasApiKey ? 'GPT Image 2' : 'Gemini';
-      showToast(`✨ 魔法分層啟動中（${modeLabel}）...`);
-
-      try {
-          const layers = await gptLayerSegment(
-              el.src,
-              effectiveApiKey || '',
-              atlasApiKey || undefined,   // undefined → Gemini fallback
-              falApiKey || undefined,
-              (msg) => showToast(msg),
-              imageModel,
-          );
-          if (layers.length === 0) throw new Error('未收到任何圖層');
-
-          const baseZ = el.zIndex;
-          const GAP = 30; // 原圖與圖層群組之間的間距（world units）
-          // 圖層區塊的左上角 X（原圖右邊緣 + gap）
-          const layerAreaLeft = el.position.x - el.width / 2 + el.width + GAP;
-          const layerAreaTop  = el.position.y - el.height / 2;
-
-          const newLayerElements: ImageElement[] = layers.map((layer, i) => {
-              // 背景補全可能失敗（不會 push 進 layers），不能用 i === 0 推斷
-              const isBackground = !!layer.isBackground;
-              // 位置夾在 [0, 1] 安全範圍
-              const clampedX = Math.max(0, Math.min(1, layer.cropRatioX));
-              const clampedY = Math.max(0, Math.min(1, layer.cropRatioY));
-              // 寬：cropRatioW × el.width（在原圖空間的比例縮放）
-              // 高：維持 GPT 輸出的原生像素比例（pixelH/pixelW），避免強套原圖 AR 造成變形
-              const layerW = isBackground ? el.width : Math.round(layer.cropRatioW * el.width);
-              const layerH = isBackground ? el.height
-                  : (layer.pixelWidth && layer.pixelHeight && layerW > 0)
-                      ? Math.round(layerW * layer.pixelHeight / layer.pixelWidth)
-                      : Math.round(layer.cropRatioH * el.height);
-              // 中心點 = 圖層區塊左上角 + bbox 偏移 + 半寬/高
-              const cx = isBackground
-                  ? layerAreaLeft + el.width / 2
-                  : layerAreaLeft + clampedX * el.width + layerW / 2;
-              const cy = isBackground
-                  ? el.position.y
-                  : layerAreaTop + clampedY * el.height + layerH / 2;
-              const layerName = layer.name
-                  ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name)
-                  : (isBackground ? `${el.name || '圖片'} 背景` : `${el.name || '圖片'} 圖層 ${i}`);
-              return {
-                  ...el,
-                  id: `${el.id}_layer_${i}_${Date.now() + i}`,
-                  src: layer.base64,
-                  position: { x: cx, y: cy },
-                  width: layerW,
-                  height: layerH,
-                  zIndex: baseZ + i,
-                  name: layerName,
-                  isLocked: false,
-              };
-          });
-
-          // 原圖保持可見，圖層貼在右側
-          setElements(prev => [...prev, ...newLayerElements]);
-          newLayerElements.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
-          const objectCount = layers.filter(l => !l.isBackground).length;
-          const hasBg = layers.some(l => l.isBackground);
-          showToast(`✅ 魔法分層完成！${objectCount} 個物件圖層${hasBg ? ' + 補全背景' : '（背景補全失敗已略過）'}`);
-      } catch (e: any) {
-          showToast(`❌ 魔法分層失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
-      } finally {
-          setIsGenerating(false);
-          setGeneratingElementIds([]);
-      }
-  }, [atlasApiKey, effectiveApiKey, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
-
-  // --- OCR 文字辨識轉換 ---
-  const handleOCRConvert = useCallback(async (elementId: string) => {
-      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
-      if (!el) return;
-
-      setIsGenerating(true);
-      setGeneratingElementIds([elementId]);
-      showToast('🔍 正在辨識文字...');
-
-      try {
-          const blocks = await detectTextBlocks(el.src, effectiveApiKey || '');
-          if (blocks.length === 0) { showToast('未偵測到文字'); return; }
-
-          const newTextElements: TextElement[] = blocks.map((block, i) => {
-              // 以圖片在畫布的實際像素換算 TextElement 的 position / width / height / fontSize
-              const imgLeft   = el.position.x - el.width  / 2;
-              const imgTop    = el.position.y - el.height / 2;
-
-              const blockW    = block.bbox.w * el.width;
-              const blockH    = block.bbox.h * el.height;
-              const blockX    = imgLeft + block.bbox.x * el.width  + blockW / 2;
-              const blockY    = imgTop  + block.bbox.y * el.height + blockH / 2;
-
-              // fontSize：區塊高度 / 行數 × 0.78（預留行距）
-              const fontSize  = Math.round((blockH / block.lines) * 0.78);
-
-              return {
-                  id: `ocr_${Date.now()}_${i}`,
-                  type: 'text' as const,
-                  text: block.text,
-                  position: { x: blockX, y: blockY },
-                  width:  blockW,
-                  height: blockH,
-                  rotation: 0,
-                  zIndex: el.zIndex + i + 1,
-                  isVisible: true,
-                  isLocked: false,
-                  name: `文字 ${i + 1}`,
-                  groupId: null,
-                  fontFamily: '"Noto Sans TC", sans-serif',
-                  fontSize: Math.max(8, Math.min(fontSize, 200)),
-                  color: block.colorHex,
-                  align: block.align,
-                  letterSpacing: 0,
-                  lineHeight: 1.3,
-                  isBold: block.isBold,
-                  isItalic: block.isItalic,
-                  isUnderline: false,
-                  isWidthLocked: true,
-              };
-          });
-
-          setElements(prev => [...prev, ...newTextElements]);
-          showToast(`✅ 辨識完成！新增 ${blocks.length} 個文字物件`);
-      } catch (e: any) {
-          showToast(`❌ 文字辨識失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
-      } finally {
-          setIsGenerating(false);
-          setGeneratingElementIds([]);
-      }
-  }, [effectiveApiKey, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
-
-  // --- 一鍵跨平台適配 ---
-  const [crossPlatformTarget, setCrossPlatformTarget] = useState<{ elementId: string; name: string } | null>(null);
-  const handleOpenCrossPlatform = useCallback((elementId: string) => {
-      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
-      if (!el) return;
-      setCrossPlatformTarget({ elementId, name: el.name });
-  }, [elements]);
-
-  // --- 延伸品牌套件 ---
-  const [brandKitTarget, setBrandKitTarget] = useState<{ elementId: string; name: string } | null>(null);
-  const handleOpenBrandKit = useCallback((elementId: string) => {
-      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
-      if (!el) return;
-      setBrandKitTarget({ elementId, name: el.name });
-  }, [elements]);
-
-  // --- 產品行銷組圖 ---
-  const [productMarketingTarget, setProductMarketingTarget] = useState<{ elementId: string; name: string } | null>(null);
-  const handleOpenProductMarketing = useCallback((elementId: string) => {
-      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
-      if (!el) return;
-      setProductMarketingTarget({ elementId, name: el.name });
-  }, [elements]);
-
-  // --- 貼紙套組一鍵切分 ---
-  const handleSplitSticker = useCallback(async (elementId: string) => {
-      const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
-      if (!el) return;
-
-      const input = window.prompt(
-          "請輸入此大圖中所含的貼圖或圖示數量（例如：3, 4, 5, 9 等），以進行精準長寬比與網格切分。\n\n若不確定請留空進行「自動偵測」：",
-          ""
-      );
-      if (input === null) return; // 使用者按取消
-
-      let expectedCount: number | undefined = undefined;
-      if (input.trim()) {
-          const parsed = parseInt(input.trim(), 10);
-          if (!isNaN(parsed) && parsed > 0) {
-              expectedCount = parsed;
-          }
-      }
-
-      setIsGenerating(true);
-      setGeneratingElementIds([elementId]);
-      showToast('🪄 正在自動切分貼圖，請稍候...');
-
-      try {
-          // 下載圖片為 base64（若為 URL）
-          let src = el.src;
-          if (!src.startsWith('data:')) {
-              src = await downloadImageAsBase64(src);
-              if (!src.startsWith('data:')) {
-                  showToast('⚠️ 無法讀取貼紙圖片');
-                  return;
-              }
-          }
-
-          // 呼叫 StickerCraft 演算法做一鍵切分
-          const result = await splitStickerCollectionDetailed(src, { expectedCount });
-
-          // 快速防呆二次確認：若透明像素比例低於 5%，通常代表此為複雜背景的一般相片，進行二次詢問
-          if (result.transparentRatio !== undefined && result.transparentRatio < 0.05 && result.pieces.length > 0) {
-              const confirm = window.confirm(
-                  "⚠️ 偵測到此圖片可能是一般相片（無透明背景或單一純底背景）。\n\n一鍵拆分貼圖功能主要為貼紙套組設計，強行切分只會以均分網格（如四宮格/九宮格）方式裁切。\n\n您確定要繼續執行拆分嗎？"
-              );
-              if (!confirm) {
-                  return;
-              }
-          }
-
-          if (result.pieces.length === 0) {
-              showToast('⚠️ 未偵測到任何獨立貼紙碎片');
-              return;
-          }
-
-          const pieces = result.pieces;
-          const maxZ = elements.length > 0 ? Math.max(...elements.map(e => e.zIndex)) : 0;
-
-          // 規劃切分後的貼圖擺放位置（依 3 列網格排列於原圖右側）
-          const cols = 3;
-          const gap = 20;
-          const startX = el.position.x + el.width / 2 + 50;
-          const startY = el.position.y - el.height / 2;
-
-          const newEls: ImageElement[] = pieces.map((piece, idx) => {
-              const row = Math.floor(idx / cols);
-              const col = idx % cols;
-              const boxWidth = piece.box.maxX - piece.box.minX + 1;
-              const boxHeight = piece.box.maxY - piece.box.minY + 1;
-              const MAX_DIM = 180;
-              
-              let w = boxWidth;
-              let h = boxHeight;
-              if (w > MAX_DIM || h > MAX_DIM) {
-                  if (w > h) { h = (h / w) * MAX_DIM; w = MAX_DIM; }
-                  else { w = (w / h) * MAX_DIM; h = MAX_DIM; }
-              }
-
-              // 新貼圖中心點座標
-              const x = startX + col * (MAX_DIM + gap) + w / 2;
-              const y = startY + row * (MAX_DIM + gap) + h / 2;
-              const newId = `split_piece_${Date.now()}_${idx}`;
-
-              return {
-                  id: newId,
-                  type: 'image' as const,
-                  src: piece.dataUrl,
-                  name: `${el.name} (拆分 ${idx + 1})`,
-                  position: { x, y },
-                  width: w,
-                  height: h,
-                  rotation: 0,
-                  zIndex: maxZ + 1 + idx,
-                  isVisible: true,
-                  isLocked: false,
-                  groupId: null,
-              };
-          });
-
-          // 置入畫布
-          setElements(prev => [...prev, ...newEls]);
-          // 緩存至 IndexedDB 確保存檔完整
-          newEls.forEach(item => {
-              if (item.src.startsWith('data:')) {
-                  cacheImage(item.id, item.src);
-              }
-          });
-
-          showToast(`✅ 拆分完成！成功新增 ${pieces.length} 張獨立去背貼圖`);
-      } catch (e: any) {
-          showToast(`❌ 拆分失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
-      } finally {
-          setIsGenerating(false);
-          setGeneratingElementIds([]);
-      }
-  }, [elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+  const {
+    handleBiRefNetRemoveBackground,
+    handleMagicLayer,
+    handleOCRConvert,
+    handleSplitSticker,
+    handleExtractPrompt,
+    handleRasterizeTextOverride,
+    handleMergeLayersOverride,
+  } = useAppAiActions({
+      elements,
+      selectedElementIds,
+      setElements,
+      showToast,
+      setShowKeyModal,
+      setIsGenerating,
+      setGeneratingElementIds,
+      effectiveApiKey,
+      atlasApiKey,
+      falApiKey,
+      imageModel,
+      zIndexCounter,
+      originalMergeLayers,
+  });
 
   // --- WRAPPED updateElements to Sync Outpainting Frame ---
   const updateElements = useCallback((updatedElement: CanvasElement, dragDelta?: Point) => {
@@ -893,94 +417,6 @@ const App: React.FC = () => {
       });
   }, [addElement, getCenterOfViewport]);
 
-  // --- NEW: Independent Handler for Image Analysis ---
-  const handleExtractPrompt = useCallback(async (elementId: string) => {
-      const element = elements.find(el => el.id === elementId) as ImageElement;
-      if (!element || element.type !== 'image') return;
-
-      if (!effectiveApiKey) {
-          setShowKeyModal(true);
-          showToast("請先設定 API Key");
-          return;
-      }
-
-      setIsGenerating(true);
-      setGeneratingElementIds([elementId]); // Show badge on the target image
-      showToast("🔍 正在進行圖片逆向分析...");
-
-      try {
-          const result = await analyzeImagePrompt(element.src, effectiveApiKey);
-          
-          // Calculate positions
-          // Right of the image for English note
-          const enPos = { 
-              x: element.position.x + element.width / 2 + 20 + 140, // 140 is half note width
-              y: element.position.y - 60 
-          };
-          
-          // Below English note for Chinese note
-          const zhPos = {
-              x: enPos.x,
-              y: enPos.y + 370 // 350 height + 20 gap
-          };
-
-          const newNotes: CanvasElement[] = [];
-
-          // Add Yellow Note (EN)
-          zIndexCounter.current += 1;
-          const enNote: NoteElement = {
-              id: `${Date.now()}-note-en`,
-              type: 'note',
-              position: enPos,
-              width: 300,
-              height: 350,
-              rotation: 0,
-              content: result.en,
-              color: 'bg-[#FFFDE7]', // Yellow-ish
-              textAlign: 'left',
-              zIndex: zIndexCounter.current,
-              isVisible: true,
-              isLocked: false,
-              name: 'Prompt (EN)',
-              groupId: null
-          };
-          newNotes.push(enNote);
-
-          // Add Green Note (ZH)
-          zIndexCounter.current += 1;
-          const zhNote: NoteElement = {
-              id: `${Date.now()}-note-zh`,
-              type: 'note',
-              position: zhPos,
-              width: 300,
-              height: 350,
-              rotation: 0,
-              content: result.zh,
-              color: 'bg-[#E8F5E9]', // Green-ish
-              textAlign: 'left',
-              zIndex: zIndexCounter.current,
-              isVisible: true,
-              isLocked: false,
-              name: 'Prompt (ZH)',
-              groupId: null
-          };
-          newNotes.push(zhNote);
-
-          // Batch update to ensure both are added
-          setElements(prev => [...prev, ...newNotes]);
-
-          showToast("提示詞提取完成！已建立中英對照便利貼 ✨");
-
-      } catch (error) {
-          console.error("Deep Extract Failed:", error);
-          showToast("分析失敗，請檢查 API Key 權限或網絡連線");
-      } finally {
-          setIsGenerating(false);
-          setGeneratingElementIds([]);
-      }
-  }, [elements, effectiveApiKey, setElements, showToast, zIndexCounter, setGeneratingElementIds]);
-
-
   // --- Callback for Floating Assistant Sticky Note Creation ---
   const handleAiCreateSticky = useCallback((text: string) => {
       const center = getCenterOfViewport();
@@ -1029,96 +465,6 @@ const App: React.FC = () => {
       }
   }, [elements, effectiveApiKey, handleAskAI, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
-
-  // --- 便利貼右鍵：開啟設計大師面板（API Key 在生成時才檢查） ---
-  const handleOpenDesignMaster = useCallback((elementId: string) => {
-      const element = elements.find(el => el.id === elementId);
-      if (!element || (element.type !== 'note' && element.type !== 'text')) return;
-      setDesignMasterTargetId(elementId);
-  }, [elements]);
-
-
-  // ✅ 刪除第 404~658 行 (drawTextOnCanvas 區域函數定義)
-
-  // --- RASTERIZE TEXT OVERRIDE (Fix: Uses Correct Dimensions with High DPI Scaling) ---
-  const handleRasterizeTextOverride = useCallback(async (id: string) => {
-      const element = elements.find(el => el.id === id) as TextElement;
-      if (!element || element.type !== 'text') return;
-
-      try {
-          const scale = 3;
-          const isCurved = Math.abs((element as any).curveStrength || 0) > 0.1;
-
-          const shadowOverflow = element.shadowBlur
-              ? Math.ceil(element.shadowBlur + 4)
-              : 0;
-          const glowOverflow = element.glowBlur
-              ? Math.ceil(element.glowBlur)
-              : 0;
-          const strokeOverflow = Math.ceil((element.strokeWidth || 0) / 2);
-          const effectPadding = Math.max(shadowOverflow, glowOverflow, strokeOverflow, 0);
-
-          const canvasWidth  = element.width  + effectPadding * 2;
-          const canvasHeight = element.height + effectPadding * 2;
-
-          let newSrc: string;
-
-          if (isCurved) {
-              // 彎曲文字：直接捕捉 DOM 中的 SVG，確保像素完全吻合螢幕顯示
-              // （canvas 重繪可能因字符寬度測量誤差導致弧心偏移）
-              newSrc = await captureTextElementAsImage(
-                  element.id,
-                  element.width,
-                  element.height,
-                  effectPadding,
-                  scale,
-                  (element.backgroundColor && element.backgroundColor !== 'transparent')
-                      ? element.backgroundColor
-                      : undefined,
-                  element.fontFamily,
-                  element.text
-              );
-          } else {
-              const offCanvas = document.createElement('canvas');
-              offCanvas.width  = canvasWidth  * scale;
-              offCanvas.height = canvasHeight * scale;
-              const offCtx = offCanvas.getContext('2d')!;
-              offCtx.scale(scale, scale);
-              await document.fonts.ready;
-              drawTextOnCanvas(offCtx, element, effectPadding, effectPadding);
-              newSrc = offCanvas.toDataURL('image/png');
-          }
-
-          const newImage: ImageElement = {
-              id: element.id,
-              type: 'image',
-              src: newSrc,
-              position: {
-                  x: element.position.x,
-                  y: element.position.y,
-              },
-              width:    canvasWidth,
-              height:   canvasHeight,
-              rotation: element.rotation,
-              zIndex:   element.zIndex,
-              isVisible: element.isVisible,
-              isLocked:  element.isLocked,
-              name:     `${element.name} (Image)`,
-              groupId:  element.groupId
-          };
-
-          setElements(prev => prev.map(el => el.id === id ? newImage : el));
-          showToast("文字已轉換為圖片，效果完整保留 ✨");
-
-      } catch (e) {
-          console.error("Rasterize failed", e);
-          showToast("文字轉換圖片失敗");
-      }
-  }, [elements, setElements, showToast]);
-
-  const handleMergeLayersOverride = useCallback(async () => {
-      await originalMergeLayers();
-  }, [originalMergeLayers]);
 
   const [resetView, setResetView] = useState<() => void>(() => () => {});
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, worldPoint: Point, elementId: string | null } | null>(null);
@@ -1932,248 +1278,70 @@ const App: React.FC = () => {
       )}
 
       {showClearConfirm && (
-          <div className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/30 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-gray-100 p-6 w-80 flex flex-col gap-4">
-                  <div>
-                      <p className="text-[15px] font-bold text-[#1D1D1F] mb-1">確定清除存檔？</p>
-                      <p className="text-xs text-[#6e6e73] leading-relaxed">清除後畫布將重置為空白，此操作無法復原。建議先匯出 JSON 備份，再執行清除。</p>
-                  </div>
-                  <div className="flex gap-2">
-                      <button
-                          onClick={() => { originalExportCanvas(); }}
-                          className="flex-1 py-2 text-xs font-bold bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
-                      >先匯出備份</button>
-                      <button
-                          onClick={() => { clearStorage(); setShowClearConfirm(false); }}
-                          className="flex-1 py-2 text-xs font-bold bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
-                      >確定清除</button>
-                  </div>
-                  <button
-                      onClick={() => setShowClearConfirm(false)}
-                      className="text-xs text-gray-400 hover:text-gray-600 transition-colors text-center"
-                  >取消</button>
-              </div>
-          </div>
+          <ClearStorageConfirmModal
+              onExportBackup={() => { originalExportCanvas(); }}
+              onClear={() => { clearStorage(); setShowClearConfirm(false); }}
+              onClose={() => setShowClearConfirm(false)}
+          />
       )}
 
-      {!semanticEditorTarget && <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[6000]">
-      <div className="animate-fade-in-down flex items-center gap-2">
-          <button
-              onClick={() => setShowKeyModal(true)}
-              className="group flex items-center gap-2 px-4 py-1.5 bg-black/5 hover:bg-white backdrop-blur-sm rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:shadow-lg border border-white/20 transition-all duration-300"
-          >
-              <div className={`w-2 h-2 rounded-full shadow-sm ${isKeyValid ? 'bg-green-500 shadow-green-500/50' : 'bg-red-500 shadow-red-500/50 animate-pulse'}`}></div>
-              <span className={`text-[10px] font-bold tracking-wide transition-colors ${isKeyValid ? 'text-gray-500 group-hover:text-[#1D1D1F]' : 'text-red-500'}`}>
-                  {isKeyValid ? 'API Ready' : 'Setup API'}
-              </span>
-              {isKeyValid && (
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 group-hover:text-[#1D1D1F] opacity-0 group-hover:opacity-100 transition-all -ml-1"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-              )}
-          </button>
-
-          {/* Model Toggle */}
-          {isKeyValid && (
-            <div className="flex items-center bg-black/5 backdrop-blur-sm rounded-full border border-white/20 p-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
-              <button
-                onClick={() => handleSetImageModel('gemini-3.1-flash-lite-image')}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide transition-all duration-200 ${
-                  imageModel === 'gemini-3.1-flash-lite-image'
-                    ? 'bg-white text-[#1D1D1F] shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Lite
-              </button>
-              <button
-                onClick={() => handleSetImageModel('gemini-3.1-flash-image-preview')}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide transition-all duration-200 ${
-                  imageModel === 'gemini-3.1-flash-image-preview'
-                    ? 'bg-white text-[#1D1D1F] shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Flash
-              </button>
-              <button
-                onClick={() => handleSetImageModel('gemini-3-pro-image-preview')}
-                className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide transition-all duration-200 ${
-                  imageModel === 'gemini-3-pro-image-preview'
-                    ? 'bg-white text-[#1D1D1F] shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Pro
-              </button>
-            </div>
-          )}
-
-          {/* Auto-Save Status（IndexedDB，無容量上限）*/}
-          {storageStatus === 'saving' && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-black/5 border border-black/8 rounded-full">
-                  <svg className="animate-spin w-2.5 h-2.5 text-gray-400" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                  <span className="text-[10px] font-medium text-gray-400">存檔中</span>
-              </div>
-          )}
-          {storageStatus === 'error' && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-full" title="自動存檔失敗，請手動 Ctrl+S 儲存">
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                  <span className="text-[10px] font-bold text-red-500">存檔失敗</span>
-              </div>
-          )}
-      </div>
-      </div>}
+      {!semanticEditorTarget && (
+        <AppTopStatusBar
+          isKeyValid={isKeyValid}
+          imageModel={imageModel}
+          storageStatus={storageStatus}
+          onOpenKeyModal={() => setShowKeyModal(true)}
+          onSetImageModel={handleSetImageModel}
+        />
+      )}
 
       {/* ── 生成意圖 Modal ── */}
       {intentModal && (
-        <div className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setIntentModal(null)}>
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/50 w-[400px] p-6" onClick={e => e.stopPropagation()}>
-            <div className="mb-4">
-              <h3 className="font-bold text-[#1D1D1F] text-[15px] mb-1">想讓 AI 做什麼？</h3>
-              <p className="text-[11px] text-[#86868B] leading-relaxed">圖片已選取，但尚未設定提示詞或風格。<br/>告訴 AI 你的意圖，結果會更精準。</p>
-            </div>
-            <textarea
-              autoFocus
-              value={intentText}
-              onChange={e => setIntentText(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  const { elements: els, count } = intentModal;
-                  setIntentModal(null);
-                  const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
-                  handleGenerate(els, count, intentText.trim() || undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam);
-                }
-              }}
-              placeholder="例如：轉成油畫風格、把背景換成日落、加強細節品質..."
-              className="w-full bg-[#f8fafc] border border-gray-200 rounded-xl px-4 py-3 text-[13px] text-gray-700 focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100 resize-none transition-colors"
-              rows={3}
-            />
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => {
-                  const { elements: els, count } = intentModal;
-                  setIntentModal(null);
-                  const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
-                  handleGenerate(els, count, undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam);
-                }}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors"
-              >
-                跳過直接生成
-              </button>
-              <button
-                onClick={() => {
-                  const { elements: els, count } = intentModal;
-                  setIntentModal(null);
-                  const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
-                  handleGenerate(els, count, intentText.trim() || undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam);
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-[13px] font-medium hover:bg-gray-700 transition-colors"
-              >
-                確認生成
-              </button>
-            </div>
-            <p className="text-center text-[10px] text-[#86868B] mt-2">按 Enter 快速確認 · Esc 或點空白處取消</p>
-          </div>
-        </div>
+        <GenerationIntentModal
+          intentModal={intentModal}
+          intentText={intentText}
+          onChangeIntentText={setIntentText}
+          onClose={() => setIntentModal(null)}
+          onSkip={() => {
+            const { elements: els, count } = intentModal;
+            setIntentModal(null);
+            const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
+            handleGenerate(els, count, undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam);
+          }}
+          onConfirm={() => {
+            const { elements: els, count } = intentModal;
+            setIntentModal(null);
+            const seedParam = useCustomSeed && customSeedValue !== '' ? Number(customSeedValue) : undefined;
+            handleGenerate(els, count, intentText.trim() || undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam);
+          }}
+        />
       )}
 
       {/* ── 存檔確認 Modal ── */}
       {saveConfirmOpen && (
-        <div className="fixed inset-0 z-[7500] flex items-center justify-center bg-black/25 backdrop-blur-sm" onClick={() => setSaveConfirmOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] border border-black/8 w-[360px] p-6" onClick={e => e.stopPropagation()}>
-            <div className="mb-5">
-              <h3 className="font-semibold text-[#1D1D1F] text-[15px] mb-1">覆蓋存檔</h3>
-              <p className="text-[12px] text-[#86868B] leading-relaxed">
-                確定要覆蓋桌面的 <span className="font-medium text-[#1D1D1F]">「{currentFileName}」</span>？
-                <br />此操作無法復原。
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setSaveConfirmOpen(false)}
-                className="flex-1 py-2.5 rounded-xl border border-black/10 text-[#1D1D1F] text-[13px] font-medium hover:bg-gray-50 transition-colors"
-              >取消</button>
-              <button
-                onClick={handleSaveConfirmDiscard}
-                className="flex-1 py-2.5 rounded-xl border border-black/10 text-[#86868B] text-[13px] font-medium hover:bg-gray-50 transition-colors"
-              >中斷連結</button>
-              <button
-                onClick={handleSaveConfirmProceed}
-                className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-[13px] font-medium hover:bg-gray-700 transition-colors"
-              >存檔</button>
-            </div>
-          </div>
-        </div>
+        <SaveConfirmModal
+          currentFileName={currentFileName}
+          onClose={() => setSaveConfirmOpen(false)}
+          onDiscard={handleSaveConfirmDiscard}
+          onProceed={handleSaveConfirmProceed}
+        />
       )}
 
-      {showStyleLibrary && (() => {
-        const STYLE_CATEGORIES = [
-          { label: '🖌 繪畫與插畫',       ids: ['Minimalist','Watercolor','Oil Painting','Sketch','Impressionism','Chinese Ink Wash','Concept Watercolor','Transparent Wash','Fine Pencil Tech','Storybook Pencil','Industrial Marker'] },
-          { label: '✏️ 動漫與漫畫',       ids: ['Comic Book','Japanese Anime','Manga Ink','Chibi','Webtoon','Mecha','Retro Cel Anime','Radiant Shinkai','Soft KyoAni','City Pop Graphic','Copic Manga'] },
-          { label: '📷 攝影與底片',       ids: ['Noir','Sepia Old','Lomo','Cinematic HDR'] },
-          { label: '💻 數位與現代藝術',   ids: ['Cyberpunk','Pop Art','Neon','Pixel Art','Glassmorphism','Glitch Effect','Vaporwave','Flat Design'] },
-          { label: '🎨 特殊材質與色彩',   ids: ['Matte Pastel','Gothic','Grunge','Japanese Ukiyo-e','Duotone','Paper Cutout','Vivid High','Muted Earth','Blueprint','Risograph'] },
-          { label: '🌸 次文化少女暗黑',   ids: ['Coquette','Jelly Candy','Y2K McBling','Decora Pop','Vamp Romantic','Weirdcore','Analog Horror','Pastel Goth','Whimsigothic','Alien Core','Fairy Grunge','Glacier Blue','Naïve Art','Fractured Glass'] },
-          { label: '🔥 新世代潮流',       ids: ['Neubrutalism','Claymorphism','Acid Graphics','Xerox Lo-Fi','Frutiger Aero','Groovy Retro','Spatial UI','Fish-eye Lens','Woodcut Print','Thermal Heat','Neo-Bauhaus','Sticker Collage','Biophilic','Maximalism'] },
-          { label: '🎉 節慶限定',         ids: ['Lunar New Year','Japanese Matsuri','Sakura Ohanami','Mid-Autumn Moon','Cozy Christmas','Spooky Halloween','Valentine Romance','Japanese Shogatsu','Easter Pastel','Retro Ghost Fest'] },
-          { label: '🏛 歷史與宗教',       ids: ['Showa Retro','Byzantine Mosaic','Soviet Constructivism','Taisho Roman','Sacred Stained Glass','Imperial Propaganda'] },
-          { label: '🔬 稀有與新趨勢',     ids: ['Glass Block','Brute Force','Bronze Age','Obsidian Black','Prompt Playground','Cyber Hacker','Reality Warp','Trinket Curation','Aerochrome','Modern Kintsugi','Solarpunk','Lunarpunk','Cassette Futurism','Gorpcore Topo','Dark Academia','Rococo Opulence','Explorecore','Subspace Wireframe','Botanical Plate','Acid Fade'] },
-          { label: '📸 經典數位相機與CCD', ids: ['Canon IXUS CCD','Canon A620 CCD','Nikon S200 CCD','Leica CCD','CCD Negative Film','DV Camcorder','Polaroid Instant Film','Fujifilm Superia','Kodak Portra 400','135mm Analog Film'] },
-          { label: '🔭 光學硬體與AI氛圍', ids: ['Fuji Direct Flash','Telephoto Compression','DSLR 50mm','Commercial Portrait','DJI Pocket Vlog','Golden Hour Backlight','Blue Hour Twilight','Japanese Airy High Key','Ocean Cool Tone','German Lens Muted Green','Ricoh GR Street','Ricoh Positive Film','Fujifilm X-T','Hasselblad Medium Format','Olympus Zuiko Blue','Fujifilm FinePix Retro','Canon High End Compact','Apple iPhone XS HDR','Polaroid Digital Print','Olympus XZ1 CCD','Fujifilm Panorama','Olympus Film SLR'] },
-        ];
-        const styleById = Object.fromEntries(STYLE_PRESETS.map(s => [s.id, s]));
-        return (
-          <div
-            className="fixed z-50 bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.12)] border border-white/50 w-[440px] h-[560px] flex flex-col overflow-hidden"
-            style={{ left: styleLibPos.x, top: styleLibPos.y }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className={`px-4 py-3 border-b border-black/5 flex justify-between items-center bg-white/50 flex-shrink-0 select-none ${styleLibDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                styleLibDragOffRef.current = { x: e.clientX - styleLibPos.x, y: e.clientY - styleLibPos.y };
-                setStyleLibDragging(true);
-              }}
-            >
-              <h3 className="font-bold text-[#1D1D1F]">Magic Style 藝術風格庫 <span className="text-xs font-normal text-[#86868B] ml-1">{STYLE_PRESETS.length} 種</span></h3>
-              <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setShowStyleLibrary(false)} className="text-[#86868B] hover:text-[#1D1D1F] text-lg leading-none">&times;</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-5">
-              {STYLE_CATEGORIES.map(cat => (
-                <div key={cat.label}>
-                  {/* 分類標題 */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[11px] font-bold text-[#86868B] tracking-wide uppercase whitespace-nowrap">{cat.label}</span>
-                    <div className="flex-1 h-px bg-black/6" />
-                  </div>
-                  {/* 風格格子 */}
-                  <div className="grid grid-cols-2 gap-2">
-                    {cat.ids.map(id => {
-                      const style = styleById[id];
-                      if (!style) return null;
-                      return (
-                        <button
-                          key={style.id}
-                          onClick={() => handlePasteStyle(selectedElementIds, style.label)}
-                          disabled={selectedElementIds.length === 0}
-                          className="group flex flex-col gap-0.5 px-3 py-2.5 rounded-xl border border-black/5 hover:bg-black hover:border-black transition-all text-left disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <span className="text-[10px] font-semibold text-[#86868B] group-hover:text-white/60 leading-tight">{style.label}</span>
-                          <span className="text-[13px] font-bold text-[#1D1D1F] group-hover:text-white leading-tight">{style.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="px-4 py-3 border-t border-black/5 bg-gray-50 text-xs text-[#86868B] flex-shrink-0">
-              {selectedElementIds.length > 0 ? `已選取 ${selectedElementIds.length} 個物件` : '請先選取圖片以應用風格'}
-            </div>
-          </div>
-        );
-      })()}
+      {showStyleLibrary && (
+        <StyleLibraryPanel
+          stylePresets={STYLE_PRESETS}
+          position={styleLibPos}
+          isDragging={styleLibDragging}
+          selectedElementIds={selectedElementIds}
+          onStartDrag={(e) => {
+            e.preventDefault();
+            styleLibDragOffRef.current = { x: e.clientX - styleLibPos.x, y: e.clientY - styleLibPos.y };
+            setStyleLibDragging(true);
+          }}
+          onClose={() => setShowStyleLibrary(false)}
+          onApplyStyle={handlePasteStyle}
+        />
+      )}
 
       <InfiniteCanvas 
         ref={canvasApiRef}
@@ -2355,118 +1523,14 @@ const App: React.FC = () => {
       )}
 
       {generatedImages && generatedImages.length > 0 && (
-        <div
-          className="fixed inset-0 z-[2000] flex items-center justify-center p-6"
-          style={{ background: 'rgba(240,240,245,0.82)', backdropFilter: 'blur(12px)' }}
-        >
-          <div
-            className="relative flex flex-col"
-            style={{
-              background: '#ffffff',
-              border: '1px solid rgba(0,0,0,0.08)',
-              boxShadow: '0 32px 64px -16px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.08)',
-              borderRadius: '24px',
-              padding: '2rem',
-              width: '100%',
-              maxWidth: generatedImages.length === 1 ? 'min(80vw, 640px)' : '820px',
-              maxHeight: '90vh',
-              animation: 'resultModalPop 0.35s cubic-bezier(0.16,1,0.3,1) forwards',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <style>{`
-              @keyframes resultModalPop {
-                from { opacity: 0; transform: scale(0.95) translateY(12px); }
-                to   { opacity: 1; transform: scale(1)    translateY(0);    }
-              }
-              .result-img-card .card-action-overlay { opacity: 0; }
-              .result-img-card:hover .card-action-overlay { opacity: 1; }
-              .result-img-card .card-action-btns { opacity: 0; transform: translateY(12px); transition: opacity 0.25s ease, transform 0.25s ease; }
-              .result-img-card:hover .card-action-btns { opacity: 1; transform: translateY(0); }
-              .result-close-btn { transition: background 0.2s ease, transform 0.25s ease; }
-              .result-close-btn:hover { transform: rotate(90deg); background: #e5e5ea !important; }
-            `}</style>
-
-            {/* 標題列 */}
-            <div className="flex items-start justify-between mb-5 pr-10">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-semibold text-[#1D1D1F] tracking-tight">生成結果</h2>
-                  <span className="text-[10px] font-normal text-[#86868B] border border-black/10 px-1.5 py-px rounded">{generatedImages.length} 張</span>
-                </div>
-                <p className="text-[11px] text-[#86868B] mt-0.5">選擇要加入畫布或下載的圖片</p>
-              </div>
-            </div>
-
-            {/* 關閉按鈕 */}
-            <button
-              onClick={() => setGeneratedImages(null)}
-              className="result-close-btn absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] border border-black/8"
-              style={{ background: '#F5F5F7' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-
-            {/* 圖片區域 */}
-            <div className={`overflow-y-auto ${generatedImages.length > 1 ? 'grid grid-cols-2 gap-4 items-start' : ''}`}>
-              {generatedImages.map((imgSrc, index) => {
-                // 透明背景 Logo 已去背 → 用棋盤格底呈現透明區域
-                const isTransparentResult = logoBgProcessedRef.current === generatedImages
-                  && (generatedImagesMetadata?.[index]?.prompt || '').includes('BACKGROUND: transparent');
-                return (
-                <div
-                  key={index}
-                  className="result-img-card relative overflow-hidden bg-[#F0F0F0]"
-                  style={{
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                    borderRadius: '12px',
-                    ...(isTransparentResult ? {
-                      backgroundImage: 'linear-gradient(45deg, #e2e2e6 25%, transparent 25%), linear-gradient(-45deg, #e2e2e6 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e2e6 75%), linear-gradient(-45deg, transparent 75%, #e2e2e6 75%)',
-                      backgroundSize: '20px 20px',
-                      backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0',
-                      backgroundColor: '#ffffff',
-                    } : {}),
-                  }}
-                >
-                  <img
-                    src={imgSrc}
-                    alt={`Generated ${index + 1}`}
-                    className="w-full block"
-                    style={{ height: 'auto', maxHeight: generatedImages.length === 1 ? '62vh' : '45vh', objectFit: 'contain', display: 'block' }}
-                    referrerPolicy="no-referrer"
-                  />
-                  {/* 懸停漸層遮罩 */}
-                  <div
-                    className="card-action-overlay absolute inset-0 flex flex-col justify-end p-4"
-                    style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.15) 55%, transparent 100%)', transition: 'opacity 0.3s ease' }}
-                  >
-                    <div className="card-action-btns flex flex-col gap-2">
-                      <button
-                        onClick={() => addGeneratedImageToCanvas(imgSrc)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-white text-black hover:bg-gray-100 active:scale-[0.98] transition-all"
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        新增至畫布
-                      </button>
-                      <button
-                        onClick={() => downloadGeneratedImage(imgSrc)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-white active:scale-[0.98] transition-all"
-                        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(4px)' }}
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        下載
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-
-            {/* 底部提示 */}
-            <p className="text-center text-[11px] text-[#AEAEB2] mt-5">點擊視窗外部區域可關閉</p>
-          </div>
-        </div>
+        <GeneratedResultsModal
+          generatedImages={generatedImages}
+          generatedImagesMetadata={generatedImagesMetadata}
+          logoBgProcessedRef={logoBgProcessedRef}
+          onClose={() => setGeneratedImages(null)}
+          onAddToCanvas={addGeneratedImageToCanvas}
+          onDownload={downloadGeneratedImage}
+        />
       )}
       
       {editingDrawing && (
@@ -2675,32 +1739,7 @@ const App: React.FC = () => {
       })()}
 
       {isDraggingOver && (
-        <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(175,82,222,0.08) 0%, rgba(88,86,214,0.06) 40%, rgba(255,255,255,0.55) 100%)', backdropFilter: 'blur(12px)' }}>
-          {/* 邊框光暈 */}
-          <div className="absolute inset-4 rounded-[2rem] pointer-events-none"
-            style={{ border: '1.5px dashed rgba(175,82,222,0.35)', boxShadow: 'inset 0 0 60px rgba(175,82,222,0.06)' }} />
-          {/* 中央卡片 */}
-          <div className="flex flex-col items-center gap-3 px-11 py-8 rounded-2xl"
-            style={{
-              background: 'rgba(255,255,255,0.82)',
-              boxShadow: '0 24px 64px rgba(88,86,214,0.12), 0 4px 16px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)',
-              border: '1px solid rgba(175,82,222,0.18)',
-              backdropFilter: 'blur(20px)',
-            }}>
-            {/* 圖示 */}
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #AF52DE 0%, #5856D6 100%)', boxShadow: '0 6px 18px rgba(88,86,214,0.28)' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="3" ry="3"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
-              </svg>
-            </div>
-            <p className="text-[#1D1D1F] font-semibold text-lg tracking-tight leading-tight">釋放以新增圖片</p>
-            <p className="text-[#86868B] text-xs tracking-wide">支援 PNG・JPG・WEBP・GIF</p>
-          </div>
-        </div>
+        <ImageDropOverlay />
       )}
     </main>
 
