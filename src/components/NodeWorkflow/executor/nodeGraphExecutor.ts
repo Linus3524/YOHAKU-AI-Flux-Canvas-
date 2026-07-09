@@ -1,10 +1,11 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams, NodeKind, RemoveBgParams, UpscaleParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams, NodeKind, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
+import { optimizePromptWithAI } from '../../../ai/pipelines/analysis';
 import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
@@ -24,6 +25,8 @@ const UPSCALE_MODEL_KEYS: UpscaleParams['modelKey'][] = ['upscale_photo', 'upsca
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '執行失敗';
 }
+
+const isImageValue = (src: string): boolean => isImageSrc(src);
 
 /** imageGen 節點：便利貼文字→提示詞、上游圖→參考圖，呼叫既有生圖 pipeline（Gemini / Atlas）。 */
 async function runImageGen(
@@ -133,6 +136,24 @@ async function runUpscale(
   return await runLocalUpscalePipeline(input, modelKey, factor, pct => onProgress?.(`放大中 ${pct}%`));
 }
 
+async function runPromptOptimize(
+  params: Partial<PromptOptimizeParams>,
+  inputs: string[],
+  engine: ExecutorEngine,
+): Promise<string> {
+  const upstreamPrompt = inputs
+    .filter(src => !isImageValue(src))
+    .map(src => src.trim())
+    .filter(Boolean)
+    .join('\n');
+  const prompt = [upstreamPrompt, params.prompt].map(part => part?.trim()).filter(Boolean).join('\n\n');
+  if (!prompt) throw new Error('提示詞優化節點需要文字輸入');
+  if (!engine.geminiApiKey) throw new Error('提示詞優化需要 Gemini API Key');
+  const optimized = await optimizePromptWithAI(prompt, engine.geminiApiKey);
+  if (!optimized) throw new Error('提示詞優化沒有回傳文字');
+  return optimized;
+}
+
 /** layerSplit 節點：Gemini 語意偵測 + BiRefNet 去背 → 多張圖層（多輸出）。 */
 async function runLayerSplit(
   input: string,
@@ -192,6 +213,11 @@ const nodeRunners: Record<NodeKind, NodeRunner> = {
     (node.data.params ?? {}) as Partial<UpscaleParams>,
     requireInput(input, '放大'),
     onProgress,
+  )),
+  promptOptimize: async ({ node, inputs, engine }) => singleResult(await runPromptOptimize(
+    (node.data.params ?? {}) as Partial<PromptOptimizeParams>,
+    inputs,
+    engine,
   )),
   layerSplit: async ({ input, engine, onProgress }) => batchResult(await runLayerSplit(
     requireInput(input, '圖層分離'),

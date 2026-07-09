@@ -7,6 +7,7 @@ import { RemoveBgNode } from './nodes/RemoveBgNode';
 import { ImageGenNode } from './nodes/ImageGenNode';
 import { StyleNode } from './nodes/StyleNode';
 import { UpscaleNode } from './nodes/UpscaleNode';
+import { PromptOptimizeNode } from './nodes/PromptOptimizeNode';
 import { LayerSplitNode } from './nodes/LayerSplitNode';
 
 export type NodeIoType = 'none' | 'image' | 'text' | 'imageOrText' | 'imageBatch';
@@ -89,6 +90,17 @@ export const NODE_REGISTRY = {
     needsUpstream: true,
     input: 'image',
     output: 'image',
+  },
+  promptOptimize: {
+    kind: 'promptOptimize',
+    component: PromptOptimizeNode,
+    label: '提示詞優化',
+    addLabel: '＋ 優化提示',
+    addable: true,
+    category: 'analysis',
+    needsUpstream: false,
+    input: 'text',
+    output: 'text',
   },
   layerSplit: {
     kind: 'layerSplit',
