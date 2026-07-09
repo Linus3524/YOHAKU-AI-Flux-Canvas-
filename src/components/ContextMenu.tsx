@@ -23,6 +23,7 @@ interface ContextMenuProps {
     editDrawing: (elementId: string) => void;
     startImageEdit: (elementId: string) => void;
     startOutpainting: (elementId: string) => void;
+    createNodeWorkflow: (elementId: string) => void;
     addImage: (position: Point) => void;
     addFrame: (ratioLabel: string, ratioValue: number, position: Point) => void;
     deleteElement: () => void;
@@ -126,6 +127,7 @@ const MenuIcons = {
   FlipH:        () => <Icon name="flip" size={15} />,
   FlipV:        () => <Icon name="flip" size={15} style={{ transform: 'rotate(90deg)' }} />,
   Layout:       () => <Icon name="space_dashboard" size={15} />,
+  NodeWorkflow: () => <Icon name="account_tree" size={15} />,
   MobileLayout: () => <Icon name="mobile_layout" size={15} />,
   ShoppingBag:  () => <Icon name="shopping_bag" size={15} />,
   Reorder:      () => <Icon name="reorder" size={15} />,
@@ -323,6 +325,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                 <MenuItem icon={<MenuIcons.Design />} onClick={() => handleAction(() => actions.designMaster(menuData.elementId!))}>
                                     設計大師
                                 </MenuItem>
+                                {elementType === 'note' && (
+                                    <MenuItem icon={<MenuIcons.NodeWorkflow />} onClick={() => handleAction(() => actions.createNodeWorkflow(menuData.elementId!))}>
+                                        建立節點工作流
+                                    </MenuItem>
+                                )}
                                 <div className="border-t my-0.5 border-gray-100/50" />
                             </>
                         )}
@@ -380,6 +387,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                         調整圖片尺寸
                                     </MenuItem>
                                 )}
+                                <div className="border-t my-0.5 border-gray-100/50" />
+                                <MenuItem icon={<MenuIcons.NodeWorkflow />} onClick={() => handleAction(() => actions.createNodeWorkflow(menuData.elementId!))}>
+                                    建立節點工作流
+                                </MenuItem>
                                 <div className="border-t my-0.5 border-gray-100/50" />
                                 <MenuItem icon={<MenuIcons.Search />} onClick={() => handleAction(() => actions.extractPrompt(menuData.elementId!))}>
                                     提取提示詞

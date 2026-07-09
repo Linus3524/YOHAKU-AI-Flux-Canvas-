@@ -42,10 +42,12 @@ import { downloadImageAsBase64, callAtlasImg2Img } from './utils/atlasImage';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import { SVGExportModal } from './components/SVGExportModal';
 import { SemanticEditorView } from './components/SemanticEditor';
+import { NodeWorkflowOverlay } from './components/NodeWorkflow/NodeWorkflowOverlay';
 import { detectBackgroundColor, repairStickerTransparency, flattenBackgroundToColor } from './utils/imageProcessing';
 import type {
-    DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement
+    DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement, NodeGroupElement
 } from './types';
+import type { NodeGraphData } from './components/NodeWorkflow/types';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 
 const App: React.FC = () => {
@@ -471,6 +473,7 @@ const App: React.FC = () => {
   const [stylePasteModal, setStylePasteModal] = useState<{ targetIds: string[] } | null>(null);
   const [editingDrawing, setEditingDrawing] = useState<DrawingElement | null>(null);
   const [editingImage, setEditingImage] = useState<ImageElement | null>(null);
+  const [activeNodeGroupId, setActiveNodeGroupId] = useState<string | null>(null);
   const [interactionMode, setInteractionMode] = useState<'select' | 'hand'>('select');
   // 便利貼「點擊放置」模式：true = 等待使用者在畫布點一下決定位置
   const [placingNote, setPlacingNote] = useState(false);
@@ -559,7 +562,21 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only on mount
 
-  const isFocusMode = !!editingImage || !!editingDrawing;
+  const isFocusMode = !!editingImage || !!editingDrawing || !!activeNodeGroupId;
+  const activeNodeGroup = activeNodeGroupId
+    ? elements.find((el): el is NodeGroupElement => el.id === activeNodeGroupId && el.type === 'node_group') ?? null
+    : null;
+
+  const handleCloseNodeWorkflow = useCallback((graph: NodeGraphData) => {
+    if (activeNodeGroupId) {
+      setElements(prev => prev.map(el =>
+        el.id === activeNodeGroupId && el.type === 'node_group'
+          ? { ...el, graph }
+          : el
+      ));
+    }
+    setActiveNodeGroupId(null);
+  }, [activeNodeGroupId, setElements]);
 
   const handleInteractionEnd = useCallback(() => {
     // 歷史已在手勢首幀新增（保住手勢前狀態），這裡只需清除首幀標記，不再 commit 重複
@@ -575,6 +592,50 @@ const App: React.FC = () => {
       if (elementId && !selectedElementIds.includes(elementId)) handleSelectElement(elementId, false);
       setContextMenu({ x: e.clientX, y: e.clientY, worldPoint, elementId });
   }, [selectedElementIds, handleSelectElement]);
+
+  const handleCreateNodeWorkflow = useCallback((elementId: string) => {
+    const source = elements.find(el => el.id === elementId);
+    if (!source || (source.type !== 'image' && source.type !== 'note')) {
+      showToast('目前只支援從圖片或便利貼建立節點工作流');
+      return;
+    }
+
+    const sourceValue = source.type === 'image' ? source.src : source.content;
+    const now = Date.now();
+    const graph: NodeGraphData = {
+      nodes: [
+        {
+          id: `input-${now}`,
+          kind: 'input',
+          position: { x: 80, y: 120 },
+          data: {
+            label: source.type === 'image' ? 'Input Image' : 'Input Note',
+            src: sourceValue,
+            params: { seedElementId: source.id, sourceType: source.type },
+          },
+        },
+        {
+          id: `output-${now}`,
+          kind: 'output',
+          position: { x: 420, y: 120 },
+          data: { label: 'Output' },
+        },
+      ],
+      edges: [],
+    };
+
+    const nodeGroupId = addElement({
+      type: 'node_group',
+      position: { x: source.position.x + source.width + 48, y: source.position.y },
+      width: 360,
+      height: 220,
+      rotation: 0,
+      graph,
+      seedElementId: source.id,
+    });
+    setSelectedElementIds([nodeGroupId]);
+    showToast('已建立節點工作流');
+  }, [addElement, elements, setSelectedElementIds, showToast]);
 
   const handleEditDrawing = useCallback((elementId: string) => {
     const el = elements.find(e => e.id === elementId);
@@ -1100,7 +1161,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.type === 'keyup') return; // Only trigger on keydown
-      if (editingDrawing || editingImage) return;
+      if (editingDrawing || editingImage || activeNodeGroupId) return;
       if (intentModal) {
         if (e.key === 'Escape') setIntentModal(null);
         return;
@@ -1140,7 +1201,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [deleteElement, undo, redo, editingDrawing, editingImage, outpaintingState, copySelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, placingNote, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
+  }, [deleteElement, undo, redo, editingDrawing, editingImage, activeNodeGroupId, outpaintingState, copySelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, placingNote, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
   
   useEffect(() => {
     const preventDefaults = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
@@ -1356,6 +1417,7 @@ const App: React.FC = () => {
         onGenerate={handleGenerateWithIntent}
         onContextMenu={handleContextMenu}
         onEditDrawing={handleEditDrawing}
+        onOpenNodeWorkflow={setActiveNodeGroupId}
         onCopySelection={copySelection}
         onPasteSelection={pasteSelection}
         onDuplicateSelection={duplicateSelection}
@@ -1555,6 +1617,13 @@ const App: React.FC = () => {
         />
       )}
 
+      {activeNodeGroup && (
+        <NodeWorkflowOverlay
+          element={activeNodeGroup}
+          onClose={handleCloseNodeWorkflow}
+        />
+      )}
+
       {crossPlatformTarget && (
         <CrossPlatformModal
           imageName={crossPlatformTarget.name}
@@ -1612,6 +1681,7 @@ const App: React.FC = () => {
             editDrawing: handleEditDrawing,
             startImageEdit: handleStartImageEdit,
             startOutpainting: handleStartOutpainting,
+            createNodeWorkflow: handleCreateNodeWorkflow,
             addImage: triggerImageUpload,
             addFrame,
             deleteElement,

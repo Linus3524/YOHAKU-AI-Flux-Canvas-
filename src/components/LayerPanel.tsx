@@ -37,6 +37,7 @@ const Icons = {
     Draw:         () => <Icon name="draw" size={14} />,
     Frame:        () => <Icon name="crop_free" size={14} />,
     Shape:        () => <Icon name="category" size={14} />,
+    NodeGroup:    () => <Icon name="account_tree" size={14} />,
     Layer:        () => <Icon name="layers" size={18} style={{ display: 'block', lineHeight: 1 }} />,
     Trash:        () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
     Folder:       () => <Icon name="folder" size={14} />,
@@ -51,6 +52,7 @@ export const getLayerColor = (type: string) => {
         case 'image':    return '#AF52DE'; // 精緻紫
         case 'drawing':  return '#ec4899'; // 粉紅
         case 'shape':    return '#FF9500'; // 活力橘
+        case 'node_group': return '#5856D6'; // 節點工作流
         case 'note':     return '#0ea5e9'; // 水藍（與物件感知生成純背景同色）
         case 'arrow':    return '#FF3B30'; // 蘋果紅
         default:         return '#86868B'; // 預設灰
@@ -66,6 +68,7 @@ const ElementIcon = ({ type }: { type: string }) => {
         case 'drawing': return <Icons.Draw />;
         case 'frame': return <Icons.Frame />;
         case 'shape': return <Icons.Shape />;
+        case 'node_group': return <Icons.NodeGroup />;
         default: return <Icons.Layer />;
     }
 }

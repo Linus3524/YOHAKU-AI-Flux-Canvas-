@@ -22,6 +22,7 @@ interface InfiniteCanvasProps {
   onGenerate: (selectedElements: CanvasElement[], count?: 1 | 2 | 3 | 4) => void;
   onContextMenu: (e: React.MouseEvent, worldPoint: Point, elementId: string | null) => void;
   onEditDrawing: (elementId: string) => void;
+  onOpenNodeWorkflow: (elementId: string) => void;
   onCopySelection: () => void;
   onPasteSelection: () => void;
   onDuplicateSelection: () => void;
@@ -224,6 +225,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onGenerate,
   onContextMenu,
   onEditDrawing,
+  onOpenNodeWorkflow,
   onCopySelection,
   onPasteSelection,
   onDuplicateSelection,
@@ -893,6 +895,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
             onInteractionEnd={onInteractionEnd}
             onContextMenu={handleElementContextMenu}
             onEditDrawing={onEditDrawing}
+            onOpenNodeWorkflow={onOpenNodeWorkflow}
             onDuplicateInPlace={onDuplicateInPlace}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}

@@ -4,7 +4,9 @@ export interface Point {
   y: number;
 }
 
-export type ElementType = 'note' | 'image' | 'arrow' | 'drawing' | 'frame' | 'text' | 'shape' | 'artboard';
+import type { NodeGraphData } from './components/NodeWorkflow/types';
+
+export type ElementType = 'note' | 'image' | 'arrow' | 'drawing' | 'frame' | 'text' | 'shape' | 'artboard' | 'node_group';
 
 interface BaseElement {
   id: string;
@@ -132,7 +134,14 @@ export interface ArtboardElement extends BaseElement {
   presetName?: string;         // 記錄使用的預設尺寸名稱，例如 'IG Post'
 }
 
-export type CanvasElement = NoteElement | ImageElement | ArrowElement | DrawingElement | FrameElement | TextElement | ShapeElement | ArtboardElement;
+export interface NodeGroupElement extends BaseElement {
+  type: 'node_group';
+  graph: NodeGraphData;
+  outputSrc?: string;
+  seedElementId?: string;
+}
+
+export type CanvasElement = NoteElement | ImageElement | ArrowElement | DrawingElement | FrameElement | TextElement | ShapeElement | ArtboardElement | NodeGroupElement;
 
 export interface ContextMenuData {
     x: number;

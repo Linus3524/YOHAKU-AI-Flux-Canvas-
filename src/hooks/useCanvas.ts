@@ -12,7 +12,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { 
     CanvasElement, Point, ShapeType, 
-    ImageElement, TextElement, ShapeElement, ArrowElement, NoteElement, FrameElement, DrawingElement, ArtboardElement 
+    ImageElement, TextElement, ShapeElement, ArrowElement, NoteElement, FrameElement, DrawingElement, ArtboardElement, NodeGroupElement
 } from '../types';
 import { useHistoryState } from './useHistoryState';
 import { trimCanvas, wrapTextCanvas, loadImage, createShapeDataUrl, createArrowDataUrl, COLORS, getRandomPosition, measureTextVisualBounds, requestTextAutoEdit } from '../utils/helpers';
@@ -302,7 +302,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         return getRandomPosition();
     }, []);
 
-    const addElement = useCallback((newElement: Omit<NoteElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<ImageElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<ArrowElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<DrawingElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<FrameElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<TextElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<ShapeElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<ArtboardElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'>) => {
+    const addElement = useCallback((newElement: Omit<NoteElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<ImageElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<ArrowElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<DrawingElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<FrameElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<TextElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<ShapeElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<ArtboardElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | Omit<NodeGroupElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'>) => {
     
         const count = elements.filter(el => el.type === newElement.type).length + 1;
         let baseName = '';
@@ -315,6 +315,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             case 'text': baseName = `Text ${count}`; break;
             case 'shape': baseName = `Shape ${count}`; break;
             case 'artboard': baseName = `Artboard ${count}`; break;
+            case 'node_group': baseName = `Node Workflow ${count}`; break;
             default: baseName = `Element ${count}`;
         }
     
@@ -1390,6 +1391,9 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                     break;
                 case 'artboard':
                     // Inherit width, height, rotation, backgroundColor via spread
+                    break;
+                case 'node_group':
+                    // Inherit graph/output data via spread.
                     break;
             }
             

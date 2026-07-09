@@ -26,6 +26,7 @@ interface ElementsLayerProps {
   onInteractionEnd: () => void;
   onContextMenu: (e: React.MouseEvent, screenPoint: Point, id: string | null) => void;
   onEditDrawing: (elementId: string) => void;
+  onOpenNodeWorkflow: (elementId: string) => void;
   onDuplicateInPlace?: (activeId: string, isShift: boolean) => { [oldId: string]: CanvasElement };
   onDragStart?: () => void;
   onDragEnd?: () => void;
@@ -39,7 +40,7 @@ const ElementsLayerInner: React.FC<ElementsLayerProps> = ({
   groupActive, croppingElementId, outpaintingState, zoom,
   activeGuidelines, snapToObjects, interactionMode, showImageSizes, screenToWorld,
   onSelectElement, onUpdateElement, onUpdateMultipleElements,
-  onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing,
+  onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onOpenNodeWorkflow,
   onDuplicateInPlace, onDragStart, onDragEnd, onDragActiveChange,
 }) => {
   // 拖曳期間不進全域 state（App/InfiniteCanvas 皆不重渲染），改以 local override 呈現位置，
@@ -155,6 +156,7 @@ const ElementsLayerInner: React.FC<ElementsLayerProps> = ({
           onInteractionEnd={onInteractionEnd}
           onContextMenu={onContextMenu}
           onEditDrawing={onEditDrawing}
+          onOpenNodeWorkflow={onOpenNodeWorkflow}
           onDuplicateInPlace={onDuplicateInPlace}
           onDragStart={handleDragStart}
           onDragEnd={onUpdateMultipleElements ? handleElementDragEnd : onDragEnd}

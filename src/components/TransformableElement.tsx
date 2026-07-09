@@ -21,6 +21,7 @@ interface TransformableElementProps {
   onInteractionEnd: () => void;
   onContextMenu: (e: React.MouseEvent, worldPoint: Point, elementId: string) => void;
   onEditDrawing: (elementId: string) => void;
+  onOpenNodeWorkflow: (elementId: string) => void;
   onDuplicateInPlace?: (activeId: string, isShift: boolean) => { [oldId: string]: CanvasElement };
   onDragStart?: () => void;
   onDragEnd?: () => void;
@@ -243,7 +244,7 @@ const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, noteW
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TransformableElementInner: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onLiveDrag, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld, disableResizeHandles, showImageSizes = false }) => {
+const TransformableElementInner: React.FC<TransformableElementProps> = ({ element, isSelected, isOutpainting, zoom, onSelect, onUpdate, onLiveDrag, onInteractionStart, onInteractionEnd, onContextMenu, onEditDrawing, onOpenNodeWorkflow, onDuplicateInPlace, onDragStart, onDragEnd, interactionMode, screenToWorld, disableResizeHandles, showImageSizes = false }) => {
   const [interaction, setInteraction] = useState<Interaction>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [galleryHovered, setGalleryHovered] = useState(false);
@@ -661,8 +662,11 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
         } else if (element.type === 'drawing') {
             e.stopPropagation();
             onEditDrawing(element.id);
+        } else if (element.type === 'node_group') {
+            e.stopPropagation();
+            onOpenNodeWorkflow(element.id);
         }
-    }, [element, onEditDrawing, isOutpainting, interactionMode]);
+    }, [element, onEditDrawing, onOpenNodeWorkflow, isOutpainting, interactionMode]);
     
     const handleElementContextMenu = (e: React.MouseEvent) => {
         if (interactionMode === 'hand') return;
@@ -1553,6 +1557,37 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                         className="text-[#86868B] text-center bg-white/50 rounded-lg backdrop-blur-sm border border-black/5 whitespace-nowrap"
                                         style={{ fontSize: hintFont, padding: `${hintPadV}px ${hintPadH}px`, lineHeight: 1.2 }}
                                     >點擊兩下以繪圖</span>
+                                )}
+                            </div>
+                        );
+                    }
+                    case 'node_group': {
+                        const nodeCount = el.graph.nodes.length;
+                        const edgeCount = el.graph.edges.length;
+                        return (
+                            <div style={style} className="rounded-2xl border border-indigo-200 bg-white/90 shadow-[0_12px_36px_rgba(79,70,229,0.16)] overflow-hidden flex flex-col">
+                                {el.outputSrc ? (
+                                    <img src={el.outputSrc} alt="Node workflow output" className="w-full h-full object-cover pointer-events-none" draggable={false} />
+                                ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-center px-5 bg-gradient-to-br from-white via-indigo-50/70 to-sky-50/70">
+                                        <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-3">
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M6 6h.01"/>
+                                                <path d="M18 18h.01"/>
+                                                <path d="M18 6h.01"/>
+                                                <path d="M6 18h.01"/>
+                                                <path d="M8 6h8"/>
+                                                <path d="M8 18h8"/>
+                                                <path d="M6 8v8"/>
+                                                <path d="M18 8v8"/>
+                                            </svg>
+                                        </div>
+                                        <div className="text-[22px] font-semibold text-slate-900 leading-tight">節點工作流</div>
+                                        <div className="mt-2 text-[13px] text-slate-500 leading-relaxed">
+                                            {nodeCount} nodes · {edgeCount} edges
+                                        </div>
+                                        <div className="mt-4 text-[12px] text-indigo-600 font-medium">雙擊進入子空間</div>
+                                    </div>
                                 )}
                             </div>
                         );
