@@ -60,10 +60,22 @@ function DeletableEdge({
     targetY,
   });
 
+  const [isHovered, setIsHovered] = useState(false);
   const onDelete = data?.onDelete;
 
   return (
-    <>
+    <g
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* 隱形的寬線以利游標感應 Hover */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={15}
+        style={{ cursor: 'pointer' }}
+      />
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
       <EdgeLabelRenderer>
         <div
@@ -73,6 +85,8 @@ function DeletableEdge({
             pointerEvents: 'all',
           }}
           className="nodrag nopan"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
         >
           <button
             type="button"
@@ -80,14 +94,16 @@ function DeletableEdge({
               e.stopPropagation();
               if (onDelete) onDelete(id);
             }}
-            className="w-4 h-4 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md border border-white opacity-40 hover:opacity-100 transition-opacity hover:scale-110 active:scale-90 text-[9px] font-bold"
+            className={`w-4 h-4 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md border border-white transition-opacity hover:scale-110 active:scale-90 text-[9px] font-bold ${
+              isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
             title="斷開此連線"
           >
             ✕
           </button>
         </div>
       </EdgeLabelRenderer>
-    </>
+    </g>
   );
 }
 
