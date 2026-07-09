@@ -5,7 +5,7 @@ import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams
 import type { Part } from '@google/genai';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
-import { optimizePromptWithAI } from '../../../ai/pipelines/analysis';
+import { analyzeImageStyleFull, optimizePromptWithAI } from '../../../ai/pipelines/analysis';
 import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
@@ -154,6 +154,42 @@ async function runPromptOptimize(
   return optimized;
 }
 
+const ANALYSIS_LABELS: Record<string, string> = {
+  color: '色彩',
+  lighting: '光影',
+  artStyle: '畫風',
+  composition: '構圖',
+  texture: '材質',
+  pose: '姿勢',
+  expression: '表情',
+  clothing: '服裝',
+  background: '背景',
+  hair: '髮型',
+  typography: '字體',
+};
+
+function formatStyleAnalysis(analysis: Record<string, string>): string {
+  return Object.entries(ANALYSIS_LABELS)
+    .map(([key, label]) => {
+      const value = analysis[key]?.trim();
+      return value ? `${label}: ${value}` : '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function runAnalyze(
+  input: string,
+  engine: ExecutorEngine,
+): Promise<string> {
+  if (!isImageSrc(input)) throw new Error('圖片分析節點需要上游圖片');
+  if (!engine.geminiApiKey) throw new Error('圖片分析需要 Gemini API Key');
+  const analysis = await analyzeImageStyleFull(input, engine.geminiApiKey);
+  const text = formatStyleAnalysis(analysis);
+  if (!text) throw new Error('圖片分析沒有回傳文字');
+  return text;
+}
+
 /** layerSplit 節點：Gemini 語意偵測 + BiRefNet 去背 → 多張圖層（多輸出）。 */
 async function runLayerSplit(
   input: string,
@@ -217,6 +253,10 @@ const nodeRunners: Record<NodeKind, NodeRunner> = {
   promptOptimize: async ({ node, inputs, engine }) => singleResult(await runPromptOptimize(
     (node.data.params ?? {}) as Partial<PromptOptimizeParams>,
     inputs,
+    engine,
+  )),
+  analyze: async ({ input, engine }) => singleResult(await runAnalyze(
+    requireInput(input, '圖片分析'),
     engine,
   )),
   layerSplit: async ({ input, engine, onProgress }) => batchResult(await runLayerSplit(

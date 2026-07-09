@@ -8,6 +8,7 @@ import { ImageGenNode } from './nodes/ImageGenNode';
 import { StyleNode } from './nodes/StyleNode';
 import { UpscaleNode } from './nodes/UpscaleNode';
 import { PromptOptimizeNode } from './nodes/PromptOptimizeNode';
+import { AnalyzeNode } from './nodes/AnalyzeNode';
 import { LayerSplitNode } from './nodes/LayerSplitNode';
 
 export type NodeIoType = 'none' | 'image' | 'text' | 'imageOrText' | 'imageBatch';
@@ -100,6 +101,17 @@ export const NODE_REGISTRY = {
     category: 'analysis',
     needsUpstream: false,
     input: 'text',
+    output: 'text',
+  },
+  analyze: {
+    kind: 'analyze',
+    component: AnalyzeNode,
+    label: '圖片分析',
+    addLabel: '＋ 分析',
+    addable: true,
+    category: 'analysis',
+    needsUpstream: true,
+    input: 'image',
     output: 'text',
   },
   layerSplit: {
