@@ -19,6 +19,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useNodeGraphStore } from '../../store/nodeGraphStore';
+import { isImageSrc } from './mediaSrc';
 import { InputNode } from './nodes/InputNode';
 import { RemoveBgNode } from './nodes/RemoveBgNode';
 import { ImageGenNode } from './nodes/ImageGenNode';
@@ -335,11 +336,16 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
 
   const handleNodeDragStop: OnNodeDrag<FlowNode> = useCallback((event, node) => {
     setIsDraggingNode(false);
-    // 落點在底部拖出區內 → 移出到大畫布（限帶圖節點）
+    // 落點在底部拖出區內 → 移出到大畫布。
     const clientY = 'clientY' in event ? event.clientY : (event as MouseEvent).clientY;
     const inDetachZone = typeof clientY === 'number' && clientY > window.innerHeight - DETACH_ZONE_HEIGHT;
-    const src = typeof node.data?.src === 'string' ? node.data.src : '';
-    if (inDetachZone && src && onDetachImage) {
+    if (!inDetachZone || !onDetachImage) return;
+    // 可拖出的圖片：Input 節點原圖 (data.src) 或動作節點執行後的結果 (nodeResults)。
+    // 只允許圖片（排除便利貼文字等非圖片 payload）。
+    const inlineSrc = typeof node.data?.src === 'string' ? node.data.src : '';
+    const resultSrc = useNodeGraphStore.getState().nodeResults[node.id] ?? '';
+    const src = isImageSrc(inlineSrc) ? inlineSrc : (isImageSrc(resultSrc) ? resultSrc : '');
+    if (src) {
       const label = typeof node.data?.label === 'string' ? node.data.label : undefined;
       onDetachImage(src, label);
     }
