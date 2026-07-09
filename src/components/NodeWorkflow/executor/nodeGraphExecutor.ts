@@ -14,6 +14,7 @@ import { generateOutpaintingPrompt } from '../../../ai/pipelines/outpainting';
 import { analyzeCopiedStyle, buildCopiedStylePrompt, buildPresetStylePrompt, generateCopiedStyleAssets, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
+import { getVisualStyleById } from '../../../skills/styles';
 import { LOGO_BRAND_OUTPUTS, LOGO_DEFAULT_CONFIG } from '../../../skills/logo';
 import { CROSS_PLATFORM_SPECS } from '../../../skills/crossPlatform';
 import { PRODUCT_MARKETING_DEFAULT_CONFIG, PRODUCT_MARKETING_PLATFORMS } from '../../../skills/marketing';
@@ -119,11 +120,16 @@ async function runStyleTransfer(
   if (!isImageSrc(upstream)) throw new Error('風格轉換節點需要上游圖片');
   if (!engine.geminiApiKey) throw new Error('風格轉換需要 Gemini API Key');
 
-  const styleName = STYLE_PRESET_BY_KEY[styleKey] ?? styleKey;
+  // 優先用系統風格藝術庫（60+ 種）的完整風格 prompt；
+  // 找不到才 fallback 舊的內建 5 種 key（向後相容既有存檔）。
+  const template = getVisualStyleById(styleKey);
+  const stylePrompt = template
+    ? template.content
+    : buildPresetStylePrompt(STYLE_PRESET_BY_KEY[styleKey] ?? styleKey);
   const src = await generateStyledImage(
     {
       srcImage: upstream,
-      stylePrompt: buildPresetStylePrompt(styleName),
+      stylePrompt,
       preserveTransparency: true,
       transparencyKeys: {
         geminiApiKey: engine.geminiApiKey,
