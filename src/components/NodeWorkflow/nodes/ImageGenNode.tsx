@@ -3,6 +3,7 @@ import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import type { ImageGenParams } from '../types';
 import { useNodeStatusRing } from './useNodeStatusRing';
 import { NodeResultPreview } from './NodeResultPreview';
+import { NodeDeleteButton } from './NodeDeleteButton';
 
 const MODEL_OPTIONS = ['gemini', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro'];
 const RATIO_OPTIONS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
@@ -10,17 +11,22 @@ const RATIO_OPTIONS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
 /**
  * 生成圖片節點：參數設定 UI，實際生成由執行引擎呼叫 pipeline。
  */
-export function ImageGenNode({ id, data }: NodeProps) {
+export function ImageGenNode({ id, data, selected }: NodeProps) {
   const { updateNodeData } = useReactFlow();
   const ring = useNodeStatusRing(id);
   const params = (data?.params ?? {}) as Partial<ImageGenParams>;
+  const onDeleteNode = data?.onDeleteNode;
+  const handleDelete = typeof onDeleteNode === 'function'
+    ? () => (onDeleteNode as (nodeId: string) => void)(id)
+    : undefined;
 
   const setParam = (patch: Partial<ImageGenParams>) => {
     updateNodeData(id, { params: { ...params, ...patch } });
   };
 
   return (
-    <div className={`border border-black/12 bg-white shadow-sm w-[190px] overflow-hidden ${ring}`}>
+    <div className={`group relative border border-black/12 bg-white shadow-sm w-[190px] overflow-visible ${ring}`}>
+      <NodeDeleteButton onDelete={handleDelete} selected={selected} />
       <Handle type="target" position={Position.Left} />
       <div className="px-2 py-1 text-[10px] font-semibold text-neutral-500 tracking-wide uppercase border-b border-black/6">
         生成圖片

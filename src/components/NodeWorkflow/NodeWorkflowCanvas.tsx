@@ -102,6 +102,7 @@ const DEFAULT_LABEL: Record<NodeKind, string> = {
 type FlowNodeData = Record<string, unknown> & {
   label: string;
   kind: NodeKind;
+  onDeleteNode?: (id: string) => void;
 };
 
 type FlowNode = Node<FlowNodeData>;
@@ -119,7 +120,7 @@ const toFlowNode = (node: GraphNode): FlowNode => ({
 });
 
 const toGraphNode = (node: FlowNode): GraphNode => {
-  const { kind, label, ...restData } = node.data;
+  const { kind, label, onDeleteNode, ...restData } = node.data;
   return {
     id: node.id,
     kind,
@@ -191,6 +192,18 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   const handleEdgeDelete = useCallback((edgeId: string) => {
     setEdges(eds => eds.filter(e => e.id !== edgeId));
   }, [setEdges]);
+
+  const handleNodeDelete = useCallback((nodeId: string) => {
+    setNodes(nds => nds.filter(n => n.id !== nodeId));
+    setEdges(eds => eds.filter(e => e.source !== nodeId && e.target !== nodeId));
+  }, [setNodes, setEdges]);
+
+  useEffect(() => {
+    setNodes(nds => nds.map(n => {
+      if (n.data?.onDeleteNode === handleNodeDelete) return n;
+      return { ...n, data: { ...n.data, onDeleteNode: handleNodeDelete } };
+    }));
+  }, [handleNodeDelete, setNodes]);
 
   // 掛載後注入 onDelete 刪除連線之回呼函式
   useEffect(() => {
@@ -294,7 +307,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
     const graphNode: GraphNode = { id, kind, position, data: { label: DEFAULT_LABEL[kind], params: {} } };
     setNodes(nds => [
       ...nds.map(n => ({ ...n, selected: false })),
-      { ...toFlowNode(graphNode), selected: true },
+      { ...toFlowNode(graphNode), data: { ...toFlowNode(graphNode).data, onDeleteNode: handleNodeDelete }, selected: true },
     ]);
     if (selected) {
       setEdges(eds => addEdge({ 

@@ -3,22 +3,28 @@ import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import type { RemoveBgParams } from '../types';
 import { useNodeStatusRing } from './useNodeStatusRing';
 import { NodeResultPreview } from './NodeResultPreview';
+import { NodeDeleteButton } from './NodeDeleteButton';
 
 /**
  * 去背節點：local/cloud 模式選擇；實際去背由執行引擎呼叫 pipeline。
  */
-export function RemoveBgNode({ id, data }: NodeProps) {
+export function RemoveBgNode({ id, data, selected }: NodeProps) {
   const { updateNodeData } = useReactFlow();
   const ring = useNodeStatusRing(id);
   const params = (data?.params ?? {}) as Partial<RemoveBgParams>;
   const mode = params.mode ?? 'local';
+  const onDeleteNode = data?.onDeleteNode;
+  const handleDelete = typeof onDeleteNode === 'function'
+    ? () => (onDeleteNode as (nodeId: string) => void)(id)
+    : undefined;
 
   const setMode = (next: 'local' | 'cloud') => {
     updateNodeData(id, { params: { ...params, mode: next } });
   };
 
   return (
-    <div className={`border border-black/12 bg-white shadow-sm w-[160px] overflow-hidden ${ring}`}>
+    <div className={`group relative border border-black/12 bg-white shadow-sm w-[160px] overflow-visible ${ring}`}>
+      <NodeDeleteButton onDelete={handleDelete} selected={selected} />
       <Handle type="target" position={Position.Left} />
       <div className="px-2 py-1 text-[10px] font-semibold text-neutral-500 tracking-wide uppercase border-b border-black/6">
         去背

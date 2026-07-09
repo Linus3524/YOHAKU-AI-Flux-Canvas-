@@ -3,20 +3,26 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { useNodeStatusRing } from './useNodeStatusRing';
 import { useNodeGraphStore } from '../../../store/nodeGraphStore';
 import { isImageSrc } from '../mediaSrc';
+import { NodeDeleteButton } from './NodeDeleteButton';
 
 /**
  * Output 節點：只顯示最終輸出結果。
  * 沒有結果時顯示一個乾淨簡潔的方塊。
  * 有結果時，若是圖片則直接滿版無框顯示，hover 時浮現標籤。
  */
-export function OutputNode({ id }: NodeProps) {
+export function OutputNode({ id, data, selected }: NodeProps) {
   const ring = useNodeStatusRing(id);
   const result = useNodeGraphStore(s => s.nodeResults[id]);
   const isImage = isImageSrc(result);
+  const onDeleteNode = data?.onDeleteNode;
+  const handleDelete = typeof onDeleteNode === 'function'
+    ? () => (onDeleteNode as (nodeId: string) => void)(id)
+    : undefined;
 
   if (result && isImage) {
     return (
       <div className={`group relative w-[180px] ${ring}`} style={{ background: 'transparent' }}>
+        <NodeDeleteButton onDelete={handleDelete} selected={selected} />
         <Handle type="target" position={Position.Left} />
         <img
           src={result}
@@ -37,7 +43,8 @@ export function OutputNode({ id }: NodeProps) {
 
   if (result) {
     return (
-      <div className={`w-[180px] bg-[#FEFCE8] border border-black/8 overflow-hidden ${ring}`}>
+      <div className={`group relative w-[180px] bg-[#FEFCE8] border border-black/8 overflow-visible ${ring}`}>
+        <NodeDeleteButton onDelete={handleDelete} selected={selected} />
         <Handle type="target" position={Position.Left} />
         <div className="px-2.5 py-2 text-[11px] leading-relaxed text-neutral-800 whitespace-pre-wrap">
           {result}
@@ -48,7 +55,8 @@ export function OutputNode({ id }: NodeProps) {
 
   // 預設無結果狀態：簡潔無多餘圓角方框
   return (
-    <div className={`w-[140px] bg-white border border-neutral-200 shadow-sm px-3 py-3 text-center ${ring}`}>
+    <div className={`group relative w-[140px] bg-white border border-neutral-200 shadow-sm px-3 py-3 text-center ${ring}`}>
+      <NodeDeleteButton onDelete={handleDelete} selected={selected} />
       <Handle type="target" position={Position.Left} />
       <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
         結果輸出
