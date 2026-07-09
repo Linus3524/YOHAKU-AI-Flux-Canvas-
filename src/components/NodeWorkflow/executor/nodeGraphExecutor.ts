@@ -20,20 +20,21 @@ const STYLE_PRESET_BY_KEY: Record<string, string> = {
 /** imageGen 節點：便利貼文字→提示詞、上游圖→參考圖，呼叫既有生圖 pipeline（Gemini / Atlas）。 */
 async function runImageGen(
   params: Partial<ImageGenParams>,
-  upstream: string | undefined,
+  upstreams: string[],
   engine: ExecutorEngine,
 ): Promise<string> {
-  const upstreamIsImage = isImageSrc(upstream);
-  const prompt = (upstreamIsImage ? params.prompt : (upstream || params.prompt) )?.trim() || '';
+  const refImages = upstreams.filter(src => isImageSrc(src));
+  const upstreamPrompt = upstreams.filter(src => !isImageSrc(src)).map(src => src.trim()).filter(Boolean).join('\n');
+  const prompt = [upstreamPrompt, params.prompt].map(part => part?.trim()).filter(Boolean).join('\n\n');
   if (!prompt) throw new Error('生圖節點需要提示詞（便利貼文字或節點輸入框）');
-  const refImage = upstreamIsImage ? upstream : undefined;
   const aspectRatio = params.aspectRatio || '1:1';
   const model = params.model || 'gemini';
 
   if (ATLAS_MODELS.includes(model)) {
     if (!engine.atlasApiKey) throw new Error('此模型需要 Atlas API Key');
+    // Atlas img2img 目前只接單張參考圖；多輸入時取第一張，Gemini 路徑可吃多張。
     const out = await atlasBatch(
-      { prompt, ratio: aspectRatio, count: 1, refImage },
+      { prompt, ratio: aspectRatio, count: 1, refImage: refImages[0] },
       { model: model as AtlasGenerationModel, apiKey: engine.atlasApiKey },
     );
     if (!out[0]) throw new Error('生圖沒有回傳圖片');
@@ -43,7 +44,7 @@ async function runImageGen(
   // Gemini 路徑
   if (!engine.geminiApiKey) throw new Error('生圖需要 Gemini API Key');
   const parts: any[] = [];
-  if (refImage) {
+  for (const refImage of refImages) {
     const [header, data] = refImage.split(',');
     const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
     parts.push({ inlineData: { data, mimeType } });
@@ -167,6 +168,13 @@ function upstreamSrc(nodeId: string, graph: NodeGraphData, results: Map<string, 
   return edge ? results.get(edge.source) : undefined;
 }
 
+function upstreamSrcs(nodeId: string, graph: NodeGraphData, results: Map<string, string>): string[] {
+  return graph.edges
+    .filter(e => e.target === nodeId)
+    .map(e => results.get(e.source))
+    .filter((src): src is string => !!src);
+}
+
 function blockedByFailedUpstream(
   nodeId: string,
   graph: NodeGraphData,
@@ -244,7 +252,7 @@ export async function executeGraph(
           case 'imageGen':
             result = await runImageGen(
               (node.data.params ?? {}) as Partial<ImageGenParams>,
-              input,
+              upstreamSrcs(node.id, graph, results),
               engine,
             );
             break;
