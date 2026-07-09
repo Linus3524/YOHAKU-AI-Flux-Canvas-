@@ -14,8 +14,6 @@ export function OutputNode({ id }: NodeProps) {
   const result = useNodeGraphStore(s => s.nodeResults[id]);
   const isImage = isImageSrc(result);
 
-  console.log('[OutputNode Render] id:', id, 'result exists:', !!result, 'isImage:', isImage);
-
   if (result && isImage) {
     return (
       <div className={`group relative w-[180px] ${ring}`} style={{ background: 'transparent' }}>
