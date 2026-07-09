@@ -377,8 +377,9 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
         onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
         fitView
-        fitViewOptions={{ padding: 0.28 }}
-        maxZoom={1}
+        fitViewOptions={{ padding: 0.28, maxZoom: 1 }}
+        minZoom={0.1}
+        maxZoom={4}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={true}
         nodesSelectable={true}
