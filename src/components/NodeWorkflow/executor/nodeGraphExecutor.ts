@@ -122,6 +122,21 @@ export interface ExecuteResult {
   results: Map<string, string>;
 }
 
+export interface ExecuteOptions {
+  signal?: AbortSignal;
+}
+
+class GraphExecutionAbortError extends Error {
+  constructor() {
+    super('節點工作流已停止');
+    this.name = 'GraphExecutionAbortError';
+  }
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new GraphExecutionAbortError();
+}
+
 /** Kahn 拓撲排序；有環路回傳 null。 */
 function topoSort(graph: NodeGraphData): GraphNode[] | null {
   const indeg = new Map<string, number>();
@@ -176,6 +191,7 @@ export async function executeGraph(
   graph: NodeGraphData,
   engine: ExecutorEngine,
   callbacks: ExecutorCallbacks = {},
+  options: ExecuteOptions = {},
 ): Promise<ExecuteResult> {
   const order = topoSort(graph);
   if (!order) throw new Error('節點圖有環路，無法執行');
@@ -191,6 +207,8 @@ export async function executeGraph(
 
   for (const node of order) {
     try {
+      throwIfAborted(options.signal);
+
       if (node.kind === 'input') {
         const src = typeof node.data.src === 'string' ? node.data.src : '';
         emitResult(node.id, src);
@@ -212,6 +230,7 @@ export async function executeGraph(
         }
 
         status(node.id, 'running');
+        throwIfAborted(options.signal);
         let result: string;
         switch (node.kind) {
           case 'removeBg': {
@@ -244,10 +263,15 @@ export async function executeGraph(
             result = input;
             break;
         }
+        throwIfAborted(options.signal);
         emitResult(node.id, result);
         status(node.id, 'done');
       }
     } catch (err: any) {
+      if (err instanceof GraphExecutionAbortError) {
+        status(node.id, 'idle');
+        break;
+      }
       const message = err?.message || '執行失敗';
       unavailableNodeIds.add(node.id);
       errors.push({ id: node.id, message });

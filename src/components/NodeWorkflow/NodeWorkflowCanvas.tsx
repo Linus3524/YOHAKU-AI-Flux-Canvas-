@@ -174,6 +174,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   const setNodeStatus = useNodeGraphStore(state => state.setNodeStatus);
   const setNodeResult = useNodeGraphStore(state => state.setNodeResult);
   const resetRuntime = useNodeGraphStore(state => state.resetRuntime);
+  const resetRunningStatuses = useNodeGraphStore(state => state.resetRunningStatuses);
   const [nodes, setNodes, onNodesChange] = useNodesState(
     useNodeGraphStore.getState().nodes.map(toFlowNode),
   );
@@ -222,9 +223,17 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
 
   const [isDraggingNode, setIsDraggingNode] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleRun = useCallback(async () => {
-    if (isRunning) return;
+    if (isRunning) {
+      abortControllerRef.current?.abort();
+      resetRunningStatuses();
+      return;
+    }
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     setIsRunning(true);
     resetRuntime();
 
@@ -246,16 +255,20 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
           setNodeResult(id, src);
         },
         onRunError,
-      });
+      }, { signal: abortController.signal });
       console.log('[handleRun] executeGraph finished. outputSrc exists:', !!outputSrc);
       if (outputSrc) onOutputChange?.(outputSrc);
     } catch (e: any) {
       console.error('[handleRun] executeGraph error:', e);
       onRunError?.(e?.message || '執行失敗');
     } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
+      resetRunningStatuses();
       setIsRunning(false);
     }
-  }, [isRunning, resetRuntime, nodes, edges, engine, setNodes, setEdges, setNodeStatus, setNodeResult, onOutputChange, onRunError]);
+  }, [isRunning, resetRuntime, resetRunningStatuses, nodes, edges, engine, setNodes, setEdges, setNodeStatus, setNodeResult, onOutputChange, onRunError]);
 
   // 把本地編輯結果鏡像回 store，讓關閉時 exportGraph() 拿到最新拓撲（存回 NodeGroupElement）。
   useEffect(() => {
@@ -415,10 +428,9 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
             <button
               type="button"
               onClick={handleRun}
-              disabled={isRunning}
-              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 disabled:opacity-50 transition-colors border-l border-black/12"
+              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors border-l border-black/12"
             >
-              {isRunning ? '執行中…' : '▶ 執行'}
+              {isRunning ? '■ 停止' : '▶ 執行'}
             </button>
           </div>
         </Panel>

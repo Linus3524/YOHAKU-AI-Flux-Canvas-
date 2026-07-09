@@ -18,6 +18,7 @@ interface NodeGraphState {
   removeNode: (id: string) => void;
   setNodeStatus: (id: string, status: NodeRunStatus) => void;
   setNodeResult: (id: string, src: string) => void;
+  resetRunningStatuses: () => void;
   resetRuntime: () => void;
   exportGraph: () => NodeGraphData;
 }
@@ -65,6 +66,11 @@ export const useNodeGraphStore = create<NodeGraphState>((set, get) => ({
   })),
   setNodeResult: (id, src) => set(state => ({
     nodeResults: { ...state.nodeResults, [id]: src },
+  })),
+  resetRunningStatuses: () => set(state => ({
+    nodeStatus: Object.fromEntries(
+      Object.entries(state.nodeStatus).map(([id, status]) => [id, status === 'running' ? 'idle' : status]),
+    ),
   })),
   resetRuntime: () => set({ nodeStatus: {}, nodeResults: {} }),
   exportGraph: () => {
