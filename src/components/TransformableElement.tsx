@@ -6,6 +6,7 @@ import type { CanvasElement, Point, ArrowElement, NoteElement, TextElement, Shap
 import { wrapTextCanvas, getArrowHeadPath, isCJK, measureTextVisualBounds, getTextBoxPadding, consumeTextAutoEdit } from '../utils/helpers';
 import { getLayerColor } from './LayerPanel';
 import { generateSimpleMaskCSS } from '../utils/maskHelpers';
+import { isImageSrc } from './NodeWorkflow/mediaSrc';
 import { isGradient, parseLinearGradient, gradientAngleToSVG } from '../utils/gradientUtils'; // ✅ 修改 A (import)
 
 interface TransformableElementProps {
@@ -1566,8 +1567,12 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                         const edgeCount = el.graph.edges.length;
                         return (
                             <div style={style} className="rounded-2xl border border-indigo-200 bg-white/90 shadow-[0_12px_36px_rgba(79,70,229,0.16)] overflow-hidden flex flex-col">
-                                {el.outputSrc ? (
+                                {isImageSrc(el.outputSrc) ? (
                                     <img src={el.outputSrc} alt="Node workflow output" className="w-full h-full object-cover pointer-events-none" draggable={false} />
+                                ) : el.outputSrc ? (
+                                    <div className="w-full h-full overflow-hidden bg-[#FEFCE8] px-4 py-3 text-[13px] leading-relaxed text-[#1D1D1F] whitespace-pre-wrap pointer-events-none">
+                                        {el.outputSrc}
+                                    </div>
                                 ) : (
                                     <div className="w-full h-full flex flex-col items-center justify-center text-center px-5 bg-gradient-to-br from-white via-indigo-50/70 to-sky-50/70">
                                         <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-3">

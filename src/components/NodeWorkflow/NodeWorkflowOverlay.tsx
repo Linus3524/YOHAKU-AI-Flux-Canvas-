@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect } from 'react';
 import type { NodeGroupElement } from '../../types';
 import type { NodeGraphData } from './types';
+import type { ExecutorEngine } from './executor/nodeGraphExecutor';
 import { useNodeGraphStore } from '../../store/nodeGraphStore';
 import { NodeWorkflowCanvas } from './NodeWorkflowCanvas';
 import { Icon } from '../Icon';
@@ -8,9 +9,17 @@ import { Icon } from '../Icon';
 interface NodeWorkflowOverlayProps {
   element: NodeGroupElement;
   onClose: (graph: NodeGraphData) => void;
+  /** 把帶圖節點拖到底部拖出區時觸發：新增為大畫布獨立圖片。 */
+  onDetachImage?: (src: string, name?: string) => void;
+  /** 執行引擎所需的 API key / model 設定。 */
+  engine?: ExecutorEngine;
+  /** 執行完成，最終輸出圖 → 寫回 NodeGroupElement.outputSrc。 */
+  onOutputChange?: (src: string) => void;
+  /** 執行失敗提示。 */
+  onRunError?: (message: string) => void;
 }
 
-export function NodeWorkflowOverlay({ element, onClose }: NodeWorkflowOverlayProps) {
+export function NodeWorkflowOverlay({ element, onClose, onDetachImage, engine, onOutputChange, onRunError }: NodeWorkflowOverlayProps) {
   const [isGraphReady, setIsGraphReady] = React.useState(false);
   const loadGraph = useNodeGraphStore(state => state.loadGraph);
   const exportGraph = useNodeGraphStore(state => state.exportGraph);
@@ -42,7 +51,14 @@ export function NodeWorkflowOverlay({ element, onClose }: NodeWorkflowOverlayPro
         </button>
       </header>
       <div className="flex-1 min-h-0 relative">
-        {isGraphReady && <NodeWorkflowCanvas />}
+        {isGraphReady && (
+          <NodeWorkflowCanvas
+            onDetachImage={onDetachImage}
+            engine={engine}
+            onOutputChange={onOutputChange}
+            onRunError={onRunError}
+          />
+        )}
       </div>
     </div>
   );

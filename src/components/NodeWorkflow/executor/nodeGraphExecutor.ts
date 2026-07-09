@@ -1,0 +1,170 @@
+// 節點圖執行引擎（純 TS，不碰 React）。
+// #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
+// 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
+import type { GraphNode, NodeGraphData, NodeRunStatus, ImageGenParams } from '../types';
+import { runLocalRmbgPipeline } from '../../../ai/pipelines/localModels';
+import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
+import type { AtlasGenerationModel } from '../../../utils/atlasImage';
+import { isImageSrc } from '../mediaSrc';
+
+const ATLAS_MODELS = ['seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
+
+/** imageGen 節點：便利貼文字→提示詞、上游圖→參考圖，呼叫既有生圖 pipeline（Gemini / Atlas）。 */
+async function runImageGen(
+  params: Partial<ImageGenParams>,
+  upstream: string | undefined,
+  engine: ExecutorEngine,
+): Promise<string> {
+  const upstreamIsImage = isImageSrc(upstream);
+  const prompt = (upstreamIsImage ? params.prompt : (upstream || params.prompt) )?.trim() || '';
+  if (!prompt) throw new Error('生圖節點需要提示詞（便利貼文字或節點輸入框）');
+  const refImage = upstreamIsImage ? upstream : undefined;
+  const aspectRatio = params.aspectRatio || '1:1';
+  const model = params.model || 'gemini';
+
+  if (ATLAS_MODELS.includes(model)) {
+    if (!engine.atlasApiKey) throw new Error('此模型需要 Atlas API Key');
+    const out = await atlasBatch(
+      { prompt, ratio: aspectRatio, count: 1, refImage },
+      { model: model as AtlasGenerationModel, apiKey: engine.atlasApiKey },
+    );
+    if (!out[0]) throw new Error('生圖沒有回傳圖片');
+    return out[0];
+  }
+
+  // Gemini 路徑
+  if (!engine.geminiApiKey) throw new Error('生圖需要 Gemini API Key');
+  const parts: any[] = [];
+  if (refImage) {
+    const [header, data] = refImage.split(',');
+    const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+    parts.push({ inlineData: { data, mimeType } });
+  }
+  parts.push({ text: prompt });
+  const src = await geminiGenerateImage(
+    { parts, aspectRatio, imageSize: '1K' },
+    { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image-preview' },
+  );
+  if (!src) throw new Error('生圖沒有回傳圖片');
+  return src;
+}
+
+export interface ExecutorEngine {
+  geminiApiKey?: string | null;
+  atlasApiKey?: string | null;
+  geminiImageModel?: string;
+}
+
+export interface ExecutorCallbacks {
+  onNodeStatus?: (id: string, status: NodeRunStatus, message?: string) => void;
+  /** 節點跑出結果時回報（每個動作節點自己顯示結果縮圖用）。 */
+  onNodeResult?: (id: string, src: string) => void;
+}
+
+export interface ExecuteResult {
+  outputSrc: string | null;
+  results: Map<string, string>;
+}
+
+/** Kahn 拓撲排序；有環路回傳 null。 */
+function topoSort(graph: NodeGraphData): GraphNode[] | null {
+  const indeg = new Map<string, number>();
+  const byId = new Map<string, GraphNode>();
+  for (const n of graph.nodes) { indeg.set(n.id, 0); byId.set(n.id, n); }
+  for (const e of graph.edges) {
+    if (indeg.has(e.target)) indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
+  }
+  const queue = graph.nodes.filter(n => (indeg.get(n.id) ?? 0) === 0).map(n => n.id);
+  const order: GraphNode[] = [];
+  while (queue.length) {
+    const id = queue.shift()!;
+    const node = byId.get(id);
+    if (node) order.push(node);
+    for (const e of graph.edges) {
+      if (e.source !== id) continue;
+      const d = (indeg.get(e.target) ?? 0) - 1;
+      indeg.set(e.target, d);
+      if (d === 0) queue.push(e.target);
+    }
+  }
+  return order.length === graph.nodes.length ? order : null;
+}
+
+/** 找某節點的上游輸入圖（線性鏈：取第一條指向它的 edge 的來源結果）。 */
+function upstreamSrc(nodeId: string, graph: NodeGraphData, results: Map<string, string>): string | undefined {
+  const edge = graph.edges.find(e => e.target === nodeId);
+  return edge ? results.get(edge.source) : undefined;
+}
+
+/** 終端節點 = 沒有任何 edge 以它為 source（鏈的末端）。 */
+function terminalNodeIds(graph: NodeGraphData): Set<string> {
+  const hasOutgoing = new Set(graph.edges.map(e => e.source));
+  return new Set(graph.nodes.filter(n => !hasOutgoing.has(n.id)).map(n => n.id));
+}
+
+/**
+ * 執行整張圖。沒有預放的 output 節點：最終輸出 = 鏈末端（終端節點）的結果。
+ * 每個節點跑出結果都透過 onNodeResult 回報，讓該節點自己顯示結果縮圖。
+ * 階段 A 只接 removeBg（本機）；imageGen / style 先原樣傳遞，等階段 B。
+ */
+export async function executeGraph(
+  graph: NodeGraphData,
+  engine: ExecutorEngine,
+  callbacks: ExecutorCallbacks = {},
+): Promise<ExecuteResult> {
+  const order = topoSort(graph);
+  if (!order) throw new Error('節點圖有環路，無法執行');
+
+  const results = new Map<string, string>();
+  const status = (id: string, s: NodeRunStatus, msg?: string) => callbacks.onNodeStatus?.(id, s, msg);
+  const emitResult = (id: string, src: string) => { results.set(id, src); callbacks.onNodeResult?.(id, src); };
+  const terminals = terminalNodeIds(graph);
+
+  let outputSrc: string | null = null;
+
+  for (const node of order) {
+    try {
+      if (node.kind === 'input') {
+        const src = typeof node.data.src === 'string' ? node.data.src : '';
+        emitResult(node.id, src);
+        status(node.id, 'done');
+      } else {
+        const input = upstreamSrc(node.id, graph, results);
+        if (!input) { status(node.id, 'idle', '無上游輸入'); continue; }
+
+        status(node.id, 'running');
+        let result: string;
+        switch (node.kind) {
+          case 'removeBg':
+            // 本機去背（免 key）。cloud 模式先也走本機，雲端去背待補。
+            result = await runLocalRmbgPipeline(input);
+            break;
+          case 'imageGen':
+            result = await runImageGen(
+              (node.data.params ?? {}) as Partial<ImageGenParams>,
+              input,
+              engine,
+            );
+            break;
+          // style 待接 styleTransfer；先原樣傳遞，不中斷整條鏈。
+          default:
+            result = input;
+            break;
+        }
+        emitResult(node.id, result);
+        status(node.id, 'done');
+      }
+
+      // 鏈末端節點的結果 = 整條鏈的最終輸出（回貼大畫布方框）
+      if (terminals.has(node.id)) {
+        const r = results.get(node.id);
+        if (r) outputSrc = r;
+      }
+    } catch (err: any) {
+      status(node.id, 'error', err?.message || '執行失敗');
+      throw err;
+    }
+  }
+
+  return { outputSrc, results };
+}

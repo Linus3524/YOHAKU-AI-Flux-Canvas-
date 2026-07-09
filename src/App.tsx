@@ -578,6 +578,35 @@ const App: React.FC = () => {
     setActiveNodeGroupId(null);
   }, [activeNodeGroupId, setElements]);
 
+  // 執行引擎輸出：把節點鏈最終圖寫回大畫布方框（NodeGroupElement.outputSrc），並持久化
+  const handleNodeWorkflowOutput = useCallback((src: string) => {
+    if (!activeNodeGroupId) return;
+    setElements(prev => prev.map(el =>
+      el.id === activeNodeGroupId && el.type === 'node_group'
+        ? { ...el, outputSrc: src }
+        : el
+    ));
+  }, [activeNodeGroupId, setElements]);
+
+  // 拖曳離鏈：把子空間裡帶圖的節點移出為大畫布獨立圖片（落點簡化為畫布中央）
+  const handleDetachNodeImage = useCallback((src: string, name?: string) => {
+    if (!src) return;
+    const center = getCenterOfViewport();
+    const img = new Image();
+    img.onload = () => {
+      const maxSide = 360;
+      const scale = Math.min(1, maxSide / Math.max(img.naturalWidth || maxSide, img.naturalHeight || maxSide));
+      const w = Math.round((img.naturalWidth || maxSide) * scale) || maxSide;
+      const h = Math.round((img.naturalHeight || maxSide) * scale) || maxSide;
+      addElement({ type: 'image', position: center, width: w, height: h, rotation: 0, src });
+    };
+    img.onerror = () => {
+      addElement({ type: 'image', position: center, width: 300, height: 300, rotation: 0, src });
+    };
+    img.src = src;
+    showToast(`已將「${name || '節點圖片'}」移出到畫布`);
+  }, [addElement, getCenterOfViewport, showToast]);
+
   const handleInteractionEnd = useCallback(() => {
     // 歷史已在手勢首幀新增（保住手勢前狀態），這裡只需清除首幀標記，不再 commit 重複
     endTransform();
@@ -602,23 +631,18 @@ const App: React.FC = () => {
 
     const sourceValue = source.type === 'image' ? source.src : source.content;
     const now = Date.now();
+    // 只放來源節點；使用者接一串動作節點，執行後每個動作節點自己長出結果，鏈末端 = 最終輸出。
     const graph: NodeGraphData = {
       nodes: [
         {
           id: `input-${now}`,
           kind: 'input',
-          position: { x: 80, y: 120 },
+          position: { x: 120, y: 160 },
           data: {
             label: source.type === 'image' ? 'Input Image' : 'Input Note',
             src: sourceValue,
             params: { seedElementId: source.id, sourceType: source.type },
           },
-        },
-        {
-          id: `output-${now}`,
-          kind: 'output',
-          position: { x: 420, y: 120 },
-          data: { label: 'Output' },
         },
       ],
       edges: [],
@@ -1621,6 +1645,10 @@ const App: React.FC = () => {
         <NodeWorkflowOverlay
           element={activeNodeGroup}
           onClose={handleCloseNodeWorkflow}
+          onDetachImage={handleDetachNodeImage}
+          engine={{ geminiApiKey: effectiveApiKey, atlasApiKey, geminiImageModel: imageModel }}
+          onOutputChange={handleNodeWorkflowOutput}
+          onRunError={(msg) => showToast(`❌ ${msg}`)}
         />
       )}
 
