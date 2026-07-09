@@ -139,6 +139,10 @@ export interface NodeGroupElement extends BaseElement {
   graph: NodeGraphData;
   outputSrc?: string;
   seedElementId?: string;
+  sourceType: 'image' | 'note';
+  src?: string;       // 原始圖片的 base64 / URL
+  content?: string;   // 原始便利貼的文字
+  color?: string;     // 原始便利貼的顏色
 }
 
 export type CanvasElement = NoteElement | ImageElement | ArrowElement | DrawingElement | FrameElement | TextElement | ShapeElement | ArtboardElement | NodeGroupElement;

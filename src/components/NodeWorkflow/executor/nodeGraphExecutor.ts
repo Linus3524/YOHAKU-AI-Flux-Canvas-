@@ -2,7 +2,7 @@
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
 import type { GraphNode, NodeGraphData, NodeRunStatus, ImageGenParams } from '../types';
-import { runLocalRmbgPipeline } from '../../../ai/pipelines/localModels';
+import { runLocalRmbgPipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { isImageSrc } from '../mediaSrc';
@@ -135,16 +135,24 @@ export async function executeGraph(
         status(node.id, 'running');
         let result: string;
         switch (node.kind) {
-          case 'removeBg':
-            // 本機去背（免 key）。cloud 模式先也走本機，雲端去背待補。
+          case 'removeBg': {
+            // 先檢查本機模型是否已下載
+            const notReady = await checkLocalModelReady('bria_rmbg');
+            if (notReady) throw new Error(notReady);
+            // 本機去背（免 key）
             result = await runLocalRmbgPipeline(input);
             break;
+          }
           case 'imageGen':
             result = await runImageGen(
               (node.data.params ?? {}) as Partial<ImageGenParams>,
               input,
               engine,
             );
+            break;
+          case 'output':
+            // 輸出節點：直接傳遞上游輸入，並作為最終結果展示
+            result = input;
             break;
           // style 待接 styleTransfer；先原樣傳遞，不中斷整條鏈。
           default:
@@ -154,15 +162,33 @@ export async function executeGraph(
         emitResult(node.id, result);
         status(node.id, 'done');
       }
-
-      // 鏈末端節點的結果 = 整條鏈的最終輸出（回貼大畫布方框）
-      if (terminals.has(node.id)) {
-        const r = results.get(node.id);
-        if (r) outputSrc = r;
-      }
     } catch (err: any) {
       status(node.id, 'error', err?.message || '執行失敗');
       throw err;
+    }
+  }
+
+  // 決定最終輸出結果：
+  // 1. 優先尋找圖中類型為 'output' 且有值的節點結果
+  const outputNodes = order.filter(n => n.kind === 'output');
+  if (outputNodes.length > 0) {
+    for (const n of outputNodes) {
+      const r = results.get(n.id);
+      if (r) {
+        outputSrc = r;
+        break;
+      }
+    }
+  }
+
+  // 2. 如果沒有 output 節點，才 fallback 使用末端終端節點的結果
+  if (!outputSrc) {
+    for (const nodeId of terminals) {
+      const r = results.get(nodeId);
+      if (r) {
+        outputSrc = r;
+        break;
+      }
     }
   }
 

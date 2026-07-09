@@ -2,8 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   addEdge,
   Background,
-  Controls,
-  MiniMap,
   Panel,
   ReactFlow,
   useEdgesState,
@@ -20,11 +18,13 @@ import { InputNode } from './nodes/InputNode';
 import { RemoveBgNode } from './nodes/RemoveBgNode';
 import { ImageGenNode } from './nodes/ImageGenNode';
 import { StyleNode } from './nodes/StyleNode';
+import { OutputNode } from './nodes/OutputNode';
 import { executeGraph, type ExecutorEngine } from './executor/nodeGraphExecutor';
 import type { GraphEdge, GraphNode, NodeKind } from './types';
 
 const nodeTypes = {
   input: InputNode,
+  output: OutputNode,
   removeBg: RemoveBgNode,
   imageGen: ImageGenNode,
   style: StyleNode,
@@ -32,6 +32,7 @@ const nodeTypes = {
 
 const DEFAULT_LABEL: Record<NodeKind, string> = {
   input: 'Input',
+  output: 'Output',
   removeBg: '去背',
   imageGen: '生成圖片',
   style: '風格轉換',
@@ -98,13 +99,15 @@ const ADDABLE: { kind: NodeKind; label: string }[] = [
   { kind: 'removeBg', label: '＋ 去背' },
   { kind: 'imageGen', label: '＋ 生圖' },
   { kind: 'style', label: '＋ 風格' },
+  { kind: 'output', label: '＋ 輸出' },
 ];
 
 export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRunError }: NodeWorkflowCanvasProps) {
   // 進子空間前 Overlay 已 loadGraph，這裡讀一次當初始值。
   // 之後由 React Flow 自己管理 nodes/edges（保留量測到的 measured 尺寸，
   // 否則每次從 store 重建會洗掉 measured → 節點永遠 visibility:hidden 不顯示）。
-  const replaceGraph = useNodeGraphStore(state => state.loadGraph);
+  // syncGraph 只更新拓撲，不清 nodeResults/nodeStatus（loadGraph 會清空執行結果）
+  const replaceGraph = useNodeGraphStore(state => state.syncGraph);
   const setNodeStatus = useNodeGraphStore(state => state.setNodeStatus);
   const setNodeResult = useNodeGraphStore(state => state.setNodeResult);
   const resetRuntime = useNodeGraphStore(state => state.resetRuntime);
@@ -194,28 +197,61 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
         onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
         fitView
+        fitViewOptions={{ padding: 0.28 }}
+        maxZoom={1}
+        proOptions={{ hideAttribution: true }}
+        className="node-workflow-flow bg-[#f8fafc]"
       >
-        <Background />
-        <MiniMap pannable zoomable />
-        <Controls />
+        <style>{`
+          .node-workflow-flow .react-flow__node {
+            border-radius: 0px;
+          }
+          /* Input / Output 節點：去除 React Flow 預設的背景/邊框/陰影/內距，讓圖片直接是節點 */
+          .node-workflow-flow .react-flow__node-input,
+          .node-workflow-flow .react-flow__node-output {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            width: auto !important;
+          }
+          .node-workflow-flow .react-flow__node.selected,
+          .node-workflow-flow .react-flow__node:focus,
+          .node-workflow-flow .react-flow__node:focus-visible {
+            outline: 1.5px solid #111827 !important;
+            outline-offset: 1px;
+            box-shadow: none !important;
+          }
+          /* Input / Output 選取時維持同樣的外聚焦框 */
+          .node-workflow-flow .react-flow__node-input.selected,
+          .node-workflow-flow .react-flow__node-input:focus,
+          .node-workflow-flow .react-flow__node-input:focus-visible,
+          .node-workflow-flow .react-flow__node-output.selected,
+          .node-workflow-flow .react-flow__node-output:focus,
+          .node-workflow-flow .react-flow__node-output:focus-visible {
+            outline: 1.5px solid #111827 !important;
+            outline-offset: 1px;
+            box-shadow: none !important;
+          }
+        `}</style>
+        <Background color="#cbd5e1" gap={28} size={1.2} />
         <Panel position="top-left">
-          <div className="flex items-center gap-1.5 rounded-xl border border-black/10 bg-white/90 backdrop-blur-xl p-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.08)]">
+          <div className="flex items-center gap-px border border-black/12 bg-white shadow-sm">
             {ADDABLE.map(({ kind, label }) => (
               <button
                 key={kind}
                 type="button"
                 onClick={() => addNode(kind)}
-                className="rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-[#1D1D1F] hover:bg-black/5 transition-colors"
+                className="px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors border-r border-black/6 last:border-r-0"
               >
                 {label}
               </button>
             ))}
-            <div className="w-px self-stretch bg-black/10 mx-0.5" />
             <button
               type="button"
               onClick={handleRun}
               disabled={isRunning}
-              className="rounded-lg bg-[#007AFF] px-3 py-1.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 disabled:opacity-50 transition-colors"
             >
               {isRunning ? '執行中…' : '▶ 執行'}
             </button>

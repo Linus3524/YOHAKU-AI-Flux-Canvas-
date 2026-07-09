@@ -569,24 +569,73 @@ const App: React.FC = () => {
 
   const handleCloseNodeWorkflow = useCallback((graph: NodeGraphData) => {
     if (activeNodeGroupId) {
-      setElements(prev => prev.map(el =>
-        el.id === activeNodeGroupId && el.type === 'node_group'
-          ? { ...el, graph }
-          : el
-      ));
+      setElements(prev => prev.map(el => {
+        if (el.id === activeNodeGroupId && el.type === 'node_group') {
+          const nodeGroup = el as any;
+          const isNote = nodeGroup.sourceType === 'note';
+          const inputNode = graph.nodes.find(n => n.kind === 'input');
+          const updatedContent = isNote && inputNode && typeof inputNode.data.src === 'string' ? inputNode.data.src : nodeGroup.content;
+          return {
+            ...el,
+            graph,
+            content: updatedContent,
+          };
+        }
+        return el;
+      }));
     }
     setActiveNodeGroupId(null);
   }, [activeNodeGroupId, setElements]);
 
-  // 執行引擎輸出：把節點鏈最終圖寫回大畫布方框（NodeGroupElement.outputSrc），並持久化
+  // 執行引擎輸出：把節點鏈最終圖寫回大畫布方框，並動態自適應重設元素高度（防止上下透明留白）
   const handleNodeWorkflowOutput = useCallback((src: string) => {
     if (!activeNodeGroupId) return;
-    setElements(prev => prev.map(el =>
-      el.id === activeNodeGroupId && el.type === 'node_group'
-        ? { ...el, outputSrc: src }
-        : el
-    ));
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || 300;
+      const h = img.naturalHeight || 300;
+      const ratio = w / h;
+      setElements(prev => prev.map(el => {
+        if (el.id === activeNodeGroupId && el.type === 'node_group') {
+          const nextHeight = Math.round(el.width / ratio);
+          return {
+            ...el,
+            outputSrc: src,
+            height: nextHeight,
+          };
+        }
+        return el;
+      }));
+    };
+    img.src = src;
   }, [activeNodeGroupId, setElements]);
+
+  const handleImportNodeWorkflowOutput = useCallback(() => {
+    const group = activeNodeGroup;
+    const outputSrc = group?.outputSrc;
+    if (!group || !outputSrc) {
+      showToast('這個節點工作流目前還沒有輸出圖片');
+      return;
+    }
+
+    const position = { x: group.position.x + group.width + 56, y: group.position.y };
+    const img = new Image();
+    img.onload = () => {
+      const maxSide = 420;
+      const scale = Math.min(1, maxSide / Math.max(img.naturalWidth || maxSide, img.naturalHeight || maxSide));
+      const width = Math.round((img.naturalWidth || maxSide) * scale) || maxSide;
+      const height = Math.round((img.naturalHeight || maxSide) * scale) || maxSide;
+      const id = addElement({ type: 'image', position, width, height, rotation: 0, src: outputSrc });
+      setSelectedElementIds([id]);
+    };
+    img.onerror = () => {
+      const id = addElement({ type: 'image', position, width: 320, height: 320, rotation: 0, src: outputSrc });
+      setSelectedElementIds([id]);
+    };
+    img.src = outputSrc;
+    setActiveNodeGroupId(null);
+    showToast('已將節點輸出匯入畫布');
+  }, [activeNodeGroup, addElement, setSelectedElementIds, showToast]);
 
   // 拖曳離鏈：把子空間裡帶圖的節點移出為大畫布獨立圖片（落點簡化為畫布中央）
   const handleDetachNodeImage = useCallback((src: string, name?: string) => {
@@ -631,7 +680,6 @@ const App: React.FC = () => {
 
     const sourceValue = source.type === 'image' ? source.src : source.content;
     const now = Date.now();
-    // 只放來源節點；使用者接一串動作節點，執行後每個動作節點自己長出結果，鏈末端 = 最終輸出。
     const graph: NodeGraphData = {
       nodes: [
         {
@@ -648,18 +696,24 @@ const App: React.FC = () => {
       edges: [],
     };
 
-    const nodeGroupId = addElement({
-      type: 'node_group',
-      position: { x: source.position.x + source.width + 48, y: source.position.y },
-      width: 360,
-      height: 220,
-      rotation: 0,
-      graph,
-      seedElementId: source.id,
-    });
-    setSelectedElementIds([nodeGroupId]);
-    showToast('已建立節點工作流');
-  }, [addElement, elements, setSelectedElementIds, showToast]);
+    setElements(prev => prev.map(el => {
+      if (el.id === elementId) {
+        return {
+          ...el,
+          type: 'node_group',
+          graph,
+          seedElementId: el.id,
+          sourceType: source.type,
+          src: source.type === 'image' ? (source as any).src : undefined,
+          content: source.type === 'note' ? (source as any).content : undefined,
+          color: source.type === 'note' ? (source as any).color : undefined,
+        } as any;
+      }
+      return el;
+    }));
+
+    showToast('已將元素轉換為節點工作流，點擊兩下進入子空間');
+  }, [elements, setElements, showToast]);
 
   const handleEditDrawing = useCallback((elementId: string) => {
     const el = elements.find(e => e.id === elementId);
@@ -1645,6 +1699,7 @@ const App: React.FC = () => {
         <NodeWorkflowOverlay
           element={activeNodeGroup}
           onClose={handleCloseNodeWorkflow}
+          onImportOutput={handleImportNodeWorkflowOutput}
           onDetachImage={handleDetachNodeImage}
           engine={{ geminiApiKey: effectiveApiKey, atlasApiKey, geminiImageModel: imageModel }}
           onOutputChange={handleNodeWorkflowOutput}

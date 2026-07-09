@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useDisplaySrc } from '../utils/displayThumb';
-import type { CanvasElement, Point, ArrowElement, NoteElement, TextElement, ShapeElement } from '../types';
+import type { CanvasElement, Point, ArrowElement, NoteElement, TextElement, ShapeElement, NodeGroupElement } from '../types';
 import { wrapTextCanvas, getArrowHeadPath, isCJK, measureTextVisualBounds, getTextBoxPadding, consumeTextAutoEdit } from '../utils/helpers';
 import { getLayerColor } from './LayerPanel';
 import { generateSimpleMaskCSS } from '../utils/maskHelpers';
@@ -1563,37 +1563,53 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                         );
                     }
                     case 'node_group': {
-                        const nodeCount = el.graph.nodes.length;
-                        const edgeCount = el.graph.edges.length;
+                        const nodeGroup = el as NodeGroupElement;
+                        const isImageOutput = isImageSrc(nodeGroup.outputSrc);
+                        
+                        let displayContent: React.ReactNode = null;
+                        
+                        if (isImageOutput) {
+                            displayContent = (
+                                <img src={nodeGroup.outputSrc} alt="Workflow output" className="w-full h-full object-contain pointer-events-none" draggable={false} />
+                            );
+                        } else if (nodeGroup.outputSrc) {
+                            displayContent = (
+                                <div className="w-full h-full overflow-hidden bg-[#FEFCE8] px-4 py-3 text-[13px] leading-relaxed text-[#1D1D1F] whitespace-pre-wrap pointer-events-none border border-black/8">
+                                    {nodeGroup.outputSrc}
+                                </div>
+                            );
+                        } else {
+                            if (nodeGroup.sourceType === 'image' && nodeGroup.src) {
+                                displayContent = (
+                                    <img src={nodeGroup.src} alt="Workflow source" className="w-full h-full object-contain pointer-events-none" draggable={false} />
+                                );
+                            } else {
+                                const noteBgColor = nodeGroup.color || '#FEFCE8';
+                                displayContent = (
+                                    <div 
+                                        className="w-full h-full p-4 overflow-hidden border border-black/8 text-left whitespace-pre-wrap"
+                                        style={{ backgroundColor: noteBgColor, color: '#1C1C1E', fontSize: 14, fontFamily: 'inherit' }}
+                                    >
+                                        {nodeGroup.content || ''}
+                                    </div>
+                                );
+                            }
+                        }
+
+                        const glowStyle = {
+                            boxShadow: '0 0 15px rgba(99, 102, 241, 0.35)',
+                            transition: 'box-shadow 0.2s ease-in-out',
+                        };
+
                         return (
-                            <div style={style} className="rounded-2xl border border-indigo-200 bg-white/90 shadow-[0_12px_36px_rgba(79,70,229,0.16)] overflow-hidden flex flex-col">
-                                {isImageSrc(el.outputSrc) ? (
-                                    <img src={el.outputSrc} alt="Node workflow output" className="w-full h-full object-cover pointer-events-none" draggable={false} />
-                                ) : el.outputSrc ? (
-                                    <div className="w-full h-full overflow-hidden bg-[#FEFCE8] px-4 py-3 text-[13px] leading-relaxed text-[#1D1D1F] whitespace-pre-wrap pointer-events-none">
-                                        {el.outputSrc}
-                                    </div>
-                                ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center text-center px-5 bg-gradient-to-br from-white via-indigo-50/70 to-sky-50/70">
-                                        <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-3">
-                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M6 6h.01"/>
-                                                <path d="M18 18h.01"/>
-                                                <path d="M18 6h.01"/>
-                                                <path d="M6 18h.01"/>
-                                                <path d="M8 6h8"/>
-                                                <path d="M8 18h8"/>
-                                                <path d="M6 8v8"/>
-                                                <path d="M18 8v8"/>
-                                            </svg>
-                                        </div>
-                                        <div className="text-[22px] font-semibold text-slate-900 leading-tight">節點工作流</div>
-                                        <div className="mt-2 text-[13px] text-slate-500 leading-relaxed">
-                                            {nodeCount} nodes · {edgeCount} edges
-                                        </div>
-                                        <div className="mt-4 text-[12px] text-indigo-600 font-medium">雙擊進入子空間</div>
-                                    </div>
-                                )}
+                            <div 
+                                style={{ ...style, ...glowStyle }} 
+                                className="group/node-group relative overflow-hidden flex flex-col hover:shadow-[0_0_22px_rgba(99,102,241,0.55)]"
+                            >
+                                {displayContent}
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent h-1/3 flex items-end justify-center pb-2 opacity-0 group-hover/node-group:opacity-100 transition-opacity pointer-events-none">
+                                    <span className="text-[10px] font-medium text-white/90 uppercase tracking-wider">雙擊進入工作流</span>
+                                </div>
                             </div>
                         );
                     }

@@ -1,4 +1,4 @@
-export type NodeKind = 'input' | 'removeBg' | 'imageGen' | 'style';
+export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style';
 
 /** 各處理節點的參數形狀（存進 GraphNode.data.params；#2 只做設定，執行是 #3） */
 export interface RemoveBgParams {

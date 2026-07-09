@@ -9,6 +9,8 @@ interface NodeGraphState {
   /** 各節點執行後的結果（runtime-only；每個動作節點自己顯示結果縮圖用） */
   nodeResults: Record<string, string>;
   loadGraph: (data: NodeGraphData) => void;
+  /** 同步拓撲（不清 runtime 狀態），給 React Flow → store 鏡像用 */
+  syncGraph: (data: NodeGraphData) => void;
   addNode: (node: GraphNode) => void;
   updateNodePosition: (id: string, position: GraphNode['position']) => void;
   updateNodeData: (id: string, params: Record<string, unknown>) => void;
@@ -30,6 +32,10 @@ export const useNodeGraphStore = create<NodeGraphState>((set, get) => ({
     edges: data.edges.map(edge => ({ ...edge })),
     nodeStatus: {},
     nodeResults: {},
+  }),
+  syncGraph: (data) => set({
+    nodes: data.nodes.map(node => ({ ...node, data: { ...node.data }, position: { ...node.position } })),
+    edges: data.edges.map(edge => ({ ...edge })),
   }),
   addNode: (node) => set(state => ({
     nodes: [...state.nodes, { ...node, data: { ...node.data }, position: { ...node.position } }],

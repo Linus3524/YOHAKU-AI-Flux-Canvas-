@@ -1,39 +1,71 @@
 import React from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import { useNodeStatusRing } from './useNodeStatusRing';
 
 /**
- * Input 節點：承載「進入節點工作流時的來源物件」。
- * 圖片 → 顯示縮圖；便利貼 → 顯示文字內容。
- * 這是節點流的起點,讓使用者看得到自己是從哪個物件開始加工。
+ * Input 節點：只顯示圖片或文字本身。
+ * 圖片：hover 時底部漸層浮現標籤。
+ * 便利貼：上方為拖曳區（Drag Handle），下方為可編輯寫字區。
+ * 寫字區支援 resize（右下角三角拉伸），且具備 `nowheel` 類名使內部滾動與畫布縮放獨立。
  */
 export function InputNode({ id, data }: NodeProps) {
+  const { updateNodeData } = useReactFlow();
   const ring = useNodeStatusRing(id);
   const sourceType = (data?.params as { sourceType?: string } | undefined)?.sourceType;
   const src = typeof data?.src === 'string' ? data.src : '';
   const label = typeof data?.label === 'string' ? data.label : 'Input';
   const isImage = sourceType === 'image';
 
+  if (isImage && src) {
+    return (
+      <div className={`group relative w-[180px] ${ring}`} style={{ background: 'transparent' }}>
+        <Handle type="source" position={Position.Right} />
+        <img
+          src={src}
+          alt={label}
+          className="block w-full object-contain"
+          draggable={false}
+        />
+        {/* hover 漸層標籤 */}
+        <div
+          className="absolute inset-x-0 bottom-0 flex items-end justify-center pb-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
+          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%)', height: '40%' }}
+        >
+          <span className="text-[10px] font-medium text-white/90 tracking-wide uppercase">{label}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 非圖片（便利貼文字）：
+  const noteBgColor = (data?.params as { color?: string } | undefined)?.color || '#FEFCE8';
+  
   return (
-    <div className={`rounded-xl border border-black/10 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.08)] overflow-hidden w-[160px] ${ring}`}>
-      <div className="px-2.5 py-1.5 text-[11px] font-semibold text-gray-500 border-b border-black/5">
-        {label}
-      </div>
-      <div className="p-2">
-        {isImage && src ? (
-          <img
-            src={src}
-            alt={label}
-            className="block w-full h-[110px] object-contain rounded-md bg-[#F5F5F7]"
-            draggable={false}
-          />
-        ) : (
-          <div className="w-full min-h-[80px] max-h-[140px] overflow-hidden rounded-md bg-[#FEFCE8] px-2.5 py-2 text-[11px] leading-relaxed text-[#1D1D1F] whitespace-pre-wrap">
-            {src || '（空白內容）'}
-          </div>
-        )}
-      </div>
+    <div className={`min-w-[180px] overflow-hidden flex flex-col ${ring}`} style={{ backgroundColor: noteBgColor }}>
       <Handle type="source" position={Position.Right} />
+      {/* 頂部拖曳手把 (Drag Handle) */}
+      <div 
+        className="h-[20px] w-full border-b border-black/5 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing select-none shrink-0"
+        style={{ backgroundColor: 'rgba(0,0,0,0.03)' }}
+      >
+        <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">便利貼</span>
+        <div className="flex gap-0.5">
+          <span className="w-1 h-1 rounded-full bg-neutral-300"></span>
+          <span className="w-1 h-1 rounded-full bg-neutral-300"></span>
+          <span className="w-1 h-1 rounded-full bg-neutral-300"></span>
+        </div>
+      </div>
+      {/* 下方寫字區 — 
+          resize: 啟用拉伸 (有右下角斜線三角)
+          nodrag: 防止拖曳文字時位移節點
+          nowheel: 阻斷滾輪事件傳播，避免在框內滾動時觸發畫布縮放
+      */}
+      <textarea
+        value={src}
+        onChange={(e) => updateNodeData(id, { src: e.target.value })}
+        placeholder="輸入便利貼內容…"
+        className="nodrag nowheel block w-full min-w-[180px] min-h-[120px] resize border-none p-2.5 text-[11px] leading-relaxed text-neutral-800 focus:outline-none focus:ring-0 bg-transparent"
+      />
     </div>
   );
 }
