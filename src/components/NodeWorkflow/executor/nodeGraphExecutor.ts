@@ -1,9 +1,9 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams, NodeKind, RemoveBgParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams, NodeKind, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
-import { runLocalRmbgPipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
+import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
 import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
@@ -19,6 +19,7 @@ const STYLE_PRESET_BY_KEY: Record<string, string> = {
   cyberpunk: 'Cyberpunk',
   clay: 'Claymation',
 };
+const UPSCALE_MODEL_KEYS: UpscaleParams['modelKey'][] = ['upscale_photo', 'upscale_anime', 'upscale_art'];
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '執行失敗';
@@ -118,6 +119,20 @@ async function runRemoveBg(
   return await runLocalRmbgPipeline(input);
 }
 
+async function runUpscale(
+  params: Partial<UpscaleParams>,
+  input: string,
+  onProgress?: (message: string) => void,
+): Promise<string> {
+  const modelKey = UPSCALE_MODEL_KEYS.includes(params.modelKey as UpscaleParams['modelKey'])
+    ? params.modelKey as UpscaleParams['modelKey']
+    : 'upscale_photo';
+  const factor = params.factor === 4 ? 4 : 2;
+  const notReady = await checkLocalModelReady(modelKey);
+  if (notReady) throw new Error(notReady);
+  return await runLocalUpscalePipeline(input, modelKey, factor, pct => onProgress?.(`放大中 ${pct}%`));
+}
+
 /** layerSplit 節點：Gemini 語意偵測 + BiRefNet 去背 → 多張圖層（多輸出）。 */
 async function runLayerSplit(
   input: string,
@@ -172,6 +187,11 @@ const nodeRunners: Record<NodeKind, NodeRunner> = {
     typeof node.data.params?.styleKey === 'string' ? node.data.params.styleKey : undefined,
     requireInput(input, '風格轉換'),
     engine,
+  )),
+  upscale: async ({ node, input, onProgress }) => singleResult(await runUpscale(
+    (node.data.params ?? {}) as Partial<UpscaleParams>,
+    requireInput(input, '放大'),
+    onProgress,
   )),
   layerSplit: async ({ input, engine, onProgress }) => batchResult(await runLayerSplit(
     requireInput(input, '圖層分離'),

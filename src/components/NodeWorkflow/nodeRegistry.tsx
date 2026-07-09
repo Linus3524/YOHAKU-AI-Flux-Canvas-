@@ -6,6 +6,7 @@ import { OutputNode } from './nodes/OutputNode';
 import { RemoveBgNode } from './nodes/RemoveBgNode';
 import { ImageGenNode } from './nodes/ImageGenNode';
 import { StyleNode } from './nodes/StyleNode';
+import { UpscaleNode } from './nodes/UpscaleNode';
 import { LayerSplitNode } from './nodes/LayerSplitNode';
 
 export type NodeIoType = 'none' | 'image' | 'text' | 'imageOrText' | 'imageBatch';
@@ -72,6 +73,17 @@ export const NODE_REGISTRY = {
     component: StyleNode,
     label: '風格轉換',
     addLabel: '＋ 風格',
+    addable: true,
+    category: 'process',
+    needsUpstream: true,
+    input: 'image',
+    output: 'image',
+  },
+  upscale: {
+    kind: 'upscale',
+    component: UpscaleNode,
+    label: '放大',
+    addLabel: '＋ 放大',
     addable: true,
     category: 'process',
     needsUpstream: true,
