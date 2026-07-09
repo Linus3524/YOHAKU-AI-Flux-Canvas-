@@ -18,18 +18,27 @@ import { callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, download
 import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
 import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
 import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
-import { generateStyledImage } from '../ai/pipelines/styleTransfer';
-import { analyzeImageStyleFull, analyzeProductStyleAnchor, analyzeBaseImageForCompositing } from '../ai/pipelines/analysis';
+import {
+    analyzeCopiedStyle,
+    buildCopiedStylePrompt,
+    buildPresetStylePrompt,
+    generateCopiedStyleAssets,
+    generatePresetStyleAssets,
+    generateStyledImage,
+} from '../ai/pipelines/styleTransfer';
+import { analyzeBaseImageForCompositing } from '../ai/pipelines/analysis';
 import { atlasBatch, geminiGenerateImage } from '../ai/pipelines/generate';
 import { checkLocalModelReady, runLocalUpscalePipeline, runLocalRmbgPipeline } from '../ai/pipelines/localModels';
 import { askAI } from '../ai/pipelines/chat';
 import { generateOutpaintingPrompt } from '../ai/pipelines/outpainting';
 import { type OnnxModelKey } from '../utils/onnxModelCache';
 import { cacheImage } from '../utils/imageCache';
-import { crossPlatformSpec, buildCrossPlatformPrompt, type CrossPlatformSpec } from '../skills/crossPlatform';
-import { LogoSkillConfig, LOGO_BRAND_OUTPUTS, LogoBrandOutputSpec, buildLogoPrompt, buildLogoBrandPrompt } from '../skills/logo';
-import { PRODUCT_MARKETING_PLATFORMS, buildProductMarketingPrompt, type ProductMarketingBrief, type ProductMarketingOutputSpec } from '../skills/marketing';
+import { LogoSkillConfig } from '../skills/logo';
+import { type ProductMarketingBrief } from '../skills/marketing';
 import { applyPoissonBlend } from '../utils/poissonBlend';
+import { runExtendBrandKitPipeline, runLogoBrandKitPipeline } from '../ai/pipelines/brandKit';
+import { runProductMarketingPipeline } from '../ai/pipelines/productMarketing';
+import { runCrossPlatformPipeline } from '../ai/pipelines/crossPlatform';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -164,8 +173,8 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
         showToast("正在全面分析圖片風格...");
 
         try {
-            // 11 維度風格分析在 src/ai/pipelines/analysis.ts（回傳鍵集與 StyleAnalysisResult 對齊）
-            const analysis = await analyzeImageStyleFull(element.src, apiKey) as unknown as import('../components/StylePasteModal').StyleAnalysisResult;
+            // 11 維度風格分析在 src/ai/pipelines/styleTransfer.ts（回傳鍵集與 StyleAnalysisResult 對齊）
+            const analysis = await analyzeCopiedStyle(element.src, apiKey) as unknown as import('../components/StylePasteModal').StyleAnalysisResult;
             setCopiedStyle({ analysis });
             showToast("✅ 風格已複製！右鍵選「貼上風格」套用。");
 
@@ -189,49 +198,14 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
         setIsGenerating(true);
         showToast(`正在應用風格...`);
 
-        const keyLabels: Record<string, string> = {
-            color: '色調/配色 (Color Palette)',
-            lighting: '光影/打光 (Lighting)',
-            artStyle: '畫風/藝術風格 (Art Style)',
-            composition: '視角/構圖 (Composition & Camera Angle)',
-            texture: '色彩細節/紋理 (Texture & Detail)',
-            pose: '人物姿勢/動作 (Pose & Action)',
-            expression: '面部表情/情緒 (Facial Expression)',
-            clothing: '服裝/穿著 (Clothing)',
-            background: '背景環境 (Background)',
-            hair: '髮型設計 (Hairstyle)',
-            typography: '字體風格 (Typography)',
-        };
-
         const analysis = copiedStyle.analysis as Record<string, string>;
-        const selectedParts = selectedKeys
-            .filter(k => analysis[k] && analysis[k].trim() !== '' && !analysis[k].toLowerCase().includes('not applicable'))
-            .map(k => `${keyLabels[k]}: ${analysis[k]}`);
-
-        if (selectedParts.length === 0) {
-            // 所有欄位均不適用時，改用全部有值的欄位作 fallback，不直接失敗
-            const fallbackParts = selectedKeys
-                .filter(k => analysis[k] && analysis[k].trim() !== '')
-                .map(k => `${keyLabels[k]}: ${analysis[k]}`);
-            if (fallbackParts.length === 0) {
-                showToast("所選元素在原圖中均不適用，請重新選擇。");
-                setGeneratingElementIds([]);
-                setIsGenerating(false);
-                return;
-            }
-            selectedParts.push(...fallbackParts);
+        const basePrompt = buildCopiedStylePrompt(analysis, selectedKeys);
+        if (!basePrompt) {
+            showToast("所選元素在原圖中均不適用，請重新選擇。");
+            setGeneratingElementIds([]);
+            setIsGenerating(false);
+            return;
         }
-
-        const styleDescription = selectedParts.join('\n');
-
-        const basePrompt = `Apply a style transfer to this image based on the following specific elements. Only transform what is listed — anything not mentioned should remain as close to the original as possible.
-
-STYLE ELEMENTS TO APPLY:
-${styleDescription}
-
-ALWAYS PRESERVE:
-- Subject identity (the main subject must remain recognizable)
-- Overall composition and spatial relationships between elements`;
 
         try {
             // 單張後台流程（壓平→img2img→透明還原）在 src/ai/pipelines/styleTransfer.ts
@@ -239,12 +213,13 @@ ALWAYS PRESERVE:
                 model: 'gemini', geminiApiKey: apiKey, geminiImageModel: imageModel, imageSize,
             };
             const transparencyKeys = { falApiKey, geminiApiKey: apiKey, imageModel };
-            for (const element of targetElements) {
-                const finalSrc = await generateStyledImage(
-                    { srcImage: element.src, stylePrompt: basePrompt, preserveTransparency, transparencyKeys },
-                    engine,
-                );
-                if (finalSrc) {
+            await generateCopiedStyleAssets({
+                targetElements,
+                stylePrompt: basePrompt,
+                preserveTransparency,
+                transparencyKeys,
+                engine,
+                onAsset: (element, finalSrc) => {
                     // 結果放在原圖右側 30px
                     setElements(prev => {
                         // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
@@ -258,8 +233,8 @@ ALWAYS PRESERVE:
                             zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
                         } as ImageElement];
                     });
-                }
-            }
+                },
+            });
             showToast("風格應用完成！✨");
         } catch (error) {
             handleAIError(error, "風格應用");
@@ -293,10 +268,7 @@ ALWAYS PRESERVE:
         try {
             // 單張後台流程（壓平→img2img→透明還原）在 src/ai/pipelines/styleTransfer.ts；
             // Atlas / Gemini 兩條分支收斂為同一迴圈，引擎由 useAtlas 決定
-            const presetMatch = STYLE_PRESETS.find(s => s.label === styleToApply || s.name === styleToApply);
-            const stylePrompt = presetMatch?.prompt
-                ? `${presetMatch.prompt} Maintain the original composition and subject placement.`
-                : `Transform this image into the following style: "${styleToApply}". Maintain the original composition.`;
+            const stylePrompt = buildPresetStylePrompt(styleToApply);
 
             const engine: ImageEngineConfig = {
                 model: useAtlas ? generationModelGlobal : 'gemini',
@@ -308,12 +280,13 @@ ALWAYS PRESERVE:
             };
             const transparencyKeys = { falApiKey, geminiApiKey: apiKey, imageModel };
 
-            for (const element of targetElements) {
-                const finalSrc = await generateStyledImage(
-                    { srcImage: element.src, stylePrompt, preserveTransparency, transparencyKeys },
-                    engine,
-                );
-                if (finalSrc) {
+            await generatePresetStyleAssets({
+                targetElements,
+                stylePrompt,
+                preserveTransparency,
+                transparencyKeys,
+                engine,
+                onAsset: (element, finalSrc) => {
                     // 風格結果放在原圖右側 30px
                     setElements(prev => {
                         // 生成期間原圖可能已被移動/刪除 → 以畫布「當下」位置錨定；已刪除則退回捕獲位置
@@ -327,8 +300,8 @@ ALWAYS PRESERVE:
                             zIndex: (prev.length ? Math.max(...prev.map(e => e.zIndex)) : 0) + 1,
                         } as ImageElement];
                     });
-                }
-            }
+                },
+            });
             showToast("風格應用完成！✨");
 
         } catch (error) {
@@ -1421,8 +1394,6 @@ CONSTRAINTS:
     ) => {
         const el = elements.find(e => e.id === elementId);
         if (!el || el.type !== 'image') { showToast('⚠️ 請先選擇一張圖片'); return; }
-        const specs = platformIds.map(id => crossPlatformSpec(id)).filter(Boolean) as CrossPlatformSpec[];
-        if (specs.length === 0) { showToast('⚠️ 請至少選一個平台'); return; }
 
         // 模型：以面板選的為主,沒帶則沿用全域生成模型
         const chosenModel = opts.model || generationModelGlobal;
@@ -1434,18 +1405,9 @@ CONSTRAINTS:
         if (!useAtlas && !apiKey) { setHasApiKey(false); showToast('⚠️ 跨平台適配需要 Gemini 或 Atlas API Key'); return; }
 
         const imgEl = el as ImageElement;
-        let src = imgEl.src;
-        if (!src.startsWith('data:')) src = await downloadImageAsBase64(src);
-        if (!src.startsWith('data:')) { showToast('⚠️ 無法讀取來源圖片'); return; }
 
         setIsGenerating(true);
         setGeneratingElementIds([elementId]);
-
-        // 結果排成一列放原圖右側,固定顯示高度、寬度依比例換算
-        const ROW_H = 220;
-        const gap = 24;
-        let cursorX = imgEl.position.x + imgEl.width / 2 + 60;
-        const baseTop = imgEl.position.y - imgEl.height / 2;
 
         try {
             // 引擎設定組裝一次，單張生成統一走 src/ai/generateImage.ts 原語
@@ -1457,51 +1419,18 @@ CONSTRAINTS:
                 imageSize: opts.imageSize || imageSize,
                 atlasWait: withAtlasWaitToast,
             };
-            for (let i = 0; i < specs.length; i++) {
-                const spec = specs[i];
-                showToast(`🎯 跨平台適配：${spec.name}（${i + 1}/${specs.length}）...`);
-                const prompt = buildCrossPlatformPrompt(spec, opts);
-                let resultSrc = '';
-                try {
-                    resultSrc = await generateOneImage(
-                        { prompt, aspectRatio: spec.atlasRatio, refImage: src, seed: opts.seed },
-                        engine,
-                    );
-                } catch (e) {
-                    console.warn('[crossPlatform] 生成失敗', spec.id, e);
-                    showToast(`⚠️ ${spec.name} 生成失敗,略過`);
-                    continue;
-                }
-                if (!resultSrc) { showToast(`⚠️ ${spec.name} 未回傳圖片,略過`); continue; }
-
-                // 用「結果圖的實際像素比例」定畫布寬高,而非規格假設比例——
-                // 模型/Atlas 回傳的真實比例可能跟 spec.ratioValue 不同,用假設值會把圖拉伸壓扁。
-                let realRatio = spec.ratioValue;
-                try {
-                    const im = await loadImage(resultSrc);
-                    if (im.naturalWidth > 0 && im.naturalHeight > 0) realRatio = im.naturalWidth / im.naturalHeight;
-                } catch { /* 載入失敗則沿用規格比例 */ }
-                const h = ROW_H;
-                const w = Math.round(ROW_H * realRatio);
-                const newId = `xplatform_${Date.now()}_${i}`;
-                const newEl: ImageElement = {
-                    ...imgEl,
-                    id: newId,
-                    src: resultSrc,
-                    name: `${imgEl.name} (${spec.name})`,
-                    position: { x: cursorX + w / 2, y: baseTop + h / 2 },
-                    width: w,
-                    height: h,
-                    rotation: 0,
-                    zIndex: zIndexCounter.current++,
-                    groupId: null,
-                    isVisible: true,
-                    isLocked: false,
-                };
-                setElements(prev => [...prev, newEl]);
-                if (resultSrc.startsWith('data:')) cacheImage(newId, resultSrc);
-                cursorX += w + gap;
-            }
+            await runCrossPlatformPipeline({
+                sourceElement: imgEl,
+                platformIds,
+                opts,
+                engine,
+                nextZIndex: () => zIndexCounter.current++,
+                onToast: showToast,
+                onAsset: (newEl) => {
+                    setElements(prev => [...prev, newEl]);
+                    if (newEl.src.startsWith('data:')) cacheImage(newEl.id, newEl.src);
+                },
+            });
             showToast('✅ 跨平台適配完成！');
         } catch (error) {
             handleAIError(error, '跨平台適配');
@@ -1530,13 +1459,6 @@ CONSTRAINTS:
 
         setIsGenerating(true);
         setGeneratingElementIds([elementId]);
-
-        // 排成一列放原便利貼右側, 固定顯示高度
-        const ROW_H = 220;
-        const gap = 24;
-        const noteEl = el as NoteElement | TextElement;
-        let cursorX = noteEl.position.x + noteEl.width / 2 + 60;
-        const baseTop = noteEl.position.y - noteEl.height / 2;
         // 引擎設定組裝一次，單張生成統一走 src/ai/generateImage.ts 原語
         const engine: ImageEngineConfig = {
             model: chosenModel,
@@ -1547,79 +1469,19 @@ CONSTRAINTS:
             atlasWait: withAtlasWaitToast,
         };
 
-        // 把一張結果圖放上畫布（依實際像素比例定寬高），回傳是否成功
-        const placeAsset = async (resultSrc: string, title: string, fallbackRatio: number, key: string): Promise<boolean> => {
-            if (!resultSrc) return false;
-            let realRatio = fallbackRatio;
-            try {
-                const im = await loadImage(resultSrc);
-                if (im.naturalWidth > 0 && im.naturalHeight > 0) realRatio = im.naturalWidth / im.naturalHeight;
-            } catch { /* 載入失敗則沿用規格比例 */ }
-            const h = ROW_H;
-            const w = Math.round(ROW_H * realRatio);
-            const newId = `brandkit_${Date.now()}_${key}`;
-            const newEl: ImageElement = {
-                type: 'image', id: newId, src: resultSrc,
-                name: `${brief.brandName || 'Brand'}（${title}）`,
-                position: { x: cursorX + w / 2, y: baseTop + h / 2 },
-                width: w, height: h, rotation: 0,
-                zIndex: zIndexCounter.current++,
-                groupId: null, isVisible: true, isLocked: false,
-            };
-            setElements(prev => [...prev, newEl]);
-            if (resultSrc.startsWith('data:')) cacheImage(newId, resultSrc);
-            cursorX += w + gap;
-            return true;
-        };
-
         try {
-            const specs = LOGO_BRAND_OUTPUTS;
-            const total = specs.length + 1; // 含主 Logo
-            let successCount = 0;
-
-            // ── Step 1：先獨立生成主 Logo（純文字創作，使用者最終要的標誌長相由這步決定）──
-            showToast(`🎯 品牌視覺套件：主 Logo（1/${total}）...`);
-            const logoAspect = brief.size || '1:1';
-            const logoPrompt = buildLogoPrompt(content, brief);
-            let logoSrc = '';
-            try {
-                logoSrc = await generateOneImage({ prompt: logoPrompt, aspectRatio: logoAspect }, engine);
-            } catch (e) {
-                console.warn('[logoBrandKit] 主 Logo 生成失敗', e);
-            }
-            if (!logoSrc) {
-                showToast('❌ 主 Logo 生成失敗，品牌套件中止');
-                return;
-            }
-            // Atlas 可能回傳 CDN URL，後續 img2img 需要 base64 才能當參考圖
-            if (!logoSrc.startsWith('data:')) {
-                try { logoSrc = await downloadImageAsBase64(logoSrc); } catch { /* 失敗則維持原樣 */ }
-            }
-            if (await placeAsset(logoSrc, '主 Logo', 1, 'logo')) successCount += 1;
-
-            // ── Step 2：用選定的主 Logo 圖片當錨點，延伸生成其餘 4 個品牌資產 ──
-            // 明確要求模型重用這個 EXACT 標誌，不要重新設計，確保整套套件用的是同一個 logo。
-            for (let i = 0; i < specs.length; i++) {
-                const spec = specs[i];
-                showToast(`🎯 品牌視覺套件：${spec.title}（${i + 2}/${total}）...`);
-                const prompt = buildLogoBrandPrompt(content, brief, spec, i, specs.length);
-                let resultSrc = '';
-
-                try {
-                    // 以主 Logo 為參考圖錨定同一標誌；Atlas 不支援 img2img 時原語自動退回純文字生成
-                    resultSrc = await generateOneImage(
-                        { prompt, aspectRatio: spec.aspectRatio, refImage: logoSrc },
-                        engine,
-                    );
-                } catch (e) {
-                    console.warn('[logoBrandKit] 生成失敗', spec.id, e);
-                    showToast(`⚠️ ${spec.title} 生成失敗,略過`);
-                    continue;
-                }
-
-                if (!resultSrc) { showToast(`⚠️ ${spec.title} 未回傳圖片,略過`); continue; }
-                if (await placeAsset(resultSrc, spec.title, spec.ratioValue, String(i))) successCount += 1;
-            }
+            const { successCount, total } = await runLogoBrandKitPipeline({
+                sourceElement: el as NoteElement | TextElement,
+                content,
+                brief,
+                engine,
+                nextZIndex: () => zIndexCounter.current++,
+                onToast: showToast,
+                onAsset: (newEl) => {
+                    setElements(prev => [...prev, newEl]);
+                    if (newEl.src.startsWith('data:')) cacheImage(newEl.id, newEl.src);
+                },
+            });
 
             showToast(successCount > 1
                 ? `✅ 品牌視覺套件生成完成！（${successCount}/${total} 張）`
@@ -1656,13 +1518,6 @@ CONSTRAINTS:
 
         setIsGenerating(true);
         setGeneratingElementIds([elementId]);
-
-        // 排成一列放原 Logo 圖片右側, 固定顯示高度
-        const ROW_H = 220;
-        const gap = 24;
-        const logoImgEl = el as ImageElement;
-        let cursorX = logoImgEl.position.x + logoImgEl.width / 2 + 60;
-        const baseTop = logoImgEl.position.y - logoImgEl.height / 2;
         // 引擎設定組裝一次，單張生成統一走 src/ai/generateImage.ts 原語
         const engine: ImageEngineConfig = {
             model: chosenModel,
@@ -1673,85 +1528,21 @@ CONSTRAINTS:
             atlasWait: withAtlasWaitToast,
         };
 
-        // 把一張結果圖放上畫布（依實際像素比例定寬高），回傳是否成功
-        const placeAsset = async (resultSrc: string, title: string, fallbackRatio: number, key: string): Promise<boolean> => {
-            if (!resultSrc) return false;
-            let realRatio = fallbackRatio;
-            try {
-                const im = await loadImage(resultSrc);
-                if (im.naturalWidth > 0 && im.naturalHeight > 0) realRatio = im.naturalWidth / im.naturalHeight;
-            } catch { /* 載入失敗則沿用規格比例 */ }
-            const h = ROW_H;
-            const w = Math.round(ROW_H * realRatio);
-            const newId = `brandkit_${Date.now()}_${key}`;
-            const newEl: ImageElement = {
-                type: 'image', id: newId, src: resultSrc,
-                name: `${brief.brandName || 'Brand'}（${title}）`,
-                position: { x: cursorX + w / 2, y: baseTop + h / 2 },
-                width: w, height: h, rotation: 0,
-                zIndex: zIndexCounter.current++,
-                groupId: null, isVisible: true, isLocked: false,
-            };
-            setElements(prev => [...prev, newEl]);
-            if (resultSrc.startsWith('data:')) cacheImage(newId, resultSrc);
-            cursorX += w + gap;
-            return true;
-        };
-
         try {
-            const allSpecs = LOGO_BRAND_OUTPUTS;
-            const baseSpecs = selectedAssetIds
-                ? allSpecs.filter(s => selectedAssetIds.includes(s.id))
-                : allSpecs;
-
-            // 支援自訂品牌資產動態生成
-            const customSpecs: LogoBrandOutputSpec[] = (brief.customAssets || []).map((title, idx) => {
-                return {
-                    id: `custom_asset_${idx}_${Date.now()}`,
-                    title: `自訂：${title}`,
-                    aspectRatio: '4:3', // 預設使用 4:3 萬能樣機比例
-                    ratioValue: 4 / 3,
-                    note: `使用者自訂品牌應用 Mockup：${title}`,
-                    guidance: [
-                        `Generate a professional photo-studio quality mockup featuring a ${title} as the main subject.`,
-                        `The approved logo from the reference image and the brand name "${brief.brandName}" must be clearly printed, embossed, or styled on the surface of the ${title} in a realistic way.`,
-                        `Ensure clean studio background, realistic material texture (e.g., paper, fabric, ceramic, glass, or plastic), professional lighting, and perfect placement.`
-                    ]
-                };
+            const { successCount, total } = await runExtendBrandKitPipeline({
+                sourceElement: el as ImageElement,
+                logoSrc,
+                brief,
+                engine,
+                selectedAssetIds,
+                customSeed,
+                nextZIndex: () => zIndexCounter.current++,
+                onToast: showToast,
+                onAsset: (newEl) => {
+                    setElements(prev => [...prev, newEl]);
+                    if (newEl.src.startsWith('data:')) cacheImage(newEl.id, newEl.src);
+                },
             });
-
-            const specs = [...baseSpecs, ...customSpecs];
-            const total = specs.length;
-            if (total === 0) { showToast('⚠️ 未選取或輸入任何品牌資產'); return; }
-            let successCount = 0;
-
-            // Atlas 可能回傳 CDN URL，後續 img2img 需要 base64 才能當參考圖
-            if (!logoSrc.startsWith('data:')) {
-                try { logoSrc = await downloadImageAsBase64(logoSrc); } catch { /* 失敗則維持原樣 */ }
-            }
-
-            // ── 用選定的主 Logo 圖片當錨點，延伸生成其餘選定的品牌資產 ──
-            for (let i = 0; i < specs.length; i++) {
-                const spec = specs[i];
-                showToast(`🎯 品牌視覺套件：${spec.title}（${i + 1}/${total}）...`);
-                const prompt = buildLogoBrandPrompt('', brief, spec, i, specs.length);
-                let resultSrc = '';
-
-                try {
-                    // 以主 Logo 為參考圖錨定同一標誌；Atlas 不支援 img2img 時原語自動退回純文字生成
-                    resultSrc = await generateOneImage(
-                        { prompt, aspectRatio: spec.aspectRatio, refImage: logoSrc, seed: customSeed },
-                        engine,
-                    );
-                } catch (e) {
-                    console.warn('[logoBrandKit] 延伸生成失敗', spec.id, e);
-                    showToast(`⚠️ ${spec.title} 生成失敗,略過`);
-                    continue;
-                }
-
-                if (!resultSrc) { showToast(`⚠️ ${spec.title} 未回傳圖片,略過`); continue; }
-                if (await placeAsset(resultSrc, spec.title, spec.ratioValue, String(i))) successCount += 1;
-            }
 
             showToast(successCount > 0
                 ? `✅ 品牌視覺套件延伸完成！（共生成 ${successCount}/${total} 張資產）`
@@ -1787,34 +1578,6 @@ CONSTRAINTS:
 
         setIsGenerating(true);
         setGeneratingElementIds([elementId]);
-
-        // 1. base64 轉換移至最前面，以供後續分析及生圖共用
-        if (!productSrc.startsWith('data:')) {
-            try { productSrc = await downloadImageAsBase64(productSrc); } catch { /* 失敗則維持原樣 */ }
-        }
-
-        // 2. 進行風格預分析以抽取配色與氛圍錨點（後台呼叫在 src/ai/pipelines/analysis.ts）
-        let sharedStyleAnchor = '';
-        if (brief.lockStyleConsistency && apiKey && productSrc.startsWith('data:')) {
-            showToast('🔍 正在分析商品風格，為成套行銷圖鎖定風格與色調...');
-            try {
-                sharedStyleAnchor = await analyzeProductStyleAnchor(productSrc, apiKey);
-            } catch (e) {
-                console.warn('[productStyleAnalysis] 風格分析失敗，將使用默認風格設定進行生成', e);
-            }
-        }
-
-        // 3. 風格一致性隨機種子碼
-        const consistencySeed = customSeed !== undefined
-            ? customSeed
-            : (brief.lockStyleConsistency ? Math.floor(Math.random() * 2147483647) : undefined);
-
-        // 排成一列放原產品圖片右側, 固定顯示高度
-        const ROW_H = 220;
-        const gap = 24;
-        const prodImgEl = el as ImageElement;
-        let cursorX = prodImgEl.position.x + prodImgEl.width / 2 + 60;
-        const baseTop = prodImgEl.position.y - prodImgEl.height / 2;
         // 引擎設定組裝一次，單張生成統一走 src/ai/generateImage.ts 原語
         const engine: ImageEngineConfig = {
             model: chosenModel,
@@ -1825,84 +1588,23 @@ CONSTRAINTS:
             atlasWait: withAtlasWaitToast,
         };
 
-        // 把一張結果圖放上畫布（依實際像素比例定寬高），回傳是否成功
-        const placeAsset = async (resultSrc: string, title: string, fallbackRatio: number, key: string): Promise<boolean> => {
-            if (!resultSrc) return false;
-            let realRatio = fallbackRatio;
-            try {
-                const im = await loadImage(resultSrc);
-                if (im.naturalWidth > 0 && im.naturalHeight > 0) realRatio = im.naturalWidth / im.naturalHeight;
-            } catch { /* 載入失敗則沿用規格比例 */ }
-            const h = ROW_H;
-            const w = Math.round(ROW_H * realRatio);
-            const newId = `mktg_${Date.now()}_${key}`;
-            const newEl: ImageElement = {
-                type: 'image', id: newId, src: resultSrc,
-                name: `${brief.productName || 'Product'}（${title}）`,
-                position: { x: cursorX + w / 2, y: baseTop + h / 2 },
-                width: w, height: h, rotation: 0,
-                zIndex: zIndexCounter.current++,
-                groupId: null, isVisible: true, isLocked: false,
-            };
-            setElements(prev => [...prev, newEl]);
-            if (resultSrc.startsWith('data:')) cacheImage(newId, resultSrc);
-            cursorX += w + gap;
-            return true;
-        };
-
         try {
-            const platformSpec = PRODUCT_MARKETING_PLATFORMS[platformId];
-            if (!platformSpec) { showToast('⚠️ 找不到指定的行銷平台設定'); return; }
-
-            const allSpecs = platformSpec.recipes;
-            const baseSpecs = selectedRecipeIds
-                ? allSpecs.filter(s => selectedRecipeIds.includes(s.id))
-                : allSpecs;
-
-            // 支援自訂規格動態生成
-            const customSpecs: ProductMarketingOutputSpec[] = (brief.customAssets || []).map((title, idx) => {
-                return {
-                    id: `custom_mktg_${idx}_${Date.now()}`,
-                    title: `自訂：${title}`,
-                    aspectRatio: '4:3', // 預設使用 4:3 萬能電商比例
-                    ratioValue: 4 / 3,
-                    note: `使用者自訂產品行銷 Mockup：${title}`,
-                    guidance: [
-                        `Generate a professional e-commerce product advertisement visual featuring a ${title} showcasing the product.`,
-                        `The product from the reference image must be realistically placed and integrated in the scene.`,
-                        `Maintain aesthetic studio lighting, clean background, and clear design layout.`
-                    ]
-                };
+            const { successCount, total } = await runProductMarketingPipeline({
+                sourceElement: el as ImageElement,
+                productSrc,
+                brief,
+                engine,
+                selectedRecipeIds,
+                platformId,
+                customSeed,
+                apiKey,
+                nextZIndex: () => zIndexCounter.current++,
+                onToast: showToast,
+                onAsset: (newEl) => {
+                    setElements(prev => [...prev, newEl]);
+                    if (newEl.src.startsWith('data:')) cacheImage(newEl.id, newEl.src);
+                },
             });
-
-            const specs = [...baseSpecs, ...customSpecs];
-            const total = specs.length;
-            if (total === 0) { showToast('⚠️ 未選取或輸入任何行銷規格'); return; }
-            let successCount = 0;
-
-            // ── 逐一調用 AI 模型生成 ──
-            for (let i = 0; i < specs.length; i++) {
-                const spec = specs[i];
-                showToast(`🎯 產品行銷組圖：${spec.title}（${i + 1}/${total}）...`);
-                const prompt = buildProductMarketingPrompt(brief, spec, i, specs.length, sharedStyleAnchor || undefined);
-                let resultSrc = '';
-
-                try {
-                    // 以產品圖為參考圖；原語內 seed 一律放 config 頂層（修正舊版塞在
-                    // imageConfig 內層被 SDK 靜默忽略 → 風格一致性 seed 實際無效的 bug）
-                    resultSrc = await generateOneImage(
-                        { prompt, aspectRatio: spec.aspectRatio, refImage: productSrc, seed: consistencySeed },
-                        engine,
-                    );
-                } catch (e) {
-                    console.warn('[productMarketingSet] 延伸生成失敗', spec.id, e);
-                    showToast(`⚠️ ${spec.title} 生成失敗,略過`);
-                    continue;
-                }
-
-                if (!resultSrc) { showToast(`⚠️ ${spec.title} 未回傳圖片,略過`); continue; }
-                if (await placeAsset(resultSrc, spec.title, spec.ratioValue, String(i))) successCount += 1;
-            }
 
             showToast(successCount > 0
                 ? `✅ 產品行銷組圖生成完成！（共生成 ${successCount}/${total} 張資產）`
