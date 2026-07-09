@@ -1584,11 +1584,28 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                     <img src={nodeGroup.src} alt="Workflow source" className="w-full h-full object-contain pointer-events-none" draggable={false} />
                                 );
                             } else {
-                                const noteBgColor = nodeGroup.color || '#FEFCE8';
+                                const noteBgClass = nodeGroup.color || 'bg-[#FEFCE8]';
+                                const targetScreen = zoom > 1.0 ? 18
+                                                   : zoom >= 0.5 ? 18
+                                                   : zoom >= 0.3 ? 15
+                                                   : 12;
+                                const noteFontSize = Math.round(targetScreen / zoom);
+                                const notePadH = Math.round(Math.max(12, 24 / zoom));
+                                const notePadV = Math.round(Math.max(10, 16 / zoom));
+
                                 displayContent = (
                                     <div 
-                                        className="w-full h-full p-4 overflow-hidden border border-black/8 text-left whitespace-pre-wrap"
-                                        style={{ backgroundColor: noteBgColor, color: '#1C1C1E', fontSize: 14, fontFamily: 'inherit' }}
+                                        className={`w-full h-full overflow-hidden border border-black/8 text-left whitespace-pre-wrap font-medium ${noteBgClass}`}
+                                        style={{ 
+                                            color: '#1D1D1F', 
+                                            fontSize: noteFontSize, 
+                                            lineHeight: '1.6', 
+                                            fontFamily: 'inherit',
+                                            paddingLeft: notePadH,
+                                            paddingRight: notePadH,
+                                            paddingTop: notePadV,
+                                            paddingBottom: notePadV,
+                                        }}
                                     >
                                         {nodeGroup.content || ''}
                                     </div>
@@ -1596,19 +1613,14 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             }
                         }
 
-                        const glowStyle = {
-                            boxShadow: '0 0 15px rgba(99, 102, 241, 0.35)',
-                            transition: 'box-shadow 0.2s ease-in-out',
-                        };
-
                         return (
                             <div 
-                                style={{ ...style, ...glowStyle }} 
-                                className="group/node-group relative overflow-hidden flex flex-col hover:shadow-[0_0_22px_rgba(99,102,241,0.55)]"
+                                style={style} 
+                                className="group/node-group relative overflow-hidden flex flex-col border-2 border-blue-500/50 shadow-[0_0_18px_rgba(59,130,246,0.45)] hover:shadow-[0_0_28px_rgba(59,130,246,0.75)] hover:border-blue-500/90 transition-all duration-200"
                             >
                                 {displayContent}
-                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent h-1/3 flex items-end justify-center pb-2 opacity-0 group-hover/node-group:opacity-100 transition-opacity pointer-events-none">
-                                    <span className="text-[10px] font-medium text-white/90 uppercase tracking-wider">雙擊進入工作流</span>
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/40 to-transparent h-1/2 flex items-end justify-center pb-3 opacity-0 group-hover/node-group:opacity-100 transition-opacity pointer-events-none">
+                                    <span className="text-[13px] font-bold text-white tracking-wider">進入節點工作流</span>
                                 </div>
                             </div>
                         );

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   addEdge,
   Background,
@@ -6,11 +6,16 @@ import {
   ReactFlow,
   useEdgesState,
   useNodesState,
+  reconnectEdge,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
   type Connection,
   type Edge,
   type Node,
   type OnConnect,
   type OnNodeDrag,
+  type EdgeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useNodeGraphStore } from '../../store/nodeGraphStore';
@@ -28,6 +33,62 @@ const nodeTypes = {
   removeBg: RemoveBgNode,
   imageGen: ImageGenNode,
   style: StyleNode,
+};
+
+function DeletableEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+  data,
+}: EdgeProps) {
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetPosition,
+    targetX,
+    targetY,
+  });
+
+  const onDelete = (data as any)?.onDelete;
+
+  return (
+    <>
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+      <EdgeLabelRenderer>
+        <div
+          style={{
+            position: 'absolute',
+            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+            pointerEvents: 'all',
+          }}
+          className="nodrag nopan"
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onDelete) onDelete(id);
+            }}
+            className="w-4 h-4 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md border border-white opacity-40 hover:opacity-100 transition-opacity hover:scale-110 active:scale-90 text-[9px] font-bold"
+            title="斷開此連線"
+          >
+            ✕
+          </button>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const edgeTypes = {
+  deletable: DeletableEdge,
 };
 
 const DEFAULT_LABEL: Record<NodeKind, string> = {
@@ -70,10 +131,12 @@ const toGraphNode = (node: FlowNode): GraphNode => {
   };
 };
 
-const toFlowEdge = (edge: GraphEdge): FlowEdge => ({
+const toFlowEdge = (edge: GraphEdge, onDelete?: (id: string) => void): FlowEdge => ({
   id: edge.id,
   source: edge.source,
   target: edge.target,
+  type: 'deletable',
+  data: { onDelete },
 });
 
 const toGraphEdge = (edge: FlowEdge): GraphEdge => ({
@@ -114,9 +177,49 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   const [nodes, setNodes, onNodesChange] = useNodesState(
     useNodeGraphStore.getState().nodes.map(toFlowNode),
   );
+
   const [edges, setEdges, onEdgesChange] = useEdgesState(
-    useNodeGraphStore.getState().edges.map(toFlowEdge),
+    useNodeGraphStore.getState().edges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: 'deletable',
+    }))
   );
+
+  const handleEdgeDelete = useCallback((edgeId: string) => {
+    setEdges(eds => eds.filter(e => e.id !== edgeId));
+  }, [setEdges]);
+
+  // 掛載後注入 onDelete 刪除連線之回呼函式
+  useEffect(() => {
+    setEdges(eds => eds.map(e => {
+      if (e.type === 'deletable' && !e.data?.onDelete) {
+        return { ...e, data: { ...e.data, onDelete: handleEdgeDelete } };
+      }
+      return e;
+    }));
+  }, [handleEdgeDelete, setEdges]);
+
+  // 拖曳斷開連線 (Reconnect / Drag to disconnect)
+  const edgeReconnectSuccessful = useRef(true);
+
+  const handleReconnectStart = useCallback(() => {
+    edgeReconnectSuccessful.current = false;
+  }, []);
+
+  const handleReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
+    edgeReconnectSuccessful.current = true;
+    setEdges(els => reconnectEdge(oldEdge, newConnection, els));
+  }, [setEdges]);
+
+  const handleReconnectEnd = useCallback((_: any, edge: Edge) => {
+    if (!edgeReconnectSuccessful.current) {
+      setEdges(eds => eds.filter(e => e.id !== edge.id));
+    }
+    edgeReconnectSuccessful.current = true;
+  }, [setEdges]);
+
   const [isDraggingNode, setIsDraggingNode] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
 
@@ -164,8 +267,13 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   const handleConnect: OnConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return;
     const edgeId = `edge-${connection.source}-${connection.target}-${Date.now()}`;
-    setEdges(eds => addEdge({ ...connection, id: edgeId }, eds));
-  }, [setEdges]);
+    setEdges(eds => addEdge({ 
+      ...connection, 
+      id: edgeId,
+      type: 'deletable',
+      data: { onDelete: handleEdgeDelete }
+    }, eds));
+  }, [setEdges, handleEdgeDelete]);
 
   // 加節點：若有選中的節點，新節點自動接在它後面並選中（連點成鏈，免拉線）。
   const addNode = useCallback((kind: NodeKind) => {
@@ -180,9 +288,15 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
       { ...toFlowNode(graphNode), selected: true },
     ]);
     if (selected) {
-      setEdges(eds => addEdge({ id: `edge-${selected.id}-${id}`, source: selected.id, target: id }, eds));
+      setEdges(eds => addEdge({ 
+        id: `edge-${selected.id}-${id}`, 
+        source: selected.id, 
+        target: id,
+        type: 'deletable',
+        data: { onDelete: handleEdgeDelete }
+      }, eds));
     }
-  }, [nodes, setNodes, setEdges]);
+  }, [nodes, setNodes, setEdges, handleEdgeDelete]);
 
   const handleNodeDragStart: OnNodeDrag<FlowNode> = useCallback(() => {
     setIsDraggingNode(true);
@@ -206,9 +320,13 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
+        onReconnect={handleReconnect}
+        onReconnectStart={handleReconnectStart}
+        onReconnectEnd={handleReconnectEnd}
         onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
         fitView
