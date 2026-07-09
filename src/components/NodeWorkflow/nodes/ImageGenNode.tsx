@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import type { ImageGenParams } from '../types';
 import { useNodeStatusRing } from './useNodeStatusRing';
+import { NodeResultPreview } from './NodeResultPreview';
 
 const MODEL_OPTIONS = ['gemini', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro'];
 const RATIO_OPTIONS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
@@ -48,6 +49,7 @@ export function ImageGenNode({ id, data }: NodeProps) {
           </select>
         </div>
       </div>
+      <NodeResultPreview id={id} />
       <Handle type="source" position={Position.Right} />
     </div>
   );

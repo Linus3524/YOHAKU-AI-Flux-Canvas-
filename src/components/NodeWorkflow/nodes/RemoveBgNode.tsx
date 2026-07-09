@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import type { RemoveBgParams } from '../types';
 import { useNodeStatusRing } from './useNodeStatusRing';
+import { NodeResultPreview } from './NodeResultPreview';
 
 /**
  * 去背節點：local/cloud 模式選擇；實際去背由執行引擎呼叫 pipeline。
@@ -38,6 +39,7 @@ export function RemoveBgNode({ id, data }: NodeProps) {
           ))}
         </div>
       </div>
+      <NodeResultPreview id={id} />
       <Handle type="source" position={Position.Right} />
     </div>
   );

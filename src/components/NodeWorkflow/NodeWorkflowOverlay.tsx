@@ -30,7 +30,7 @@ export function NodeWorkflowOverlay({ element, onClose, onImportOutput, onDetach
     setIsGraphReady(false);
     loadGraph(element.graph);
     setIsGraphReady(true);
-  }, [element.graph, element.id, loadGraph]);
+  }, [element.id, loadGraph]);
 
   const handleClose = useCallback(() => {
     onClose(exportGraph());

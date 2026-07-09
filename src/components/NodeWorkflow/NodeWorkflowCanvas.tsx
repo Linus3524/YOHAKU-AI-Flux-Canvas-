@@ -124,19 +124,34 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
     if (isRunning) return;
     setIsRunning(true);
     resetRuntime();
-    const graph = { nodes: nodes.map(toGraphNode), edges: edges.map(toGraphEdge) };
+
+    const graph = { 
+      nodes: nodes.map(toGraphNode), 
+      edges: edges.map(toGraphEdge) 
+    };
+
+    console.log('[handleRun] starting executeGraph. Nodes:', graph.nodes.map(n => n.id));
+
     try {
       const { outputSrc } = await executeGraph(graph, engine ?? {}, {
-        onNodeStatus: (id, s) => setNodeStatus(id, s),
-        onNodeResult: (id, src) => setNodeResult(id, src),
+        onNodeStatus: (id, s) => {
+          console.log('[handleRun] onNodeStatus:', id, s);
+          setNodeStatus(id, s);
+        },
+        onNodeResult: (id, src) => {
+          console.log('[handleRun] onNodeResult writing result for:', id, 'src length:', src?.length);
+          setNodeResult(id, src);
+        },
       });
+      console.log('[handleRun] executeGraph finished. outputSrc exists:', !!outputSrc);
       if (outputSrc) onOutputChange?.(outputSrc);
     } catch (e: any) {
+      console.error('[handleRun] executeGraph error:', e);
       onRunError?.(e?.message || '執行失敗');
     } finally {
       setIsRunning(false);
     }
-  }, [isRunning, resetRuntime, nodes, edges, engine, setNodeStatus, setNodeResult, onOutputChange, onRunError]);
+  }, [isRunning, resetRuntime, nodes, edges, engine, setNodes, setEdges, setNodeStatus, setNodeResult, onOutputChange, onRunError]);
 
   // 把本地編輯結果鏡像回 store，讓關閉時 exportGraph() 拿到最新拓撲（存回 NodeGroupElement）。
   useEffect(() => {

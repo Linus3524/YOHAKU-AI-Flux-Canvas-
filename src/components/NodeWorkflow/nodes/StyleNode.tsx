@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import type { StyleParams } from '../types';
 import { useNodeStatusRing } from './useNodeStatusRing';
+import { NodeResultPreview } from './NodeResultPreview';
 
 const STYLE_OPTIONS = [
   { key: 'none', label: '未選擇' },
@@ -35,6 +36,7 @@ export function StyleNode({ id, data }: NodeProps) {
           {STYLE_OPTIONS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
       </div>
+      <NodeResultPreview id={id} />
       <Handle type="source" position={Position.Right} />
     </div>
   );
