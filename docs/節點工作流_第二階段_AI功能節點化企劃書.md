@@ -33,7 +33,7 @@
 | `imageGen` | 生成圖片 | 文字+圖(多) | 圖 | `geminiGenerateImage` / `atlasBatch` | ✅ |
 | `style` | 預設風格轉換 | 圖 | 圖 | `buildPresetStylePrompt`+`generateStyledImage` | ✅ |
 | `upscale` | 放大 | 圖 | 圖 | `runLocalUpscalePipeline` | 🆕 T11 |
-| `layerSplit` | 圖層分離 | 圖 | 多圖 | `geminiLayerSegment`（或 `gptLayerSegment`） | 🆕 T12 |
+| `layerSplit` | 圖層分離 | 圖 | 多圖 | `geminiLayerSegment` | ✅ 已完成（Batch 示範） |
 | `outpaint` | 外擴延伸 | 圖 | 圖 | `generateOutpaintingPrompt`+生圖 | 🆕 T13 |
 | `analyze` | 圖片分析 | 圖 | 文字 | `analyzeImageStyleFull` | 🆕 T14 |
 | `promptOptimize` | 提示詞優化 | 文字 | 文字 | `optimizePromptWithAI` | 🆕 T15 |
@@ -56,13 +56,20 @@
 - **UI**：極簡，可只有標題 + 結果預覽（若函式支援倍率參數再加下拉）。
 - **executor**：新增 `case 'upscale'`，仿 `case 'removeBg'`。
 
-### T12. `layerSplit` 圖層分離節點
-- **接**：`geminiLayerSegment(imageBase64, geminiApiKey, falKey, onProgress)`（`src/utils/geminiLayer.ts:211`），回傳 `LayerResult[]`（多圖層）。
-- **輸入**：單張圖。**輸出**：多張圖層。
-- **關鍵挑戰**：節點模型目前是「一節點一結果」，但這個輸出是**多張**。做法二選一，先在企劃回報你選哪個：
-  - (A) 節點內顯示所有圖層縮圖，`onNodeResult` 只傳「合成預覽」當主結果；使用者可從節點把個別圖層拖出到畫布。
-  - (B) 執行後動態展開成多個 output 子節點。（較複雜，不建議首版）
-- 需要 `geminiApiKey` + `falApiKey`（engine 已有）。
+### T12. `layerSplit` 圖層分離節點 — ✅ 已由 Linus 完成（作為 Batch 基礎設施的示範）
+- **已實作**：接 `geminiLayerSegment`，產出 `LayerResult[]` → 多輸出。
+- **多輸出呈現＝可折疊 Batch 節點**（見下方「Batch 基礎設施」）：一個節點裝一組結果，
+  折疊成疊圖+數量，可展開；展開後每個項目有獨立輸出接口 `item-N`（可各自接下游）、
+  可單獨拖出、可整批匯出。
+- 後續其他多輸出節點（T17–T19）**一律沿用這套 Batch 基礎設施**，不要再自創呈現方式。
+
+### 📦 Batch 多輸出基礎設施（已建，供多輸出節點共用）
+Codex 做多輸出節點時，直接用既有機制，勿重造：
+- `types.ts`：`isMultiOutputKind(kind)` 判定；`GraphEdge.sourceHandle`（邊用 `item-N` 指定接第幾個輸出）。
+- `store`：`nodeBatchResults[id]: string[]` + `setNodeBatchResult`。
+- `executor`：`emitBatch(id, srcs)` 寫入整組並保留第 0 個為單值代表；`resolveEdgeValue` 依 `sourceHandle` 解析下游取第幾個。
+- UI：`nodes/LayerSplitNode.tsx` 是可折疊 Batch 容器的參考實作；`NodeWorkflowContext` 提供 `detachImage` 給節點內項目。
+- **新增一個多輸出節點的步驟**：把 kind 加進 `MULTI_OUTPUT_KINDS`、executor 走 `emitBatch`、UI 仿 `LayerSplitNode`（或抽成共用 `<BatchNodeShell>` 更好）。
 
 ### T13. `outpaint` 外擴節點
 - **接**：`generateOutpaintingPrompt`（`src/ai/pipelines/outpainting.ts:6`）產生提示詞，再走生圖。讀懂它回傳什麼、是否需搭配 `geminiGenerateImage`。
@@ -85,11 +92,14 @@
 - **輸出**：套用風格後的圖。
 - **註**：這是唯一需要「具名/多角色輸入」的節點，若 handle 區分成本高，首版可約定「第一條入邊=風格、第二條=內容」並在節點 UI 標註。
 
-### T17–T19. 整組資產節點（brandKit / crossPlatform / productMarketing）— 需先評估
-這三個 pipeline 產出**一整組圖**（多尺寸/多平台/多版位），本質上與「節點單結果流」不合。**動手前先在企劃提方案**，候選：
-- 包成單一節點，結果區顯示網格縮圖，可逐一拖出到畫布。
-- 或暫不節點化，在節點模式提供「跳回主畫布對應功能」的捷徑。
-Linus 拍板後再實作。
+### T17–T19. 整組資產節點（brandKit / crossPlatform / productMarketing）
+這三個 pipeline 產出**一整組圖**（多尺寸/多平台/多版位），屬多輸出。
+**呈現方式已定案：一律用上面的「可折疊 Batch 基礎設施」**（不需再提方案）：
+- 把各自的 kind 加進 `MULTI_OUTPUT_KINDS`。
+- executor 對應 case 呼叫該 pipeline，取回一組圖 → `emitBatch(id, srcs)`。
+- UI 仿 `LayerSplitNode`（建議先把它抽成共用 `<BatchNodeShell>`，三者共用只改標題/參數）。
+- 使用者即可對整組資產：折疊/展開、個別接下游、個別拖出、整批匯出。
+- 各 pipeline 的參數（品牌色、平台清單、版位等）放節點 UI，比照 imageGen 的參數欄。
 
 ---
 
