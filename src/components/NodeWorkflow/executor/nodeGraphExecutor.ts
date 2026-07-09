@@ -1,18 +1,20 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, BrandKitParams, CopyStyleParams, ImageGenParams, NodeKind, OutpaintParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, BrandKitParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, NodeKind, OutpaintParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
 import type { ImageElement, OutpaintingState } from '../../../types';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
 import { runExtendBrandKitPipeline } from '../../../ai/pipelines/brandKit';
+import { runCrossPlatformPipeline } from '../../../ai/pipelines/crossPlatform';
 import { analyzeImageStyleFull, optimizePromptWithAI } from '../../../ai/pipelines/analysis';
 import { generateOutpaintingPrompt } from '../../../ai/pipelines/outpainting';
 import { analyzeCopiedStyle, buildCopiedStylePrompt, buildPresetStylePrompt, generateCopiedStyleAssets, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
 import { LOGO_BRAND_OUTPUTS, LOGO_DEFAULT_CONFIG } from '../../../skills/logo';
+import { CROSS_PLATFORM_SPECS } from '../../../skills/crossPlatform';
 import { isImageSrc } from '../mediaSrc';
 import { nodeRequiresUpstream } from '../nodeRegistry';
 
@@ -368,6 +370,36 @@ async function runBrandKit(
   return assets;
 }
 
+async function runCrossPlatform(
+  params: Partial<CrossPlatformParams>,
+  input: string,
+  engine: ExecutorEngine,
+  onProgress?: (message: string) => void,
+): Promise<string[]> {
+  if (!isImageSrc(input)) throw new Error('跨平台適配節點需要上游圖片');
+  const platformIds = Array.isArray(params.platformIds) && params.platformIds.length > 0
+    ? params.platformIds
+    : CROSS_PLATFORM_SPECS.slice(0, 4).map(spec => spec.id);
+  const assets: string[] = [];
+  let zIndex = 0;
+  await runCrossPlatformPipeline({
+    sourceElement: createImageElementForPipeline(input, 'cross-platform-source'),
+    platformIds,
+    opts: {
+      preserveSubject: params.preserveSubject !== false,
+      keepText: params.keepText === true,
+    },
+    engine: resolveImageEngine({ model: params.model, imageSize: params.imageSize }, engine),
+    nextZIndex: () => zIndex++,
+    onToast: message => onProgress?.(message),
+    onAsset: asset => {
+      if (asset.src) assets.push(asset.src);
+    },
+  });
+  if (assets.length === 0) throw new Error('跨平台適配沒有產生任何圖片');
+  return assets;
+}
+
 /** layerSplit 節點：Gemini 語意偵測 + BiRefNet 去背 → 多張圖層（多輸出）。 */
 async function runLayerSplit(
   input: string,
@@ -458,6 +490,12 @@ const nodeRunners: Record<NodeKind, NodeRunner> = {
   brandKit: async ({ node, input, engine, onProgress }) => batchResult(await runBrandKit(
     (node.data.params ?? {}) as Partial<BrandKitParams>,
     requireInput(input, '品牌識別'),
+    engine,
+    onProgress,
+  )),
+  crossPlatform: async ({ node, input, engine, onProgress }) => batchResult(await runCrossPlatform(
+    (node.data.params ?? {}) as Partial<CrossPlatformParams>,
+    requireInput(input, '跨平台適配'),
     engine,
     onProgress,
   )),

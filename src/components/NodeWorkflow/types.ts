@@ -1,7 +1,7 @@
-export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'copyStyle' | 'layerSplit' | 'brandKit';
+export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'copyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform';
 
 /** 產出「一組」結果的多輸出節點種類（用可折疊 Batch 容器呈現）。 */
-export const MULTI_OUTPUT_KINDS: readonly NodeKind[] = ['layerSplit', 'brandKit'];
+export const MULTI_OUTPUT_KINDS: readonly NodeKind[] = ['layerSplit', 'brandKit', 'crossPlatform'];
 export const isMultiOutputKind = (kind: NodeKind): boolean => MULTI_OUTPUT_KINDS.includes(kind);
 
 /** 各處理節點的參數形狀（存進 GraphNode.data.params；#2 只做設定，執行是 #3） */
@@ -41,6 +41,13 @@ export interface BrandKitParams {
   model: string;
   imageSize: '1K' | '2K' | '4K';
   selectedAssetIds: string[];
+}
+export interface CrossPlatformParams {
+  platformIds: string[];
+  model: string;
+  imageSize: '1K' | '2K' | '4K';
+  preserveSubject: boolean;
+  keepText: boolean;
 }
 export interface LayerSplitParams {
   engine: 'gemini' | 'gpt';
