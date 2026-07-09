@@ -8,7 +8,8 @@ export const isMultiOutputKind = (kind: NodeKind): boolean => MULTI_OUTPUT_KINDS
 
 /** 各處理節點的參數形狀（存進 GraphNode.data.params；#2 只做設定，執行是 #3） */
 export interface RemoveBgParams {
-  mode: 'local' | 'cloud';
+  /** 本機 ISNet／智慧 Gemini／雲端 BiRefNet（對標主畫布三種去背）。 */
+  mode: 'local' | 'smart' | 'cloud';
   /** 雲端模式下的 BiRefNet 模型（對標主畫布 6 種）；未選用預設 Matting。 */
   cloudModel?: BiRefNetModel;
 }
@@ -21,6 +22,8 @@ export interface StyleParams {
   styleKey: string;
 }
 export interface UpscaleParams {
+  /** 本機 ONNX 高清放大／智能 AI 放大（對標主畫布兩種）。 */
+  mode: 'local' | 'smart';
   modelKey: 'upscale_photo' | 'upscale_anime' | 'upscale_art';
   factor: 2 | 4;
 }

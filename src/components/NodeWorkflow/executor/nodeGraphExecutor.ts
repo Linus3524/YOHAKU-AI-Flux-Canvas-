@@ -14,6 +14,8 @@ import { generateOutpaintingPrompt } from '../../../ai/pipelines/outpainting';
 import { analyzeCopiedStyle, buildCopiedStylePrompt, buildPresetStylePrompt, generateCopiedStyleAssets, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
+import { executeDynamicRemoval } from '../../../utils/DynamicBackgroundRemoval';
+import { createGeminiClient } from '../../../ai/geminiClient';
 import { getVisualStyleById } from '../../../skills/styles';
 import { LOGO_BRAND_OUTPUTS, LOGO_DEFAULT_CONFIG } from '../../../skills/logo';
 import { CROSS_PLATFORM_SPECS } from '../../../skills/crossPlatform';
@@ -155,6 +157,15 @@ async function runRemoveBg(
 ): Promise<string> {
   const mode = params.mode ?? 'local';
 
+  // 智慧去背：Gemini 動態去背（對標主畫布 executeDynamicRemoval）。
+  if (mode === 'smart') {
+    if (engine.geminiApiKey) {
+      const genAI = createGeminiClient(engine.geminiApiKey);
+      return await executeDynamicRemoval(input, genAI, onFallback, engine.geminiImageModel);
+    }
+    onFallback?.('缺少 Gemini API Key，暫時改用本機去背');
+  }
+
   // 雲端去背：fal.ai BiRefNet v2（重用既有 pipeline，不重寫）。可選 6 種模型。
   if (mode === 'cloud') {
     if (engine.falApiKey) {
@@ -171,12 +182,45 @@ async function runRemoveBg(
 async function runUpscale(
   params: Partial<UpscaleParams>,
   input: string,
+  engine: ExecutorEngine,
   onProgress?: (message: string) => void,
 ): Promise<string> {
+  const factor = params.factor === 4 ? 4 : 2;
+
+  // 智能放大：Gemini/Atlas 生成式放大（對標主畫布 handleAIUpscale，用 generateStyledImage）。
+  if (params.mode === 'smart') {
+    if (!isImageSrc(input)) throw new Error('智能放大需要上游圖片');
+    if (!engine.geminiApiKey) throw new Error('智能放大需要 Gemini API Key');
+    const requestedResolution = factor >= 4 ? '4K' : '2K';
+    const prompt = `Task: High-fidelity image upscaling.
+Action: Upscale the image by ${factor}x.
+CRITICAL INSTRUCTION: Maintain the EXACT aspect ratio and geometry of the original subject content.
+Do NOT stretch, squeeze, or distort the image content to fit the aspect ratio container.
+If the container ratio differs slightly, extend the background naturally instead of distorting the subject.
+Enhance details and sharpness significantly while keeping the structure identical.`;
+    onProgress?.(`智能放大中（目標 ${requestedResolution}）`);
+    const src = await generateStyledImage(
+      {
+        srcImage: input,
+        stylePrompt: prompt,
+        preserveTransparency: true,
+        transparencyKeys: { falApiKey: engine.falApiKey, geminiApiKey: engine.geminiApiKey, imageModel: engine.geminiImageModel },
+      },
+      {
+        model: 'gemini',
+        geminiApiKey: engine.geminiApiKey,
+        geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
+        imageSize: requestedResolution,
+      },
+    );
+    if (!src) throw new Error('智能放大沒有回傳圖片');
+    return src;
+  }
+
+  // 本機 ONNX 高清放大。
   const modelKey = UPSCALE_MODEL_KEYS.includes(params.modelKey as UpscaleParams['modelKey'])
     ? params.modelKey as UpscaleParams['modelKey']
     : 'upscale_photo';
-  const factor = params.factor === 4 ? 4 : 2;
   const notReady = await checkLocalModelReady(modelKey);
   if (notReady) throw new Error(notReady);
   return await runLocalUpscalePipeline(input, modelKey, factor, pct => onProgress?.(`放大中 ${pct}%`));
@@ -506,9 +550,10 @@ const nodeRunners: Record<NodeKind, NodeRunner> = {
     requireInput(input, '風格轉換'),
     engine,
   )),
-  upscale: async ({ node, input, onProgress }) => singleResult(await runUpscale(
+  upscale: async ({ node, input, engine, onProgress }) => singleResult(await runUpscale(
     (node.data.params ?? {}) as Partial<UpscaleParams>,
     requireInput(input, '放大'),
+    engine,
     onProgress,
   )),
   promptOptimize: async ({ node, inputs, engine }) => singleResult(await runPromptOptimize(

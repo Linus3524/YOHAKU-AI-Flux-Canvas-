@@ -32,9 +32,14 @@ export function RemoveBgNode({ id, data, selected }: NodeProps) {
     ? () => (onDeleteNode as (nodeId: string) => void)(id)
     : undefined;
 
-  const setMode = (next: 'local' | 'cloud') => {
+  const setMode = (next: 'local' | 'smart' | 'cloud') => {
     updateNodeData(id, { params: { ...params, mode: next } });
   };
+  const MODE_TABS: { key: 'local' | 'smart' | 'cloud'; label: string }[] = [
+    { key: 'local', label: '本機' },
+    { key: 'smart', label: '智慧' },
+    { key: 'cloud', label: '雲端' },
+  ];
   const setCloudModel = (next: BiRefNetModel) => {
     updateNodeData(id, { params: { ...params, cloudModel: next } });
   };
@@ -48,19 +53,24 @@ export function RemoveBgNode({ id, data, selected }: NodeProps) {
       </div>
       <div className="p-1.5 space-y-1.5">
         <div className="flex gap-px bg-neutral-100 p-px">
-          {(['local', 'cloud'] as const).map(m => (
+          {MODE_TABS.map(tab => (
             <button
-              key={m}
+              key={tab.key}
               type="button"
-              onClick={() => setMode(m)}
+              onClick={() => setMode(tab.key)}
               className={`nodrag flex-1 px-2 py-1 text-[11px] transition-colors ${
-                mode === m ? 'bg-white text-neutral-900 font-medium shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                mode === tab.key ? 'bg-white text-neutral-900 font-medium shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
               }`}
             >
-              {m === 'local' ? '本機' : '雲端'}
+              {tab.label}
             </button>
           ))}
         </div>
+        {mode === 'smart' && (
+          <div className="text-[9px] leading-snug text-neutral-400 px-0.5">
+            Gemini 智慧去背：自動偵測背景、適合複雜場景
+          </div>
+        )}
         {mode === 'cloud' && (
           <>
             <select

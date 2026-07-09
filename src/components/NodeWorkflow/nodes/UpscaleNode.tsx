@@ -15,6 +15,7 @@ export function UpscaleNode({ id, data, selected }: NodeProps) {
   const { updateNodeData } = useReactFlow();
   const ring = useNodeStatusRing(id);
   const params = (data?.params ?? {}) as Partial<UpscaleParams>;
+  const mode = params.mode ?? 'local';
   const modelKey = params.modelKey ?? 'upscale_photo';
   const factor = params.factor ?? 2;
   const onDeleteNode = data?.onDeleteNode;
@@ -34,15 +35,36 @@ export function UpscaleNode({ id, data, selected }: NodeProps) {
         放大
       </div>
       <div className="p-1.5 space-y-1.5">
-        <select
-          value={modelKey}
-          onChange={(e) => setParam({ modelKey: e.target.value as UpscaleParams['modelKey'] })}
-          className="nodrag block w-full border border-neutral-200 px-1.5 py-1 text-[11px] focus:outline-none focus:border-neutral-400 bg-neutral-50"
-        >
-          {MODEL_OPTIONS.map(option => (
-            <option key={option.key} value={option.key}>{option.label}</option>
+        <div className="flex gap-px bg-neutral-100 p-px">
+          {([['local', '本機'], ['smart', '智能']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setParam({ mode: key })}
+              className={`nodrag flex-1 px-2 py-1 text-[11px] transition-colors ${
+                mode === key ? 'bg-white text-neutral-900 font-medium shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              {label}
+            </button>
           ))}
-        </select>
+        </div>
+        {mode === 'local' && (
+          <select
+            value={modelKey}
+            onChange={(e) => setParam({ modelKey: e.target.value as UpscaleParams['modelKey'] })}
+            className="nodrag block w-full border border-neutral-200 px-1.5 py-1 text-[11px] focus:outline-none focus:border-neutral-400 bg-neutral-50"
+          >
+            {MODEL_OPTIONS.map(option => (
+              <option key={option.key} value={option.key}>{option.label}</option>
+            ))}
+          </select>
+        )}
+        {mode === 'smart' && (
+          <div className="text-[9px] leading-snug text-neutral-400 px-0.5">
+            AI 生成式放大：細節增強、需 Gemini Key
+          </div>
+        )}
         <div className="flex gap-px bg-neutral-100 p-px">
           {([2, 4] as const).map(nextFactor => (
             <button
