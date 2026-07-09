@@ -119,7 +119,6 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   );
   const [isDraggingNode, setIsDraggingNode] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [interactionMode, setInteractionMode] = useState<'select' | 'pan'>('select');
 
   const handleRun = useCallback(async () => {
     if (isRunning) return;
@@ -216,10 +215,10 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
         fitViewOptions={{ padding: 0.28 }}
         maxZoom={1}
         proOptions={{ hideAttribution: true }}
-        nodesDraggable={interactionMode === 'select'}
-        nodesSelectable={interactionMode === 'select'}
+        nodesDraggable={true}
+        nodesSelectable={true}
         panOnDrag={true}
-        className={`node-workflow-flow bg-[#f8fafc] ${interactionMode === 'pan' ? 'mode-pan' : ''}`}
+        className="node-workflow-flow bg-[#f8fafc]"
       >
         <style>{`
           .node-workflow-flow .react-flow__node {
@@ -253,16 +252,32 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
             box-shadow: none !important;
           }
           
-          /* 抓手模式下，懸停與拖拽的游標覆寫 */
-          .node-workflow-flow.mode-pan,
-          .node-workflow-flow.mode-pan .react-flow__pane,
-          .node-workflow-flow.mode-pan .react-flow__node {
+          /* 自動游標感應：畫布背景是抓手，物件上是普通選取箭頭 */
+          .node-workflow-flow,
+          .node-workflow-flow .react-flow__pane {
             cursor: grab !important;
           }
-          .node-workflow-flow.mode-pan:active,
-          .node-workflow-flow.mode-pan .react-flow__pane:active,
-          .node-workflow-flow.mode-pan .react-flow__node:active {
+          .node-workflow-flow:active,
+          .node-workflow-flow .react-flow__pane:active {
             cursor: grabbing !important;
+          }
+          
+          /* 物件（節點）上是普通選取指針 */
+          .node-workflow-flow .react-flow__node {
+            cursor: default !important;
+          }
+          
+          /* 連線點、按鈕、下拉選單是 pointer */
+          .node-workflow-flow .react-flow__handle,
+          .node-workflow-flow .react-flow__node button,
+          .node-workflow-flow .react-flow__node select,
+          .node-workflow-flow .react-flow__node [role="button"] {
+            cursor: pointer !important;
+          }
+          
+          /* 文字輸入框上是文字選取游標 (I-beam) */
+          .node-workflow-flow .react-flow__node textarea {
+            cursor: text !important;
           }
         `}</style>
         <Background color="#cbd5e1" gap={28} size={1.2} />
@@ -273,46 +288,16 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
                 key={kind}
                 type="button"
                 onClick={() => addNode(kind)}
-                className="px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors border-r border-black/6"
+                className="px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors border-r border-black/6 last:border-r-0"
               >
                 {label}
               </button>
             ))}
-            
-            {/* 模式切換器 */}
-            <button
-              type="button"
-              onClick={() => setInteractionMode('select')}
-              className={`px-3 py-1.5 text-[12px] transition-colors border-r border-black/6 font-medium ${
-                interactionMode === 'select'
-                  ? 'bg-neutral-100 text-neutral-900 font-semibold'
-                  : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700'
-              }`}
-              title="選取、編輯與拖曳節點"
-            >
-              指針
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setInteractionMode('pan');
-                setNodes(ns => ns.map(n => ({ ...n, selected: false })));
-              }}
-              className={`px-3 py-1.5 text-[12px] transition-colors border-r border-black/6 font-medium ${
-                interactionMode === 'pan'
-                  ? 'bg-neutral-100 text-neutral-900 font-semibold'
-                  : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700'
-              }`}
-              title="拖曳移動畫布背景"
-            >
-              抓手
-            </button>
-
             <button
               type="button"
               onClick={handleRun}
               disabled={isRunning}
-              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 disabled:opacity-50 transition-colors"
+              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 disabled:opacity-50 transition-colors border-l border-black/12"
             >
               {isRunning ? '執行中…' : '▶ 執行'}
             </button>
