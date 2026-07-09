@@ -14,6 +14,7 @@ import { CopyStyleNode } from './nodes/CopyStyleNode';
 import { LayerSplitNode } from './nodes/LayerSplitNode';
 import { BrandKitNode } from './nodes/BrandKitNode';
 import { CrossPlatformNode } from './nodes/CrossPlatformNode';
+import { ProductMarketingNode } from './nodes/ProductMarketingNode';
 
 export type NodeIoType = 'none' | 'image' | 'text' | 'imageOrText' | 'imageBatch';
 export type NodeCategory = 'input' | 'process' | 'generate' | 'analysis' | 'output';
@@ -167,6 +168,17 @@ export const NODE_REGISTRY = {
     component: CrossPlatformNode,
     label: '跨平台適配',
     addLabel: '＋ 跨平台',
+    addable: true,
+    category: 'generate',
+    needsUpstream: true,
+    input: 'image',
+    output: 'imageBatch',
+  },
+  productMarketing: {
+    kind: 'productMarketing',
+    component: ProductMarketingNode,
+    label: '商品行銷圖',
+    addLabel: '＋ 商品行銷',
     addable: true,
     category: 'generate',
     needsUpstream: true,

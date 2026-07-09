@@ -1,13 +1,14 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, BrandKitParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, NodeKind, OutpaintParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, BrandKitParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
 import type { ImageElement, OutpaintingState } from '../../../types';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
 import { runExtendBrandKitPipeline } from '../../../ai/pipelines/brandKit';
 import { runCrossPlatformPipeline } from '../../../ai/pipelines/crossPlatform';
+import { runProductMarketingPipeline } from '../../../ai/pipelines/productMarketing';
 import { analyzeImageStyleFull, optimizePromptWithAI } from '../../../ai/pipelines/analysis';
 import { generateOutpaintingPrompt } from '../../../ai/pipelines/outpainting';
 import { analyzeCopiedStyle, buildCopiedStylePrompt, buildPresetStylePrompt, generateCopiedStyleAssets, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
@@ -15,6 +16,7 @@ import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
 import { LOGO_BRAND_OUTPUTS, LOGO_DEFAULT_CONFIG } from '../../../skills/logo';
 import { CROSS_PLATFORM_SPECS } from '../../../skills/crossPlatform';
+import { PRODUCT_MARKETING_DEFAULT_CONFIG, PRODUCT_MARKETING_PLATFORMS } from '../../../skills/marketing';
 import { isImageSrc } from '../mediaSrc';
 import { nodeRequiresUpstream } from '../nodeRegistry';
 
@@ -400,6 +402,48 @@ async function runCrossPlatform(
   return assets;
 }
 
+async function runProductMarketing(
+  params: Partial<ProductMarketingParams>,
+  input: string,
+  engine: ExecutorEngine,
+  onProgress?: (message: string) => void,
+): Promise<string[]> {
+  if (!isImageSrc(input)) throw new Error('商品行銷圖節點需要上游商品圖片');
+  const platformId = params.platformId && PRODUCT_MARKETING_PLATFORMS[params.platformId]
+    ? params.platformId
+    : 'shopee';
+  const recipes = PRODUCT_MARKETING_PLATFORMS[platformId].recipes;
+  const selectedRecipeIds = Array.isArray(params.selectedRecipeIds) && params.selectedRecipeIds.length > 0
+    ? params.selectedRecipeIds
+    : recipes.slice(0, 3).map(recipe => recipe.id);
+  const assets: string[] = [];
+  let zIndex = 0;
+  const brief = {
+    ...PRODUCT_MARKETING_DEFAULT_CONFIG,
+    productName: params.productName?.trim() || 'Product',
+    sellingPoints: params.sellingPoints?.trim() || '',
+    targetAudience: params.targetAudience?.trim() || PRODUCT_MARKETING_DEFAULT_CONFIG.targetAudience,
+    visualTone: params.visualTone?.trim() || PRODUCT_MARKETING_DEFAULT_CONFIG.visualTone,
+    lockStyleConsistency: params.lockStyleConsistency === true,
+  };
+  await runProductMarketingPipeline({
+    sourceElement: createImageElementForPipeline(input, 'product-marketing-source'),
+    productSrc: input,
+    brief,
+    engine: resolveImageEngine({ model: params.model, imageSize: params.imageSize }, engine),
+    selectedRecipeIds,
+    platformId,
+    apiKey: engine.geminiApiKey,
+    nextZIndex: () => zIndex++,
+    onToast: message => onProgress?.(message),
+    onAsset: asset => {
+      if (asset.src) assets.push(asset.src);
+    },
+  });
+  if (assets.length === 0) throw new Error('商品行銷圖沒有產生任何圖片');
+  return assets;
+}
+
 /** layerSplit 節點：Gemini 語意偵測 + BiRefNet 去背 → 多張圖層（多輸出）。 */
 async function runLayerSplit(
   input: string,
@@ -496,6 +540,12 @@ const nodeRunners: Record<NodeKind, NodeRunner> = {
   crossPlatform: async ({ node, input, engine, onProgress }) => batchResult(await runCrossPlatform(
     (node.data.params ?? {}) as Partial<CrossPlatformParams>,
     requireInput(input, '跨平台適配'),
+    engine,
+    onProgress,
+  )),
+  productMarketing: async ({ node, input, engine, onProgress }) => batchResult(await runProductMarketing(
+    (node.data.params ?? {}) as Partial<ProductMarketingParams>,
+    requireInput(input, '商品行銷圖'),
     engine,
     onProgress,
   )),
