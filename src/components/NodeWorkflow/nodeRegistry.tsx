@@ -12,6 +12,7 @@ import { AnalyzeNode } from './nodes/AnalyzeNode';
 import { OutpaintNode } from './nodes/OutpaintNode';
 import { CopyStyleNode } from './nodes/CopyStyleNode';
 import { LayerSplitNode } from './nodes/LayerSplitNode';
+import { BrandKitNode } from './nodes/BrandKitNode';
 
 export type NodeIoType = 'none' | 'image' | 'text' | 'imageOrText' | 'imageBatch';
 export type NodeCategory = 'input' | 'process' | 'generate' | 'analysis' | 'output';
@@ -145,6 +146,17 @@ export const NODE_REGISTRY = {
     addLabel: '＋ 圖層分離',
     addable: true,
     category: 'process',
+    needsUpstream: true,
+    input: 'image',
+    output: 'imageBatch',
+  },
+  brandKit: {
+    kind: 'brandKit',
+    component: BrandKitNode,
+    label: '品牌識別',
+    addLabel: '＋ 品牌識別',
+    addable: true,
+    category: 'generate',
     needsUpstream: true,
     input: 'image',
     output: 'imageBatch',
