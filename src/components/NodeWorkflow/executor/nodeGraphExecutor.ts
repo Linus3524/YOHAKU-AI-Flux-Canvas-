@@ -9,6 +9,7 @@ import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelin
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
 import { isImageSrc } from '../mediaSrc';
+import { nodeRequiresUpstream } from '../nodeRegistry';
 
 const ATLAS_MODELS = ['seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
 const STYLE_PRESET_BY_KEY: Record<string, string> = {
@@ -298,9 +299,7 @@ export async function executeGraph(
         }
 
         const input = upstreamSrc(node.id, graph, results, batchResults);
-        const needsUpstream = node.kind === 'removeBg' || node.kind === 'style'
-          || node.kind === 'output' || node.kind === 'layerSplit';
-        if (needsUpstream && !input) {
+        if (nodeRequiresUpstream(node.kind) && !input) {
           unavailableNodeIds.add(node.id);
           status(node.id, 'idle', '無上游輸入');
           continue;

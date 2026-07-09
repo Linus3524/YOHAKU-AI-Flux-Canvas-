@@ -20,24 +20,10 @@ import {
 import '@xyflow/react/dist/style.css';
 import { useNodeGraphStore } from '../../store/nodeGraphStore';
 import { isImageSrc } from './mediaSrc';
-import { InputNode } from './nodes/InputNode';
-import { RemoveBgNode } from './nodes/RemoveBgNode';
-import { ImageGenNode } from './nodes/ImageGenNode';
-import { StyleNode } from './nodes/StyleNode';
-import { OutputNode } from './nodes/OutputNode';
-import { LayerSplitNode } from './nodes/LayerSplitNode';
 import { NodeWorkflowContext } from './NodeWorkflowContext';
+import { ADDABLE_NODES, DEFAULT_NODE_LABELS, nodeTypes } from './nodeRegistry';
 import { executeGraph, type ExecutorEngine } from './executor/nodeGraphExecutor';
 import type { GraphEdge, GraphNode, NodeKind } from './types';
-
-const nodeTypes = {
-  input: InputNode,
-  output: OutputNode,
-  removeBg: RemoveBgNode,
-  imageGen: ImageGenNode,
-  style: StyleNode,
-  layerSplit: LayerSplitNode,
-};
 
 function DeletableEdge({
   id,
@@ -111,15 +97,6 @@ const edgeTypes = {
   deletable: DeletableEdge,
 };
 
-const DEFAULT_LABEL: Record<NodeKind, string> = {
-  input: 'Input',
-  output: 'Output',
-  removeBg: '去背',
-  imageGen: '生成圖片',
-  style: '風格轉換',
-  layerSplit: '圖層分離',
-};
-
 type FlowNodeData = Record<string, unknown> & {
   label: string;
   kind: NodeKind;
@@ -143,7 +120,7 @@ const toFlowNode = (node: GraphNode): FlowNode => ({
   position: node.position,
   data: {
     ...node.data,
-    label: node.data.label ?? DEFAULT_LABEL[node.kind],
+    label: node.data.label ?? DEFAULT_NODE_LABELS[node.kind],
     kind: node.kind,
   },
 });
@@ -190,13 +167,6 @@ interface NodeWorkflowCanvasProps {
 
 // 拖到畫面底部這個高度內放開 = 移出到大畫布
 const DETACH_ZONE_HEIGHT = 90;
-const ADDABLE: { kind: NodeKind; label: string }[] = [
-  { kind: 'removeBg', label: '＋ 去背' },
-  { kind: 'imageGen', label: '＋ 生圖' },
-  { kind: 'style', label: '＋ 風格' },
-  { kind: 'layerSplit', label: '＋ 圖層分離' },
-  { kind: 'output', label: '＋ 輸出' },
-];
 
 export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRunError }: NodeWorkflowCanvasProps) {
   // 進子空間前 Overlay 已 loadGraph，這裡讀一次當初始值。
@@ -340,7 +310,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
     const position = selected
       ? { x: selected.position.x + 240, y: selected.position.y }
       : { x: 260 + nodes.length * 24, y: 260 };
-    const graphNode: GraphNode = { id, kind, position, data: { label: DEFAULT_LABEL[kind], params: {} } };
+    const graphNode: GraphNode = { id, kind, position, data: { label: DEFAULT_NODE_LABELS[kind], params: {} } };
     const flowNode = toFlowNode(graphNode);
     setNodes(nds => [
       ...nds.map(n => ({ ...n, selected: false })),
@@ -466,7 +436,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
         <Background color="#cbd5e1" gap={28} size={1.2} />
         <Panel position="top-left">
           <div className="flex items-center gap-px border border-black/12 bg-white shadow-sm">
-            {ADDABLE.map(({ kind, label }) => (
+            {ADDABLE_NODES.map(({ kind, label }) => (
               <button
                 key={kind}
                 type="button"
