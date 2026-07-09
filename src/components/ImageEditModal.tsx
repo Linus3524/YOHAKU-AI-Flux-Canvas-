@@ -10,31 +10,10 @@ import { getModelStatus } from '../utils/onnxModelCache';
 import { runLamaInWorker, warmUpLamaWorker, getLamaBackend } from '../utils/lamaWorkerClient';
 import { runUpscaleInWorker } from '../utils/upscaleWorkerClient';
 import { runMiGanInWorker, warmUpMiGanWorker, getMiGanBackend } from '../utils/miGanWorkerClient';
-
-// Helper: Simple debounce hook
-const useDebounce = (callback: (...args: any[]) => void, delay: number) => {
-  const timeoutRef = useRef<number | null>(null);
-  
-  useEffect(() => {
-    // Cleanup on unmount
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  return (...args: any[]) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = window.setTimeout(() => {
-      callback(...args);
-    }, delay);
-  };
-};
-
-
+import { BRUSH_SIZES, defaultAdjustments, EditIcons, MASK_COLOR, MAX_REFERENCE_IMAGES, MAX_ZOOM, MIN_ZOOM, removeModelOptions, type ImageAdjustments } from './ImageEditModal/constants';
+import { drawEllipseFromDrag, useDebounce } from './ImageEditModal/helpers';
+import { AdjustmentSlider } from './ImageEditModal/AdjustmentSlider';
+import { CollapsibleSection } from './ImageEditModal/CollapsibleSection';
 
 interface ImageEditModalProps {
   element: ImageElement;
@@ -46,144 +25,12 @@ interface ImageEditModalProps {
   canvasImages?: { id: string; src: string; name?: string }[];
 }
 
-const MAX_REFERENCE_IMAGES = 3;
-
 interface GenerationContext {
   baseImageSrc: string;
   maskDataUrl: string;
   prompt: string;
   type: 'remove' | 'edit';
 }
-
-interface ImageAdjustments {
-  brightness: number;
-  contrast: number;
-  saturation: number;
-  temperature: number;
-  tint: number;
-  highlight: number;
-  shadow: number;
-  sharpness: number;
-}
-
-const defaultAdjustments: ImageAdjustments = {
-  brightness: 100,
-  contrast: 100,
-  saturation: 100,
-  temperature: 0,
-  tint: 0,
-  highlight: 0,
-  shadow: 0,
-  sharpness: 0,
-};
-
-
-const BRUSH_SIZES = [10, 20, 40, 60];
-const MASK_COLOR = 'rgba(255, 59, 48, 0.5)'; // Increased opacity slightly for clearer AI visibility
-const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 5;
-
-const EditIcons = {
-    Undo:   () => <Icon name="undo" size={16} />,
-    Redo:   () => <Icon name="redo" size={16} />,
-    Eye:    () => <Icon name="visibility" size={16} />,
-    EyeOff: () => <Icon name="visibility_off" size={16} />,
-    Trash:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
-};
-
-const AdjustmentSlider: React.FC<{
-  label: string;
-  value: number;
-  defaultValue: number;
-  min: number;
-  max: number;
-  onChange: (value: number) => void;
-  onReset: () => void;
-}> = ({ label, value, defaultValue, min, max, onChange, onReset }) => {
-  const isModified = value !== defaultValue;
-  // Parse "亮度 (Brightness)" → ["亮度", "Brightness"]
-  const match = label.match(/^(.+?)\s*\((.+)\)$/);
-  const labelMain = match ? match[1].trim() : label;
-  const labelEn = match ? match[2] : '';
-  return (
-    <div className="w-full">
-      <div className="flex justify-between items-center">
-        <span className="text-[11px] font-bold text-gray-600 uppercase">
-          {labelMain}
-          {labelEn && <span className="text-gray-400 font-normal ml-1">({labelEn})</span>}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-bold text-gray-900 w-6 text-right">{value.toFixed(0)}</span>
-          {isModified && (
-            <button onClick={onReset} className="text-[10px] text-blue-500 hover:underline" title="重置">重置</button>
-          )}
-        </div>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="img-editor-slider"
-      />
-    </div>
-  );
-};
-
-const CollapsibleSection: React.FC<{
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}> = ({ title, defaultOpen = true, children }) => {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="py-4 border-b border-gray-100 last:border-b-0">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between mb-4 cursor-pointer group"
-      >
-        <h3 className="text-[11px] font-bold text-gray-400 tracking-widest uppercase">{title}</h3>
-        <svg
-          width="14" height="14" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          className={`text-gray-400 group-hover:text-gray-600 transition-transform duration-200 ${open ? '' : 'rotate-180'}`}
-        >
-          <polyline points="18 15 12 9 6 15" />
-        </svg>
-      </button>
-      {open && <div className="space-y-4">{children}</div>}
-    </div>
-  );
-};
-
-
-/**
- * 圓形色塊工具：從拖曳起訖點畫「自由橢圓」（寬高各自的拖曳距離決定長短軸），
- * 按住 Shift 鎖定正圓（取寬高中較大者為半徑）——對齊設計軟體慣例（PS/AI/Figma 皆用 Shift）。
- */
-function drawEllipseFromDrag(
-  ctx: CanvasRenderingContext2D,
-  startX: number, startY: number,
-  curX: number, curY: number,
-  constrainCircle: boolean,
-) {
-  const cx = (startX + curX) / 2;
-  const cy = (startY + curY) / 2;
-  let rx = Math.abs(curX - startX) / 2;
-  let ry = Math.abs(curY - startY) / 2;
-  if (constrainCircle) {
-    const r = Math.max(rx, ry);
-    rx = r; ry = r;
-  }
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-}
-
-const removeModelOptions = [
-  { key: 'cloud' as const, label: '雲端模式', desc: '依據頂部 Model 設定' },
-  { key: 'lama' as const, label: '本機 LaMa', desc: '背景/紋理填補 (極速)' },
-  { key: 'mi_gan' as const, label: '本機 MI-GAN', desc: '人物/五官/結構修復' }
-];
 
 export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasKey, canvasImages = [] }) => {
   const imageRef = useRef<HTMLImageElement>(null);
