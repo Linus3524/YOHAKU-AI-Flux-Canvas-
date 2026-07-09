@@ -130,7 +130,8 @@ export async function executeGraph(
         status(node.id, 'done');
       } else {
         const input = upstreamSrc(node.id, graph, results);
-        if (!input) { status(node.id, 'idle', '無上游輸入'); continue; }
+        const needsUpstream = node.kind === 'removeBg' || node.kind === 'style' || node.kind === 'output';
+        if (needsUpstream && !input) { status(node.id, 'idle', '無上游輸入'); continue; }
 
         status(node.id, 'running');
         let result: string;
