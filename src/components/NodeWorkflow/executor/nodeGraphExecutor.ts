@@ -1,7 +1,7 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams, RemoveBgParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, ImageGenParams, NodeKind, RemoveBgParams } from '../types';
 import type { Part } from '@google/genai';
 import { runLocalRmbgPipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
@@ -131,6 +131,54 @@ async function runLayerSplit(
   if (srcs.length === 0) throw new Error('圖層分離沒有產生任何圖層');
   return srcs;
 }
+
+type NodeRunnerResult =
+  | { type: 'single'; value: string }
+  | { type: 'batch'; values: string[] };
+
+interface NodeRunnerContext {
+  node: GraphNode;
+  input: string | undefined;
+  inputs: string[];
+  engine: ExecutorEngine;
+  onProgress: (message: string) => void;
+}
+
+type NodeRunner = (ctx: NodeRunnerContext) => Promise<NodeRunnerResult> | NodeRunnerResult;
+
+const singleResult = (value: string): NodeRunnerResult => ({ type: 'single', value });
+const batchResult = (values: string[]): NodeRunnerResult => ({ type: 'batch', values });
+
+const requireInput = (input: string | undefined, nodeName: string): string => {
+  if (!input) throw new Error(`${nodeName}節點需要上游輸入`);
+  return input;
+};
+
+const nodeRunners: Record<NodeKind, NodeRunner> = {
+  input: ({ node }) => singleResult(typeof node.data.src === 'string' ? node.data.src : ''),
+  output: ({ input }) => singleResult(requireInput(input, '輸出')),
+  removeBg: async ({ node, input, engine, onProgress }) => singleResult(await runRemoveBg(
+    (node.data.params ?? {}) as Partial<RemoveBgParams>,
+    requireInput(input, '去背'),
+    engine,
+    onProgress,
+  )),
+  imageGen: async ({ node, inputs, engine }) => singleResult(await runImageGen(
+    (node.data.params ?? {}) as Partial<ImageGenParams>,
+    inputs,
+    engine,
+  )),
+  style: async ({ node, input, engine }) => singleResult(await runStyleTransfer(
+    typeof node.data.params?.styleKey === 'string' ? node.data.params.styleKey : undefined,
+    requireInput(input, '風格轉換'),
+    engine,
+  )),
+  layerSplit: async ({ input, engine, onProgress }) => batchResult(await runLayerSplit(
+    requireInput(input, '圖層分離'),
+    engine,
+    onProgress,
+  )),
+};
 
 export interface ExecutorEngine {
   geminiApiKey?: string | null;
@@ -286,72 +334,38 @@ export async function executeGraph(
     try {
       throwIfAborted(options.signal);
 
-      if (node.kind === 'input') {
-        const src = typeof node.data.src === 'string' ? node.data.src : '';
-        emitResult(node.id, src);
+      const blockedReason = blockedByFailedUpstream(node.id, graph, unavailableNodeIds);
+      if (blockedReason) {
+        unavailableNodeIds.add(node.id);
+        status(node.id, 'idle', blockedReason);
+        continue;
+      }
+
+      const input = upstreamSrc(node.id, graph, results, batchResults);
+      if (nodeRequiresUpstream(node.kind) && !input) {
+        unavailableNodeIds.add(node.id);
+        status(node.id, 'idle', '無上游輸入');
+        continue;
+      }
+
+      if (node.kind !== 'input') status(node.id, 'running');
+      throwIfAborted(options.signal);
+
+      const runnerResult = await nodeRunners[node.kind]({
+        node,
+        input,
+        inputs: upstreamSrcs(node.id, graph, results, batchResults),
+        engine,
+        onProgress: message => status(node.id, 'running', message),
+      });
+
+      if (runnerResult.type === 'batch') {
+        throwIfAborted(options.signal);
+        emitBatch(node.id, runnerResult.values);
         status(node.id, 'done');
       } else {
-        const blockedReason = blockedByFailedUpstream(node.id, graph, unavailableNodeIds);
-        if (blockedReason) {
-          unavailableNodeIds.add(node.id);
-          status(node.id, 'idle', blockedReason);
-          continue;
-        }
-
-        const input = upstreamSrc(node.id, graph, results, batchResults);
-        if (nodeRequiresUpstream(node.kind) && !input) {
-          unavailableNodeIds.add(node.id);
-          status(node.id, 'idle', '無上游輸入');
-          continue;
-        }
-
-        status(node.id, 'running');
         throwIfAborted(options.signal);
-
-        // 多輸出節點：產出「一組」結果，走 emitBatch，不進單值路徑。
-        if (node.kind === 'layerSplit') {
-          const srcs = await runLayerSplit(input, engine, message => status(node.id, 'running', message));
-          throwIfAborted(options.signal);
-          emitBatch(node.id, srcs);
-          status(node.id, 'done');
-          continue;
-        }
-
-        let result: string;
-        switch (node.kind) {
-          case 'removeBg': {
-            result = await runRemoveBg(
-              (node.data.params ?? {}) as Partial<RemoveBgParams>,
-              input,
-              engine,
-              message => status(node.id, 'running', message),
-            );
-            break;
-          }
-          case 'imageGen':
-            result = await runImageGen(
-              (node.data.params ?? {}) as Partial<ImageGenParams>,
-              upstreamSrcs(node.id, graph, results, batchResults),
-              engine,
-            );
-            break;
-          case 'output':
-            // 輸出節點：直接傳遞上游輸入，並作為最終結果展示
-            result = input;
-            break;
-          case 'style':
-            result = await runStyleTransfer(
-              typeof node.data.params?.styleKey === 'string' ? node.data.params.styleKey : undefined,
-              input,
-              engine,
-            );
-            break;
-          default:
-            result = input;
-            break;
-        }
-        throwIfAborted(options.signal);
-        emitResult(node.id, result);
+        emitResult(node.id, runnerResult.value);
         status(node.id, 'done');
       }
     } catch (err: unknown) {
