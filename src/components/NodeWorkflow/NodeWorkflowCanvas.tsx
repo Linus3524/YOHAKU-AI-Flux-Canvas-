@@ -119,6 +119,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   );
   const [isDraggingNode, setIsDraggingNode] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [interactionMode, setInteractionMode] = useState<'select' | 'pan'>('select');
 
   const handleRun = useCallback(async () => {
     if (isRunning) return;
@@ -215,7 +216,10 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
         fitViewOptions={{ padding: 0.28 }}
         maxZoom={1}
         proOptions={{ hideAttribution: true }}
-        className="node-workflow-flow bg-[#f8fafc]"
+        nodesDraggable={interactionMode === 'select'}
+        nodesSelectable={interactionMode === 'select'}
+        panOnDrag={true}
+        className={`node-workflow-flow bg-[#f8fafc] ${interactionMode === 'pan' ? 'mode-pan' : ''}`}
       >
         <style>{`
           .node-workflow-flow .react-flow__node {
@@ -248,6 +252,18 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
             outline-offset: 1px;
             box-shadow: none !important;
           }
+          
+          /* 抓手模式下，懸停與拖拽的游標覆寫 */
+          .node-workflow-flow.mode-pan,
+          .node-workflow-flow.mode-pan .react-flow__pane,
+          .node-workflow-flow.mode-pan .react-flow__node {
+            cursor: grab !important;
+          }
+          .node-workflow-flow.mode-pan:active,
+          .node-workflow-flow.mode-pan .react-flow__pane:active,
+          .node-workflow-flow.mode-pan .react-flow__node:active {
+            cursor: grabbing !important;
+          }
         `}</style>
         <Background color="#cbd5e1" gap={28} size={1.2} />
         <Panel position="top-left">
@@ -257,11 +273,41 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
                 key={kind}
                 type="button"
                 onClick={() => addNode(kind)}
-                className="px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors border-r border-black/6 last:border-r-0"
+                className="px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors border-r border-black/6"
               >
                 {label}
               </button>
             ))}
+            
+            {/* 模式切換器 */}
+            <button
+              type="button"
+              onClick={() => setInteractionMode('select')}
+              className={`px-3 py-1.5 text-[12px] transition-colors border-r border-black/6 font-medium ${
+                interactionMode === 'select'
+                  ? 'bg-neutral-100 text-neutral-900 font-semibold'
+                  : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700'
+              }`}
+              title="選取、編輯與拖曳節點"
+            >
+              指針
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setInteractionMode('pan');
+                setNodes(ns => ns.map(n => ({ ...n, selected: false })));
+              }}
+              className={`px-3 py-1.5 text-[12px] transition-colors border-r border-black/6 font-medium ${
+                interactionMode === 'pan'
+                  ? 'bg-neutral-100 text-neutral-900 font-semibold'
+                  : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700'
+              }`}
+              title="拖曳移動畫布背景"
+            >
+              抓手
+            </button>
+
             <button
               type="button"
               onClick={handleRun}
