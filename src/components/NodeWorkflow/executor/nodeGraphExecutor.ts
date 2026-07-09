@@ -1,7 +1,7 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, NodeGraphData, NodeRunStatus, ImageGenParams } from '../types';
+import type { GraphNode, NodeGraphData, NodeRunStatus, ImageGenParams, RemoveBgParams } from '../types';
 import { runLocalRmbgPipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
 import { buildPresetStylePrompt, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
@@ -86,6 +86,21 @@ async function runStyleTransfer(
   );
   if (!src) throw new Error('風格轉換沒有回傳圖片');
   return src;
+}
+
+async function runRemoveBg(
+  params: Partial<RemoveBgParams>,
+  input: string,
+  onFallback?: (message: string) => void,
+): Promise<string> {
+  const mode = params.mode ?? 'local';
+  if (mode === 'cloud') {
+    onFallback?.('雲端去背 pipeline 尚未存在，暫時改用本機去背');
+  }
+
+  const notReady = await checkLocalModelReady('bria_rmbg');
+  if (notReady) throw new Error(notReady);
+  return await runLocalRmbgPipeline(input);
 }
 
 export interface ExecutorEngine {
@@ -176,11 +191,11 @@ export async function executeGraph(
         let result: string;
         switch (node.kind) {
           case 'removeBg': {
-            // 先檢查本機模型是否已下載
-            const notReady = await checkLocalModelReady('bria_rmbg');
-            if (notReady) throw new Error(notReady);
-            // 本機去背（免 key）
-            result = await runLocalRmbgPipeline(input);
+            result = await runRemoveBg(
+              (node.data.params ?? {}) as Partial<RemoveBgParams>,
+              input,
+              message => status(node.id, 'running', message),
+            );
             break;
           }
           case 'imageGen':
