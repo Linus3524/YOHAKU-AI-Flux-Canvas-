@@ -108,12 +108,12 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, o
               <label className="mb-2 block text-xs font-semibold text-neutral-700">希望拆出幾層</label>
               <div className="grid grid-cols-4 gap-1.5">
                 {COUNTS.map(count => (
-                  <button key={String(count)} type="button" onClick={() => set('layerCount', count)} className={`h-8 border text-xs font-medium ${options.layerCount === count ? 'border-violet-500 bg-violet-600 text-white' : 'border-neutral-200 text-neutral-600 hover:border-neutral-400'}`}>
+                  <button key={String(count)} type="button" disabled={options.groupingStrategy === 'custom'} onClick={() => set('layerCount', count)} className={`h-8 border text-xs font-medium disabled:cursor-not-allowed disabled:opacity-35 ${options.layerCount === count ? 'border-violet-500 bg-violet-600 text-white' : 'border-neutral-200 text-neutral-600 hover:border-neutral-400'}`}>
                     {count === 'auto' ? '自動' : `${count} 層`}
                   </button>
                 ))}
               </div>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-500">模型會依內容調整；背景層會計入目標層數。</p>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-500">{options.groupingStrategy === 'custom' ? '依照指令模式會以列出的物件決定層數。' : '模型會依內容調整；背景層會計入目標層數。'}</p>
             </div>
 
             <div>
@@ -146,8 +146,8 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, o
             </div>
 
             <div>
-              <label htmlFor="magic-layer-instruction" className="mb-2 block text-xs font-semibold text-neutral-700">補充指令</label>
-              <textarea id="magic-layer-instruction" value={options.customInstruction} onChange={event => set('customInstruction', event.target.value)} placeholder="例如：人物、杯子與招牌分開；保留人物手上的花束。" className="h-24 w-full resize-none border border-neutral-200 p-2.5 text-xs leading-relaxed outline-none focus:border-violet-500" />
+              <label htmlFor="magic-layer-instruction" className="mb-2 block text-xs font-semibold text-neutral-700">{options.groupingStrategy === 'custom' ? '要拆出的物件' : '補充指令'}</label>
+              <textarea id="magic-layer-instruction" value={options.customInstruction} onChange={event => set('customInstruction', event.target.value)} placeholder="例如：人物、杯子、招牌、花束，各自拆成一層。" className="h-24 w-full resize-none border border-neutral-200 p-2.5 text-xs leading-relaxed outline-none focus:border-violet-500" />
             </div>
 
             <div className="space-y-2 border-y border-neutral-100 py-3 text-xs text-neutral-700">

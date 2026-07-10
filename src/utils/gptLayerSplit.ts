@@ -303,6 +303,40 @@ async function planObjectLayers(
     apiKey: string,
     options: Partial<MagicLayerOptions>,
 ): Promise<MagicLayerPlan> {
+    if (options.groupingStrategy === 'custom') {
+        const instruction = options.customInstruction?.trim();
+        if (!instruction) throw new Error('使用「依照指令」時，請先填寫要拆出的物件');
+
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [{ text: `You are selecting editable layers from an atomic object inventory.
+The user's instruction is an EXCLUSIVE WHITELIST. Select only objects explicitly requested by the user. Do not add other detected objects, do not fill a target count, and do not require every object ID to appear.
+Create one group per item requested by the user, unless the user explicitly asks to group items together. If a requested item has multiple atomic parts, include those parts in the same group.
+User instruction: ${instruction}
+Return ONLY JSON: [{"memberIds":["object_1"],"label":"人物","reason":"explicitly requested"}]
+Objects: ${JSON.stringify(objects.map(object => ({ id: object.id, label: object.label, labelEn: object.labelEn, category: object.category, bbox: object.bbox, description: object.description })))}` }] },
+        });
+        const match = (response.text ?? '').replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').match(/\[[\s\S]*\]/);
+        if (!match) throw new Error('無法依照指令建立圖層，請把物件名稱寫得更明確');
+        const rawGroups = JSON.parse(match[0]) as Array<{ memberIds?: string[]; label?: string; reason?: string }>;
+        const byId = new Map(objects.map(object => [object.id, object]));
+        const used = new Set<string>();
+        const groups = rawGroups.slice(0, 20).map(group => {
+            const members = (group.memberIds ?? []).filter(id => byId.has(id) && !used.has(id)).map(id => {
+                used.add(id);
+                return byId.get(id)!;
+            });
+            return { members, label: group.label, reason: group.reason };
+        }).filter(group => group.members.length > 0);
+        if (groups.length === 0) throw new Error('指令中的物件未能對應到圖片內容，請換成更明確的名稱');
+        return {
+            detectedObjectCount: objects.length,
+            targetForegroundCount: groups.length,
+            layers: groups.map((group, index) => buildPlanItem(group.members, index, group.label, group.reason)),
+        };
+    }
+
     const requested = typeof options.layerCount === 'number'
         ? options.layerCount - (options.includeBackground === false ? 0 : 1)
         : Math.min(8, Math.max(1, Math.ceil(objects.length * 0.7)));
@@ -317,9 +351,7 @@ async function planObjectLayers(
 
     const strategyInstruction = options.groupingStrategy === 'separate'
         ? 'Keep objects separate whenever possible. Only group the least important related objects when required to meet the exact target count.'
-        : options.groupingStrategy === 'custom'
-            ? `User instructions have highest priority: ${options.customInstruction || 'No additional instruction supplied.'}`
-            : 'Group objects that form one meaningful design unit, while keeping major subjects, products and text independently editable.';
+        : 'Group objects that form one meaningful design unit, while keeping major subjects, products and text independently editable.';
     const ai = new GoogleGenAI({ apiKey });
     try {
         const response = await ai.models.generateContent({
