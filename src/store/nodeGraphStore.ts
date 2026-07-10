@@ -10,7 +10,12 @@ interface NodeGraphState {
   nodeResults: Record<string, string>;
   /** 多輸出節點執行後的「一組」結果（runtime-only；可折疊 Batch 節點展開用） */
   nodeBatchResults: Record<string, string[]>;
-  loadGraph: (data: NodeGraphData) => void;
+  loadGraph: (
+    data: NodeGraphData, 
+    nodeResults?: Record<string, string>, 
+    nodeBatchResults?: Record<string, string[]>, 
+    nodeStatus?: Record<string, NodeRunStatus>
+  ) => void;
   /** 同步拓撲（不清 runtime 狀態），給 React Flow → store 鏡像用 */
   syncGraph: (data: NodeGraphData) => void;
   addNode: (node: GraphNode) => void;
@@ -32,12 +37,12 @@ export const useNodeGraphStore = create<NodeGraphState>((set, get) => ({
   nodeStatus: {},
   nodeResults: {},
   nodeBatchResults: {},
-  loadGraph: (data) => set({
+  loadGraph: (data, nodeResults = {}, nodeBatchResults = {}, nodeStatus = {}) => set({
     nodes: data.nodes.map(node => ({ ...node, data: { ...node.data }, position: { ...node.position } })),
     edges: data.edges.map(edge => ({ ...edge })),
-    nodeStatus: {},
-    nodeResults: {},
-    nodeBatchResults: {},
+    nodeStatus,
+    nodeResults,
+    nodeBatchResults,
   }),
   syncGraph: (data) => set({
     nodes: data.nodes.map(node => ({ ...node, data: { ...node.data }, position: { ...node.position } })),

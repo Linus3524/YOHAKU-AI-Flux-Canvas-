@@ -43,6 +43,7 @@ import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCach
 import { SVGExportModal } from './components/SVGExportModal';
 import { SemanticEditorView } from './components/SemanticEditor';
 import { NodeWorkflowOverlay } from './components/NodeWorkflow/NodeWorkflowOverlay';
+import { useNodeGraphStore } from './store/nodeGraphStore';
 import { detectBackgroundColor, repairStickerTransparency, flattenBackgroundToColor } from './utils/imageProcessing';
 import type {
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement, NodeGroupElement
@@ -569,6 +570,7 @@ const App: React.FC = () => {
 
   const handleCloseNodeWorkflow = useCallback((graph: NodeGraphData) => {
     if (activeNodeGroupId) {
+      const store = useNodeGraphStore.getState();
       setElements(prev => prev.map(el => {
         if (el.id === activeNodeGroupId && el.type === 'node_group') {
           const nodeGroup = el as any;
@@ -579,6 +581,9 @@ const App: React.FC = () => {
             ...el,
             graph,
             content: updatedContent,
+            nodeResults: store.nodeResults,
+            nodeBatchResults: store.nodeBatchResults,
+            nodeStatus: store.nodeStatus,
           };
         }
         return el;

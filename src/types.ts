@@ -143,6 +143,9 @@ export interface NodeGroupElement extends BaseElement {
   src?: string;       // 原始圖片的 base64 / URL
   content?: string;   // 原始便利貼的文字
   color?: string;     // 原始便利貼的顏色
+  nodeResults?: Record<string, string>;
+  nodeBatchResults?: Record<string, string[]>;
+  nodeStatus?: Record<string, string>;
 }
 
 export type CanvasElement = NoteElement | ImageElement | ArrowElement | DrawingElement | FrameElement | TextElement | ShapeElement | ArtboardElement | NodeGroupElement;

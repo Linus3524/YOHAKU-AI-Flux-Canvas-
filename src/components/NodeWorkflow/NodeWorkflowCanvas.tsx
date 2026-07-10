@@ -377,6 +377,28 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   const runTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // React Flow 實例（雙擊快速搜尋要用 screenToFlowPosition 換算座標）
   const rfInstanceRef = useRef<{ screenToFlowPosition: (p: { x: number; y: number }) => { x: number; y: number } } | null>(null);
+  // 記錄最後滑鼠在畫布上的 flow 座標，用於滑鼠在哪點擊就新增在哪裡
+  const lastMouseFlowPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleMouseMove = useCallback((event: React.MouseEvent) => {
+    const inst = rfInstanceRef.current;
+    if (inst) {
+      lastMouseFlowPosRef.current = inst.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+    }
+  }, []);
+
+  const getCanvasCenter = useCallback(() => {
+    const inst = rfInstanceRef.current;
+    if (!inst) return { x: 260, y: 260 };
+    return inst.screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+  }, []);
+
   // 雙擊畫布空白處的快速搜尋選單
   const [quickSearch, setQuickSearch] = useState<{ sx: number; sy: number; flow: { x: number; y: number } } | null>(null);
   const [quickQuery, setQuickQuery] = useState('');
@@ -611,7 +633,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
       ? dropPosition
       : selected
         ? { x: selected.position.x + 240, y: selected.position.y }
-        : { x: 260 + nodes.length * 24, y: 260 };
+        : (lastMouseFlowPosRef.current ?? getCanvasCenter());
     const parentId = kind !== 'group' ? selected?.parentId : undefined;
     const params = kind === 'group'
       ? { label: '節點框組', color: '#6366f1', width: 360, height: 240 }
@@ -719,7 +741,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
 
   return (
     <NodeWorkflowContext.Provider value={{ detachImage: onDetachImage }}>
-    <div className="absolute inset-0">
+    <div className="absolute inset-0" onMouseMove={handleMouseMove}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
