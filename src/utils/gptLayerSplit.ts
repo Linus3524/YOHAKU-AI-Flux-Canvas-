@@ -14,7 +14,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { callAtlasImg2Img, compressForAtlas, detectClosestRatio, downloadImageAsBase64, type AtlasGenerationModel } from './atlasImage';
+import { callAtlasImg2Img, compressForAtlas, detectClosestRatio, type AtlasGenerationModel } from './atlasImage';
 import { birefnetRemoveBg, selectBiRefNetModel } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
@@ -611,6 +611,27 @@ function cropBBoxWithPad(
     });
 }
 
+/** PNG 格式不必然含 alpha；檢查 Seedream 是否真的交付透明背景。 */
+function hasTransparentPixels(src: string): Promise<boolean> {
+    return new Promise(resolve => {
+        const image = new Image();
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { resolve(false); return; }
+            ctx.drawImage(image, 0, 0);
+            const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            for (let index = 3; index < pixels.length; index += 4) {
+                if (pixels[index] < 250) { resolve(true); return; }
+            }
+            resolve(false);
+        };
+        image.onerror = () => resolve(false);
+        image.src = src;
+    });
+}
+
 // ── 單一物件提取（供 Promise.all 並發）──────────────────────────────────────
 async function extractOneLayer(
     obj: DetectedObject,
@@ -644,52 +665,54 @@ async function extractOneLayer(
             : '';
 
         let isolatedSrc: string;
+        let isNativeTransparent = false;
         if (atlasKey) {
+            const isSeedreamPro = atlasModel === 'seedream-v5-pro';
             const isolated = await callAtlasImg2Img(
-                `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
-                `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
-                `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
-                `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations. ` +
-                `CRITICAL: Do NOT blend or feather the object edges into the background. ` +
-                `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
-                `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.` +
-                perspectiveHint + refHint,
+                isSeedreamPro
+                    ? `Extract ONLY the "${obj.labelEn}" (${obj.label}) as a true RGBA PNG layer. ` +
+                      `Every pixel outside this object must be fully transparent (alpha 0). Do not use a solid background, checkerboard, shadow plate, border, or matte. ` +
+                      `Preserve the exact original position, scale, perspective, colors, materials, lighting and edges.` + perspectiveHint + refHint
+                    : `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
+                      `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
+                      `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
+                      `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations. ` +
+                      `CRITICAL: Do NOT blend or feather the object edges into the background. ` +
+                      `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
+                      `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.` + perspectiveHint + refHint,
                 atlasModel,
                 atlasKey,
                 compressedImage,
                 1,
-                { ratio: detectedRatio },
+                isSeedreamPro
+                    ? { ratio: detectedRatio, quality: '2K', outputFormat: 'png', keepAlpha: true }
+                    : { ratio: detectedRatio },
                 referenceCrop ? [referenceCrop] : undefined,
             );
             if (!isolated[0]) return null;
             isolatedSrc = isolated[0];
+            isNativeTransparent = isSeedreamPro && await hasTransparentPixels(isolatedSrc);
         } else {
             isolatedSrc = await geminiIsolateOnSolidBg(obj, compressedImage, geminiApiKey, geminiImageModel, bgColor, perspectiveHint);
         }
 
-        // ── 2a.5：背景均一化（修正 Gemini 背景殘留雜訊，確保 BiRefNet 看到乾淨對比）──
-        isolatedSrc = await uniformizeBackground(isolatedSrc, bgColor.hex);
-
-        // ── 2b：去背（BiRefNet 優先，timeout 後降級 Chroma Key）──────────────
-        // 依 category + edgeComplexity 自動選型：Portrait/Matting/Light
-        const birefnetModel = selectBiRefNetModel(obj.edgeComplexity, obj.category);
-        const method = useBiRefNet ? `BiRefNet(${birefnetModel})` : 'Chroma Key';
-        onProgress?.(`✂️ 去背：${obj.label}（${method}）`);
-        const birefnetTimeout = obj.edgeComplexity === 'complex' ? 180_000 : 120_000;
-
-        let transparent: string;
-        if (useBiRefNet) {
-            transparent = await withTimeout(
-                birefnetRemoveBg(isolatedSrc, falKey!, birefnetModel),
-                birefnetTimeout,
-                () => {
-                    console.warn(`[magicLayer] BiRefNet timeout for "${obj.label}", fallback chroma key`);
-                    return removeColorBackground(isolatedSrc, bgColor.hex, obj.edgeComplexity);
-                },
-            );
-        } else {
-            // TEXT / DECOR 或無 falKey → Chroma Key
-            transparent = await removeColorBackground(isolatedSrc, bgColor.hex, obj.edgeComplexity);
+        let transparent = isolatedSrc;
+        if (!isNativeTransparent) {
+            // API 未真的交付 alpha 時，才用舊的去背流程保底。
+            isolatedSrc = await uniformizeBackground(isolatedSrc, bgColor.hex);
+            const birefnetModel = selectBiRefNetModel(obj.edgeComplexity, obj.category);
+            const method = useBiRefNet ? `BiRefNet(${birefnetModel})` : 'Chroma Key';
+            onProgress?.(`✂️ 去背：${obj.label}（${method}）`);
+            const birefnetTimeout = obj.edgeComplexity === 'complex' ? 180_000 : 120_000;
+            if (useBiRefNet) {
+                transparent = await withTimeout(
+                    birefnetRemoveBg(isolatedSrc, falKey!, birefnetModel),
+                    birefnetTimeout,
+                    () => removeColorBackground(isolatedSrc, bgColor.hex, obj.edgeComplexity),
+                );
+            } else {
+                transparent = await removeColorBackground(isolatedSrc, bgColor.hex, obj.edgeComplexity);
+            }
         }
 
         // ── 2c：裁切透明邊緣 ──────────────────────────────────────────────────
@@ -915,60 +938,4 @@ export async function gptLayerSegment(
 
     if (layers.length === 0) throw new Error('所有圖層提取均失敗');
     return layers;
-}
-
-/**
- * Seedream Pro 原生圖層分離：一次呼叫取得背景與透明 PNG 資產。
- * 不進行 Gemini bbox 偵測、逐物件隔離或額外去背。
- */
-export async function seedreamLayerSegment(
-    imageBase64: string,
-    atlasKey: string,
-    options: Partial<MagicLayerOptions> = {},
-    onProgress?: (msg: string) => void,
-): Promise<LayerResult[]> {
-    const requestedCount = typeof options.layerCount === 'number'
-        ? Math.max(2, Math.min(20, options.layerCount))
-        : 8;
-    const requestedCategories = options.categories?.length
-        ? options.categories.join(', ')
-        : 'background, main subject, products, text or logo, props, decorative elements';
-    const instruction = options.customInstruction?.trim() || 'Separate only meaningful independently editable visual elements.';
-
-    onProgress?.(`即夢原生分層中，目標 ${requestedCount} 層...`);
-    const outputs = await callAtlasImg2Img(
-        [
-            `Separate this image into up to ${requestedCount} independently editable layers.`,
-            `Include these when present: ${requestedCategories}.`,
-            options.includeBackground === false ? 'Do not return a background layer.' : 'Return one complete background layer plus separate foreground element layers.',
-            'Every foreground output must be a transparent PNG with only one coherent element or grouped visual unit.',
-            'Keep all layers aligned to the original canvas coordinates, preserving original scale, color, lighting, texture and perspective.',
-            'Do not redraw, restyle, merge unrelated objects, add objects, or add a checkerboard background.',
-            instruction,
-        ].join(' '),
-        'seedream-v5-pro',
-        atlasKey,
-        imageBase64,
-        1,
-        { ratio: 'Original', quality: '2K', outputFormat: 'png', keepAlpha: true },
-    );
-
-    const layers = await Promise.all(outputs.map(async (src, index) => {
-        const base64 = src.startsWith('data:') ? src : await downloadImageAsBase64(src);
-        const trimmed = await trimTransparentPixels(base64);
-        const coverage = trimmed.cropRatioW * trimmed.cropRatioH;
-        const isBackground = options.includeBackground !== false && (index === 0 || coverage > 0.94);
-        return {
-            ...trimmed,
-            name: isBackground ? '背景' : `即夢圖層 ${index + 1}`,
-            category: isBackground ? 'BACKGROUND' : 'LAYER',
-            isBackground,
-        } satisfies LayerResult;
-    }));
-
-    const visibleLayers = options.includeBackground === false
-        ? layers.filter(layer => !layer.isBackground)
-        : layers;
-    if (visibleLayers.length === 0) throw new Error('即夢沒有回傳任何圖層');
-    return visibleLayers;
 }

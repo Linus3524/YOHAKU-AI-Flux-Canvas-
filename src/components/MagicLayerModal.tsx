@@ -19,7 +19,7 @@ const COUNTS: Array<'auto' | number> = ['auto', 2, 4, 6, 8, 12, 16, 20];
 const MODEL_INFO: Record<MagicLayerModel, { title: string; detail: string }> = {
   gemini: { title: 'Gemini', detail: '語意辨識後逐物件分離' },
   'gpt-image-2': { title: 'GPT Image 2', detail: '精細隔離與背景補全' },
-  'seedream-v5-pro': { title: '即夢 Seedream 5.0 Pro', detail: '原生多圖層透明 PNG 輸出' },
+  'seedream-v5-pro': { title: '即夢 Seedream 5.0 Pro', detail: '逐物件透明 PNG 分離，保留材質與位置' },
 };
 
 export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart }: MagicLayerModalProps) {
@@ -84,7 +84,7 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart }:
                   </button>
                 ))}
               </div>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-500">模型會依內容調整；即夢 Pro 會依指令產生背景與多張透明圖層。</p>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-500">模型會依內容調整；背景層會計入目標層數。</p>
             </div>
           </div>
 

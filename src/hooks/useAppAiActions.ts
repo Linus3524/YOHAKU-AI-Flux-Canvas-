@@ -3,7 +3,7 @@ import { analyzeImagePrompt } from '../utils/ImageAnalysisService';
 import { downloadImageAsBase64 } from '../utils/atlasImage';
 import { cacheImage } from '../utils/imageCache';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
-import { gptLayerSegment, seedreamLayerSegment, type MagicLayerOptions } from '../utils/gptLayerSplit';
+import { gptLayerSegment, type MagicLayerOptions } from '../utils/gptLayerSplit';
 import { detectTextBlocks } from '../utils/ocrService';
 import { splitStickerCollectionDetailed } from '../utils/imageProcessing';
 import { drawTextOnCanvas } from '../utils/textCanvas';
@@ -83,7 +83,7 @@ export const useAppAiActions = ({
           setShowKeyModal(true);
           return;
       }
-      if (selectedModel !== 'seedream-v5-pro' && !effectiveApiKey) {
+      if (!effectiveApiKey) {
           showToast('⚠️ 此分層模型需要 Gemini API Key 進行物件分析');
           setShowKeyModal(true);
           return;
@@ -92,18 +92,16 @@ export const useAppAiActions = ({
       showToast(`✨ 魔法分層啟動中（${modeLabel}）...`);
 
       try {
-          const layers = selectedModel === 'seedream-v5-pro'
-              ? await seedreamLayerSegment(el.src, atlasApiKey!, options, (msg) => showToast(msg))
-              : await gptLayerSegment(
-                  el.src,
-                  effectiveApiKey || '',
-                  selectedModel === 'gpt-image-2' ? atlasApiKey || undefined : undefined,
-                  falApiKey || undefined,
-                  (msg) => showToast(msg),
-                  imageModel,
-                  selectedModel === 'gpt-image-2' ? 'gpt-image-2' : 'gpt-image-2',
-                  options,
-              );
+          const layers = await gptLayerSegment(
+              el.src,
+              effectiveApiKey,
+              selectedModel === 'gemini' ? undefined : atlasApiKey || undefined,
+              falApiKey || undefined,
+              (msg) => showToast(msg),
+              imageModel,
+              selectedModel === 'seedream-v5-pro' ? 'seedream-v5-pro' : 'gpt-image-2',
+              options,
+          );
           if (layers.length === 0) throw new Error('未收到任何圖層');
 
           const baseZ = el.zIndex;
