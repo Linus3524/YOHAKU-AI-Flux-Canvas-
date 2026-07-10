@@ -116,28 +116,34 @@ export const useAppAiActions = ({
               // 位置夾在 [0, 1] 安全範圍
               const clampedX = Math.max(0, Math.min(1, layer.bbox?.x ?? layer.cropRatioX));
               const clampedY = Math.max(0, Math.min(1, layer.bbox?.y ?? layer.cropRatioY));
-              // 寬：cropRatioW × el.width（在原圖空間的比例縮放）
-              // 高：維持 GPT 輸出的原生像素比例（pixelH/pixelW），避免強套原圖 AR 造成變形
-              const layerW = isBackground ? el.width : options.preservePosition && layer.bboxW
-                  ? Math.round(layer.bboxW * el.width)
-                  : Math.round(layer.cropRatioW * el.width);
-              const layerH = isBackground ? el.height : options.preservePosition && layer.bboxH
-                  ? Math.round(layer.bboxH * el.height)
-                  : (layer.pixelWidth && layer.pixelHeight && layerW > 0)
-                      ? Math.round(layerW * layer.pixelHeight / layer.pixelWidth)
-                      : Math.round(layer.cropRatioH * el.height);
-              // 中心點 = 圖層區塊左上角 + bbox 偏移 + 半寬/高
+              const naturalRatio = layer.pixelWidth && layer.pixelHeight
+                  ? layer.pixelWidth / layer.pixelHeight
+                  : layer.cropRatioH > 0 ? layer.cropRatioW / layer.cropRatioH : 1;
+              const bboxW = (layer.bboxW ?? layer.cropRatioW) * el.width;
+              const bboxH = (layer.bboxH ?? layer.cropRatioH) * el.height;
+              // GPT 路徑同款：bbox 只當「可放置範圍」，圖片依自身比例等比 contain，絕不硬壓變形。
+              let layerW = isBackground ? el.width : Math.round(layer.cropRatioW * el.width);
+              let layerH = isBackground ? el.height : Math.round(layerW / naturalRatio);
+              if (!isBackground && options.preservePosition) {
+                  layerW = bboxW;
+                  layerH = layerW / naturalRatio;
+                  if (layerH > bboxH) {
+                      layerH = bboxH;
+                      layerW = layerH * naturalRatio;
+                  }
+              }
+              // 中心點以 Gemini bbox 鎖定；等比縮放後仍保持在原圖中的相對中心。
               const gridColumn = i % 3;
               const gridRow = Math.floor(i / 3);
               const cx = isBackground
                   ? layerAreaLeft + el.width / 2
                   : options.preservePosition
-                    ? layerAreaLeft + clampedX * el.width + layerW / 2
+                    ? layerAreaLeft + clampedX * el.width + bboxW / 2
                     : layerAreaLeft + gridColumn * (el.width * 0.38) + layerW / 2;
               const cy = isBackground
                   ? (options.autoArrange ? el.position.y : layerAreaTop + el.height / 2)
                   : options.preservePosition
-                    ? layerAreaTop + clampedY * el.height + layerH / 2
+                    ? layerAreaTop + clampedY * el.height + bboxH / 2
                     : layerAreaTop + gridRow * (el.height * 0.38) + layerH / 2;
               const layerName = layer.name
                   ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name)
