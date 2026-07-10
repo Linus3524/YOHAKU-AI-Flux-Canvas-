@@ -44,7 +44,19 @@ export function CopyStyleNode({ id, data, selected }: NodeProps) {
     <div className={`group relative border border-black/12 bg-white shadow-sm w-[198px] overflow-visible ${ring}`}>
       <NodeDeleteButton onDelete={handleDelete} selected={selected} />
       <Handle id="style" type="target" position={Position.Left} style={{ top: 44 }} />
+      <div
+        className="absolute pointer-events-none text-[9px] font-medium text-neutral-500 bg-white/95 border border-black/8 px-1 leading-tight"
+        style={{ top: 38, right: '100%', marginRight: 6 }}
+      >
+        風格
+      </div>
       <Handle id="content" type="target" position={Position.Left} style={{ top: 86 }} />
+      <div
+        className="absolute pointer-events-none text-[9px] font-medium text-neutral-500 bg-white/95 border border-black/8 px-1 leading-tight"
+        style={{ top: 80, right: '100%', marginRight: 6 }}
+      >
+        內容
+      </div>
       <div className="px-2 py-1 text-[10px] font-semibold text-neutral-500 tracking-wide uppercase border-b border-black/6">
         拷貝風格
       </div>

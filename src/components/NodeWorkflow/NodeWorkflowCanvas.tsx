@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import {
   addEdge,
   Background,
+  Controls,
+  MiniMap,
   Panel,
   ReactFlow,
   useEdgesState,
@@ -21,7 +23,7 @@ import '@xyflow/react/dist/style.css';
 import { useNodeGraphStore } from '../../store/nodeGraphStore';
 import { isImageSrc } from './mediaSrc';
 import { NodeWorkflowContext } from './NodeWorkflowContext';
-import { ADDABLE_NODES, DEFAULT_NODE_LABELS, nodeTypes, type NodeCategory } from './nodeRegistry';
+import { ADDABLE_NODES, DEFAULT_NODE_LABELS, NODE_REGISTRY, nodeTypes, type NodeCategory, type NodeIoType } from './nodeRegistry';
 import { executeGraph, type ExecutorEngine } from './executor/nodeGraphExecutor';
 import type { GraphEdge, GraphNode, NodeKind } from './types';
 
@@ -155,6 +157,18 @@ const toGraphEdge = (edge: FlowEdge): GraphEdge => ({
   sourceHandle: edge.sourceHandle ?? undefined,
   targetHandle: edge.targetHandle ?? undefined,
 });
+
+/**
+ * 連線型別相容判定：來源節點的 output 型別能否接到目標節點的 input 型別。
+ * imageOrText 為萬用（可收 image/text/imageBatch）；image 端不收純 text，text 端不收純 image。
+ */
+function ioCompatible(sourceOut: NodeIoType, targetIn: NodeIoType): boolean {
+  if (targetIn === 'none') return false;                 // 例如 Input 節點沒有輸入端
+  if (targetIn === 'imageOrText') return sourceOut !== 'none';
+  if (targetIn === 'image') return sourceOut === 'image' || sourceOut === 'imageOrText' || sourceOut === 'imageBatch';
+  if (targetIn === 'text') return sourceOut === 'text' || sourceOut === 'imageOrText';
+  return false;
+}
 
 interface NodeWorkflowCanvasProps {
   /** 把帶圖節點拖到底部拖出區時觸發：新增為大畫布獨立圖片。 */
@@ -323,6 +337,19 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
     });
   }, [nodes, edges, replaceGraph]);
 
+  // 智慧連線驗證：依 nodeRegistry 的 I/O 型別擋掉非法連線（如 text → image），
+  // React Flow 會在拖線時即時把不相容的連線標紅並禁止釋放。
+  const isValidConnection = useCallback((connection: Connection | Edge): boolean => {
+    if (connection.source === connection.target) return false; // 禁止自連
+    const source = nodes.find(n => n.id === connection.source);
+    const target = nodes.find(n => n.id === connection.target);
+    if (!source || !target) return false;
+    const sourceEntry = NODE_REGISTRY[source.data.kind as NodeKind];
+    const targetEntry = NODE_REGISTRY[target.data.kind as NodeKind];
+    if (!sourceEntry || !targetEntry) return true; // 未知節點 → 放行（fail-open，不擋既有功能）
+    return ioCompatible(sourceEntry.output, targetEntry.input);
+  }, [nodes]);
+
   const handleConnect: OnConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return;
     const edgeId = `edge-${connection.source}-${connection.target}-${Date.now()}`;
@@ -395,6 +422,9 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
         onReconnectEnd={handleReconnectEnd}
         onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
+        isValidConnection={isValidConnection}
+        snapToGrid
+        snapGrid={[15, 15]}
         fitView
         fitViewOptions={{ padding: 0.28, maxZoom: 1 }}
         minZoom={0.1}
@@ -469,6 +499,8 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
           }
         `}</style>
         <Background color="#cbd5e1" gap={28} size={1.2} />
+        <Controls position="bottom-left" showInteractive={false} />
+        <MiniMap position="bottom-right" pannable zoomable nodeStrokeWidth={2} />
         <Panel position="top-left">
           <div className="flex items-center gap-px border border-black/12 bg-white shadow-sm">
             {groupedAddableNodes.map(group => (
