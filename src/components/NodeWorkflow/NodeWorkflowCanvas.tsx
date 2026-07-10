@@ -764,9 +764,9 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
             padding: 0 !important;
             width: auto !important;
           }
-          .node-workflow-flow .react-flow__node.selected,
-          .node-workflow-flow .react-flow__node:focus,
-          .node-workflow-flow .react-flow__node:focus-visible {
+          .node-workflow-flow .react-flow__node.selected:not(.react-flow__node-group),
+          .node-workflow-flow .react-flow__node:focus:not(.react-flow__node-group),
+          .node-workflow-flow .react-flow__node:focus-visible:not(.react-flow__node-group) {
             outline: 1.5px solid #111827 !important;
             outline-offset: 1px;
             box-shadow: none !important;
