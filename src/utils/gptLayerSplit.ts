@@ -20,6 +20,26 @@ import { trimTransparentPixels, LayerResult } from './falImage';
 import { detectBackgroundColor } from './imageProcessing';
 
 export type MagicLayerModel = 'gemini' | 'gpt-image-2' | 'seedream-v5-pro';
+export type MagicLayerGroupingStrategy = 'smart' | 'separate' | 'custom';
+
+export interface MagicLayerPlanItem {
+    id: string;
+    label: string;
+    labelEn: string;
+    category: 'SUBJECT' | 'PRODUCT' | 'OBJECTS' | 'DECOR' | 'TEXT';
+    memberLabels: string[];
+    bbox: { x: number; y: number; w: number; h: number };
+    description: string;
+    groupReason: string;
+    bgColor: BgColorKey;
+    edgeComplexity: 'simple' | 'complex';
+}
+
+export interface MagicLayerPlan {
+    detectedObjectCount: number;
+    targetForegroundCount: number;
+    layers: MagicLayerPlanItem[];
+}
 
 export interface MagicLayerOptions {
     model: MagicLayerModel;
@@ -29,6 +49,9 @@ export interface MagicLayerOptions {
     includeBackground: boolean;
     preservePosition: boolean;
     autoArrange: boolean;
+    groupingStrategy: MagicLayerGroupingStrategy;
+    /** 執行前確認過的 runtime plan，不進畫布存檔。 */
+    plan?: MagicLayerPlan;
 }
 
 export const DEFAULT_MAGIC_LAYER_OPTIONS: MagicLayerOptions = {
@@ -39,6 +62,7 @@ export const DEFAULT_MAGIC_LAYER_OPTIONS: MagicLayerOptions = {
     includeBackground: true,
     preservePosition: true,
     autoArrange: true,
+    groupingStrategy: 'smart',
 };
 
 // ── 背景色方案 ──────────────────────────────────────────────────────────────
@@ -55,6 +79,7 @@ type BgColorKey = keyof typeof BG_COLOR_MAP;
 
 // ── 偵測結果 ─────────────────────────────────────────────────────────────────
 interface DetectedObject {
+    id: string;
     label: string;
     labelEn: string;
     category: 'SUBJECT' | 'PRODUCT' | 'OBJECTS' | 'DECOR' | 'TEXT';
@@ -96,7 +121,6 @@ async function detectObjects(imageBase64: string, apiKey: string, options?: Part
     const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
 
     const requestedCategories = options?.categories?.length ? options.categories.join(', ') : '自動判斷最適合的類別';
-    const requestedCount = options?.layerCount && options.layerCount !== 'auto' ? options.layerCount : 'auto';
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: {
@@ -122,26 +146,21 @@ Do NOT include any of these as separate layers:
 - Atmospheric haze, fog, depth-of-field blur areas
 - Texture overlays spanning the entire image
 
-━━━ GROUPING RULES (important) ━━━
-Physically touching or functionally related objects MUST be grouped into ONE layer:
-- Person + any furniture/prop they are directly sitting on, holding, or wearing → ONE layer
-- Character + vehicle/mount they are on → ONE layer
-- Product + its stand/base/packaging it rests on → ONE layer
-- Group of identical/similar small objects (e.g. multiple tickets, icons of the same type) → ONE layer
-- A logo lockup (icon + wordmark/logotype + tagline) → ONE layer. NEVER output both a "logo"/"decoration" element AND a separate "text" element for the same visual unit — that is a duplicate.
-Do NOT split a person from their chair, a rider from their bike, a wordmark from its logo, etc.
+━━━ ATOMIC DETECTION RULES (important) ━━━
+This pass is an inventory, not the final layer plan. Detect every meaningful atomic object separately.
+- Person, held prop, chair, vehicle, product, stand, package, logo icon and text must be separate objects when each has visible boundaries.
+- Similar repeated objects should be separate when their positions can be identified independently.
+- Do not merge objects merely because they touch or are functionally related.
+- A later planning pass will decide which atomic objects belong in the same output layer.
 
 ━━━ NO DUPLICATES (critical) ━━━
-Every pixel region belongs to AT MOST ONE element.
-None of your output bboxes may contain, be contained by, or substantially overlap another output bbox.
-Before returning, self-check: if two elements cover the same visual unit (e.g. a logo and its text), merge them into ONE element with ONE bbox.
+Do not return the same semantic object twice under different names.
+Atomic objects may overlap or contain one another when they are genuinely distinct, such as a hand holding a cup or text inside a logo badge.
+Before returning, self-check that each entry represents a distinct editable object.
 
-━━━ LAYER COUNT RULES ━━━
-Determine count based on actual image complexity — never force layers:
-- Very simple (1-2 objects): return 2-3 layers
-- Moderate (3-5 objects): return 3-5 layers
-- Complex (6+ distinct objects): return 5-10 layers
-Maximum 10 layers. Fewer precise layers beats more noisy layers.
+━━━ OBJECT COUNT RULES ━━━
+Return every meaningful atomic object visible in the image, up to 20 objects.
+Do not reduce the inventory to match a requested final layer count.
 
 ━━━ CATEGORIES ━━━
 - SUBJECT: main person, character, model, portrait
@@ -177,7 +196,7 @@ This will be used as an image generation prompt — be specific and visual.
 Example: "A young East Asian woman in her 20s wearing a white collared shirt, smiling, looking at camera, with long straight dark hair."
 
 ━━━ USER REQUEST ━━━
-Preferred layer count: ${requestedCount}. Preferred categories: ${requestedCategories}.
+Preferred categories to notice: ${requestedCategories}.
 Additional instruction: ${options?.customInstruction?.trim() || 'None'}.
 
 Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
@@ -199,6 +218,7 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         throw new Error('Gemini 回傳 JSON 解析失敗');
     }
     if (!objects || objects.length === 0) throw new Error('Gemini 未偵測到任何物件');
+    objects = objects.slice(0, 20).map((object, index) => ({ ...object, id: `object_${index + 1}` }));
 
     // 按重要性排序，確保截取時重要層（主體、產品、文字）優先保留
     const CATEGORY_PRIORITY: Record<string, number> = {
@@ -208,9 +228,7 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         (CATEGORY_PRIORITY[a.category] ?? 5) - (CATEGORY_PRIORITY[b.category] ?? 5)
     );
 
-    // 去重：logo 重複辨識（標準字被同時認成 TEXT 和 DECOR）的典型形態是
-    // 「一大一小的包含關係」，IoU 在這種情況天生失效（完全包含的小框 IoU 可能只有 0.2）。
-    // TEXT/DECOR 組合改用 overlap coefficient（交集 ÷ 較小框面積）：包含時 = 1.0，與尺寸差異無關。
+    // 原子盤點只移除幾乎完全相同的重複框；接觸、包含或 logo/text 關係留給第二階段規劃。
     type BBox = DetectedObject['bbox'];
     const intersectArea = (a: BBox, b: BBox): number => {
         const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
@@ -222,44 +240,17 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         const union = a.w * a.h + b.w * b.h - inter;
         return union > 0 ? inter / union : 0;
     };
-    const overlapCoeff = (a: BBox, b: BBox): number => {
-        const inter = intersectArea(a, b);
-        const minArea = Math.min(a.w * a.h, b.w * b.h);
-        return minArea > 0 ? inter / minArea : 0;
-    };
-    const unionBbox = (a: BBox, b: BBox): BBox => {
-        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
-        return {
-            x, y,
-            w: Math.max(a.x + a.w, b.x + b.w) - x,
-            h: Math.max(a.y + a.h, b.y + b.h) - y,
-        };
-    };
-    const isLogoLike = (cat: string) => cat === 'TEXT' || cat === 'DECOR';
-
     const deduplicated: DetectedObject[] = [];
     for (const obj of objects) {
-        // logo 形態（TEXT/DECOR 互相）：overlap > 0.55 → 合併成聯集框。
-        // 不能只丟掉小的：只留 TEXT 小框會缺 logo 圖示，只留 DECOR 大框分類不對。
-        // 已按優先級排序，保留者（TEXT 優先）繼承名稱與分類，bbox 擴成聯集涵蓋完整 logo。
-        const logoDup = isLogoLike(obj.category)
-            ? deduplicated.find(kept => isLogoLike(kept.category) && overlapCoeff(kept.bbox, obj.bbox) > 0.55)
-            : undefined;
-        if (logoDup) {
-            logoDup.bbox = unionBbox(logoDup.bbox, obj.bbox);
-            if (obj.edgeComplexity === 'complex') logoDup.edgeComplexity = 'complex';
-            continue;
-        }
-        // 其他類別組合維持 IoU 0.5：包含關係可能是合法的（商品 bbox 在人物 bbox 內），不能用 overlap 誤殺
-        if (deduplicated.some(kept => iou(kept.bbox, obj.bbox) > 0.5)) continue;
+        const duplicate = deduplicated.some(kept =>
+            kept.category === obj.category &&
+            kept.labelEn?.toLowerCase() === obj.labelEn?.toLowerCase() &&
+            iou(kept.bbox, obj.bbox) > 0.88
+        );
+        if (duplicate) continue;
         deduplicated.push(obj);
     }
     objects = deduplicated;
-
-    const requestedLimit = typeof options?.layerCount === 'number'
-        ? Math.max(1, Math.min(20, options.layerCount - (options.includeBackground ? 1 : 0)))
-        : 20;
-    if (objects.length > requestedLimit) objects = objects.slice(0, requestedLimit);
 
     // 安全夾值：bbox + edgeComplexity 預設值
     return objects.map(o => ({
@@ -274,6 +265,109 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
             h: Math.max(0.01, Math.min(1, o.bbox?.h ?? 1)),
         },
     }));
+}
+
+function unionObjectBboxes(objects: DetectedObject[]): DetectedObject['bbox'] {
+    const left = Math.min(...objects.map(object => object.bbox.x));
+    const top = Math.min(...objects.map(object => object.bbox.y));
+    const right = Math.max(...objects.map(object => object.bbox.x + object.bbox.w));
+    const bottom = Math.max(...objects.map(object => object.bbox.y + object.bbox.h));
+    return { x: left, y: top, w: right - left, h: bottom - top };
+}
+
+function buildPlanItem(members: DetectedObject[], index: number, label?: string, reason?: string): MagicLayerPlanItem {
+    const categoryPriority: Record<string, number> = { SUBJECT: 0, PRODUCT: 1, TEXT: 2, OBJECTS: 3, DECOR: 4 };
+    const primary = [...members].sort((a, b) => (categoryPriority[a.category] ?? 5) - (categoryPriority[b.category] ?? 5))[0];
+    return {
+        id: `layer_${index + 1}`,
+        label: label?.trim() || members.map(member => member.label).join('＋'),
+        labelEn: members.map(member => member.labelEn).join(' and '),
+        category: primary.category,
+        memberLabels: members.map(member => member.label),
+        bbox: unionObjectBboxes(members),
+        description: members.map(member => member.description).filter(Boolean).join('; '),
+        groupReason: reason?.trim() || (members.length === 1 ? '獨立物件' : '依目標層數合併'),
+        bgColor: primary.bgColor,
+        edgeComplexity: members.some(member => member.edgeComplexity === 'complex') ? 'complex' : 'simple',
+    };
+}
+
+function fallbackLayerPlan(objects: DetectedObject[], targetCount: number): MagicLayerPlanItem[] {
+    const buckets = Array.from({ length: targetCount }, () => [] as DetectedObject[]);
+    objects.forEach((object, index) => buckets[index % targetCount].push(object));
+    return buckets.filter(bucket => bucket.length > 0).map((bucket, index) => buildPlanItem(bucket, index));
+}
+
+async function planObjectLayers(
+    objects: DetectedObject[],
+    apiKey: string,
+    options: Partial<MagicLayerOptions>,
+): Promise<MagicLayerPlan> {
+    const requested = typeof options.layerCount === 'number'
+        ? options.layerCount - (options.includeBackground === false ? 0 : 1)
+        : Math.min(8, Math.max(1, Math.ceil(objects.length * 0.7)));
+    const targetForegroundCount = Math.max(1, Math.min(objects.length, requested));
+    if (objects.length <= targetForegroundCount) {
+        return {
+            detectedObjectCount: objects.length,
+            targetForegroundCount,
+            layers: objects.map((object, index) => buildPlanItem([object], index)),
+        };
+    }
+
+    const strategyInstruction = options.groupingStrategy === 'separate'
+        ? 'Keep objects separate whenever possible. Only group the least important related objects when required to meet the exact target count.'
+        : options.groupingStrategy === 'custom'
+            ? `User instructions have highest priority: ${options.customInstruction || 'No additional instruction supplied.'}`
+            : 'Group objects that form one meaningful design unit, while keeping major subjects, products and text independently editable.';
+    const ai = new GoogleGenAI({ apiKey });
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [{ text: `You are planning editable design layers from an atomic object inventory.
+Create exactly ${targetForegroundCount} foreground layer groups. Every object ID must appear exactly once.
+${strategyInstruction}
+Preferred categories: ${options.categories?.join(', ') || 'automatic'}.
+Return ONLY JSON: [{"memberIds":["object_1"],"label":"人物","reason":"main subject"}]
+Objects: ${JSON.stringify(objects.map(object => ({ id: object.id, label: object.label, labelEn: object.labelEn, category: object.category, bbox: object.bbox, description: object.description })))}` }] },
+        });
+        const match = (response.text ?? '').replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').match(/\[[\s\S]*\]/);
+        if (!match) throw new Error('規劃器未回傳 JSON');
+        const rawGroups = JSON.parse(match[0]) as Array<{ memberIds?: string[]; label?: string; reason?: string }>;
+        const byId = new Map(objects.map(object => [object.id, object]));
+        const used = new Set<string>();
+        const groups = rawGroups.slice(0, targetForegroundCount).map(group => {
+            const members = (group.memberIds ?? []).filter(id => byId.has(id) && !used.has(id)).map(id => {
+                used.add(id);
+                return byId.get(id)!;
+            });
+            return { members, label: group.label, reason: group.reason };
+        }).filter(group => group.members.length > 0);
+        const remaining = objects.filter(object => !used.has(object.id));
+        remaining.forEach((object, index) => groups[index % Math.max(1, groups.length)]?.members.push(object));
+        if (groups.length !== targetForegroundCount) throw new Error('規劃層數不符');
+        return {
+            detectedObjectCount: objects.length,
+            targetForegroundCount,
+            layers: groups.map((group, index) => buildPlanItem(group.members, index, group.label, group.reason)),
+        };
+    } catch (error) {
+        console.warn('[magicLayer] Layer planner fallback:', error);
+        return {
+            detectedObjectCount: objects.length,
+            targetForegroundCount,
+            layers: fallbackLayerPlan(objects, targetForegroundCount),
+        };
+    }
+}
+
+export async function analyzeMagicLayerPlan(
+    imageBase64: string,
+    geminiApiKey: string,
+    options: Partial<MagicLayerOptions>,
+): Promise<MagicLayerPlan> {
+    const objects = await detectObjects(imageBase64, geminiApiKey, options);
+    return planObjectLayers(objects, geminiApiKey, options);
 }
 
 // ── Gemini 背景重繪（移除前景物件，補全背景）────────────────────────────────
@@ -830,9 +924,19 @@ export async function gptLayerSegment(
     options: Partial<MagicLayerOptions> = {},
 ): Promise<LayerResult[]> {
 
-    // Step 1：Gemini 識別元素 + bbox + category + bgColor
-    onProgress?.('🔍 Gemini 分析圖片語意與位置中...');
-    const objects = await detectObjects(imageBase64, geminiApiKey, options);
+    // Step 1：使用面板已確認的 plan；沒有 plan 時才在執行階段補分析。
+    onProgress?.('🔍 載入已確認的分層規劃...');
+    const plan = options.plan ?? await analyzeMagicLayerPlan(imageBase64, geminiApiKey, options);
+    const objects: DetectedObject[] = plan.layers.map(layer => ({
+        id: layer.id,
+        label: layer.label,
+        labelEn: layer.labelEn,
+        category: layer.category,
+        bgColor: layer.bgColor,
+        edgeComplexity: layer.edgeComplexity,
+        bbox: layer.bbox,
+        description: layer.description,
+    }));
     const bgMethod = falKey ? 'BiRefNet' : 'Chroma Key';
     onProgress?.(`✨ 偵測到 ${objects.length} 個元素，使用 ${bgMethod} 去背，平行處理中...`);
 
@@ -899,7 +1003,7 @@ export async function gptLayerSegment(
                     if (rawCrop) referenceCrop = await compressForAtlas(rawCrop, 768, 0.9, false);
                 } catch { /* 參考圖失敗不影響主流程 */ }
             }
-            return extractOneLayer(
+            let result = await extractOneLayer(
                 obj,
                 compressedImage,
                 detectedRatio,
@@ -911,6 +1015,19 @@ export async function gptLayerSegment(
                 onProgress,
                 referenceCrop,
             );
+            const usable = result &&
+                result.base64.startsWith('data:image') &&
+                result.cropRatioW * result.cropRatioH >= 0.0004 &&
+                (result.pixelWidth ?? 16) >= 12 &&
+                (result.pixelHeight ?? 16) >= 12;
+            if (!usable) {
+                onProgress?.(`↻「${obj.label}」品質檢查未通過，單層重試中...`);
+                result = await extractOneLayer(
+                    obj, compressedImage, detectedRatio, atlasKey, atlasModel,
+                    falKey, geminiApiKey, geminiImageModel, onProgress, referenceCrop,
+                );
+            }
+            return result;
         })
     );
 

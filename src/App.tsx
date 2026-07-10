@@ -50,7 +50,7 @@ import type {
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement, NodeGroupElement
 } from './types';
 import type { NodeGraphData } from './components/NodeWorkflow/types';
-import type { MagicLayerModel, MagicLayerOptions } from './utils/gptLayerSplit';
+import { analyzeMagicLayerPlan, type MagicLayerModel, type MagicLayerOptions } from './utils/gptLayerSplit';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 
 const App: React.FC = () => {
@@ -1788,6 +1788,15 @@ const App: React.FC = () => {
             : atlasApiKey ? 'gpt-image-2' : 'gemini'}
           hasAtlasKey={!!atlasApiKey}
           onClose={() => setMagicLayerTargetId(null)}
+          onAnalyze={async (options: MagicLayerOptions) => {
+            const target = elements.find(element => element.id === magicLayerTargetId && element.type === 'image') as ImageElement | undefined;
+            if (!target) throw new Error('找不到要分層的圖片');
+            if (!effectiveApiKey) {
+              setShowKeyModal(true);
+              throw new Error('需要 Gemini API Key 才能分析圖層');
+            }
+            return analyzeMagicLayerPlan(target.src, effectiveApiKey, options);
+          }}
           onStart={(options: MagicLayerOptions) => {
             const targetId = magicLayerTargetId;
             setMagicLayerTargetId(null);

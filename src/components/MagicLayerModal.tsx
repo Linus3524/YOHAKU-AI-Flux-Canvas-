@@ -4,6 +4,7 @@ import {
   DEFAULT_MAGIC_LAYER_OPTIONS,
   type MagicLayerModel,
   type MagicLayerOptions,
+  type MagicLayerPlan,
 } from '../utils/gptLayerSplit';
 
 interface MagicLayerModalProps {
@@ -11,6 +12,7 @@ interface MagicLayerModalProps {
   hasAtlasKey: boolean;
   onClose: () => void;
   onStart: (options: MagicLayerOptions) => void;
+  onAnalyze: (options: MagicLayerOptions) => Promise<MagicLayerPlan>;
 }
 
 const CATEGORIES = ['主體／人物', '商品／產品', '文字／Logo', '道具／小物', '裝飾／圖形'];
@@ -22,8 +24,11 @@ const MODEL_INFO: Record<MagicLayerModel, { title: string; detail: string }> = {
   'seedream-v5-pro': { title: '即夢 Seedream 5.0 Pro', detail: '逐物件透明 PNG 分離，保留材質與位置' },
 };
 
-export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart }: MagicLayerModalProps) {
+export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, onAnalyze }: MagicLayerModalProps) {
   const [options, setOptions] = useState<MagicLayerOptions>({ ...DEFAULT_MAGIC_LAYER_OPTIONS, model: defaultModel });
+  const [plan, setPlan] = useState<MagicLayerPlan | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState('');
 
   useEffect(() => {
     setOptions(current => ({ ...current, model: defaultModel }));
@@ -31,6 +36,20 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart }:
 
   const set = <K extends keyof MagicLayerOptions>(key: K, value: MagicLayerOptions[K]) => {
     setOptions(current => ({ ...current, [key]: value }));
+    setPlan(null);
+    setAnalyzeError('');
+  };
+
+  const analyze = async () => {
+    setIsAnalyzing(true);
+    setAnalyzeError('');
+    try {
+      setPlan(await onAnalyze(options));
+    } catch (error) {
+      setAnalyzeError(error instanceof Error ? error.message : '分析失敗');
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const toggleCategory = (category: string) => {
@@ -41,7 +60,7 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart }:
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4" onMouseDown={onClose}>
-      <section className="w-full max-w-[620px] overflow-hidden rounded-lg bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
+      <section className="flex max-h-[90vh] w-full max-w-[680px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
         <header className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <div>
             <h2 className="text-base font-semibold text-neutral-900">魔法分層</h2>
@@ -52,7 +71,7 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart }:
           </button>
         </header>
 
-        <div className="grid gap-5 p-5 md:grid-cols-[1.1fr_.9fr]">
+        <div className="grid overflow-y-auto gap-5 p-5 md:grid-cols-[1.1fr_.9fr]">
           <div className="space-y-5">
             <div>
               <label className="mb-2 block text-xs font-semibold text-neutral-700">分層模型</label>
@@ -85,6 +104,21 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart }:
                 ))}
               </div>
               <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-500">模型會依內容調整；背景層會計入目標層數。</p>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-semibold text-neutral-700">拆分策略</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {([
+                  ['smart', '智慧分組'],
+                  ['separate', '盡量分開'],
+                  ['custom', '依照指令'],
+                ] as const).map(([value, label]) => (
+                  <button key={value} type="button" onClick={() => set('groupingStrategy', value)} className={`h-8 border text-[11px] font-medium ${options.groupingStrategy === value ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-neutral-200 text-neutral-600'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -119,13 +153,43 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart }:
               ))}
             </div>
           </div>
+
+          {(plan || isAnalyzing || analyzeError) && (
+            <div className="md:col-span-2 border-t border-neutral-200 pt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold text-neutral-700">預計圖層</span>
+                {plan && <span className="text-[11px] text-neutral-500">偵測 {plan.detectedObjectCount} 個物件，規劃 {plan.layers.length} 個前景層</span>}
+              </div>
+              {isAnalyzing && <div className="border border-neutral-200 p-3 text-xs text-neutral-500">正在盤點物件並規劃圖層...</div>}
+              {analyzeError && <div className="border border-red-200 bg-red-50 p-3 text-xs text-red-600">{analyzeError}</div>}
+              {plan && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {options.includeBackground && <div className="border border-neutral-200 bg-neutral-50 p-2.5 text-xs"><span className="font-medium">背景</span><span className="ml-2 text-neutral-500">移除所有前景後補全</span></div>}
+                  {plan.layers.map((layer, index) => (
+                    <div key={layer.id} className="border border-neutral-200 p-2.5 text-xs">
+                      <div className="font-medium text-neutral-800">{index + 1}. {layer.label}</div>
+                      <div className="mt-1 text-[11px] text-neutral-500">{layer.memberLabels.join('、')}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <footer className="flex items-center justify-between border-t border-neutral-200 px-5 py-3.5">
           <span className="text-xs text-neutral-500">{MODEL_INFO[options.model].title} · {options.layerCount === 'auto' ? '自動層數' : `${options.layerCount} 層目標`}</span>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="h-9 border border-neutral-200 px-3 text-sm text-neutral-600 hover:bg-neutral-50">取消</button>
-            <button type="button" onClick={() => onStart(options)} className="h-9 bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">開始分層</button>
+            {plan && <button type="button" onClick={analyze} disabled={isAnalyzing} className="h-9 border border-violet-200 px-3 text-sm text-violet-700 hover:bg-violet-50">重新分析</button>}
+            <button
+              type="button"
+              disabled={isAnalyzing}
+              onClick={() => plan ? onStart({ ...options, plan }) : analyze()}
+              className="h-9 bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+            >
+              {isAnalyzing ? '分析中...' : plan ? '確認並開始分層' : '分析圖層'}
+            </button>
           </div>
         </footer>
       </section>
