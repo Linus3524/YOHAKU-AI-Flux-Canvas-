@@ -1803,7 +1803,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                       {showAdvanced && (
                                         <div className="px-5 pb-4 flex flex-col gap-3">
                                           {/* 保留透明背景 */}
-                                          {hasImageOrDrawingOrShape && generationModel === 'seedream-v5-pro' && (
+                                          {(hasImageOrDrawingOrShape || hasNote) && generationModel === 'seedream-v5-pro' && (
                                               <div className="flex items-center justify-between">
                             <span className="text-[11px] font-medium text-gray-500">{generationModel === 'seedream-v5-pro' ? '原生透明背景' : '保留透明背景'}</span>
                                                   <div
