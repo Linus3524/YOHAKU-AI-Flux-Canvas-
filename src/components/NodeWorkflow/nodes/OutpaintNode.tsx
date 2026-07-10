@@ -131,7 +131,7 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
   };
 
   return (
-    <div className={`group relative border border-black/12 bg-white shadow-sm w-[184px] overflow-visible ${ring}`}>
+    <div className={`group relative border border-black/12 bg-white shadow-sm w-[216px] overflow-visible ${ring}`}>
       <NodeDeleteButton onDelete={handleDelete} selected={selected} />
       <Handle type="target" position={Position.Left} />
       
