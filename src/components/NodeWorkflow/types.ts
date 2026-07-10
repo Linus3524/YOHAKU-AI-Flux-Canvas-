@@ -1,6 +1,6 @@
 import type { BiRefNetModel } from '../../utils/geminiLayer';
 
-export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'copyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing';
+export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'cameraAngle' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'copyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing';
 
 /** 產出「一組」結果的多輸出節點種類（用可折疊 Batch 容器呈現）。 */
 export const MULTI_OUTPUT_KINDS: readonly NodeKind[] = ['layerSplit', 'brandKit', 'crossPlatform', 'productMarketing'];
@@ -21,6 +21,11 @@ export interface ImageGenParams {
 export interface StyleParams {
   styleKey: string;
 }
+export interface CameraAngleParams {
+  anglePrompt: string;
+  /** 生成模型；空值 = 跟隨全域生成模型設定。可指定 'gemini' 或任一 Atlas 模型。 */
+  model?: string;
+}
 export interface UpscaleParams {
   /** 本機 ONNX 高清放大／智能 AI 放大（對標主畫布兩種）。 */
   mode: 'local' | 'smart';
@@ -37,6 +42,7 @@ export interface OutpaintParams {
   direction: 'all' | 'left' | 'right' | 'top' | 'bottom';
   aspectRatio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16';
   prompt: string;
+  model?: 'gemini' | 'gpt';
 }
 export interface CopyStyleParams {
   selectedKeys: string[];

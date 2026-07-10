@@ -10,7 +10,6 @@ import {
     getClosestAspectRatio,
     STYLE_PRESETS,
     calculateImageDifference,
-    detectIfIllustration,
     checkCompositionSimilarity
 } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
@@ -21,6 +20,7 @@ import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
 import {
     analyzeCopiedStyle,
     buildCopiedStylePrompt,
+    buildCameraAnglePrompt,
     buildPresetStylePrompt,
     generateCopiedStyleAssets,
     generatePresetStyleAssets,
@@ -320,26 +320,6 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
         setIsGenerating(true);
         showToast(`正在轉換視角...`);
 
-        // 視角 prompt（單次生成，不再做 diff 重試）
-        const buildAnglePrompt = (targetPrompt: string, isIllustration: boolean): string => {
-            const base = `
-You are a 3D rendering expert. Re-render this subject from a completely new camera angle.
-
-CURRENT VIEW: Assume the original image is a standard front/eye-level shot.
-TARGET VIEW: ${targetPrompt}
-
-STRICT RULES:
-1. DRAMATICALLY change the perspective and camera position — do NOT produce a result that looks similar to the input.
-2. Maintain the EXACT same subject identity, colors, and art style.
-3. Apply correct perspective distortion for the target angle (foreshortening, depth cues).
-4. The background should remain simple and consistent with the original.
-5. If the subject is a character: show the correct body parts visible from this angle.
-`.trim();
-            return isIllustration
-                ? base + `\nIMPORTANT: Even though this is a 2D illustration, you MUST apply 3D perspective transformation. Force the angle change even if it feels unnatural for 2D art. This is intentional.`
-                : base;
-        };
-
         // 取得生成圖的原生像素尺寸
         const getDims = (src: string) => new Promise<{ w: number; h: number }>((resolve) => {
             const img = new Image();
@@ -392,7 +372,7 @@ STRICT RULES:
             for (const element of targetElements) {
                 const finalSrc = await generateStyledImage({
                     srcImage: element.src,
-                    stylePrompt: async (flatSrc) => buildAnglePrompt(anglePrompt, await detectIfIllustration(flatSrc)),
+                    stylePrompt: (flatSrc) => buildCameraAnglePrompt(anglePrompt, flatSrc),
                     preserveTransparency,
                     transparencyKeys,
                     atlasRatio: imageAspectRatio || 'Original',

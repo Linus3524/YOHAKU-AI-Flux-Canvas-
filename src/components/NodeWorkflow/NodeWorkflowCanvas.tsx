@@ -163,6 +163,8 @@ interface NodeWorkflowCanvasProps {
   engine?: ExecutorEngine;
   /** 執行完成，最終輸出圖 → 回貼大畫布 NodeGroupElement.outputSrc。 */
   onOutputChange?: (src: string) => void;
+  /** 工作流拓撲或參數變動後，原先的畫布預覽不再可信，必須失效。 */
+  onInvalidateOutput?: () => void;
   /** 執行失敗提示。 */
   onRunError?: (message: string) => void;
 }
@@ -178,7 +180,7 @@ const NODE_CATEGORY_LABELS: Record<NodeCategory, string> = {
   output: '輸出',
 };
 
-export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRunError }: NodeWorkflowCanvasProps) {
+export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onInvalidateOutput, onRunError }: NodeWorkflowCanvasProps) {
   // 進子空間前 Overlay 已 loadGraph，這裡讀一次當初始值。
   // 之後由 React Flow 自己管理 nodes/edges（保留量測到的 measured 尺寸，
   // 否則每次從 store 重建會洗掉 measured → 節點永遠 visibility:hidden 不顯示）。
@@ -196,6 +198,12 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
   const [edges, setEdges, onEdgesChange] = useEdgesState(
     useNodeGraphStore.getState().edges.map(e => toFlowEdge(e))
   );
+  // 只追蹤會改變執行結果的 graph 資料；React Flow 量測尺寸與拖曳位置不會使預覽失效。
+  const graphFingerprint = useMemo(() => JSON.stringify({
+    nodes: nodes.map(toGraphNode).map(({ id, kind, data }) => ({ id, kind, data })),
+    edges: edges.map(toGraphEdge),
+  }), [nodes, edges]);
+  const graphFingerprintRef = useRef<string | null>(null);
   const groupedAddableNodes = useMemo(() => NODE_CATEGORY_ORDER
     .map(category => ({
       category,
@@ -295,6 +303,17 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onRu
       setIsRunning(false);
     }
   }, [isRunning, resetRuntime, resetRunningStatuses, nodes, edges, engine, setNodes, setEdges, setNodeStatus, setNodeResult, setNodeBatchResult, onOutputChange, onRunError]);
+
+  useEffect(() => {
+    if (graphFingerprintRef.current === null) {
+      graphFingerprintRef.current = graphFingerprint;
+      return;
+    }
+    if (graphFingerprintRef.current !== graphFingerprint) {
+      graphFingerprintRef.current = graphFingerprint;
+      onInvalidateOutput?.();
+    }
+  }, [graphFingerprint, onInvalidateOutput]);
 
   // 把本地編輯結果鏡像回 store，讓關閉時 exportGraph() 拿到最新拓撲（存回 NodeGroupElement）。
   useEffect(() => {

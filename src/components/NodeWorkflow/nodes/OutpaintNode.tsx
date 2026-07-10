@@ -61,6 +61,14 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
             </option>
           ))}
         </select>
+        <select
+          value={params.model ?? 'gemini'}
+          onChange={(e) => setParams({ model: e.target.value as OutpaintParams['model'] })}
+          className="nodrag w-full border border-neutral-200 bg-neutral-50 px-1.5 py-1 text-[11px] focus:outline-none focus:border-neutral-400"
+        >
+          <option value="gemini">Gemini 外擴</option>
+          <option value="gpt">GPT Image 2 遮罩外擴</option>
+        </select>
         <textarea
           value={params.prompt ?? ''}
           onChange={(e) => setParams({ prompt: e.target.value })}

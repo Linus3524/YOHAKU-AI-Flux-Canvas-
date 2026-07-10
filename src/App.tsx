@@ -610,6 +610,15 @@ const App: React.FC = () => {
     img.src = src;
   }, [activeNodeGroupId, setElements]);
 
+  const handleInvalidateNodeWorkflowOutput = useCallback(() => {
+    if (!activeNodeGroupId) return;
+    setElements(prev => prev.map(el => (
+      el.id === activeNodeGroupId && el.type === 'node_group'
+        ? { ...el, outputSrc: undefined }
+        : el
+    )));
+  }, [activeNodeGroupId, setElements]);
+
   const handleImportNodeWorkflowOutput = useCallback(() => {
     const group = activeNodeGroup;
     const outputSrc = group?.outputSrc;
@@ -1701,8 +1710,9 @@ const App: React.FC = () => {
           onClose={handleCloseNodeWorkflow}
           onImportOutput={handleImportNodeWorkflowOutput}
           onDetachImage={handleDetachNodeImage}
-          engine={{ geminiApiKey: effectiveApiKey, atlasApiKey, falApiKey, geminiImageModel: imageModel }}
+          engine={{ geminiApiKey: effectiveApiKey, atlasApiKey, falApiKey, geminiImageModel: imageModel, generationModel, imageSize, imageAspectRatio, preserveTransparency }}
           onOutputChange={handleNodeWorkflowOutput}
+          onInvalidateOutput={handleInvalidateNodeWorkflowOutput}
           onRunError={(msg) => showToast(`❌ ${msg}`)}
         />
       )}

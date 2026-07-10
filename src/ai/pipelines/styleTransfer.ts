@@ -10,7 +10,7 @@
  */
 import { GenerateContentResponse } from '@google/genai';
 import { callGeminiWithRetry } from '../../utils/helpers';
-import { STYLE_PRESETS } from '../../utils/helpers';
+import { detectIfIllustration, STYLE_PRESETS } from '../../utils/helpers';
 import { callAtlasImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../../utils/atlasImage';
 import { createGeminiClient } from '../geminiClient';
 import { prepareImageForGeneration, restoreTransparency, type RestoreTransparencyKeys } from '../transparency';
@@ -36,6 +36,29 @@ export interface StyleTransferOpts {
     omitImageConfig?: boolean;
     /** Gemini imageConfig 額外帶 aspectRatio（智能放大用：鎖定輸出比例防變形） */
     geminiAspectRatio?: string;
+}
+
+/** 視角轉換共用提示詞，畫布與節點工作流必須使用同一份。 */
+export async function buildCameraAnglePrompt(targetPrompt: string, flatSrc: string): Promise<string> {
+    const base = `
+Re-view the EXACT same image from a new camera angle. You are only moving the camera — you are NOT redesigning, restyling, or reimagining the image.
+
+NEW CAMERA ANGLE: ${targetPrompt}
+
+MUST STAY IDENTICAL (this is the same image, just seen from another angle):
+1. Medium & art style: if the input is an illustration, the output stays an illustration in the SAME drawing style (same linework, shading, coloring). If it is a photograph, it stays a photograph. NEVER convert illustration↔photo, or change the rendering style.
+2. Subject identity: same people, faces, hair, clothing, objects, products, text and logos — unchanged.
+3. Color fidelity (TOP PRIORITY — match the original precisely): reproduce the SAME color palette, white balance, saturation, contrast and color grading as the input. Sample the original's exact hues for skin, hair, clothing, products and background and reuse them. Do NOT shift the image warmer or cooler, do NOT boost saturation or contrast, do NOT add any new color cast or filter. The overall tone must read as the same photograph/artwork under the same lighting.
+4. Composition & layout: if the image has multiple panels/sections, split scenes, text blocks or a specific arrangement (e.g. an illustration on top and a photo below), PRESERVE that whole structure and every element in it. Do NOT collapse it into a single subject.
+
+WHAT CHANGES — only this:
+- The camera viewpoint. Re-project the same scene with correct perspective for the new angle (foreshortening, depth, and any parts that newly become visible), while keeping everything above intact.
+
+The output must be instantly recognizable as the SAME image from a different angle — not a new or redesigned image.
+`.trim();
+    return (await detectIfIllustration(flatSrc))
+        ? base + `\nThis is a 2D illustration: keep it a 2D illustration in the identical art style — imagine how the SAME artist would redraw this exact scene from the new angle. Do NOT make it look 3D-rendered or photographic.`
+        : base;
 }
 
 /**

@@ -17,11 +17,13 @@ interface NodeWorkflowOverlayProps {
   engine?: ExecutorEngine;
   /** 執行完成，最終輸出圖 → 寫回 NodeGroupElement.outputSrc。 */
   onOutputChange?: (src: string) => void;
+  /** 節點圖被編輯後，清除已過期的大畫布預覽。 */
+  onInvalidateOutput?: () => void;
   /** 執行失敗提示。 */
   onRunError?: (message: string) => void;
 }
 
-export function NodeWorkflowOverlay({ element, onClose, onImportOutput, onDetachImage, engine, onOutputChange, onRunError }: NodeWorkflowOverlayProps) {
+export function NodeWorkflowOverlay({ element, onClose, onImportOutput, onDetachImage, engine, onOutputChange, onInvalidateOutput, onRunError }: NodeWorkflowOverlayProps) {
   const [isGraphReady, setIsGraphReady] = React.useState(false);
   const loadGraph = useNodeGraphStore(state => state.loadGraph);
   const exportGraph = useNodeGraphStore(state => state.exportGraph);
@@ -75,6 +77,7 @@ export function NodeWorkflowOverlay({ element, onClose, onImportOutput, onDetach
             onDetachImage={onDetachImage}
             engine={engine}
             onOutputChange={onOutputChange}
+            onInvalidateOutput={onInvalidateOutput}
             onRunError={onRunError}
           />
         )}

@@ -6,6 +6,7 @@ import { OutputNode } from './nodes/OutputNode';
 import { RemoveBgNode } from './nodes/RemoveBgNode';
 import { ImageGenNode } from './nodes/ImageGenNode';
 import { StyleNode } from './nodes/StyleNode';
+import { CameraAngleNode } from './nodes/CameraAngleNode';
 import { UpscaleNode } from './nodes/UpscaleNode';
 import { PromptOptimizeNode } from './nodes/PromptOptimizeNode';
 import { AnalyzeNode } from './nodes/AnalyzeNode';
@@ -80,6 +81,17 @@ export const NODE_REGISTRY = {
     component: StyleNode,
     label: '風格轉換',
     addLabel: '＋ 風格',
+    addable: true,
+    category: 'process',
+    needsUpstream: true,
+    input: 'image',
+    output: 'image',
+  },
+  cameraAngle: {
+    kind: 'cameraAngle',
+    component: CameraAngleNode,
+    label: '視角轉換',
+    addLabel: '＋ 視角',
     addable: true,
     category: 'process',
     needsUpstream: true,

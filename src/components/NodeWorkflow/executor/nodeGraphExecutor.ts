@@ -1,22 +1,26 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, BrandKitParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, BrandKitParams, CameraAngleParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
 import type { ImageElement, OutpaintingState } from '../../../types';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
+import { callAtlasInpaint } from '../../../utils/atlasImage';
 import { runExtendBrandKitPipeline } from '../../../ai/pipelines/brandKit';
 import { runCrossPlatformPipeline } from '../../../ai/pipelines/crossPlatform';
 import { runProductMarketingPipeline } from '../../../ai/pipelines/productMarketing';
 import { analyzeImageStyleFull, optimizePromptWithAI } from '../../../ai/pipelines/analysis';
 import { generateOutpaintingPrompt } from '../../../ai/pipelines/outpainting';
-import { analyzeCopiedStyle, buildCopiedStylePrompt, buildPresetStylePrompt, generateCopiedStyleAssets, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
+import { analyzeCopiedStyle, buildCameraAnglePrompt, buildCopiedStylePrompt, buildPresetStylePrompt, generateCopiedStyleAssets, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
+import { atlasModelSupportsImg2Img } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
 import { executeDynamicRemoval } from '../../../utils/DynamicBackgroundRemoval';
 import { createGeminiClient } from '../../../ai/geminiClient';
 import { getVisualStyleById } from '../../../skills/styles';
+import { loadImage } from '../../../utils/helpers';
+import { applyPoissonBlend } from '../../../utils/poissonBlend';
 import { LOGO_BRAND_OUTPUTS, LOGO_DEFAULT_CONFIG } from '../../../skills/logo';
 import { CROSS_PLATFORM_SPECS } from '../../../skills/crossPlatform';
 import { PRODUCT_MARKETING_DEFAULT_CONFIG, PRODUCT_MARKETING_PLATFORMS } from '../../../skills/marketing';
@@ -106,7 +110,7 @@ async function runImageGen(
   }
   parts.push({ text: prompt });
   const src = await geminiGenerateImage(
-    { parts, aspectRatio, imageSize: '1K' },
+    { parts, aspectRatio, imageSize: engine.imageSize || '1K' },
     { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image-preview' },
   );
   if (!src) throw new Error('生圖沒有回傳圖片');
@@ -120,33 +124,78 @@ async function runStyleTransfer(
 ): Promise<string> {
   if (!styleKey || styleKey === 'none') return upstream;
   if (!isImageSrc(upstream)) throw new Error('風格轉換節點需要上游圖片');
-  if (!engine.geminiApiKey) throw new Error('風格轉換需要 Gemini API Key');
+  const useAtlas = !!engine.atlasApiKey
+    && !!engine.generationModel
+    && engine.generationModel !== 'gemini'
+    && atlasModelSupportsImg2Img(engine.generationModel as AtlasGenerationModel);
+  if (!useAtlas && !engine.geminiApiKey) throw new Error('風格轉換需要 Gemini 或 Atlas API Key');
 
   // 優先用系統風格藝術庫（60+ 種）的完整風格 prompt；
   // 找不到才 fallback 舊的內建 5 種 key（向後相容既有存檔）。
   const template = getVisualStyleById(styleKey);
   const stylePrompt = template
-    ? template.content
+    ? buildPresetStylePrompt(template.name_zh || template.name)
     : buildPresetStylePrompt(STYLE_PRESET_BY_KEY[styleKey] ?? styleKey);
   const src = await generateStyledImage(
     {
       srcImage: upstream,
       stylePrompt,
-      preserveTransparency: true,
+      preserveTransparency: engine.preserveTransparency ?? false,
       transparencyKeys: {
         geminiApiKey: engine.geminiApiKey,
         imageModel: engine.geminiImageModel,
       },
     },
     {
-      model: 'gemini',
+      model: useAtlas ? engine.generationModel! : 'gemini',
       geminiApiKey: engine.geminiApiKey,
+      atlasApiKey: useAtlas ? engine.atlasApiKey : undefined,
       geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
-      imageSize: '1K',
+      imageSize: engine.imageSize || '1K',
     },
   );
   if (!src) throw new Error('風格轉換沒有回傳圖片');
   return src;
+}
+
+async function runCameraAngle(
+  params: Partial<CameraAngleParams>,
+  input: string,
+  engine: ExecutorEngine,
+): Promise<string> {
+  if (!isImageSrc(input)) throw new Error('視角轉換節點需要上游圖片');
+  if (!engine.geminiApiKey && !engine.atlasApiKey) throw new Error('視角轉換需要 Gemini 或 Atlas API Key');
+
+  const target = params.anglePrompt?.trim() || 'straight-on front view, eye-level, facing camera directly';
+  // 節點若指定模型就用它，否則跟隨全域生成模型設定。
+  const atlasModel = params.model || engine.generationModel;
+  const useAtlas = !!engine.atlasApiKey
+    && !!atlasModel
+    && atlasModel !== 'gemini'
+    && atlasModelSupportsImg2Img(atlasModel as AtlasGenerationModel);
+  const result = await generateStyledImage(
+    {
+      srcImage: input,
+      stylePrompt: (flatSrc) => buildCameraAnglePrompt(target, flatSrc),
+      preserveTransparency: engine.preserveTransparency ?? false,
+      transparencyKeys: {
+        falApiKey: engine.falApiKey,
+        geminiApiKey: engine.geminiApiKey,
+        imageModel: engine.geminiImageModel,
+      },
+      atlasRatio: engine.imageAspectRatio || 'Original',
+      omitImageConfig: true,
+    },
+    {
+      model: useAtlas ? atlasModel as AtlasGenerationModel : 'gemini',
+      geminiApiKey: engine.geminiApiKey ?? undefined,
+      atlasApiKey: useAtlas ? engine.atlasApiKey : undefined,
+      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
+      imageSize: engine.imageSize || '1K',
+    },
+  );
+  if (!result) throw new Error('視角轉換沒有回傳圖片');
+  return result;
 }
 
 async function runRemoveBg(
@@ -190,7 +239,11 @@ async function runUpscale(
   // 智能放大：Gemini/Atlas 生成式放大（對標主畫布 handleAIUpscale，用 generateStyledImage）。
   if (params.mode === 'smart') {
     if (!isImageSrc(input)) throw new Error('智能放大需要上游圖片');
-    if (!engine.geminiApiKey) throw new Error('智能放大需要 Gemini API Key');
+    const useAtlas = !!engine.atlasApiKey
+      && !!engine.generationModel
+      && engine.generationModel !== 'gemini'
+      && atlasModelSupportsImg2Img(engine.generationModel as AtlasGenerationModel);
+    if (!useAtlas && !engine.geminiApiKey) throw new Error('智能放大需要 Gemini 或 Atlas API Key');
     const requestedResolution = factor >= 4 ? '4K' : '2K';
     const prompt = `Task: High-fidelity image upscaling.
 Action: Upscale the image by ${factor}x.
@@ -203,12 +256,13 @@ Enhance details and sharpness significantly while keeping the structure identica
       {
         srcImage: input,
         stylePrompt: prompt,
-        preserveTransparency: true,
+        preserveTransparency: engine.preserveTransparency ?? false,
         transparencyKeys: { falApiKey: engine.falApiKey, geminiApiKey: engine.geminiApiKey, imageModel: engine.geminiImageModel },
       },
       {
-        model: 'gemini',
+        model: useAtlas ? engine.generationModel! : 'gemini',
         geminiApiKey: engine.geminiApiKey,
+        atlasApiKey: useAtlas ? engine.atlasApiKey : undefined,
         geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
         imageSize: requestedResolution,
       },
@@ -325,7 +379,9 @@ async function runOutpaint(
   onProgress?: (message: string) => void,
 ): Promise<string> {
   if (!isImageSrc(input)) throw new Error('外擴節點需要上游圖片');
-  if (!engine.geminiApiKey) throw new Error('外擴需要 Gemini API Key');
+  const model = params.model ?? 'gemini';
+  if (model === 'gpt' && !engine.atlasApiKey) throw new Error('GPT 擴圖需要 Atlas Cloud API Key');
+  if (model === 'gemini' && !engine.geminiApiKey) throw new Error('外擴需要 Gemini API Key');
   const direction = params.direction && params.direction in OUTPAINT_DIRECTIONS ? params.direction : 'all';
   const aspectRatio = params.aspectRatio ?? '1:1';
   onProgress?.('分析外擴提示詞中');
@@ -335,14 +391,70 @@ async function runOutpaint(
     autoPrompt,
     params.prompt?.trim(),
   ].filter(Boolean).join('\n\n');
-  const [header, data] = input.split(',');
-  const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-  const src = await geminiGenerateImage(
-    { parts: [{ inlineData: { data, mimeType } }, { text: prompt }], aspectRatio, imageSize: '1K' },
-    { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image-preview' },
-  );
-  if (!src) throw new Error('外擴沒有回傳圖片');
-  return src;
+  const img = await loadImage(input);
+  const sourceW = img.naturalWidth;
+  const sourceH = img.naturalHeight;
+  const ratio = Number(aspectRatio.split(':')[0]) / Number(aspectRatio.split(':')[1]);
+  let canvasW = Math.max(sourceW, Math.round(sourceH * ratio));
+  let canvasH = Math.max(sourceH, Math.round(sourceW / ratio));
+  const cap = Math.min(1, 2048 / Math.max(canvasW, canvasH));
+  canvasW = Math.max(1, Math.round(canvasW * cap));
+  canvasH = Math.max(1, Math.round(canvasH * cap));
+  const scale = Math.min(canvasW / sourceW, canvasH / sourceH);
+  const drawW = Math.round(sourceW * scale);
+  const drawH = Math.round(sourceH * scale);
+  const gapX = canvasW - drawW;
+  const gapY = canvasH - drawH;
+  const imageX = direction === 'left' ? gapX : direction === 'right' ? 0 : Math.round(gapX / 2);
+  const imageY = direction === 'top' ? gapY : direction === 'bottom' ? 0 : Math.round(gapY / 2);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasW; canvas.height = canvasH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas context failed');
+  ctx.drawImage(img, imageX, imageY, drawW, drawH);
+  const composite = canvas.toDataURL('image/png');
+
+  const mask = document.createElement('canvas');
+  mask.width = canvasW; mask.height = canvasH;
+  const maskCtx = mask.getContext('2d');
+  if (!maskCtx) throw new Error('Mask context failed');
+  maskCtx.fillStyle = '#ffffff';
+  maskCtx.fillRect(0, 0, canvasW, canvasH);
+  maskCtx.fillStyle = '#000000';
+  maskCtx.fillRect(imageX, imageY, drawW, drawH);
+  const maskSrc = mask.toDataURL('image/png');
+
+  let generated = '';
+  if (model === 'gpt') {
+    generated = await callAtlasInpaint(prompt, composite, maskSrc, engine.atlasApiKey!, undefined, undefined, undefined, `${canvasW}x${canvasH}`);
+  } else {
+    const [header, data] = composite.split(',');
+    const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
+    generated = await geminiGenerateImage(
+      {
+        parts: [
+          { inlineData: { data, mimeType } },
+          { text: `The semi-transparent red area marks empty space to fill. Keep the existing (non-red) area pixel-for-pixel UNCHANGED — do not redraw, stretch, recolor, zoom, or shift it. Only paint into the red area, seamlessly extending the scene with matching lighting, perspective and style. ${prompt}` },
+        ],
+        aspectRatio,
+        imageSize: '4K',
+      },
+      { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image-preview' },
+    ) || '';
+  }
+  if (!generated) throw new Error('外擴沒有回傳圖片');
+  try {
+    return await applyPoissonBlend(input, generated, {
+      originalPosition: { x: imageX, y: imageY },
+      originalWidth: drawW,
+      originalHeight: drawH,
+      canvasWidth: canvasW,
+      canvasHeight: canvasH,
+    });
+  } catch {
+    return generated;
+  }
 }
 
 async function runCopyStyle(
@@ -367,7 +479,7 @@ async function runCopyStyle(
   await generateCopiedStyleAssets({
     targetElements: [createImageElementForPipeline(contentSrc, 'copy-style-content')],
     stylePrompt,
-    preserveTransparency: params.preserveTransparency !== false,
+    preserveTransparency: params.preserveTransparency ?? engine.preserveTransparency ?? false,
     transparencyKeys: {
       falApiKey: engine.falApiKey,
       geminiApiKey: engine.geminiApiKey,
@@ -377,7 +489,7 @@ async function runCopyStyle(
       model: 'gemini',
       geminiApiKey: engine.geminiApiKey,
       geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
-      imageSize: '1K',
+      imageSize: engine.imageSize || '1K',
     },
     onAsset: (_source, finalSrc) => {
       result = finalSrc;
@@ -550,6 +662,11 @@ const nodeRunners: Record<NodeKind, NodeRunner> = {
     requireInput(input, '風格轉換'),
     engine,
   )),
+  cameraAngle: async ({ node, input, engine }) => singleResult(await runCameraAngle(
+    (node.data.params ?? {}) as Partial<CameraAngleParams>,
+    requireInput(input, '視角轉換'),
+    engine,
+  )),
   upscale: async ({ node, input, engine, onProgress }) => singleResult(await runUpscale(
     (node.data.params ?? {}) as Partial<UpscaleParams>,
     requireInput(input, '放大'),
@@ -607,6 +724,10 @@ export interface ExecutorEngine {
   atlasApiKey?: string | null;
   falApiKey?: string | null;
   geminiImageModel?: string;
+  generationModel?: string;
+  imageSize?: '1K' | '2K' | '4K';
+  imageAspectRatio?: string;
+  preserveTransparency?: boolean;
 }
 
 export interface ExecutorCallbacks {
