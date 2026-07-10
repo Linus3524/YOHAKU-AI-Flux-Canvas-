@@ -422,12 +422,40 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
 
   const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
-    setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
-      type: 'pane',
+    const inst = rfInstanceRef.current;
+    if (!inst) {
+      setContextMenu({ x: event.clientX, y: event.clientY, type: 'pane' });
+      return;
+    }
+    const flowPos = inst.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    
+    // 尋找包含此座標的 group 節點
+    const containingGroup = nodes.find(n => {
+      if (n.type !== 'group') return false;
+      const width = n.style?.width ?? n.measured?.width ?? 360;
+      const height = n.style?.height ?? n.measured?.height ?? 240;
+      const x1 = n.position.x;
+      const y1 = n.position.y;
+      const x2 = x1 + (typeof width === 'number' ? width : 360);
+      const y2 = y1 + (typeof height === 'number' ? height : 240);
+      return flowPos.x >= x1 && flowPos.x <= x2 && flowPos.y >= y1 && flowPos.y <= y2;
     });
-  }, []);
+
+    if (containingGroup) {
+      setContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        type: 'node',
+        nodeId: containingGroup.id,
+      });
+    } else {
+      setContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        type: 'pane',
+      });
+    }
+  }, [nodes]);
 
   const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: any) => {
     event.preventDefault();
@@ -1057,7 +1085,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
             onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
           />
           <div
-            className="fixed z-[8010] min-w-[152px] rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-1.5 ring-1 ring-black/5 pointer-events-auto select-none"
+            className="fixed z-[8010] min-w-[152px] border border-black bg-white py-1.5 pointer-events-auto select-none rounded-none shadow-none"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             {/* A. 畫布空白處右鍵選單 */}
@@ -1076,7 +1104,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                     <Icon name="chevron_right" size={10} className="text-neutral-400" />
                   </button>
                   {/* 子選單 */}
-                  <div className="absolute left-full top-0 ml-0.5 hidden group-hover/submenu:block min-w-[164px] rounded-2xl bg-white/95 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-1.5 ring-1 ring-black/5 max-h-[360px] overflow-y-auto">
+                  <div className="absolute left-full top-0 ml-0.5 hidden group-hover/submenu:block min-w-[164px] border border-black bg-white py-1.5 max-h-[360px] overflow-y-auto rounded-none shadow-none">
                     {[
                       { key: 'generate', label: 'AI 生成' },
                       { key: 'process', label: '影像處理' },
@@ -1110,14 +1138,14 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                               <span>{n.label}</span>
                             </button>
                           ))}
-                          <div className="border-t border-black/4 my-1 last:hidden" />
+                          <div className="border-t border-neutral-200 my-1 last:hidden" />
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                <div className="border-t border-black/6 my-1" />
+                <div className="border-t border-neutral-200 my-1" />
 
                 {/* 執行/停止項目 */}
                 <button
@@ -1138,7 +1166,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
             {contextMenu.type === 'node' && (() => {
               const targetNode = nodes.find(n => n.id === contextMenu.nodeId);
               if (!targetNode) return null;
-              const isGroup = targetNode.type === 'group';
+              const isGroup = targetNode.data.kind === 'group';
               const resultSrc = useNodeGraphStore.getState().nodeResults[targetNode.id];
               const hasImgResult = resultSrc && isImageSrc(resultSrc);
 
@@ -1165,15 +1193,15 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                               } : n));
                               setContextMenu(null);
                             }}
-                            className={`h-4.5 w-4.5 rounded-full border shadow-sm transition-transform hover:scale-110 active:scale-95 ${
-                              (targetNode.data?.params as any)?.color === nextColor ? 'border-neutral-950 ring-1 ring-neutral-950' : 'border-white'
+                            className={`h-4.5 w-4.5 rounded-none border transition-transform hover:scale-105 active:scale-95 ${
+                              (targetNode.data?.params as any)?.color === nextColor ? 'border-black ring-1 ring-black' : 'border-neutral-200'
                             }`}
                             style={{ backgroundColor: nextColor }}
                             title={`變更為此顏色`}
                           />
                         ))}
                       </div>
-                      <div className="border-t border-black/6 my-1" />
+                      <div className="border-t border-neutral-200 my-1" />
                     </>
                   )}
 
