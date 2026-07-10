@@ -179,7 +179,7 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
               >
                 {RATIOS.map(ratio => (
                   <option key={ratio} value={ratio}>
-                    {ratio === 'custom' ? '自訂像素外擴' : `目標比例 ${ratio}`}
+                    {ratio === 'custom' ? '自訂像素' : ratio}
                   </option>
                 ))}
               </select>
@@ -189,8 +189,8 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
                 onChange={(e) => setParams({ model: e.target.value as OutpaintParams['model'] })}
                 className="nodrag block w-full border border-neutral-200 bg-neutral-50 px-1 py-0.5 text-[10px] font-medium focus:outline-none focus:border-neutral-400"
               >
-                <option value="gemini">Gemini 外擴</option>
-                <option value="gpt">GPT Image 外擴</option>
+                <option value="gemini">Gemini</option>
+                <option value="gpt">GPT</option>
               </select>
             </div>
           </div>
