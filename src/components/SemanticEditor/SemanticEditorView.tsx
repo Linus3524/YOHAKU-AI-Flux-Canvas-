@@ -106,7 +106,7 @@ export function SemanticEditorView({
     // 重繪引擎
     const canUseGpt    = !!atlasApiKey;
     const canUseGemini = !!geminiApiKey;
-    const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'gemini'>(canUseGpt ? 'gpt' : 'gemini');
+    const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'seedream-v5-pro' | 'gemini'>(canUseGpt ? 'gpt' : 'gemini');
     const [onnxSAM2Ready, setOnnxSAM2Ready] = useState(false);
     const [onnxEmbeddingLoading, setOnnxEmbeddingLoading] = useState(false);
     const [onnxEmbeddingReady, setOnnxEmbeddingReady] = useState(false);
@@ -381,7 +381,7 @@ export function SemanticEditorView({
 
     // Apply：單層重繪
     const handleApply = useCallback(async (layer: SmartLayer) => {
-        if (inpaintEngine === 'gpt'    && !atlasApiKey)  { showToast('⚠️ GPT 重繪需要 Atlas API Key'); return; }
+        if ((inpaintEngine === 'gpt' || inpaintEngine === 'seedream-v5-pro') && !atlasApiKey)  { showToast('⚠️ Atlas 重繪需要 Atlas API Key'); return; }
         if (inpaintEngine === 'gemini' && !geminiApiKey) { showToast('⚠️ Gemini 重繪需要 Gemini API Key'); return; }
         if (!falApiKey) { showToast('⚠️ 需要 fal.ai Key（SAM2 分割用）'); return; }
         applyLayerRegen(layer, inpaintEngine).catch(e => {
@@ -393,7 +393,7 @@ export function SemanticEditorView({
     // 與物件重繪一致，跟隨使用者的引擎切換鈕（inpaintEngine）：選 GPT 用 GPT、選 Gemini 用 Gemini。
     const handleApplyText = useCallback((layer: SmartLayer, newText: string) => {
         if (!newText.trim()) { showToast('⚠️ 請輸入文字內容'); return; }
-        if (inpaintEngine === 'gpt'    && !atlasApiKey)  { showToast('⚠️ GPT 重繪需要 Atlas API Key'); return; }
+        if ((inpaintEngine === 'gpt' || inpaintEngine === 'seedream-v5-pro') && !atlasApiKey)  { showToast('⚠️ Atlas 重繪需要 Atlas API Key'); return; }
         if (inpaintEngine === 'gemini' && !geminiApiKey) { showToast('⚠️ Gemini 重繪需要 Gemini API Key'); return; }
         applyTextLayerEdit(layer, newText, inpaintEngine).catch(e => {
             showToast(`❌ 文字重繪失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
@@ -402,7 +402,7 @@ export function SemanticEditorView({
 
     // Apply All（批次）
     const handleApplyAll = useCallback(() => {
-        if (inpaintEngine === 'gpt'    && !atlasApiKey)  { showToast('⚠️ GPT 重繪需要 Atlas API Key'); return; }
+        if ((inpaintEngine === 'gpt' || inpaintEngine === 'seedream-v5-pro') && !atlasApiKey)  { showToast('⚠️ Atlas 重繪需要 Atlas API Key'); return; }
         if (inpaintEngine === 'gemini' && !geminiApiKey) { showToast('⚠️ Gemini 重繪需要 Gemini API Key'); return; }
         applyAllDirtyLayers(inpaintEngine).catch(e => {
             showToast(`❌ 批次重繪失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
@@ -1009,11 +1009,11 @@ export function SemanticEditorView({
                                 {ocrEngine === 'local' ? '本機 OCR' : 'Gemini OCR'}
                             </button>
                         )}
-                        {/* 重繪模型切換（與 SAM2 切換同款） */}
-                        {(canUseGpt && canUseGemini) && (
+                        {/* 重繪模型切換 */}
+                        {(canUseGpt || canUseGemini) && (
                             <button
-                                onClick={() => setInpaintEngine(inpaintEngine === 'gpt' ? 'gemini' : 'gpt')}
-                                title={`重繪模型：${inpaintEngine === 'gpt' ? 'GPT Image 2' : 'Gemini'} — 點選切換`}
+                                onClick={() => setInpaintEngine(inpaintEngine === 'gpt' ? (canUseGpt ? 'seedream-v5-pro' : 'gemini') : inpaintEngine === 'seedream-v5-pro' ? 'gemini' : 'gpt')}
+                                title="重繪模型：點選切換"
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: 5,
                                     padding: '4px 10px', borderRadius: 9999,
@@ -1028,7 +1028,7 @@ export function SemanticEditorView({
                                     width: 6, height: 6, borderRadius: '50%',
                                     background: '#7c3aed', flexShrink: 0,
                                 }} />
-                                {inpaintEngine === 'gpt' ? 'GPT Image 2' : 'Gemini'}
+                                {inpaintEngine === 'gpt' ? 'GPT Image 2' : inpaintEngine === 'seedream-v5-pro' ? '即夢 Pro' : 'Gemini'}
                             </button>
                         )}
                         {onImportToCanvas && (

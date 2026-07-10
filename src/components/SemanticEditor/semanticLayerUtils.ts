@@ -1487,8 +1487,8 @@ export interface RegenerateLayerOptions {
     /** 當前完整畫面（作為 inpaint 的 base image） */
     originalBase64: string;
     newPrompt: string;
-    /** 'gpt'（預設）= Atlas inpaint；'gemini' = crop → Gemini img2img → SAM2 */
-    engine?: 'gpt' | 'gemini';
+    /** 'gpt' = Atlas inpaint；'seedream-v5-pro' = Atlas edit + selection reference；'gemini' = crop → Gemini img2img */
+    engine?: 'gpt' | 'seedream-v5-pro' | 'gemini';
     atlasApiKey?: string;   // engine === 'gpt' 時必要
     geminiApiKey?: string;  // engine === 'gemini' 時必要
     imageModel?: string;    // Gemini 使用的模型
@@ -1684,9 +1684,15 @@ export async function regenerateLayer({
                 originalBase64, newPrompt, geminiApiKey, imageModel,
                 referenceImage, layerName: layer.name, onProgress,
             });
-        } else {
+        } else if (engine === 'gpt') {
             if (!atlasApiKey) throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
             newCompositeBase64 = await regenerateTextFullImageGpt({
+                layer, originalBase64, newPrompt, atlasApiKey, referenceImage, signal, onProgress,
+            });
+        }
+        else {
+            if (!atlasApiKey) throw new Error('Seedream Pro 重繪需要 Atlas API Key');
+            newCompositeBase64 = await regenerateTextFullImageSeedream({
                 layer, originalBase64, newPrompt, atlasApiKey, referenceImage, signal, onProgress,
             });
         }
@@ -1782,6 +1788,29 @@ export async function regenerateLayer({
     }
 
     // ══ GPT / Atlas 路線（原有，完全不動）══════════════════════════════════════
+    if (engine === 'seedream-v5-pro') {
+        if (!atlasApiKey) throw new Error('Seedream Pro 重繪需要 Atlas API Key');
+        const dims = await getImageDims(originalBase64);
+        const fullLayerPng = await layerToFullCanvas(layer, dims.w, dims.h);
+        const maskBase64 = await transparentPngToInpaintMask(fullLayerPng);
+        const { callAtlasImg2Img, compressForAtlas } = await import('../../utils/atlasImage');
+        onProgress?.(`Seedream 5.0 Pro 重新生成「${layer.name}」...`);
+        const [compOrig, compMask] = await Promise.all([
+            compressForAtlas(originalBase64, 1536, 0.92, false),
+            compressForAtlas(maskBase64, 1536, 1.0, true),
+        ]);
+        const outputs = await callAtlasImg2Img(
+            `${newPrompt} Keep all areas outside the selected mask unchanged. Edit only the selected object and preserve its position, scale, lighting and perspective. The second reference image is a black-and-white selection mask: white is the edit region and black is the preserve region.`,
+            'seedream-v5-pro', atlasApiKey, compOrig, 1,
+            { ratio: 'Original', quality: '2K', keepAlpha: true },
+            [compMask, ...(referenceImage ? [referenceImage] : [])],
+        );
+        if (!outputs[0]) throw new Error('Seedream Pro 沒有回傳重繪結果');
+        const newCompositeBase64 = await pasteInpaintRegion(originalBase64, outputs[0], maskBase64);
+        const updatedLayer = await cropToBBox(newCompositeBase64, layer.bbox);
+        const newLayerBase64 = updatedLayer;
+        return { newLayerBase64, newCropRatio: layer.cropRatio, newCompositeBase64 };
+    }
     if (!atlasApiKey) throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
     const { callAtlasInpaint, compressForAtlas, gptSizeForImage } = await import('../../utils/atlasImage');
     const dims = await getImageDims(originalBase64);
@@ -1867,4 +1896,25 @@ export async function regenerateLayer({
         pixelWidth:  newPixelW,
         pixelHeight: newPixelH,
     };
+}
+
+async function regenerateTextFullImageSeedream({
+    layer, originalBase64, newPrompt, atlasApiKey, referenceImage, signal, onProgress,
+}: {
+    layer: SmartLayer; originalBase64: string; newPrompt: string; atlasApiKey: string;
+    referenceImage?: string; signal?: AbortSignal; onProgress?: (msg: string) => void;
+}): Promise<string> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const { callAtlasImg2Img, compressForAtlas } = await import('../../utils/atlasImage');
+    const dims = await getImageDims(originalBase64);
+    const mask = solidRectMask(dims.w, dims.h, expandBboxForText(layer.bbox));
+    onProgress?.(`Seedream 5.0 Pro 重繪文字「${layer.name}」...`);
+    const outputs = await callAtlasImg2Img(
+        `${newPrompt} The second reference image is a black-and-white selection mask. Edit only the white text region, preserve the rest of the image exactly, and match the original typography style.`,
+        'seedream-v5-pro', atlasApiKey, await compressForAtlas(originalBase64, 1536, 0.95, false), 1,
+        { ratio: 'Original', quality: '2K' },
+        [await compressForAtlas(mask, 1536, 1.0, true), ...(referenceImage ? [referenceImage] : [])],
+    );
+    if (!outputs[0]) throw new Error('Seedream Pro 沒有回傳文字編輯結果');
+    return outputs[0];
 }

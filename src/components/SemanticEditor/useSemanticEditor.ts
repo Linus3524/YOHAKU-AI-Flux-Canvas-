@@ -279,7 +279,7 @@ export function useSemanticEditor({
     // ── 單層 Apply（inpaint → 全部重新切割）────────────────────────────────
     const applyLayerRegen = useCallback(async (
         layer: SmartLayer,
-        engine: 'gpt' | 'gemini' = 'gpt',
+        engine: 'gpt' | 'seedream-v5-pro' | 'gemini' = 'gpt',
         opts: {
             /** 覆蓋 layer.prompt 作為重繪指令（文字編輯模式用，不污染圖層 prompt 欄位） */
             promptOverride?: string;
@@ -289,7 +289,7 @@ export function useSemanticEditor({
             textEdit?: boolean;
         } = {},
     ) => {
-        if (engine === 'gpt'    && !atlasApiKey)  throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
+        if ((engine === 'gpt' || engine === 'seedream-v5-pro') && !atlasApiKey)  throw new Error('Atlas 重繪需要 Atlas API Key');
         if (engine === 'gemini' && !geminiApiKey) throw new Error('Gemini 重繪需要 Gemini API Key');
 
         const effectivePrompt = opts.promptOverride ?? layer.prompt;
