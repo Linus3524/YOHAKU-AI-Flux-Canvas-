@@ -1087,6 +1087,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
           <div
             className="fixed z-[8010] min-w-[152px] border border-black bg-white py-1.5 pointer-events-auto select-none rounded-none shadow-none"
             style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* A. 畫布空白處右鍵選單 */}
             {contextMenu.type === 'pane' && (
