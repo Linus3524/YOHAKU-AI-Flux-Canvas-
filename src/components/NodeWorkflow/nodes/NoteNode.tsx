@@ -32,10 +32,7 @@ export function NoteNode({ id, data, selected }: NodeProps) {
       
       {/* 標題欄 */}
       <div className="px-2 py-1 text-[10px] font-semibold text-neutral-600 tracking-wide uppercase border-b border-black/6 flex items-center justify-between select-none">
-        <div className="flex items-center gap-1">
-          <Icon name="description" size={11} className="text-neutral-500" />
-          <span>便利貼</span>
-        </div>
+        <span>便利貼</span>
         <button
           type="button"
           onClick={(e) => {
