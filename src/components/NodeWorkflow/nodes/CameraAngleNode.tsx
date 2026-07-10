@@ -4,28 +4,18 @@ import type { CameraAngleParams } from '../types';
 import { useNodeStatusRing } from './useNodeStatusRing';
 import { NodeResultPreview } from './NodeResultPreview';
 import { NodeDeleteButton } from './NodeDeleteButton';
+import { Icon } from '../../Icon';
 
-const ANGLES: Array<{ value: string; label: string }> = [
-  { value: 'high angle shot from top-left corner, looking down', label: '俯視左上' },
-  { value: "bird's-eye view, directly overhead, extreme high angle", label: '正俯視' },
-  { value: 'high angle shot from top-right corner, looking down', label: '俯視右上' },
-  { value: "camera is on the LEFT side of the subject, subject faces RIGHT, we see the subject's right profile", label: '左側視' },
-  { value: 'straight-on front view, eye-level, facing camera directly', label: '正視' },
-  { value: "camera is on the RIGHT side of the subject, subject faces LEFT, we see the subject's left profile", label: '右側視' },
-  { value: "worm's-eye view from bottom-left, looking up", label: '仰視左下' },
-  { value: "worm's-eye view, directly below, looking straight up", label: '正仰視' },
-  { value: "worm's-eye view from bottom-right, looking up", label: '仰視右下' },
-];
-
-// 空值 = 跟隨全域生成模型；其餘對標主畫布可選的生成模型。
-const MODEL_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '', label: '跟隨全域' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'seedream-v5', label: 'Seedream v5' },
-  { value: 'seedream-v4.5', label: 'Seedream v4.5' },
-  { value: 'gpt-image-2', label: 'GPT Image 2' },
-  { value: 'flux-2-pro', label: 'FLUX.2 Pro' },
-  { value: 'qwen-image-2', label: 'Qwen Image 2' },
+const CAMERA_ANGLES = [
+  { id: 'top-left', icon: 'north_west', label: '俯視左上', prompt: 'high angle shot from top-left corner, looking down' },
+  { id: 'top', icon: 'north', label: '正俯視', prompt: "bird's-eye view, directly overhead, extreme high angle" },
+  { id: 'top-right', icon: 'north_east', label: '俯視右上', prompt: 'high angle shot from top-right corner, looking down' },
+  { id: 'left', icon: 'west', label: '左側視', prompt: "camera is on the LEFT side of the subject, subject faces RIGHT, we see the subject's right profile" },
+  { id: 'center', icon: 'circle', filled: true, label: '正視', prompt: 'straight-on front view, eye-level, facing camera directly' },
+  { id: 'right', icon: 'east', label: '右側視', prompt: "camera is on the RIGHT side of the subject, subject faces LEFT, we see the subject's left profile" },
+  { id: 'bottom-left', icon: 'south_west', label: '仰視左下', prompt: "worm's-eye view from bottom-left, looking up" },
+  { id: 'bottom', icon: 'south', label: '正仰視', prompt: "worm's-eye view, directly below, looking straight up" },
+  { id: 'bottom-right', icon: 'south_east', label: '仰視右下', prompt: "worm's-eye view from bottom-right, looking up" },
 ];
 
 export function CameraAngleNode({ id, data, selected }: NodeProps) {
@@ -36,7 +26,9 @@ export function CameraAngleNode({ id, data, selected }: NodeProps) {
   const handleDelete = typeof onDeleteNode === 'function'
     ? () => (onDeleteNode as (nodeId: string) => void)(id)
     : undefined;
-  const anglePrompt = params.anglePrompt ?? ANGLES[4].value;
+  
+  // 預設為正視
+  const anglePrompt = params.anglePrompt ?? CAMERA_ANGLES[4].prompt;
 
   return (
     <div className={`group relative border border-black/12 bg-white shadow-sm w-[186px] overflow-visible ${ring}`}>
@@ -45,22 +37,30 @@ export function CameraAngleNode({ id, data, selected }: NodeProps) {
       <div className="px-2 py-1 text-[10px] font-semibold text-neutral-500 tracking-wide uppercase border-b border-black/6">
         視角轉換
       </div>
-      <div className="p-1.5 space-y-1">
-        <select
-          value={anglePrompt}
-          onChange={(e) => updateNodeData(id, { params: { ...params, anglePrompt: e.target.value } })}
-          className="nodrag block w-full border border-neutral-200 px-1.5 py-1 text-[11px] focus:outline-none focus:border-neutral-400 bg-neutral-50"
-        >
-          {ANGLES.map(angle => <option key={angle.value} value={angle.value}>{angle.label}</option>)}
-        </select>
-        <select
-          value={params.model ?? ''}
-          onChange={(e) => updateNodeData(id, { params: { ...params, model: e.target.value } })}
-          className="nodrag block w-full border border-neutral-200 px-1.5 py-1 text-[11px] focus:outline-none focus:border-neutral-400 bg-neutral-50"
-          title="生成模型（預設跟隨全域）"
-        >
-          {MODEL_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-        </select>
+      <div className="p-2 space-y-2">
+        <div className="grid grid-cols-3 gap-1.5">
+          {CAMERA_ANGLES.map((angle) => {
+            const isActive = anglePrompt === angle.prompt;
+            return (
+              <button
+                key={angle.id}
+                type="button"
+                onClick={() => updateNodeData(id, { params: { ...params, anglePrompt: angle.prompt } })}
+                title={angle.label}
+                className={`nodrag h-8 flex items-center justify-center rounded border transition-all ${
+                  isActive
+                    ? 'bg-neutral-900 text-white border-neutral-900'
+                    : 'bg-neutral-50 text-neutral-500 hover:bg-neutral-100 border-neutral-200 active:bg-neutral-200'
+                }`}
+              >
+                <Icon name={angle.icon} size={16} filled={angle.filled} />
+              </button>
+            );
+          })}
+        </div>
+        <div className="text-center text-[9px] text-neutral-400">
+          點擊按鈕切換 AI 生成視角
+        </div>
       </div>
       <NodeResultPreview id={id} />
       <Handle type="source" position={Position.Right} />
