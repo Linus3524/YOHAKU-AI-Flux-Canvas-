@@ -1179,11 +1179,10 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                       <div className="px-3 py-0.5 text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
                         變更色票顏色
                       </div>
-                      <div className="px-3 pb-1.5 flex gap-1.5">
+                      <div className="px-3 pb-1.5 flex gap-2">
                         {['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'].map(nextColor => (
-                          <button
+                          <div
                             key={nextColor}
-                            type="button"
                             onClick={() => {
                               setNodes(nds => nds.map(n => n.id === targetNode.id ? {
                                 ...n,
@@ -1194,7 +1193,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                               } : n));
                               setContextMenu(null);
                             }}
-                            className={`h-4.5 w-4.5 rounded-none border transition-transform hover:scale-105 active:scale-95 ${
+                            className={`h-6 w-6 rounded-none border cursor-pointer transition-transform hover:scale-110 active:scale-95 ${
                               (targetNode.data?.params as any)?.color === nextColor ? 'border-black ring-1 ring-black' : 'border-neutral-200'
                             }`}
                             style={{ backgroundColor: nextColor }}
