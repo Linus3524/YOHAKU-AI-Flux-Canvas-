@@ -1585,6 +1585,25 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         )}
                                     </div>}
 
+                                    {/* 單獨便利貼生圖也要在生成設定直接提供即夢原生透明。 */}
+                                    {!hasImageOrDrawingOrShape && hasNote && generationModel === 'seedream-v5-pro' && (
+                                        <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+                                            <div>
+                                                <div className="text-[11px] font-medium text-gray-600">原生透明背景</div>
+                                                <div className="mt-0.5 text-[10px] text-gray-400">直接輸出透明 PNG</div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={preserveTransparency}
+                                                className={`h-6 w-11 rounded-full p-1 transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
+                                                onClick={() => onSetPreserveTransparency(!preserveTransparency)}
+                                            >
+                                                <span className={`block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${preserveTransparency ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+                                    )}
+
                                     {/* 自訂風格種子 (Seed) - 僅便利貼選取時顯示在生成設定 */}
                                     {!hasImageOrDrawingOrShape && hasNote && (
                                         <div className="flex flex-col gap-1.5 mt-1 border-t border-gray-100 pt-3">
