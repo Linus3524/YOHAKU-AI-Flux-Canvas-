@@ -764,6 +764,13 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
             padding: 0 !important;
             width: auto !important;
           }
+          /* Group 框組節點：去除 React Flow 預設的背景/邊框/陰影，維持自訂尺寸縮放 */
+          .node-workflow-flow .react-flow__node-group {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+          }
           .node-workflow-flow .react-flow__node.selected:not(.react-flow__node-group),
           .node-workflow-flow .react-flow__node:focus:not(.react-flow__node-group),
           .node-workflow-flow .react-flow__node:focus-visible:not(.react-flow__node-group) {
