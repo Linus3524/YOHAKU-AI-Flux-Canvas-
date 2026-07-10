@@ -12,7 +12,15 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
   const { updateNodeData } = useReactFlow();
   const ring = useNodeStatusRing(id);
   const params = (data?.params ?? {}) as Partial<OutpaintParams & { isCollapsed?: boolean }>;
-  const direction = params.direction ?? 'all';
+  
+  // 多選方向狀態解析
+  const activeDirs = Array.isArray(params.directions) ? params.directions : [params.direction || 'all'];
+  const hasLeft = activeDirs.includes('left') || activeDirs.includes('all');
+  const hasRight = activeDirs.includes('right') || activeDirs.includes('all');
+  const hasTop = activeDirs.includes('top') || activeDirs.includes('all');
+  const hasBottom = activeDirs.includes('bottom') || activeDirs.includes('all');
+  const hasAll = activeDirs.includes('all');
+
   const aspectRatio = params.aspectRatio ?? '1:1';
   const pixelOffset = params.pixelOffset ?? 256;
   const isCollapsed = !!params.isCollapsed;
@@ -26,21 +34,56 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
     updateNodeData(id, { params: { ...params, ...patch } });
   };
 
-  // 十字幾何方向盤 D-Pad 按鈕渲染輔助
-  const renderDirectionBtn = (dir: OutpaintParams['direction'], iconName: string, tooltip: string) => {
-    const isActive = direction === dir;
+  // 切換多選方向狀態機
+  const toggleDirection = (dir: 'left' | 'right' | 'top' | 'bottom' | 'all') => {
+    if (dir === 'all') {
+      if (hasAll) {
+        setParams({ directions: [] });
+      } else {
+        setParams({ directions: ['all'] });
+      }
+      return;
+    }
+
+    let newDirs = activeDirs.filter(d => d !== 'all');
+    if (newDirs.includes(dir)) {
+      newDirs = newDirs.filter(d => d !== dir);
+    } else {
+      newDirs.push(dir);
+    }
+
+    // 如果 4 個方向都選，自動轉為 'all'
+    if (
+      newDirs.includes('left') &&
+      newDirs.includes('right') &&
+      newDirs.includes('top') &&
+      newDirs.includes('bottom')
+    ) {
+      newDirs = ['all'];
+    }
+
+    setParams({ directions: newDirs });
+  };
+
+  // D-Pad 按鈕渲染
+  const renderDpadButton = (
+    dir: 'left' | 'right' | 'top' | 'bottom' | 'all',
+    label: string,
+    isActive: boolean,
+    tooltip: string
+  ) => {
     return (
       <button
         type="button"
-        onClick={() => setParams({ direction: dir })}
-        className={`nodrag flex items-center justify-center transition-all active:scale-90 border select-none cursor-pointer h-[22px] w-[22px] rounded-none ${
+        onClick={() => toggleDirection(dir)}
+        className={`nodrag flex h-6 w-6 items-center justify-center text-[10px] font-bold border transition-all active:scale-90 rounded-none cursor-pointer ${
           isActive
             ? 'border-black bg-neutral-900 text-white'
             : 'border-black/10 bg-white hover:bg-neutral-100 text-neutral-600'
         }`}
         title={tooltip}
       >
-        <Icon name={iconName} size={12} />
+        {label}
       </button>
     );
   };
@@ -50,7 +93,7 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
       <NodeDeleteButton onDelete={handleDelete} selected={selected} />
       <Handle type="target" position={Position.Left} />
       
-      {/* 標題列與折疊按鈕 */}
+      {/* 標題列 */}
       <div className="px-2 py-1 text-[10px] font-semibold text-neutral-500 tracking-wide uppercase border-b border-black/6 flex items-center justify-between">
         <span>外擴延伸</span>
         <button
@@ -68,26 +111,25 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
 
       {!isCollapsed && (
         <div className="p-1.5 space-y-1.5">
-          {/* 上半部：左邊幾何十字方向盤 D-Pad，右邊下拉選單 */}
+          {/* 上半部：D-Pad 十字方向盤 + 下拉選單並排 */}
           <div className="flex gap-2 items-center">
-            {/* D-Pad 十字方向盤 */}
-            <div className="grid grid-cols-3 gap-0.5 w-[72px] h-[72px] bg-neutral-50 p-0.5 border border-black/8 select-none flex-shrink-0">
+            {/* D-Pad 十字多選方向盤 - 固定的 78px 寬高，避免任何排版跑版 */}
+            <div className="grid grid-cols-3 gap-0.5 w-[76px] h-[76px] bg-neutral-100 p-0.5 border border-black/8 select-none flex-shrink-0">
               <div />
-              {renderDirectionBtn('top', 'arrow_upward', '向上外擴')}
+              {renderDpadButton('top', '↑', hasTop, '向上外擴')}
               <div />
 
-              {renderDirectionBtn('left', 'arrow_back', '向左外擴')}
-              {renderDirectionBtn('all', 'select_all', '四周外擴')}
-              {renderDirectionBtn('right', 'arrow_forward', '向右外擴')}
+              {renderDpadButton('left', '←', hasLeft, '向左外擴')}
+              {renderDpadButton('all', '▣', hasAll, '四周外擴')}
+              {renderDpadButton('right', '→', hasRight, '向右外擴')}
 
               <div />
-              {renderDirectionBtn('bottom', 'arrow_downward', '向下外擴')}
+              {renderDpadButton('bottom', '↓', hasBottom, '向下外擴')}
               <div />
             </div>
 
-            {/* 下拉選單區 */}
+            {/* 下拉選單選取 */}
             <div className="flex-1 space-y-1">
-              {/* 目標比例 */}
               <select
                 value={aspectRatio}
                 onChange={(e) => setParams({ aspectRatio: e.target.value as OutpaintParams['aspectRatio'] })}
@@ -100,7 +142,6 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
                 ))}
               </select>
 
-              {/* 生圖模型 */}
               <select
                 value={params.model ?? 'gemini'}
                 onChange={(e) => setParams({ model: e.target.value as OutpaintParams['model'] })}
@@ -112,7 +153,7 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
             </div>
           </div>
 
-          {/* 模式 A：自訂像素滑桿 (僅當自訂比例時顯示) */}
+          {/* 模式 A：自訂像素滑桿微調 */}
           {aspectRatio === 'custom' && (
             <div className="flex flex-col gap-0.5 border border-black/6 bg-neutral-50/50 p-1 select-none">
               <div className="flex justify-between items-center text-[9px] text-neutral-500 font-medium font-mono">

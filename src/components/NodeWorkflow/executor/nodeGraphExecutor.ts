@@ -382,15 +382,35 @@ async function runOutpaint(
   const model = params.model ?? 'gemini';
   if (model === 'gpt' && !engine.atlasApiKey) throw new Error('GPT 擴圖需要 Atlas Cloud API Key');
   if (model === 'gemini' && !engine.geminiApiKey) throw new Error('外擴需要 Gemini API Key');
-  const direction = params.direction && params.direction in OUTPAINT_DIRECTIONS ? params.direction : 'all';
+
+  // 解析多選方向（向下相容單選 params.direction）
+  const activeDirs = Array.isArray(params.directions) ? params.directions : [params.direction || 'all'];
+  const hasLeft = activeDirs.includes('left') || activeDirs.includes('all');
+  const hasRight = activeDirs.includes('right') || activeDirs.includes('all');
+  const hasTop = activeDirs.includes('top') || activeDirs.includes('all');
+  const hasBottom = activeDirs.includes('bottom') || activeDirs.includes('all');
+  const hasAll = activeDirs.includes('all');
+
+  const dirWords: string[] = [];
+  if (hasAll || (hasLeft && hasRight && hasTop && hasBottom)) {
+    dirWords.push('all sides');
+  } else {
+    if (hasLeft) dirWords.push('left side');
+    if (hasRight) dirWords.push('right side');
+    if (hasTop) dirWords.push('top side');
+    if (hasBottom) dirWords.push('bottom side');
+  }
+  const dirDesc = dirWords.length > 0 ? `outpaint ${dirWords.join(', ')}` : 'outpaint all sides';
+
   const aspectRatio = params.aspectRatio ?? '1:1';
   onProgress?.('分析外擴提示詞中');
   const autoPrompt = await generateOutpaintingPrompt(createOutpaintingStateForPrompt(input), engine.geminiApiKey);
   const prompt = [
-    `Use the attached image as the visual source and ${OUTPAINT_DIRECTIONS[direction]}. Preserve the original subject, lighting, perspective, palette, texture, and style while creating a seamless expanded composition.`,
+    `Use the attached image as the visual source and ${dirDesc}. Preserve the original subject, lighting, perspective, palette, texture, and style while creating a seamless expanded composition.`,
     autoPrompt,
     params.prompt?.trim(),
   ].filter(Boolean).join('\n\n');
+
   const img = await loadImage(input);
   const sourceW = img.naturalWidth;
   const sourceH = img.naturalHeight;
@@ -405,24 +425,15 @@ async function runOutpaint(
   if (aspectRatio === 'custom') {
     // 自訂像素外擴 (微調)
     const offset = typeof params.pixelOffset === 'number' ? params.pixelOffset : 256;
-    if (direction === 'left') {
-      canvasW = sourceW + offset;
-      imageX = offset;
-    } else if (direction === 'right') {
-      canvasW = sourceW + offset;
-      imageX = 0;
-    } else if (direction === 'top') {
-      canvasH = sourceH + offset;
-      imageY = offset;
-    } else if (direction === 'bottom') {
-      canvasH = sourceH + offset;
-      imageY = 0;
-    } else { // 'all' 四周
-      canvasW = sourceW + offset * 2;
-      canvasH = sourceH + offset * 2;
-      imageX = offset;
-      imageY = offset;
-    }
+    const padLeft = hasLeft ? offset : 0;
+    const padRight = hasRight ? offset : 0;
+    const padTop = hasTop ? offset : 0;
+    const padBottom = hasBottom ? offset : 0;
+
+    canvasW = sourceW + padLeft + padRight;
+    canvasH = sourceH + padTop + padBottom;
+    imageX = padLeft;
+    imageY = padTop;
   } else {
     // 預設比例外擴
     const ratio = Number(aspectRatio.split(':')[0]) / Number(aspectRatio.split(':')[1]);
@@ -436,8 +447,21 @@ async function runOutpaint(
     drawH = Math.round(sourceH * scale);
     const gapX = canvasW - drawW;
     const gapY = canvasH - drawH;
-    imageX = direction === 'left' ? gapX : direction === 'right' ? 0 : Math.round(gapX / 2);
-    imageY = direction === 'top' ? gapY : direction === 'bottom' ? 0 : Math.round(gapY / 2);
+
+    // 根據多選方向分配空白與對齊
+    imageX = Math.round(gapX / 2); // 預設居中
+    if (hasLeft && !hasRight) {
+      imageX = gapX;
+    } else if (hasRight && !hasLeft) {
+      imageX = 0;
+    }
+
+    imageY = Math.round(gapY / 2); // 預設居中
+    if (hasTop && !hasBottom) {
+      imageY = gapY;
+    } else if (hasBottom && !hasTop) {
+      imageY = 0;
+    }
   }
 
   const canvas = document.createElement('canvas');
