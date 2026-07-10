@@ -195,29 +195,56 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
             </div>
           </div>
 
-          {/* 模式 A：自訂像素加減微調，解決 range 滑桿原點遮字問題 */}
+          {/* 模式 A：自訂像素滑桿微調 */}
           {aspectRatio === 'custom' && (
-            <div className="flex items-center justify-between border border-black/8 bg-neutral-50/50 p-1 select-none">
-              <span className="text-[9px] text-neutral-500 font-semibold">外擴尺寸微調</span>
-              <div className="flex items-center gap-1.5 font-mono">
-                <button
-                  type="button"
-                  onClick={() => setParams({ pixelOffset: Math.max(64, pixelOffset - 32) })}
-                  className="nodrag h-5 w-5 flex items-center justify-center border border-black/10 bg-white hover:bg-neutral-100 active:scale-95 cursor-pointer font-bold text-[11px] rounded-none shadow-none"
-                  title="減少 32px"
-                >
-                  -
-                </button>
-                <span className="text-[10px] font-bold text-neutral-800 min-w-[36px] text-center">{pixelOffset}px</span>
-                <button
-                  type="button"
-                  onClick={() => setParams({ pixelOffset: Math.min(512, pixelOffset + 32) })}
-                  className="nodrag h-5 w-5 flex items-center justify-center border border-black/10 bg-white hover:bg-neutral-100 active:scale-95 cursor-pointer font-bold text-[11px] rounded-none shadow-none"
-                  title="增加 32px"
-                >
-                  +
-                </button>
+            <div className="flex flex-col gap-1 border border-black/8 bg-neutral-50/50 p-1.5 select-none">
+              <style dangerouslySetInnerHTML={{__html: `
+                .custom-node-slider {
+                  -webkit-appearance: none;
+                  appearance: none;
+                  width: 100%;
+                  height: 2px;
+                  background: #e5e5e5;
+                  outline: none;
+                  margin: 6px 0;
+                  padding: 0;
+                }
+                .custom-node-slider::-webkit-slider-thumb {
+                  -webkit-appearance: none;
+                  appearance: none;
+                  width: 8px;
+                  height: 12px;
+                  background: #111827;
+                  cursor: pointer;
+                  border: 1px solid #111827;
+                  border-radius: 0px;
+                  transition: background 0.15s;
+                }
+                .custom-node-slider::-webkit-slider-thumb:hover {
+                  background: #4b5563;
+                }
+                .custom-node-slider::-moz-range-thumb {
+                  width: 8px;
+                  height: 12px;
+                  background: #111827;
+                  cursor: pointer;
+                  border: 1px solid #111827;
+                  border-radius: 0px;
+                }
+              `}} />
+              <div className="flex justify-between items-center text-[9px] text-neutral-500 font-semibold">
+                <span>外擴尺寸微調</span>
+                <span className="text-black font-bold font-mono">{pixelOffset}px</span>
               </div>
+              <input
+                type="range"
+                min="64"
+                max="512"
+                step="32"
+                value={pixelOffset}
+                onChange={(e) => setParams({ pixelOffset: parseInt(e.target.value) })}
+                className="nodrag w-full custom-node-slider cursor-pointer"
+              />
             </div>
           )}
 
