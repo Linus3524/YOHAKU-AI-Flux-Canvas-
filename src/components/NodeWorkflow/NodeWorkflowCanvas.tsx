@@ -274,6 +274,14 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   const [isDraggingNode, setIsDraggingNode] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // 執行計時（顯示在執行按鈕）
+  const [runElapsed, setRunElapsed] = useState(0);
+  const runTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // React Flow 實例（雙擊快速搜尋要用 screenToFlowPosition 換算座標）
+  const rfInstanceRef = useRef<{ screenToFlowPosition: (p: { x: number; y: number }) => { x: number; y: number } } | null>(null);
+  // 雙擊畫布空白處的快速搜尋選單
+  const [quickSearch, setQuickSearch] = useState<{ sx: number; sy: number; flow: { x: number; y: number } } | null>(null);
+  const [quickQuery, setQuickQuery] = useState('');
 
   const handleRun = useCallback(async () => {
     if (isRunning) {
@@ -286,10 +294,17 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
     abortControllerRef.current = abortController;
     setIsRunning(true);
     resetRuntime();
+    // 執行流動動畫：把所有連線設為 animated（animated 不進 graphFingerprint，不會使預覽失效）
+    setEdges(eds => eds.map(e => (e.animated ? e : { ...e, animated: true })));
+    // 執行計時
+    const startedAt = Date.now();
+    setRunElapsed(0);
+    if (runTimerRef.current) clearInterval(runTimerRef.current);
+    runTimerRef.current = setInterval(() => setRunElapsed((Date.now() - startedAt) / 1000), 100);
 
-    const graph = { 
-      nodes: nodes.map(toGraphNode), 
-      edges: edges.map(toGraphEdge) 
+    const graph = {
+      nodes: nodes.map(toGraphNode),
+      edges: edges.map(toGraphEdge)
     };
 
     try {
@@ -315,8 +330,14 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
       }
       resetRunningStatuses();
       setIsRunning(false);
+      // 收掉流動動畫與計時器
+      setEdges(eds => eds.map(e => (e.animated ? { ...e, animated: false } : e)));
+      if (runTimerRef.current) { clearInterval(runTimerRef.current); runTimerRef.current = null; }
     }
   }, [isRunning, resetRuntime, resetRunningStatuses, nodes, edges, engine, setNodes, setEdges, setNodeStatus, setNodeResult, setNodeBatchResult, onOutputChange, onRunError]);
+
+  // 卸載時清掉計時器
+  useEffect(() => () => { if (runTimerRef.current) clearInterval(runTimerRef.current); }, []);
 
   useEffect(() => {
     if (graphFingerprintRef.current === null) {
@@ -361,13 +382,19 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
     }, eds));
   }, [setEdges, handleEdgeDelete]);
 
-  // 加節點：若有選中的節點，新節點自動接在它後面並選中（連點成鏈，免拉線）。
-  const addNode = useCallback((kind: NodeKind) => {
-    const selected = nodes.find(n => n.selected) ?? nodes[nodes.length - 1];
+  // 加節點：
+  // - 不給 dropPosition：接在選中節點後面並自動連線（連點成鏈，免拉線）。
+  // - 給 dropPosition（雙擊快速搜尋）：放在游標處，不自動連線。
+  const addNode = useCallback((kind: NodeKind, dropPosition?: { x: number; y: number }) => {
+    // 只接「明確選中」的節點；沒選中就只放節點、不自動連線（避免使用者以為沒接卻被連上）。
+    // 新節點加入後會被設為 selected，所以「連點成鏈」仍然順暢。
+    const selected = dropPosition ? undefined : nodes.find(n => n.selected);
     const id = `${kind}-${Date.now()}`;
-    const position = selected
-      ? { x: selected.position.x + 240, y: selected.position.y }
-      : { x: 260 + nodes.length * 24, y: 260 };
+    const position = dropPosition
+      ? dropPosition
+      : selected
+        ? { x: selected.position.x + 240, y: selected.position.y }
+        : { x: 260 + nodes.length * 24, y: 260 };
     const graphNode: GraphNode = { id, kind, position, data: { label: DEFAULT_NODE_LABELS[kind], params: {} } };
     const flowNode = toFlowNode(graphNode);
     setNodes(nds => [
@@ -375,15 +402,40 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
       { ...flowNode, data: { ...flowNode.data, onDeleteNode: handleNodeDelete }, selected: true },
     ]);
     if (selected) {
-      setEdges(eds => addEdge({ 
-        id: `edge-${selected.id}-${id}`, 
-        source: selected.id, 
+      setEdges(eds => addEdge({
+        id: `edge-${selected.id}-${id}`,
+        source: selected.id,
         target: id,
         type: 'deletable',
         data: { onDelete: handleEdgeDelete }
       }, eds));
     }
-  }, [nodes, setNodes, setEdges, handleEdgeDelete]);
+  }, [nodes, setNodes, setEdges, handleEdgeDelete, handleNodeDelete]);
+
+  // 雙擊畫布空白處 → 在游標位置彈出快速搜尋（點在節點/控制項/工具列上不觸發）
+  const handlePaneDoubleClick = useCallback((event: React.MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (
+      target.closest('.react-flow__node') ||
+      target.closest('.react-flow__controls') ||
+      target.closest('.react-flow__minimap') ||
+      target.closest('.react-flow__panel')
+    ) return;
+    const flow = rfInstanceRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      ?? { x: 0, y: 0 };
+    setQuickQuery('');
+    setQuickSearch({ sx: event.clientX, sy: event.clientY, flow });
+  }, []);
+
+  const quickSearchResults = useMemo(() => {
+    const q = quickQuery.trim().toLowerCase();
+    return ADDABLE_NODES.filter(n => !q || n.label.toLowerCase().includes(q) || n.kind.toLowerCase().includes(q));
+  }, [quickQuery]);
+
+  const pickQuickNode = useCallback((kind: NodeKind) => {
+    if (quickSearch) addNode(kind, quickSearch.flow);
+    setQuickSearch(null);
+  }, [quickSearch, addNode]);
 
   const handleNodeDragStart: OnNodeDrag<FlowNode> = useCallback(() => {
     setIsDraggingNode(true);
@@ -422,6 +474,9 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
         onReconnectEnd={handleReconnectEnd}
         onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
+        onInit={(inst) => { rfInstanceRef.current = inst; }}
+        onDoubleClick={handlePaneDoubleClick}
+        zoomOnDoubleClick={false}
         isValidConnection={isValidConnection}
         snapToGrid
         snapGrid={[15, 15]}
@@ -497,6 +552,15 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
           .node-toolbar-summary::-webkit-details-marker {
             display: none;
           }
+          /* 執行時連線流動動畫 */
+          .node-workflow-flow .react-flow__edge.animated .react-flow__edge-path {
+            stroke: #007AFF;
+            stroke-dasharray: 5;
+            animation: nw-edge-flow 0.55s linear infinite;
+          }
+          @keyframes nw-edge-flow {
+            to { stroke-dashoffset: -10; }
+          }
         `}</style>
         <Background color="#cbd5e1" gap={28} size={1.2} />
         <Controls position="bottom-left" showInteractive={false} />
@@ -528,9 +592,9 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
             <button
               type="button"
               onClick={handleRun}
-              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors border-l border-black/12"
+              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors border-l border-black/12 tabular-nums"
             >
-              {isRunning ? '■ 停止' : '▶ 執行'}
+              {isRunning ? `■ 停止 (${runElapsed.toFixed(1)}s)` : '▶ 執行'}
             </button>
           </div>
         </Panel>
@@ -547,6 +611,44 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
       >
         拖到這裡 → 移出到畫布
       </div>
+      {/* 雙擊畫布空白處的快速搜尋選單 */}
+      {quickSearch && (
+        <>
+          <div className="fixed inset-0 z-[7050]" onClick={() => setQuickSearch(null)} />
+          <div
+            className="fixed z-[7060] w-[184px] border border-black/15 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.16)]"
+            style={{ left: quickSearch.sx, top: quickSearch.sy }}
+          >
+            <input
+              autoFocus
+              value={quickQuery}
+              onChange={(e) => setQuickQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && quickSearchResults[0]) pickQuickNode(quickSearchResults[0].kind);
+                if (e.key === 'Escape') setQuickSearch(null);
+              }}
+              placeholder="搜尋節點…"
+              className="block w-full border-b border-black/8 px-2 py-1.5 text-[12px] focus:outline-none"
+            />
+            <div className="max-h-[220px] overflow-y-auto py-1">
+              {quickSearchResults.length === 0 ? (
+                <div className="px-2 py-1.5 text-[11px] text-neutral-400">無符合節點</div>
+              ) : (
+                quickSearchResults.map((n) => (
+                  <button
+                    key={n.kind}
+                    type="button"
+                    onClick={() => pickQuickNode(n.kind)}
+                    className="block w-full px-2 py-1.5 text-left text-[12px] text-neutral-700 hover:bg-neutral-100 transition-colors"
+                  >
+                    {n.label}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
     </NodeWorkflowContext.Provider>
   );
