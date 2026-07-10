@@ -4,6 +4,7 @@ import type { CameraAngleParams } from '../types';
 import { useNodeStatusRing } from './useNodeStatusRing';
 import { NodeResultPreview } from './NodeResultPreview';
 import { NodeDeleteButton } from './NodeDeleteButton';
+import { useNodeGraphStore } from '../../../store/nodeGraphStore';
 import { Icon } from '../../Icon';
 
 const CAMERA_ANGLES = [
@@ -21,7 +22,7 @@ const CAMERA_ANGLES = [
 export function CameraAngleNode({ id, data, selected }: NodeProps) {
   const { updateNodeData } = useReactFlow();
   const ring = useNodeStatusRing(id);
-  const params = (data?.params ?? {}) as Partial<CameraAngleParams>;
+  const params = (data?.params ?? {}) as Partial<CameraAngleParams & { isCollapsed?: boolean }>;
   const onDeleteNode = data?.onDeleteNode;
   const handleDelete = typeof onDeleteNode === 'function'
     ? () => (onDeleteNode as (nodeId: string) => void)(id)
@@ -36,47 +37,68 @@ export function CameraAngleNode({ id, data, selected }: NodeProps) {
   // 取得目前選中視角的 label，作為預設顯示
   const currentAngle = CAMERA_ANGLES.find(a => a.prompt === anglePrompt);
 
+  // 檢查是否有結果圖片以決定是否能摺疊
+  const hasResult = useNodeGraphStore(s => !!s.nodeResults[id]);
+  const isCollapsed = hasResult && !!params.isCollapsed;
+
+  const toggleCollapse = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    updateNodeData(id, { params: { ...params, isCollapsed: !isCollapsed } });
+  };
+
   return (
     <div className={`group relative border border-black/12 bg-white shadow-sm w-[186px] overflow-visible ${ring}`}>
       <NodeDeleteButton onDelete={handleDelete} selected={selected} />
       <Handle type="target" position={Position.Left} />
-      <div className="px-2 py-1 text-[10px] font-semibold text-neutral-500 tracking-wide uppercase border-b border-black/6">
-        視角轉換
+      <div className="px-2 py-1 text-[10px] font-semibold text-neutral-500 tracking-wide uppercase border-b border-black/6 flex items-center justify-between">
+        <span>視角轉換</span>
+        {hasResult && (
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            className="nodrag text-neutral-400 hover:text-neutral-700 transition-colors w-4 h-4 flex items-center justify-center cursor-pointer"
+            title={isCollapsed ? '展開控制參數' : '摺疊控制參數'}
+          >
+            <Icon name={isCollapsed ? 'expand_more' : 'expand_less'} size={12} />
+          </button>
+        )}
       </div>
-      <div className="p-2 space-y-2">
-        <div className="grid grid-cols-3 gap-1.5 w-full">
-          {CAMERA_ANGLES.map((angle) => {
-            const isActive = anglePrompt === angle.prompt;
-            const isCenter = angle.id === 'center';
-            return (
-              <button
-                key={angle.id}
-                type="button"
-                onClick={() => updateNodeData(id, { params: { ...params, anglePrompt: angle.prompt } })}
-                onMouseEnter={() => setHoveredLabel(angle.label)}
-                onMouseLeave={() => setHoveredLabel(null)}
-                title={angle.label}
-                className={`nodrag h-8 flex items-center justify-center rounded border transition-all ${
-                  isActive
-                    ? 'bg-neutral-100 border-neutral-400 text-neutral-900 font-medium shadow-sm'
-                    : 'bg-neutral-50 text-neutral-400 hover:bg-neutral-100 border-neutral-200 active:bg-neutral-200'
-                }`}
-              >
-                <Icon 
-                  name={angle.icon} 
-                  size={isCenter ? 8 : 14} 
-                  filled={isCenter ? isActive : undefined} 
-                />
-              </button>
-            );
-          })}
+      {!isCollapsed && (
+        <div className="p-2 space-y-2">
+          <div className="grid grid-cols-3 gap-1.5 w-full">
+            {CAMERA_ANGLES.map((angle) => {
+              const isActive = anglePrompt === angle.prompt;
+              const isCenter = angle.id === 'center';
+              return (
+                <button
+                  key={angle.id}
+                  type="button"
+                  onClick={() => updateNodeData(id, { params: { ...params, anglePrompt: angle.prompt } })}
+                  onMouseEnter={() => setHoveredLabel(angle.label)}
+                  onMouseLeave={() => setHoveredLabel(null)}
+                  title={angle.label}
+                  className={`nodrag h-8 flex items-center justify-center rounded border transition-all ${
+                    isActive
+                      ? 'bg-neutral-100 border-neutral-400 text-neutral-900 font-medium shadow-sm'
+                      : 'bg-neutral-50 text-neutral-400 hover:bg-neutral-100 border-neutral-200 active:bg-neutral-200'
+                  }`}
+                >
+                  <Icon 
+                    name={angle.icon} 
+                    size={isCenter ? 8 : 14} 
+                    filled={isCenter ? isActive : undefined} 
+                  />
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-center text-[9px] text-neutral-400 min-h-[12px] leading-3 transition-colors duration-150">
+            {hoveredLabel 
+              ? `視角：${hoveredLabel}` 
+              : (currentAngle ? `目前：${currentAngle.label}` : '點擊按鈕切換 AI 生成視角')}
+          </div>
         </div>
-        <div className="text-center text-[9px] text-neutral-400 min-h-[12px] leading-3 transition-colors duration-150">
-          {hoveredLabel 
-            ? `視角：${hoveredLabel}` 
-            : (currentAngle ? `目前：${currentAngle.label}` : '點擊按鈕切換 AI 生成視角')}
-        </div>
-      </div>
+      )}
       <NodeResultPreview id={id} />
       <Handle type="source" position={Position.Right} />
     </div>

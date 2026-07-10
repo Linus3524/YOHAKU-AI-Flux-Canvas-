@@ -5,6 +5,8 @@ import type { BiRefNetModel } from '../../../utils/geminiLayer';
 import { useNodeStatusRing } from './useNodeStatusRing';
 import { NodeResultPreview } from './NodeResultPreview';
 import { NodeDeleteButton } from './NodeDeleteButton';
+import { useNodeGraphStore } from '../../../store/nodeGraphStore';
+import { Icon } from '../../Icon';
 
 // 雲端 BiRefNet 模型清單，對標主畫布（InfiniteCanvas）的 6 種。
 const CLOUD_MODELS: { key: BiRefNetModel; label: string; desc: string }[] = [
@@ -24,7 +26,7 @@ const DEFAULT_CLOUD_MODEL: BiRefNetModel = 'Matting';
 export function RemoveBgNode({ id, data, selected }: NodeProps) {
   const { updateNodeData } = useReactFlow();
   const ring = useNodeStatusRing(id);
-  const params = (data?.params ?? {}) as Partial<RemoveBgParams>;
+  const params = (data?.params ?? {}) as Partial<RemoveBgParams & { isCollapsed?: boolean }>;
   const mode = params.mode ?? 'local';
   const cloudModel = params.cloudModel ?? DEFAULT_CLOUD_MODEL;
   const onDeleteNode = data?.onDeleteNode;
@@ -44,48 +46,69 @@ export function RemoveBgNode({ id, data, selected }: NodeProps) {
     updateNodeData(id, { params: { ...params, cloudModel: next } });
   };
 
+  // 檢查是否有結果圖片以決定是否能摺疊
+  const hasResult = useNodeGraphStore(s => !!s.nodeResults[id]);
+  const isCollapsed = hasResult && !!params.isCollapsed;
+
+  const toggleCollapse = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    updateNodeData(id, { params: { ...params, isCollapsed: !isCollapsed } });
+  };
+
   return (
     <div className={`group relative border border-black/12 bg-white shadow-sm w-[168px] overflow-visible ${ring}`}>
       <NodeDeleteButton onDelete={handleDelete} selected={selected} />
       <Handle type="target" position={Position.Left} />
-      <div className="px-2 py-1 text-[10px] font-semibold text-neutral-500 tracking-wide uppercase border-b border-black/6">
-        去背
+      <div className="px-2 py-1 text-[10px] font-semibold text-neutral-500 tracking-wide uppercase border-b border-black/6 flex items-center justify-between">
+        <span>去背</span>
+        {hasResult && (
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            className="nodrag text-neutral-400 hover:text-neutral-700 transition-colors w-4 h-4 flex items-center justify-center cursor-pointer"
+            title={isCollapsed ? '展開控制參數' : '摺疊控制參數'}
+          >
+            <Icon name={isCollapsed ? 'expand_more' : 'expand_less'} size={12} />
+          </button>
+        )}
       </div>
-      <div className="p-1.5 space-y-1.5">
-        <div className="flex gap-px bg-neutral-100 p-px">
-          {MODE_TABS.map(tab => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setMode(tab.key)}
-              className={`nodrag flex-1 px-2 py-1 text-[11px] transition-colors ${
-                mode === tab.key ? 'bg-white text-neutral-900 font-medium shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        {mode === 'smart' && (
-          <div className="text-[9px] leading-snug text-neutral-400 px-0.5">
-            Gemini 智慧去背：自動偵測背景、適合複雜場景
+      {!isCollapsed && (
+        <div className="p-1.5 space-y-1.5">
+          <div className="flex gap-px bg-neutral-100 p-px">
+            {MODE_TABS.map(tab => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setMode(tab.key)}
+                className={`nodrag flex-1 px-2 py-1 text-[11px] transition-colors ${
+                  mode === tab.key ? 'bg-white text-neutral-900 font-medium shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
-        )}
-        {mode === 'cloud' && (
-          <>
-            <select
-              value={cloudModel}
-              onChange={(e) => setCloudModel(e.target.value as BiRefNetModel)}
-              className="nodrag block w-full border border-neutral-200 px-1.5 py-1 text-[11px] focus:outline-none focus:border-neutral-400 bg-neutral-50"
-            >
-              {CLOUD_MODELS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
-            </select>
+          {mode === 'smart' && (
             <div className="text-[9px] leading-snug text-neutral-400 px-0.5">
-              {CLOUD_MODELS.find(m => m.key === cloudModel)?.desc}
+              Gemini 智慧去背：自動偵測背景、適合複雜場景
             </div>
-          </>
-        )}
-      </div>
+          )}
+          {mode === 'cloud' && (
+            <>
+              <select
+                value={cloudModel}
+                onChange={(e) => setCloudModel(e.target.value as BiRefNetModel)}
+                className="nodrag block w-full border border-neutral-200 px-1.5 py-1 text-[11px] focus:outline-none focus:border-neutral-400 bg-neutral-50"
+              >
+                {CLOUD_MODELS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+              </select>
+              <div className="text-[9px] leading-snug text-neutral-400 px-0.5">
+                {CLOUD_MODELS.find(m => m.key === cloudModel)?.desc}
+              </div>
+            </>
+          )}
+        </div>
+      )}
       <NodeResultPreview id={id} />
       <Handle type="source" position={Position.Right} />
     </div>
