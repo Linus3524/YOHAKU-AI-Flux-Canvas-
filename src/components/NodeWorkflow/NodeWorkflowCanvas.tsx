@@ -1167,14 +1167,14 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
             {contextMenu.type === 'node' && (() => {
               const targetNode = nodes.find(n => n.id === contextMenu.nodeId);
               if (!targetNode) return null;
-              const isGroup = targetNode.data.kind === 'group';
+              const showColorPicker = targetNode.data.kind === 'group' || targetNode.data.kind === 'note';
               const resultSrc = useNodeGraphStore.getState().nodeResults[targetNode.id];
               const hasImgResult = resultSrc && isImageSrc(resultSrc);
 
               return (
                 <div className="flex flex-col">
-                  {/* 如果是框組 (group) 節點，最上方顯示色票 */}
-                  {isGroup && (
+                  {/* 如果是框組 (group) 或便利貼 (note) 節點，最上方顯示色票 */}
+                  {showColorPicker && (
                     <>
                       <div className="px-3 py-0.5 text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
                         變更色票顏色
@@ -1206,7 +1206,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                   )}
 
                   {/* 複製 */}
-                  {!isGroup && (
+                  {targetNode.data.kind !== 'group' && (
                     <button
                       type="button"
                       onClick={() => {
@@ -1216,7 +1216,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                       className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
                     >
                       <Icon name="content_copy" size={13} />
-                      <span>複製節點</span>
+                      <span>複製{targetNode.data.kind === 'note' ? '便利貼' : '節點'}</span>
                     </button>
                   )}
 
@@ -1260,7 +1260,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                     className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left text-[11px] font-medium text-red-500 hover:bg-red-50 transition-colors"
                   >
                     <Icon name="delete" size={13} />
-                    <span>刪除{isGroup ? '框組' : '節點'}</span>
+                    <span>刪除{targetNode.data.kind === 'group' ? '框組' : targetNode.data.kind === 'note' ? '便利貼' : '節點'}</span>
                   </button>
                 </div>
               );

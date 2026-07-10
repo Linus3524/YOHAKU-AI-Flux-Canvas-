@@ -718,6 +718,7 @@ const nodeRunners: Record<ExecutableNodeKind, NodeRunner> = {
     engine,
     onProgress,
   )),
+  note: ({ node }) => singleResult(typeof node.data.params?.text === 'string' ? node.data.params.text : ''),
 };
 
 export interface ExecutorEngine {

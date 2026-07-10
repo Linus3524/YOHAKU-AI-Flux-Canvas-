@@ -17,6 +17,7 @@ import { BrandKitNode } from './nodes/BrandKitNode';
 import { CrossPlatformNode } from './nodes/CrossPlatformNode';
 import { ProductMarketingNode } from './nodes/ProductMarketingNode';
 import { GroupNode } from './nodes/GroupNode';
+import { NoteNode } from './nodes/NoteNode';
 
 export type NodeIoType = 'none' | 'image' | 'text' | 'imageOrText' | 'imageBatch';
 export type NodeCategory = 'input' | 'layout' | 'process' | 'generate' | 'analysis' | 'output';
@@ -208,6 +209,16 @@ export const NODE_REGISTRY = {
     needsUpstream: false,
     input: 'none',
     output: 'none',
+  },
+  note: {
+    kind: 'note',
+    component: NoteNode,
+    label: '便利貼',
+    addable: true,
+    category: 'layout',
+    needsUpstream: false,
+    input: 'none',
+    output: 'text',
   },
 } satisfies Record<NodeKind, NodeRegistryEntry>;
 
