@@ -114,12 +114,15 @@ export const useAppAiActions = ({
               // 背景補全可能失敗（不會 push 進 layers），不能用 i === 0 推斷
               const isBackground = !!layer.isBackground;
               // 位置夾在 [0, 1] 安全範圍
-              const clampedX = Math.max(0, Math.min(1, layer.cropRatioX));
-              const clampedY = Math.max(0, Math.min(1, layer.cropRatioY));
+              const clampedX = Math.max(0, Math.min(1, layer.bbox?.x ?? layer.cropRatioX));
+              const clampedY = Math.max(0, Math.min(1, layer.bbox?.y ?? layer.cropRatioY));
               // 寬：cropRatioW × el.width（在原圖空間的比例縮放）
               // 高：維持 GPT 輸出的原生像素比例（pixelH/pixelW），避免強套原圖 AR 造成變形
-              const layerW = isBackground ? el.width : Math.round(layer.cropRatioW * el.width);
-              const layerH = isBackground ? el.height
+              const layerW = isBackground ? el.width : options.preservePosition && layer.bboxW
+                  ? Math.round(layer.bboxW * el.width)
+                  : Math.round(layer.cropRatioW * el.width);
+              const layerH = isBackground ? el.height : options.preservePosition && layer.bboxH
+                  ? Math.round(layer.bboxH * el.height)
                   : (layer.pixelWidth && layer.pixelHeight && layerW > 0)
                       ? Math.round(layerW * layer.pixelHeight / layer.pixelWidth)
                       : Math.round(layer.cropRatioH * el.height);

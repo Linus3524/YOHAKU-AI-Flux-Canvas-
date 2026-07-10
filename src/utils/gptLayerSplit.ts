@@ -17,6 +17,7 @@ import { GoogleGenAI } from '@google/genai';
 import { callAtlasImg2Img, compressForAtlas, detectClosestRatio, type AtlasGenerationModel } from './atlasImage';
 import { birefnetRemoveBg, selectBiRefNetModel } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
+import { detectBackgroundColor } from './imageProcessing';
 
 export type MagicLayerModel = 'gemini' | 'gpt-image-2' | 'seedream-v5-pro';
 
@@ -699,7 +700,10 @@ async function extractOneLayer(
         let transparent = isolatedSrc;
         if (!isNativeTransparent) {
             // API 未真的交付 alpha 時，才用舊的去背流程保底。
-            isolatedSrc = await uniformizeBackground(isolatedSrc, bgColor.hex);
+            const fallbackBgColor = atlasModel === 'seedream-v5-pro'
+                ? await detectBackgroundColor(isolatedSrc)
+                : bgColor.hex;
+            isolatedSrc = await uniformizeBackground(isolatedSrc, fallbackBgColor);
             const birefnetModel = selectBiRefNetModel(obj.edgeComplexity, obj.category);
             const method = useBiRefNet ? `BiRefNet(${birefnetModel})` : 'Chroma Key';
             onProgress?.(`✂️ 去背：${obj.label}（${method}）`);
@@ -708,10 +712,10 @@ async function extractOneLayer(
                 transparent = await withTimeout(
                     birefnetRemoveBg(isolatedSrc, falKey!, birefnetModel),
                     birefnetTimeout,
-                    () => removeColorBackground(isolatedSrc, bgColor.hex, obj.edgeComplexity),
+                    () => removeColorBackground(isolatedSrc, fallbackBgColor, obj.edgeComplexity),
                 );
             } else {
-                transparent = await removeColorBackground(isolatedSrc, bgColor.hex, obj.edgeComplexity);
+                transparent = await removeColorBackground(isolatedSrc, fallbackBgColor, obj.edgeComplexity);
             }
         }
 
@@ -834,6 +838,9 @@ export async function gptLayerSegment(
 
     // Step 2 & 3：物件提取（Promise.all 平行）+ 背景補全（同步開跑，互不等待）
     const labelsList = objects.map(o => `"${o.labelEn}" (${o.label})`).join(', ');
+    const objectLocations = objects.map(o =>
+        `${o.labelEn}: x=${Math.round(o.bbox.x * 100)}%, y=${Math.round(o.bbox.y * 100)}%, width=${Math.round(o.bbox.w * 100)}%, height=${Math.round(o.bbox.h * 100)}%`
+    ).join('; ');
 
     // ⚡ 預處理：壓縮圖片 + 偵測比例 + 背景環境分析（三項並行，只做一次）
     onProgress?.('⚡ 預壓縮圖片、偵測比例、分析背景環境...');
@@ -861,6 +868,7 @@ export async function gptLayerSegment(
             try {
                 const removalPrompt = [
                     `Remove ALL of these foreground elements from this image: ${labelsList}.`,
+                    `Their exact normalized bounding boxes are: ${objectLocations}. Remove only these regions and keep all other pixels unchanged.`,
                     'Output the SAME image with ONLY the background scene remaining.',
                     'Reconstruct the areas that were hidden behind the removed elements so the background continues naturally and seamlessly.',
                     'Keep the background composition, colors, lighting, textures and every detail EXACTLY as the original.',
