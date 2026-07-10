@@ -58,6 +58,16 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, o
       : [...options.categories, category]);
   };
 
+  const removePlannedLayer = (layerId: string) => {
+    setPlan(current => {
+      if (!current) return current;
+      const layers = current.layers.filter(layer => layer.id !== layerId);
+      return { ...current, targetForegroundCount: layers.length, layers };
+    });
+  };
+
+  const hasPlannedOutput = !!plan && (options.includeBackground || plan.layers.length > 0);
+
   return (
     <div className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/35 p-4" onMouseDown={onClose}>
       <section className="flex max-h-[90vh] w-full max-w-[680px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
@@ -166,11 +176,23 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, o
                 <div className="grid gap-2 sm:grid-cols-2">
                   {options.includeBackground && <div className="border border-neutral-200 bg-neutral-50 p-2.5 text-xs"><span className="font-medium">背景</span><span className="ml-2 text-neutral-500">移除所有前景後補全</span></div>}
                   {plan.layers.map((layer, index) => (
-                    <div key={layer.id} className="border border-neutral-200 p-2.5 text-xs">
+                    <div key={layer.id} className="relative border border-neutral-200 p-2.5 pr-9 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => removePlannedLayer(layer.id)}
+                        className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center text-neutral-400 hover:bg-red-50 hover:text-red-600"
+                        title={`不要拆出「${layer.label}」`}
+                        aria-label={`刪除預計圖層「${layer.label}」`}
+                      >
+                        <Icon name="close" size={14} />
+                      </button>
                       <div className="font-medium text-neutral-800">{index + 1}. {layer.label}</div>
                       <div className="mt-1 text-[11px] text-neutral-500">{layer.memberLabels.join('、')}</div>
                     </div>
                   ))}
+                  {plan.layers.length === 0 && !options.includeBackground && (
+                    <div className="border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-700 sm:col-span-2">至少保留一個前景層，或開啟背景圖層。</div>
+                  )}
                 </div>
               )}
             </div>
@@ -184,7 +206,7 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, o
             {plan && <button type="button" onClick={analyze} disabled={isAnalyzing} className="h-9 border border-violet-200 px-3 text-sm text-violet-700 hover:bg-violet-50">重新分析</button>}
             <button
               type="button"
-              disabled={isAnalyzing}
+              disabled={isAnalyzing || (!!plan && !hasPlannedOutput)}
               onClick={() => plan ? onStart({ ...options, plan }) : analyze()}
               className="h-9 bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
             >
