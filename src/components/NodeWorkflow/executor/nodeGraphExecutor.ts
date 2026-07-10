@@ -19,7 +19,7 @@ import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer
 import { executeDynamicRemoval } from '../../../utils/DynamicBackgroundRemoval';
 import { createGeminiClient } from '../../../ai/geminiClient';
 import { getVisualStyleById } from '../../../skills/styles';
-import { loadImage } from '../../../utils/helpers';
+import { loadImage, STYLE_PRESETS } from '../../../utils/helpers';
 import { applyPoissonBlend } from '../../../utils/poissonBlend';
 import { LOGO_BRAND_OUTPUTS, LOGO_DEFAULT_CONFIG } from '../../../skills/logo';
 import { CROSS_PLATFORM_SPECS } from '../../../skills/crossPlatform';
@@ -130,11 +130,11 @@ async function runStyleTransfer(
     && atlasModelSupportsImg2Img(engine.generationModel as AtlasGenerationModel);
   if (!useAtlas && !engine.geminiApiKey) throw new Error('風格轉換需要 Gemini 或 Atlas API Key');
 
-  // 優先用系統風格藝術庫（60+ 種）的完整風格 prompt；
-  // 找不到才 fallback 舊的內建 5 種 key（向後相容既有存檔）。
-  const template = getVisualStyleById(styleKey);
-  const stylePrompt = template
-    ? buildPresetStylePrompt(template.name_zh || template.name)
+  // 優先用大畫布風格藝術庫（STYLE_PRESETS）中對標的風格 prompt；
+  // 找不到才 fallback 舊的內建 5 種 key。
+  const preset = STYLE_PRESETS.find(s => s.id === styleKey || s.label === styleKey);
+  const stylePrompt = preset
+    ? preset.prompt
     : buildPresetStylePrompt(STYLE_PRESET_BY_KEY[styleKey] ?? styleKey);
   const src = await generateStyledImage(
     {
