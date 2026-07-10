@@ -259,6 +259,7 @@ const NODE_CATEGORY_LABELS: Record<NodeCategory, string> = {
 };
 
 export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onInvalidateOutput, onRunError }: NodeWorkflowCanvasProps) {
+  const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>('pan');
   // 進子空間前 Overlay 已 loadGraph，這裡讀一次當初始值。
   // 之後由 React Flow 自己管理 nodes/edges（保留量測到的 measured 尺寸，
   // 否則每次從 store 重建會洗掉 measured → 節點永遠 visibility:hidden 不顯示）。
@@ -745,8 +746,10 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
         proOptions={{ hideAttribution: true }}
         nodesDraggable={true}
         nodesSelectable={true}
-        panOnDrag={true}
-        className="node-workflow-flow bg-[#f8fafc]"
+        panOnDrag={interactionMode === 'pan' ? true : [1, 2]}
+        selectionOnDrag={interactionMode === 'select'}
+        selectionMode="partial"
+        className={`node-workflow-flow bg-[#f8fafc] ${interactionMode === 'pan' ? 'mode-pan' : 'mode-select'}`}
       >
         <style>{`
           .node-workflow-flow .react-flow__node {
@@ -780,14 +783,20 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
             box-shadow: none !important;
           }
           
-          /* 自動游標感應：畫布背景是抓手，物件上是普通選取箭頭 */
-          .node-workflow-flow,
-          .node-workflow-flow .react-flow__pane {
+          /* 抓手模式游標 */
+          .node-workflow-flow.mode-pan,
+          .node-workflow-flow.mode-pan .react-flow__pane {
             cursor: grab !important;
           }
-          .node-workflow-flow:active,
-          .node-workflow-flow .react-flow__pane:active {
+          .node-workflow-flow.mode-pan:active,
+          .node-workflow-flow.mode-pan .react-flow__pane:active {
             cursor: grabbing !important;
+          }
+          
+          /* 選取模式游標 */
+          .node-workflow-flow.mode-select,
+          .node-workflow-flow.mode-select .react-flow__pane {
+            cursor: crosshair !important;
           }
           
           /* 物件（節點）上是普通選取指針 */
@@ -847,10 +856,37 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                 </div>
               </details>
             ))}
+            {/* 模式切換按鈕 */}
+            <div className="flex items-center border-l border-r border-black/6 bg-neutral-50 px-1 py-0.5 gap-0.5 select-none">
+              <button
+                type="button"
+                onClick={() => setInteractionMode('pan')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                  interactionMode === 'pan'
+                    ? 'bg-neutral-900 text-white shadow-sm'
+                    : 'text-neutral-600 hover:bg-neutral-200'
+                }`}
+                title="抓手模式 (滑鼠左鍵平移畫布)"
+              >
+                ✋ 抓手
+              </button>
+              <button
+                type="button"
+                onClick={() => setInteractionMode('select')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                  interactionMode === 'select'
+                    ? 'bg-neutral-900 text-white shadow-sm'
+                    : 'text-neutral-600 hover:bg-neutral-200'
+                }`}
+                title="選取模式 (滑鼠左鍵拖曳框選)"
+              >
+                ↖ 選取
+              </button>
+            </div>
             <button
               type="button"
               onClick={handleRun}
-              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors border-l border-black/12 tabular-nums"
+              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors tabular-nums"
             >
               {isRunning ? `■ 停止 (${runElapsed.toFixed(1)}s)` : '▶ 執行'}
             </button>
