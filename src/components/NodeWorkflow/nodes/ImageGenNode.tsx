@@ -7,7 +7,7 @@ import { NodeDeleteButton } from './NodeDeleteButton';
 import { useNodeGraphStore } from '../../../store/nodeGraphStore';
 import { Icon } from '../../Icon';
 
-const MODEL_OPTIONS = ['gemini', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro'];
+const MODEL_OPTIONS = ['gemini', 'seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro'];
 const RATIO_OPTIONS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
 
 /**

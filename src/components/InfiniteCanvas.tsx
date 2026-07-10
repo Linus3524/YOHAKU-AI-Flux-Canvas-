@@ -1310,6 +1310,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                             { id: 'flux-2-pro', label: 'FLUX.2 Pro', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', badge: 'Atlas Cloud', needsAtlas: true },
+                                            { id: 'seedream-v5-pro', label: '即夢 Seedream v5 Pro', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'qwen-image-2', label: '通義千問 Qwen Image 2.0', badge: 'Atlas Cloud', needsAtlas: true },
                                         ];
                                         const selectedModelOpt = MODEL_OPTIONS_DETAILS.find(opt => opt.id === generationModel) || MODEL_OPTIONS_DETAILS[0];

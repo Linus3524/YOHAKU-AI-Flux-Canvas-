@@ -7,6 +7,7 @@ import { BatchNodeShell } from './BatchNodeShell';
 const MODEL_OPTIONS = [
   { value: 'gemini', label: 'Gemini' },
   { value: 'seedream-v5', label: 'Seedream v5' },
+  { value: 'seedream-v5-pro', label: 'Seedream v5 Pro' },
   { value: 'gpt-image-2', label: 'GPT Image 2' },
 ];
 

@@ -27,7 +27,7 @@ import { PRODUCT_MARKETING_DEFAULT_CONFIG, PRODUCT_MARKETING_PLATFORMS } from '.
 import { isImageSrc } from '../mediaSrc';
 import { nodeRequiresUpstream } from '../nodeRegistry';
 
-const ATLAS_MODELS = ['seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
+const ATLAS_MODELS = ['seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
 const STYLE_PRESET_BY_KEY: Record<string, string> = {
   pixel: 'Pixel Art 8-bit / 16-bit',
   watercolor: 'Watercolor Bleed',
