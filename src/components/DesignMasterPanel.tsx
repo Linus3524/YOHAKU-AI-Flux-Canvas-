@@ -883,7 +883,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                   }))}
                   className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-1.5 text-[12px] text-[#1E293B]"
                 >
-                  <option value="transparent">透明背景 (自動去背)</option>
+                  <option value="transparent">透明背景（{generationModel === 'seedream-v5-pro' ? '即夢原生透明' : '生成後去背'}）</option>
                   <option value="white">純白背景</option>
                   <option value="colored">彩色背景</option>
                   <option value="pattern">格線圖案背景</option>

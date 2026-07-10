@@ -19,7 +19,7 @@ interface InfiniteCanvasProps {
   onInteractionStart?: () => void;
   onInteractionEnd: () => void;
   setResetViewCallback: (callback: () => void) => void;
-  onGenerate: (selectedElements: CanvasElement[], count?: 1 | 2 | 3 | 4) => void;
+  onGenerate: (selectedElements: CanvasElement[], count?: 1 | 2 | 3 | 4, preserveTransparency?: boolean) => void;
   onContextMenu: (e: React.MouseEvent, worldPoint: Point, elementId: string | null) => void;
   onEditDrawing: (elementId: string) => void;
   onOpenNodeWorkflow: (elementId: string) => void;
@@ -1283,7 +1283,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                     )}
                     {elements.filter(el => selectedElementIds.includes(el.id)).some(el => ['image', 'drawing', 'shape', 'text', 'note'].includes(el.type)) && (
                         <GenerateSplitButton
-                            onGenerate={(count) => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)), count)}
+                            onGenerate={(count) => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)), count, preserveTransparency)}
                         />
                     )}
                     </div>
@@ -1805,7 +1805,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                           {/* 保留透明背景 */}
                                           {hasImageOrDrawingOrShape && (
                                               <div className="flex items-center justify-between">
-                                                  <span className="text-[11px] font-medium text-gray-500">保留透明背景</span>
+                            <span className="text-[11px] font-medium text-gray-500">{generationModel === 'seedream-v5-pro' ? '原生透明背景' : '保留透明背景'}</span>
                                                   <div
                                                       className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
                                                       onClick={() => onSetPreserveTransparency(!preserveTransparency)}
@@ -1920,7 +1920,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                 >
                      {elements.filter(el => selectedElementIds.includes(el.id)).some(el => ['image', 'drawing', 'shape', 'text', 'note'].includes(el.type)) && (
                          <button 
-                            onClick={() => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)))}
+                            onClick={() => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)), undefined, preserveTransparency)}
                             className="w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-tr from-[#AF52DE] to-[#5856D6] text-white shadow-md hover:scale-105 active:scale-95 transition-all"
                             title="一鍵生成圖片"
                          >

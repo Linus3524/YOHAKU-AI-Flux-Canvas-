@@ -54,7 +54,7 @@ interface UseAIProps {
     falApiKey?: string | null;
 }
 
-/** 根據便利貼 prompt 關鍵字判斷是否需要透明背景（僅 GPT Image 2 支援） */
+/** 透明背景由呼叫端依模型決定：Seedream Pro 走 API 原生透明，其餘模型走生成後去背。 */
 // 剝掉風格提示詞的「主動改造」前綴，讓它變成純描述語氣
 // 例："Transform into Cyberpunk aesthetic: neon..." → "Cyberpunk aesthetic: neon..."
 //     "將圖片轉換為1980年代台灣..."           → "1980年代台灣..."
@@ -76,7 +76,7 @@ function buildStyledPrompt(userContent: string, stylePrompt: string, fallbackLab
 export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel: generationModelGlobal = 'gemini', falApiKey }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
-    // 設計大師「透明背景」：本批生成的圖在放入畫布時自動去背
+    // 設計大師「透明背景」：非 Seedream Pro 的本批生成圖在放入畫布時自動去背
     const [pendingAutoDebg, setPendingAutoDebg] = useState(false);
     // LINE 貼圖去背用：null = 非貼圖；true/false = 貼圖有/無白描邊（決定泛洪扣黑或白）
     const [pendingStickerBorder, setPendingStickerBorder] = useState<boolean | null>(null);
@@ -93,10 +93,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [preserveTransparency, setPreserveTransparency] = useState(false);
     const [useCustomSeed, setUseCustomSeed] = useState<boolean>(false);
     const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
-    // 透明背景一律改用「生成後去背」流程處理。
-    // Atlas 的 gpt-image-2 端點不接受 background:transparent 參數（會直接打回失敗），
-    // 故所有模型都不再透過 API 參數要求透明背景。
-    const getTransparentBg = (_prompt: string) => false;
+    const getTransparentBg = (model: string, requested: boolean) => model === 'seedream-v5-pro' && requested;
     const [showStyleLibrary, setShowStyleLibrary] = useState(false);
     const zIndexCounter = useRef(Math.max(0, ...elements.map(e => e.zIndex)) + 1);
 
@@ -957,12 +954,14 @@ CONSTRAINTS:
         }
     }, [elements, selectedElementIds, setElements, showToast]);
 
-    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean, customSeed?: number) => {
+    const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean, customSeed?: number, transparentBgOverride = false) => {
         const generationModel = modelOverride || generationModelGlobal;
+        const wantsTransparent = autoRemoveBg || transparentBgOverride;
+        const nativeTransparentBg = generationModel === 'seedream-v5-pro' && wantsTransparent;
         const baseSeed = customSeed !== undefined ? customSeed : Math.floor(Math.random() * 2147483647);
         // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定
         const effImageSize = imageSizeOverride || imageSize;
-        setPendingAutoDebg(autoRemoveBg);
+        setPendingAutoDebg(wantsTransparent && !nativeTransparentBg);
         // LINE 貼圖去背走泛洪 chroma 主路：null = 非貼圖（用語意去背）；true/false = 貼圖有無白邊
         setPendingStickerBorder(stickerDebgBorder === undefined ? null : stickerDebgBorder);
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
@@ -1041,7 +1040,7 @@ CONSTRAINTS:
                         // 有便利貼參考圖且支援 img2img → 以第一張參考圖為主
                         const imgs = await atlasBatch({
                             prompt: atlasPrompt, count: 1, ratio: frameRatio, imageSize: effImageSize,
-                            seed: frameSeed, transparentBg: getTransparentBg(atlasPrompt || ''),
+                            seed: frameSeed, transparentBg: getTransparentBg(generationModel, nativeTransparentBg),
                             refImage: (hasNoteRefs && canDoImg2Img) ? noteRefImgs[0] : undefined,
                             extraRefImages: (hasNoteRefs && canDoImg2Img) ? noteRefImgs.slice(1) : undefined,
                         }, atlasEngine);
@@ -1102,7 +1101,7 @@ CONSTRAINTS:
                     // 便利貼參考圖追加在畫布圖片之後
                     const rawImages = await atlasBatch({
                         prompt: img2imgPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
-                        seed: baseSeed, transparentBg: getTransparentBg(atlasPrompt || ''),
+                        seed: baseSeed, transparentBg: getTransparentBg(generationModel, nativeTransparentBg),
                         refImage, extraRefImages: hasNoteRefs ? noteRefImgs : undefined,
                     }, atlasEngine);
                     if (rawImages.length === 0) throw new Error('未收到任何圖片');
@@ -1137,7 +1136,7 @@ CONSTRAINTS:
                 try {
                     const images = await atlasBatch({
                         prompt: atlasPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
-                        seed: baseSeed, transparentBg: getTransparentBg(atlasPrompt || ''),
+                        seed: baseSeed, transparentBg: getTransparentBg(generationModel, nativeTransparentBg),
                         refImage: noteRefImgs[0], extraRefImages: noteRefImgs.slice(1),
                     }, atlasEngine);
                     if (images.length === 0) throw new Error('未收到任何圖片');
@@ -1169,7 +1168,7 @@ CONSTRAINTS:
                     prompt: atlasPrompt, count,
                     ratio: (resolvedAtlasRatio === 'Original' || !resolvedAtlasRatio) ? '1:1' : resolvedAtlasRatio,
                     imageSize: effImageSize,
-                    seed: baseSeed, transparentBg: getTransparentBg(atlasPrompt || ''),
+                    seed: baseSeed, transparentBg: getTransparentBg(generationModel, nativeTransparentBg),
                 }, atlasEngine);
                 if (images.length === 0) throw new Error('未收到任何圖片');
                 setGeneratedImages(images);

@@ -69,8 +69,9 @@ export async function generateStyledImage(
     opts: StyleTransferOpts,
     engine: ImageEngineConfig,
 ): Promise<string | null> {
+    const nativeTransparent = opts.preserveTransparency && isAtlasEngine(engine) && engine.model === 'seedream-v5-pro';
     const { src: flatSrc, hadTransparency, bgColor } =
-        await prepareImageForGeneration(opts.srcImage, opts.preserveTransparency);
+        await prepareImageForGeneration(opts.srcImage, opts.preserveTransparency && !nativeTransparent);
 
     const prompt = typeof opts.stylePrompt === 'function'
         ? await opts.stylePrompt(flatSrc)
@@ -84,7 +85,7 @@ export async function generateStyledImage(
         const wait = engine.atlasWait ?? (<T,>(fn: () => Promise<T>) => fn());
         const images = await wait(() => callAtlasImg2Img(
             prompt, engine.model as AtlasGenerationModel, engine.atlasApiKey!,
-            refImage, 1, { ratio: opts.atlasRatio ?? '1:1', quality },
+            refImage, 1, { ratio: opts.atlasRatio ?? '1:1', quality, transparentBg: nativeTransparent, outputFormat: nativeTransparent ? 'png' : undefined, keepAlpha: nativeTransparent },
         ));
         result = images[0] ?? '';
     } else {
@@ -109,7 +110,7 @@ export async function generateStyledImage(
 
     if (!result) return null;
 
-    if (hadTransparency) {
+    if (hadTransparency && !nativeTransparent) {
         try {
             result = await restoreTransparency(result, bgColor, opts.transparencyKeys);
         } catch (e) {

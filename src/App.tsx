@@ -529,7 +529,7 @@ const App: React.FC = () => {
   const [intentModal, setIntentModal] = useState<{ elements: CanvasElement[]; count: 1|2|3|4 } | null>(null);
   const [intentText, setIntentText] = useState('');
 
-  const handleGenerateWithIntent = useCallback((selectedElements: CanvasElement[], count: 1|2|3|4 = 2) => {
+  const handleGenerateWithIntent = useCallback((selectedElements: CanvasElement[], count: 1|2|3|4 = 2, preserveTransparencyOverride = false) => {
     const hasNotes = selectedElements.some(el => el.type === 'note' || el.type === 'text');
     const hasImages = selectedElements.some(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
     const hasStyle = imageStyle && imageStyle !== 'Default';
@@ -540,7 +540,7 @@ const App: React.FC = () => {
       setIntentModal({ elements: selectedElements, count });
       return;
     }
-    handleGenerate(selectedElements, count, undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam);
+    handleGenerate(selectedElements, count, undefined, undefined, false, undefined, undefined, undefined, undefined, undefined, seedParam, preserveTransparencyOverride);
   }, [handleGenerate, imageStyle, useCustomSeed, customSeedValue]);
 
   // 新畫布時（只有歡迎便利貼）自動 fit to screen 對齊畫面
