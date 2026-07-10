@@ -890,12 +890,25 @@ export async function executeGraph(
   const unavailableNodeIds = new Set<string>();
   const errors: { id: string; message: string }[] = [];
 
+  // 收集所有已連線的節點 ID。孤立節點（無連線）在執行時會直接被跳過並維持 idle，不進行算圖也不會誤報錯誤
+  const connectedNodeIds = new Set<string>();
+  for (const edge of graph.edges) {
+    connectedNodeIds.add(edge.source);
+    connectedNodeIds.add(edge.target);
+  }
+
   let outputSrc: string | null = null;
 
   for (const node of order) {
     if (node.kind === 'group') continue;
     try {
       throwIfAborted(options.signal);
+
+      // 孤立節點不予執行，狀態設為 idle，防止亮紅框
+      if (!connectedNodeIds.has(node.id)) {
+        status(node.id, 'idle');
+        continue;
+      }
 
       const blockedReason = blockedByFailedUpstream(node.id, graph, unavailableNodeIds);
       if (blockedReason) {
