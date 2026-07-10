@@ -394,19 +394,51 @@ async function runOutpaint(
   const img = await loadImage(input);
   const sourceW = img.naturalWidth;
   const sourceH = img.naturalHeight;
-  const ratio = Number(aspectRatio.split(':')[0]) / Number(aspectRatio.split(':')[1]);
-  let canvasW = Math.max(sourceW, Math.round(sourceH * ratio));
-  let canvasH = Math.max(sourceH, Math.round(sourceW / ratio));
-  const cap = Math.min(1, 2048 / Math.max(canvasW, canvasH));
-  canvasW = Math.max(1, Math.round(canvasW * cap));
-  canvasH = Math.max(1, Math.round(canvasH * cap));
-  const scale = Math.min(canvasW / sourceW, canvasH / sourceH);
-  const drawW = Math.round(sourceW * scale);
-  const drawH = Math.round(sourceH * scale);
-  const gapX = canvasW - drawW;
-  const gapY = canvasH - drawH;
-  const imageX = direction === 'left' ? gapX : direction === 'right' ? 0 : Math.round(gapX / 2);
-  const imageY = direction === 'top' ? gapY : direction === 'bottom' ? 0 : Math.round(gapY / 2);
+
+  let canvasW = sourceW;
+  let canvasH = sourceH;
+  let drawW = sourceW;
+  let drawH = sourceH;
+  let imageX = 0;
+  let imageY = 0;
+
+  if (aspectRatio === 'custom') {
+    // 自訂像素外擴 (微調)
+    const offset = typeof params.pixelOffset === 'number' ? params.pixelOffset : 256;
+    if (direction === 'left') {
+      canvasW = sourceW + offset;
+      imageX = offset;
+    } else if (direction === 'right') {
+      canvasW = sourceW + offset;
+      imageX = 0;
+    } else if (direction === 'top') {
+      canvasH = sourceH + offset;
+      imageY = offset;
+    } else if (direction === 'bottom') {
+      canvasH = sourceH + offset;
+      imageY = 0;
+    } else { // 'all' 四周
+      canvasW = sourceW + offset * 2;
+      canvasH = sourceH + offset * 2;
+      imageX = offset;
+      imageY = offset;
+    }
+  } else {
+    // 預設比例外擴
+    const ratio = Number(aspectRatio.split(':')[0]) / Number(aspectRatio.split(':')[1]);
+    canvasW = Math.max(sourceW, Math.round(sourceH * ratio));
+    canvasH = Math.max(sourceH, Math.round(sourceW / ratio));
+    const cap = Math.min(1, 2048 / Math.max(canvasW, canvasH));
+    canvasW = Math.max(1, Math.round(canvasW * cap));
+    canvasH = Math.max(1, Math.round(canvasH * cap));
+    const scale = Math.min(canvasW / sourceW, canvasH / sourceH);
+    drawW = Math.round(sourceW * scale);
+    drawH = Math.round(sourceH * scale);
+    const gapX = canvasW - drawW;
+    const gapY = canvasH - drawH;
+    imageX = direction === 'left' ? gapX : direction === 'right' ? 0 : Math.round(gapX / 2);
+    imageY = direction === 'top' ? gapY : direction === 'bottom' ? 0 : Math.round(gapY / 2);
+  }
 
   const canvas = document.createElement('canvas');
   canvas.width = canvasW; canvas.height = canvasH;

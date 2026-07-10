@@ -45,7 +45,8 @@ export interface AnalyzeParams {
 }
 export interface OutpaintParams {
   direction: 'all' | 'left' | 'right' | 'top' | 'bottom';
-  aspectRatio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16';
+  aspectRatio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | 'custom';
+  pixelOffset?: number;
   prompt: string;
   model?: 'gemini' | 'gpt';
 }
