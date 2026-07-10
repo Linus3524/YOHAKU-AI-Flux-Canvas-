@@ -1538,7 +1538,17 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                     filter: imgDropShadow,
                                     transform: flipTransform,
                                 }}>
-                                    <img src={displaySrc ?? el.src} alt="Canvas element" style={{ width: '100%', height: '100%', objectFit: 'fill' }} className="pointer-events-none" draggable={false} />
+                                    <img
+                                        src={displaySrc ?? el.src}
+                                        alt="Canvas element"
+                                        style={{ width: '100%', height: '100%', objectFit: 'fill' }}
+                                        className="pointer-events-none"
+                                        draggable={false}
+                                        onError={(event) => {
+                                            // 縮圖 blob 被快取淘汰時，立刻回到元素持有的原圖。
+                                            if (event.currentTarget.src !== el.src) event.currentTarget.src = el.src;
+                                        }}
+                                    />
                                 </div>
                             </div>
                         );

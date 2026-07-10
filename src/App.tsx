@@ -548,7 +548,7 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在 mount 時執行一次
 
-  // Restore Atlas images from IndexedDB cache when they are broken URLs
+  // 還原 IndexedDB 中的圖片：畫布資料可能在 mount 後才載入，不能只跑一次。
   useEffect(() => {
     const restoreFromCache = async () => {
       const imageElements = elements.filter(
@@ -564,8 +564,7 @@ const App: React.FC = () => {
       }
     };
     restoreFromCache();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only on mount
+  }, [elements, setElements]);
 
   const isFocusMode = !!editingImage || !!editingDrawing || !!activeNodeGroupId;
   const activeNodeGroup = activeNodeGroupId
