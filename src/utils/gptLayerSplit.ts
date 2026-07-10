@@ -804,7 +804,9 @@ async function extractOneLayer(
                 isSeedreamPro
                     ? `Extract ONLY the "${obj.labelEn}" (${obj.label}) as a true RGBA PNG layer. ` +
                       `Every pixel outside this object must be fully transparent (alpha 0). Do not use a solid background, checkerboard, shadow plate, border, or matte. ` +
-                      `Preserve the exact original position, scale, perspective, colors, materials, lighting and edges.` + perspectiveHint + refHint
+                      `Preserve the exact original position, scale, perspective, colors, materials, lighting and edges. ` +
+                      `Preserve the source object's original opacity: solid objects such as paper, sticky notes, labels, products, logos and text panels must remain solid and must not become translucent, faded, ghosted or see-through. ` +
+                      `Only preserve translucency when it is clearly present in the source, such as glass, smoke, liquid, sheer fabric or glow. Preserve shadows and highlights without reducing the opacity of the object's main body.` + perspectiveHint + refHint
                     : `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
                       `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
                       `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
