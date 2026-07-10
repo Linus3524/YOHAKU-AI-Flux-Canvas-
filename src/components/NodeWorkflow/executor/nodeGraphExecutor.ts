@@ -91,9 +91,9 @@ async function runImageGen(
 
   if (ATLAS_MODELS.includes(model)) {
     if (!engine.atlasApiKey) throw new Error('此模型需要 Atlas API Key');
-    // Atlas img2img 目前只接單張參考圖；多輸入時取第一張，Gemini 路徑可吃多張。
+    // 多參考圖：第一張為主參考，其餘走 extraRefImages（如即夢 Pro 支援多圖融合/合成）。
     const out = await atlasBatch(
-      { prompt, ratio: aspectRatio, count: 1, refImage: refImages[0] },
+      { prompt, ratio: aspectRatio, count: 1, refImage: refImages[0], extraRefImages: refImages.slice(1) },
       { model: model as AtlasGenerationModel, apiKey: engine.atlasApiKey },
     );
     if (!out[0]) throw new Error('生圖沒有回傳圖片');
