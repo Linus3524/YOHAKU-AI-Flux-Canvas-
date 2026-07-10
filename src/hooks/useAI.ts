@@ -93,7 +93,6 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [preserveTransparency, setPreserveTransparency] = useState(false);
     const [useCustomSeed, setUseCustomSeed] = useState<boolean>(false);
     const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
-    const getTransparentBg = (model: string, requested: boolean) => model === 'seedream-v5-pro' && requested;
     const [showStyleLibrary, setShowStyleLibrary] = useState(false);
     const zIndexCounter = useRef(Math.max(0, ...elements.map(e => e.zIndex)) + 1);
 
@@ -958,7 +957,7 @@ CONSTRAINTS:
         const generationModel = modelOverride || generationModelGlobal;
         // 原生透明是 Seedream Pro 專屬；其他模型不自動啟動去背，交由使用者後續選擇工具。
         const wantsTransparent = generationModel === 'seedream-v5-pro' && (autoRemoveBg || transparentBgOverride);
-        const nativeTransparentBg = generationModel === 'seedream-v5-pro' && wantsTransparent;
+        const nativeTransparentBg = false; // 即夢 Pro 5 並非真正原生輸出透明（仍帶白背景），因此不標記為 nativeTransparentBg，以觸發自動後製去背流程
         const baseSeed = customSeed !== undefined ? customSeed : Math.floor(Math.random() * 2147483647);
         // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定
         const effImageSize = imageSizeOverride || imageSize;
@@ -1041,7 +1040,7 @@ CONSTRAINTS:
                         // 有便利貼參考圖且支援 img2img → 以第一張參考圖為主
                         const imgs = await atlasBatch({
                             prompt: atlasPrompt, count: 1, ratio: frameRatio, imageSize: effImageSize,
-                            seed: frameSeed, transparentBg: getTransparentBg(generationModel, nativeTransparentBg),
+                            seed: frameSeed, transparentBg: wantsTransparent,
                             refImage: (hasNoteRefs && canDoImg2Img) ? noteRefImgs[0] : undefined,
                             extraRefImages: (hasNoteRefs && canDoImg2Img) ? noteRefImgs.slice(1) : undefined,
                         }, atlasEngine);
@@ -1102,7 +1101,7 @@ CONSTRAINTS:
                     // 便利貼參考圖追加在畫布圖片之後
                     const rawImages = await atlasBatch({
                         prompt: img2imgPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
-                        seed: baseSeed, transparentBg: getTransparentBg(generationModel, nativeTransparentBg),
+                        seed: baseSeed, transparentBg: wantsTransparent,
                         refImage, extraRefImages: hasNoteRefs ? noteRefImgs : undefined,
                     }, atlasEngine);
                     if (rawImages.length === 0) throw new Error('未收到任何圖片');
@@ -1137,7 +1136,7 @@ CONSTRAINTS:
                 try {
                     const images = await atlasBatch({
                         prompt: atlasPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
-                        seed: baseSeed, transparentBg: getTransparentBg(generationModel, nativeTransparentBg),
+                        seed: baseSeed, transparentBg: wantsTransparent,
                         refImage: noteRefImgs[0], extraRefImages: noteRefImgs.slice(1),
                     }, atlasEngine);
                     if (images.length === 0) throw new Error('未收到任何圖片');
@@ -1169,7 +1168,7 @@ CONSTRAINTS:
                     prompt: atlasPrompt, count,
                     ratio: (resolvedAtlasRatio === 'Original' || !resolvedAtlasRatio) ? '1:1' : resolvedAtlasRatio,
                     imageSize: effImageSize,
-                    seed: baseSeed, transparentBg: getTransparentBg(generationModel, nativeTransparentBg),
+                    seed: baseSeed, transparentBg: wantsTransparent,
                 }, atlasEngine);
                 if (images.length === 0) throw new Error('未收到任何圖片');
                 setGeneratedImages(images);
