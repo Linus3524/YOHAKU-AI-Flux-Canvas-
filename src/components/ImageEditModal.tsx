@@ -5,7 +5,7 @@ import type { ImageElement, Point } from '../types';
 import { callGeminiWithRetry, analyzeDominantColor, loadImage } from '../utils/helpers';
 import { Icon } from './Icon';
 import { rgbToHsl, hslToRgb, compositeImagesPixelPerfect, createPrefilledImage } from '../utils/imageProcessing';
-import { callAtlasInpaint } from '../utils/atlasImage';
+import { callAtlasImg2Img, callAtlasInpaint } from '../utils/atlasImage';
 import { getModelStatus } from '../utils/onnxModelCache';
 import { runLamaInWorker, warmUpLamaWorker, getLamaBackend } from '../utils/lamaWorkerClient';
 import { runUpscaleInWorker } from '../utils/upscaleWorkerClient';
@@ -103,7 +103,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
 
   // Inpaint engine selector
   const canSwitchEngine = !!(atlasKey || apiKey);
-  const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'gemini'>(atlasKey ? 'gpt' : 'gemini');
+  const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'seedream-v5-pro' | 'gemini'>(atlasKey ? 'gpt' : 'gemini');
   const [lamaReady, setLamaReady] = useState(false);
   const [lamaBackend, setLamaBackend] = useState<'webgpu' | 'wasm' | null>(null);
   const [miGanReady, setMiGanReady] = useState(false);
@@ -1173,7 +1173,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
         // 否則走雲端移除 (removeModel === 'cloud')
       }
 
-      // ══ 路線 A：Atlas GPT Image 2 ══════
+      // ══ 路線 A：Atlas 編輯模型 ══════
       if (atlasKey && inpaintEngine === 'gpt') {
         // 先用 Gemini Flash Lite 分析周圍環境，幫助 GPT Image 2 更好融合
         const surroundingContext = await analyzeSurroundingContext(context.baseImageSrc, bwMaskBase64Url);
@@ -1205,6 +1205,27 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
             model: 'gpt-image-2',
             prompt: fluxPrompt
         });
+        return;
+      }
+
+      if (atlasKey && inpaintEngine === 'seedream-v5-pro') {
+        const seedreamPrompt = context.type === 'remove'
+          ? (context.prompt?.trim()
+              ? `Remove the selected object and seamlessly reconstruct the background. Background hint: ${context.prompt}.`
+              : 'Remove the selected object and seamlessly reconstruct the background with matching texture and lighting.')
+          : context.prompt;
+        const results = await callAtlasImg2Img(
+          `${seedreamPrompt}\nThe second reference image is a black-and-white selection mask: white marks the region to edit, black marks the region to preserve. Edit only the white region and keep the rest of the original image unchanged.`,
+          'seedream-v5-pro',
+          atlasKey,
+          context.baseImageSrc,
+          1,
+          { ratio: 'Original', quality: '2K', keepAlpha: true },
+          [bwMaskBase64Url, ...referenceImages],
+        );
+        if (!results[0]) throw new Error('Seedream Pro 沒有回傳編輯結果');
+        setPreviewImageSrc(results[0]);
+        setGenerationMetadata({ seed: activeSeed, model: 'seedream-v5-pro', prompt: seedreamPrompt });
         return;
       }
 
@@ -1487,13 +1508,14 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                   <select
                     value={inpaintEngine}
                     onChange={e => {
-                      const val = e.target.value as 'gpt' | 'gemini';
+                      const val = e.target.value as 'gpt' | 'seedream-v5-pro' | 'gemini';
                       if (val === 'gemini' && !apiKey) return;
                       setInpaintEngine(val);
                     }}
                     className="appearance-none bg-transparent py-1 pl-2 pr-6 text-[11px] font-bold text-purple-600 focus:outline-none cursor-pointer"
                   >
                     {atlasKey && <option value="gpt">GPT Image 2</option>}
+                    {atlasKey && <option value="seedream-v5-pro">即夢 Seedream 5.0 Pro</option>}
                     <option value="gemini" disabled={!apiKey}>Gemini{!apiKey ? ' (需 Key)' : ''}</option>
                   </select>
                   <svg className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
