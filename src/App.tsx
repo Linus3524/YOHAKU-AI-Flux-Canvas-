@@ -552,7 +552,8 @@ const App: React.FC = () => {
   useEffect(() => {
     const restoreFromCache = async () => {
       const imageElements = elements.filter(
-        el => el.type === 'image' && (el as any).src && !(el as any).src.startsWith('data:')
+        // 拆分持久化的 payload 遺失時 src 會是空字串；仍須用元素 ID 查 IndexedDB 快取救回。
+        el => el.type === 'image' && !String((el as any).src ?? '').startsWith('data:')
       );
       if (imageElements.length === 0) return;
 
