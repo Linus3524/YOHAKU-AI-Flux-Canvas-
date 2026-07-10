@@ -832,7 +832,38 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
         <Background color="#cbd5e1" gap={28} size={1.2} />
         <Controls position="bottom-left" showInteractive={false} />
         <MiniMap position="bottom-right" pannable zoomable nodeStrokeWidth={2} />
-        <Panel position="top-left">
+        <Panel position="top-left" className="flex items-center gap-2">
+          {/* 模式切換按鈕：獨立控制框 */}
+          <div className="flex items-center border border-black/12 bg-white shadow-sm p-0.5 gap-0.5 select-none">
+            <button
+              type="button"
+              onClick={() => setInteractionMode('pan')}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                interactionMode === 'pan'
+                  ? 'bg-neutral-900 text-white shadow-sm'
+                  : 'text-neutral-600 hover:bg-neutral-100'
+              }`}
+              title="抓手模式 (滑鼠左鍵平移畫布)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', overflow: 'visible' }}><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
+              抓手
+            </button>
+            <button
+              type="button"
+              onClick={() => setInteractionMode('select')}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                interactionMode === 'select'
+                  ? 'bg-neutral-900 text-white shadow-sm'
+                  : 'text-neutral-600 hover:bg-neutral-100'
+              }`}
+              title="選取模式 (滑鼠左鍵拖曳框選)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', overflow: 'visible' }}><path d="M12.586 12.586 19 19"/><path d="M3.688 3.037a.497.497 0 0 0-.651.651l6.5 15.999a.501.501 0 0 0 .947-.062l1.569-6.083a2 2 0 0 1 1.448-1.479l6.124-1.579a.5 0 0 0 .063-.947z"/></svg>
+              選取
+            </button>
+          </div>
+
+          {/* 節點分類選單與執行按鈕 */}
           <div className="flex items-center gap-px border border-black/12 bg-white shadow-sm">
             {groupedAddableNodes.map(group => (
               <details key={group.category} className="relative">
@@ -856,39 +887,10 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                 </div>
               </details>
             ))}
-            {/* 模式切換按鈕 */}
-            <div className="flex items-center border-l border-r border-black/6 bg-neutral-50 px-1 py-0.5 gap-0.5 select-none">
-              <button
-                type="button"
-                onClick={() => setInteractionMode('pan')}
-                className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                  interactionMode === 'pan'
-                    ? 'bg-neutral-900 text-white shadow-sm'
-                    : 'text-neutral-600 hover:bg-neutral-200'
-                }`}
-                title="抓手模式 (滑鼠左鍵平移畫布)"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
-                抓手
-              </button>
-              <button
-                type="button"
-                onClick={() => setInteractionMode('select')}
-                className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                  interactionMode === 'select'
-                    ? 'bg-neutral-900 text-white shadow-sm'
-                    : 'text-neutral-600 hover:bg-neutral-200'
-                }`}
-                title="選取模式 (滑鼠左鍵拖曳框選)"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M12.586 12.586 19 19"/><path d="M3.688 3.037a.497.497 0 0 0-.651.651l6.5 15.999a.501.501 0 0 0 .947-.062l1.569-6.083a2 2 0 0 1 1.448-1.479l6.124-1.579a.5 0 0 0 .063-.947z"/></svg>
-                選取
-              </button>
-            </div>
             <button
               type="button"
               onClick={handleRun}
-              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors tabular-nums"
+              className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors border-l border-black/12 tabular-nums"
             >
               {isRunning ? `■ 停止 (${runElapsed.toFixed(1)}s)` : '▶ 執行'}
             </button>
