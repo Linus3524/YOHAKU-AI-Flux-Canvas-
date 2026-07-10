@@ -225,7 +225,7 @@ export const ADDABLE_NODES = NODE_REGISTRY_ENTRIES
   .filter(entry => entry.addable)
   .map(entry => ({
     kind: entry.kind,
-    label: entry.addLabel ?? `＋ ${entry.label}`,
+    label: entry.label,
     category: entry.category,
   }));
 
