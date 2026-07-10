@@ -6,7 +6,7 @@ import type { Part } from '@google/genai';
 import type { ImageElement, OutpaintingState } from '../../../types';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
 import { geminiGenerateImage, atlasBatch } from '../../../ai/pipelines/generate';
-import { callAtlasInpaint } from '../../../utils/atlasImage';
+import { callAtlasImg2Img, callAtlasInpaint } from '../../../utils/atlasImage';
 import { runExtendBrandKitPipeline } from '../../../ai/pipelines/brandKit';
 import { runCrossPlatformPipeline } from '../../../ai/pipelines/crossPlatform';
 import { runProductMarketingPipeline } from '../../../ai/pipelines/productMarketing';
@@ -380,7 +380,7 @@ async function runOutpaint(
 ): Promise<string> {
   if (!isImageSrc(input)) throw new Error('外擴節點需要上游圖片');
   const model = params.model ?? 'gemini';
-  if (model === 'gpt' && !engine.atlasApiKey) throw new Error('GPT 擴圖需要 Atlas Cloud API Key');
+  if (model !== 'gemini' && !engine.atlasApiKey) throw new Error('Atlas 擴圖需要 Atlas Cloud API Key');
   if (model === 'gemini' && !engine.geminiApiKey) throw new Error('外擴需要 Gemini API Key');
 
   // 解析多選方向（向下相容單選 params.direction）
@@ -484,6 +484,16 @@ async function runOutpaint(
   let generated = '';
   if (model === 'gpt') {
     generated = await callAtlasInpaint(prompt, composite, maskSrc, engine.atlasApiKey!, undefined, undefined, undefined, `${canvasW}x${canvasH}`);
+  } else if (model === 'seedream-v5-pro') {
+    const ratio = canvasW === canvasH ? '1:1' : canvasW > canvasH ? '16:9' : '9:16';
+    generated = (await callAtlasImg2Img(
+      `${prompt}\nExtend only the transparent outer area. Preserve the existing subject and all visible details exactly.`,
+      'seedream-v5-pro',
+      engine.atlasApiKey!,
+      composite,
+      1,
+      { ratio, quality: '2K' },
+    ))[0] ?? '';
   } else {
     const [header, data] = composite.split(',');
     const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';

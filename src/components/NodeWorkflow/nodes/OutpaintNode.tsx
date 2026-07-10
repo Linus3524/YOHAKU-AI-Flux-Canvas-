@@ -191,6 +191,7 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
               >
                 <option value="gemini">Gemini</option>
                 <option value="gpt">GPT</option>
+                <option value="seedream-v5-pro">即夢 Seedream 5.0 Pro</option>
               </select>
             </div>
           </div>

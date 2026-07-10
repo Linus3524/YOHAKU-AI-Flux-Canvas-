@@ -614,12 +614,12 @@ CONSTRAINTS:
         }
     }, [elements]);
 
-    const handleOutpaintingGenerate = useCallback(async (prompt: string, model: 'gemini' | 'gpt' = 'gemini') => {
+    const handleOutpaintingGenerate = useCallback(async (prompt: string, model: 'gemini' | 'gpt' | 'seedream-v5-pro' = 'gemini') => {
         if (!outpaintingState) return;
         const { element, frame } = outpaintingState;
 
-        if (model === 'gpt' && !atlasApiKey) {
-            showToast('GPT 擴圖需要 Atlas Cloud Key，請先於設定中輸入');
+        if (model !== 'gemini' && !atlasApiKey) {
+            showToast('Atlas 擴圖需要 Atlas Cloud Key，請先於設定中輸入');
             return;
         }
 
@@ -656,7 +656,7 @@ CONSTRAINTS:
                 showToast('擴圖完成！已新增為新圖層 ✨');
             };
 
-            if (model === 'gpt') {
+            if (model === 'gpt' || model === 'seedream-v5-pro') {
                 // ── GPT Image 2 Edit 遮罩外擴 ──
                 // GPT edit 只支援三種輸出尺寸 → 把外框比例「吸附」到最接近的一種，
                 // 並把 size 帶進 API（不帶 size 它會輸出近似原圖比例 → 完全不擴）。
@@ -700,8 +700,14 @@ CONSTRAINTS:
                 const outPrompt = prompt.trim()
                     ? prompt.trim()
                     : 'Naturally extend and continue the existing scene outward into the surrounding area — keep the same lighting, color palette, perspective, depth and artistic style so it looks like one continuous photograph.';
-                const resultSrc = await withAtlasWaitToast(() =>
-                    callAtlasInpaint(outPrompt, compositeB64, maskB64, atlasApiKey!, undefined, undefined, undefined, `${outW}x${outH}`));
+                const resultSrc = model === 'gpt'
+                    ? await withAtlasWaitToast(() => callAtlasInpaint(outPrompt, compositeB64, maskB64, atlasApiKey!, undefined, undefined, undefined, `${outW}x${outH}`))
+                    : (await withAtlasWaitToast(() => callAtlasImg2Img(
+                        `${outPrompt} Extend only the transparent outer area. Preserve the existing subject and all visible details exactly.`,
+                        'seedream-v5-pro', atlasApiKey!, compositeB64, 1,
+                        { ratio: outRatio === 1 ? '1:1' : outRatio > 1 ? '16:9' : '9:16', quality: '2K' },
+                    )))[0];
+                if (!resultSrc) throw new Error('即夢擴圖沒有回傳圖片');
                 
                 try {
                     const blendedSrc = await applyPoissonBlend(element.src, resultSrc, {

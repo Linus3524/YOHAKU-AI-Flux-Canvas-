@@ -49,7 +49,7 @@ export interface OutpaintParams {
   aspectRatio: '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | 'custom';
   pixelOffset?: number;
   prompt: string;
-  model?: 'gemini' | 'gpt';
+  model?: 'gemini' | 'gpt' | 'seedream-v5-pro';
 }
 export interface CopyStyleParams {
   selectedKeys: string[];

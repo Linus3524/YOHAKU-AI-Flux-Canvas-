@@ -42,7 +42,7 @@ interface InfiniteCanvasProps {
   outpaintingState: OutpaintingState | null;
   onUpdateOutpaintingFrame: (newFrame: { position: Point; width: number; height: number; }) => void;
   onCancelOutpainting: () => void;
-  onOutpaintingGenerate: (prompt: string, model: 'gemini' | 'gpt') => void;
+  onOutpaintingGenerate: (prompt: string, model: 'gemini' | 'gpt' | 'seedream-v5-pro') => void;
   onAutoPromptGenerate: (state: OutpaintingState) => Promise<string>;
   stylePresets: { id: string, name: string, label: string }[];
   onCameraAngle: (prompt: string) => void;
@@ -291,7 +291,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
   const [outpaintingPrompt, setOutpaintingPrompt] = useState('');
   const [isAutoPrompting, setIsAutoPrompting] = useState(false);
-  const [outpaintModel, setOutpaintModel] = useState<'gemini' | 'gpt'>(hasAtlasKey ? 'gpt' : 'gemini');
+  const [outpaintModel, setOutpaintModel] = useState<'gemini' | 'gpt' | 'seedream-v5-pro'>(hasAtlasKey ? 'gpt' : 'gemini');
   
   const [menuOffset, setMenuOffset] = useState<Point>({ x: 20, y: 0 }); 
   const [isDraggingMenu, setIsDraggingMenu] = useState(false);

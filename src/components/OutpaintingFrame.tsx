@@ -163,8 +163,8 @@ export const DraggableOutpaintingPanel: React.FC<{
     handleAutoPrompt: () => void;
     onGenerate: () => void;
     onCancel: () => void;
-    model: 'gemini' | 'gpt';
-    setModel: (m: 'gemini' | 'gpt') => void;
+    model: 'gemini' | 'gpt' | 'seedream-v5-pro';
+    setModel: (m: 'gemini' | 'gpt' | 'seedream-v5-pro') => void;
     hasAtlasKey: boolean;
     // Screen coordinates of the image's RIGHT edge and TOP edge, for initial placement
     frameScreenRight?: number;
@@ -297,9 +297,17 @@ export const DraggableOutpaintingPanel: React.FC<{
                             >
                                 Gemini
                             </button>
+                            <button
+                                onClick={() => setModel('seedream-v5-pro')}
+                                disabled={!hasAtlasKey}
+                                title={hasAtlasKey ? '即夢 Seedream 5.0 Pro Edit 擴圖' : '需 Atlas Cloud Key'}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${model === 'seedream-v5-pro' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                即夢 Pro
+                            </button>
                         </div>
                         <span className="text-[10px] text-gray-400 leading-tight">
-                            {model === 'gpt' ? '原圖保真・無縫融合' : '無縫拼接・免 Key'}
+                            {model === 'gpt' ? '原圖保真・無縫融合' : model === 'seedream-v5-pro' ? '即夢 Edit・場景延伸' : '無縫拼接・免 Key'}
                         </span>
                     </div>
 
