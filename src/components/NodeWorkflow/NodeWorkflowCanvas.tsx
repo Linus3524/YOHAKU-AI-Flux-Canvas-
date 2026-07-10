@@ -380,6 +380,8 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   const rfInstanceRef = useRef<{ screenToFlowPosition: (p: { x: number; y: number }) => { x: number; y: number } } | null>(null);
   // 記錄最後滑鼠在畫布上的 flow 座標，用於滑鼠在哪點擊就新增在哪裡
   const lastMouseFlowPosRef = useRef<{ x: number; y: number } | null>(null);
+  // 「插入圖片」用的隱藏檔案選擇器
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleMouseMove = useCallback((event: React.MouseEvent) => {
     const inst = rfInstanceRef.current;
@@ -755,6 +757,34 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
     }
   }, [nodes, setNodes, setEdges, handleEdgeDelete, handleNodeDelete]);
 
+  // 插入圖片：把上傳的圖建成一個 input 圖片節點，供合成/多參考圖使用。
+  const insertImageNode = useCallback((src: string, name?: string) => {
+    const id = `input-${Date.now()}`;
+    const position = lastMouseFlowPosRef.current ?? getCanvasCenter();
+    const graphNode: GraphNode = {
+      id,
+      kind: 'input',
+      position,
+      data: { label: name || '插入圖片', src, params: { sourceType: 'image' } },
+    };
+    const flowNode = toFlowNode(graphNode);
+    setNodes(nds => sortParentBeforeChildren([
+      ...nds.map(n => ({ ...n, selected: false })),
+      { ...flowNode, data: { ...flowNode.data, onDeleteNode: handleNodeDelete }, selected: true },
+    ]));
+  }, [setNodes, handleNodeDelete]);
+
+  const handleImageFilePick = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // 允許連續選同一張
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') insertImageNode(reader.result, file.name);
+    };
+    reader.readAsDataURL(file);
+  }, [insertImageNode]);
+
   // 雙擊畫布空白處 → 在游標位置彈出快速搜尋（點在節點/控制項/工具列上不觸發）
   const handlePaneDoubleClick = useCallback((event: React.MouseEvent) => {
     const target = event.target as HTMLElement;
@@ -991,6 +1021,19 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
             </button>
           </div>
 
+          {/* 插入圖片：把外部圖片加入工作流（供合成／多參考圖） */}
+          <div className="flex items-center border border-black/12 bg-white shadow-sm">
+            <button
+              type="button"
+              onClick={() => imageFileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+              title="插入圖片到工作流（可接生圖節點做合成）"
+            >
+              <Icon name="add_photo_alternate" size={15} />
+              插入圖片
+            </button>
+          </div>
+
           {/* 節點分類選單與執行按鈕 */}
           <div className="flex items-center gap-px border border-black/12 bg-white shadow-sm">
             {groupedAddableNodes.map(group => (
@@ -1025,6 +1068,14 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
           </div>
         </Panel>
       </ReactFlow>
+      {/* 插入圖片用的隱藏檔案選擇器 */}
+      <input
+        ref={imageFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImageFilePick}
+      />
       {/* 底部拖出區：拖曳節點時浮現，放開帶圖節點於此 → 移出到大畫布 */}
       <div
         className={`pointer-events-none absolute inset-x-0 bottom-0 h-[90px] flex items-center justify-center text-[12px] font-medium transition-opacity ${
