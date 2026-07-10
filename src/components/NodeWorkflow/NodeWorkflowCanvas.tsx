@@ -1180,7 +1180,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                         變更色票顏色
                       </div>
                       <div className="px-3 pb-1.5 flex gap-2">
-                        {['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'].map(nextColor => (
+                        {['#FFFDE7', '#E3F2FD', '#E8F5E9', '#FFEBEE', '#F3E5F5', '#FFF3E0', '#F5F5F7', '#FFFFFF'].map(nextColor => (
                           <div
                             key={nextColor}
                             onClick={() => {

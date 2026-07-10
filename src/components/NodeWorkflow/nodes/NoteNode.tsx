@@ -5,7 +5,7 @@ import { NodeDeleteButton } from './NodeDeleteButton';
 import { useNodeStatusRing } from './useNodeStatusRing';
 import { Icon } from '../../Icon';
 
-const DEFAULT_NOTE_COLOR = '#fef08a'; // 溫暖黃色
+const DEFAULT_NOTE_COLOR = '#FFFDE7'; // 大畫布經典淺黃色
 
 /**
  * 便利貼節點：純文字輸入源，可同時連往多個生圖或優化節點，並支援在右鍵選單改底色與卡片摺疊。
