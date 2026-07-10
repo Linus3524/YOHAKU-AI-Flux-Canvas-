@@ -475,6 +475,7 @@ const App: React.FC = () => {
   const [resetView, setResetView] = useState<() => void>(() => () => {});
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, worldPoint: Point, elementId: string | null } | null>(null);
   const [magicLayerTargetId, setMagicLayerTargetId] = useState<string | null>(null);
+  const attemptedImageCacheRestores = useRef(new Set<string>());
   const [stylePasteModal, setStylePasteModal] = useState<{ targetIds: string[] } | null>(null);
   const [editingDrawing, setEditingDrawing] = useState<DrawingElement | null>(null);
   const [editingImage, setEditingImage] = useState<ImageElement | null>(null);
@@ -554,14 +555,25 @@ const App: React.FC = () => {
       const imageElements = elements.filter(
         // 拆分持久化的 payload 遺失時 src 會是空字串；仍須用元素 ID 查 IndexedDB 快取救回。
         el => el.type === 'image' && !String((el as any).src ?? '').startsWith('data:')
-      );
+      ).filter(el => {
+        const src = String((el as any).src ?? '');
+        const key = `${el.id}:${src}`;
+        if (attemptedImageCacheRestores.current.has(key)) return false;
+        attemptedImageCacheRestores.current.add(key);
+        return true;
+      });
       if (imageElements.length === 0) return;
 
-      for (const el of imageElements) {
-        const cached = await getCachedImage(el.id);
-        if (cached) {
-          setElements(prev => prev.map(e => e.id === el.id ? { ...e, src: cached } : e));
-        }
+      // 全部快取先平行讀完，再只更新一次，避免大量圖片逐張 setState 觸發連鎖自動存檔。
+      const cachedById = new Map(
+        (await Promise.all(imageElements.map(async el => [el.id, await getCachedImage(el.id)] as const)))
+          .filter((entry): entry is readonly [string, string] => typeof entry[1] === 'string')
+      );
+      if (cachedById.size > 0) {
+        setElements(prev => prev.map(el => {
+          const cached = cachedById.get(el.id);
+          return cached && el.type === 'image' ? { ...el, src: cached } : el;
+        }));
       }
     };
     restoreFromCache();
