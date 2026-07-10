@@ -169,6 +169,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     const [storageStatus, setStorageStatus] = useState<StorageStatus>('saved');
     const hasMountedRef = useRef(false);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const autoSavePauseCountRef = useRef(0);
     const lastIDBSaveRef = useRef<string>(''); // 上次寫入 IndexedDB 的內容（內容沒變則略過）
     const idbErrorNotifiedRef = useRef(false); // 存檔失敗 toast 只提示一次（debounce 高頻觸發，避免洗版）
 
@@ -220,6 +221,19 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const pauseAutoSave = useCallback(() => {
+        autoSavePauseCountRef.current += 1;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+    }, []);
+
+    const resumeAutoSave = useCallback(() => {
+        autoSavePauseCountRef.current = Math.max(0, autoSavePauseCountRef.current - 1);
+        if (autoSavePauseCountRef.current > 0) return;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(() => { persistToIDB(); }, 0);
+    }, [persistToIDB]);
+
     // Mount 時 hydrate：IndexedDB（權威）→ 舊版 localStorage 遷移 → 全新使用者歡迎便利貼。
     useEffect(() => {
         (async () => {
@@ -250,6 +264,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             hasMountedRef.current = true;
             return;
         }
+        if (autoSavePauseCountRef.current > 0) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         setStorageStatus('saving');
         saveTimerRef.current = setTimeout(() => { persistToIDB(); }, 1000);
@@ -262,6 +277,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     // 解決「完全關閉瀏覽器只恢復到較早狀態」——最後一秒的編輯不再丟失
     useEffect(() => {
         const flushNow = () => {
+            if (autoSavePauseCountRef.current > 0) return;
             if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
             persistToIDB();
         };
@@ -1990,6 +2006,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         currentFileName,
         isFileSystemSupported,
         storageStatus,
+        pauseAutoSave,
+        resumeAutoSave,
         clearStorage,
         showImageSizes,
         toggleShowImageSizes,

@@ -4,6 +4,7 @@ import { downloadImageAsBase64 } from '../utils/atlasImage';
 import { cacheImage } from '../utils/imageCache';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
 import { gptLayerSegment, type MagicLayerOptions } from '../utils/gptLayerSplit';
+import type { LayerResult } from '../utils/falImage';
 import { detectTextBlocks } from '../utils/ocrService';
 import { splitStickerCollectionDetailed } from '../utils/imageProcessing';
 import { drawTextOnCanvas } from '../utils/textCanvas';
@@ -23,6 +24,9 @@ export const useAppAiActions = ({
   setShowKeyModal,
   setIsGenerating,
   setGeneratingElementIds,
+  setGeneratingLabels,
+  pauseAutoSave,
+  resumeAutoSave,
   effectiveApiKey,
   atlasApiKey,
   falApiKey,
@@ -38,6 +42,9 @@ export const useAppAiActions = ({
   setShowKeyModal: (open: boolean) => void;
   setIsGenerating: (value: boolean) => void;
   setGeneratingElementIds: (ids: string[]) => void;
+  setGeneratingLabels: (labels: Record<string, string>) => void;
+  pauseAutoSave: () => void;
+  resumeAutoSave: () => void;
   effectiveApiKey: string | null;
   atlasApiKey: string | null;
   falApiKey: string | null;
@@ -75,8 +82,6 @@ export const useAppAiActions = ({
       const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
       if (!el) return;
 
-      setIsGenerating(true);
-      setGeneratingElementIds([elementId]);
       const selectedModel = options.model || (generationModel === 'seedream-v5-pro' ? 'seedream-v5-pro' : atlasApiKey ? 'gpt-image-2' : 'gemini');
       if (selectedModel !== 'gemini' && !atlasApiKey) {
           showToast('⚠️ 此分層模型需要 Atlas Cloud Key');
@@ -88,8 +93,70 @@ export const useAppAiActions = ({
           setShowKeyModal(true);
           return;
       }
+      const plan = options.plan;
+      if (!plan) {
+          showToast('⚠️ 找不到已確認的分層規劃，請重新分析');
+          return;
+      }
+      setIsGenerating(true);
       const modeLabel = selectedModel === 'seedream-v5-pro' ? '即夢 Seedream 5.0 Pro' : selectedModel === 'gpt-image-2' ? 'GPT Image 2' : 'Gemini';
       showToast(`✨ 魔法分層啟動中（${modeLabel}）...`);
+
+      const taskIds = [...(options.includeBackground ? ['background'] : []), ...plan.layers.map(layer => layer.id)];
+      const batchId = Date.now();
+      const placeholderIds = new Map(taskIds.map((taskId, index) => [taskId, `${el.id}_magic_${batchId}_${index}`]));
+      const taskIndex = new Map(taskIds.map((taskId, index) => [taskId, index]));
+      const layerAreaLeft = options.autoArrange ? el.position.x + el.width / 2 + 30 : el.position.x - el.width / 2;
+      const layerAreaTop = el.position.y - el.height / 2;
+      const transparentPixel = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+      const placeholders: ImageElement[] = taskIds.map((taskId, index) => ({
+          ...el,
+          id: placeholderIds.get(taskId)!,
+          src: transparentPixel,
+          position: {
+              x: layerAreaLeft + (index % 3) * Math.max(120, el.width * 0.34) + Math.max(100, el.width * 0.3) / 2,
+              y: layerAreaTop + Math.floor(index / 3) * Math.max(100, el.height * 0.34) + Math.max(80, el.height * 0.3) / 2,
+          },
+          width: Math.max(100, el.width * 0.3),
+          height: Math.max(80, el.height * 0.3),
+          zIndex: el.zIndex + index + 1,
+          name: taskId === 'background' ? '背景處理中' : `${plan.layers.find(layer => layer.id === taskId)?.label || '圖層'}處理中`,
+          isLocked: true,
+      }));
+      pauseAutoSave();
+      setElements(prev => [...prev, ...placeholders]);
+      setGeneratingElementIds([elementId, ...placeholderIds.values()]);
+      setGeneratingLabels(Object.fromEntries(placeholders.map((placeholder, index) => [placeholder.id, `等待中 0/${taskIds.length} · ${index + 1}`])));
+
+      let completed = 0;
+      let failed = 0;
+      const createLayerElement = (taskId: string, layer: LayerResult): ImageElement => {
+          const index = taskIndex.get(taskId) ?? 0;
+          const isBackground = !!layer.isBackground;
+          const bboxX = layer.bbox?.x ?? layer.cropRatioX;
+          const bboxY = layer.bbox?.y ?? layer.cropRatioY;
+          const bboxRatioW = layer.bboxW ?? layer.cropRatioW;
+          const bboxRatioH = layer.bboxH ?? layer.cropRatioH;
+          const unionLeft = Math.max(0, Math.min(bboxX, layer.cropRatioX));
+          const unionTop = Math.max(0, Math.min(bboxY, layer.cropRatioY));
+          const unionRight = Math.min(1, Math.max(bboxX + bboxRatioW, layer.cropRatioX + layer.cropRatioW));
+          const unionBottom = Math.min(1, Math.max(bboxY + bboxRatioH, layer.cropRatioY + layer.cropRatioH));
+          const naturalRatio = layer.pixelWidth && layer.pixelHeight ? layer.pixelWidth / layer.pixelHeight : layer.cropRatioH > 0 ? layer.cropRatioW / layer.cropRatioH : 1;
+          const bboxW = Math.max(1, (unionRight - unionLeft) * el.width);
+          const bboxH = Math.max(1, (unionBottom - unionTop) * el.height);
+          let width = isBackground ? el.width : Math.round(layer.cropRatioW * el.width);
+          let height = isBackground ? el.height : Math.round(width / naturalRatio);
+          if (!isBackground && options.preservePosition) {
+              width = bboxW;
+              height = width / naturalRatio;
+              if (height > bboxH) { height = bboxH; width = height * naturalRatio; }
+          }
+          const gridColumn = index % 3;
+          const gridRow = Math.floor(index / 3);
+          const x = isBackground ? layerAreaLeft + el.width / 2 : options.preservePosition ? layerAreaLeft + unionLeft * el.width + bboxW / 2 : layerAreaLeft + gridColumn * (el.width * 0.38) + width / 2;
+          const y = isBackground ? (options.autoArrange ? el.position.y : layerAreaTop + el.height / 2) : options.preservePosition ? layerAreaTop + unionTop * el.height + bboxH / 2 : layerAreaTop + gridRow * (el.height * 0.38) + height / 2;
+          return { ...el, id: placeholderIds.get(taskId)!, src: layer.base64, position: { x, y }, width, height, zIndex: el.zIndex + index + 1, name: layer.name ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name) : `圖層 ${index + 1}`, isLocked: false };
+      };
 
       try {
           const layers = await gptLayerSegment(
@@ -101,88 +168,36 @@ export const useAppAiActions = ({
               imageModel,
               selectedModel === 'seedream-v5-pro' ? 'seedream-v5-pro' : 'gpt-image-2',
               options,
+              {
+                  onLayerComplete: (taskId, layer) => {
+                      completed += 1;
+                      const completedElement = createLayerElement(taskId, layer);
+                      setElements(prev => prev.map(item => item.id === completedElement.id ? completedElement : item), { addToHistory: false });
+                      if (completedElement.src.startsWith('data:')) cacheImage(completedElement.id, completedElement.src);
+                      setGeneratingElementIds([elementId, ...[...placeholderIds.values()].filter(id => id !== completedElement.id)]);
+                      setGeneratingLabels(Object.fromEntries([...placeholderIds.values()].filter(id => id !== completedElement.id).map(id => [id, `已完成 ${completed}/${taskIds.length}`])));
+                  },
+                  onLayerFailed: (taskId) => {
+                      failed += 1;
+                      const placeholderId = placeholderIds.get(taskId);
+                      if (placeholderId) setElements(prev => prev.filter(item => item.id !== placeholderId), { addToHistory: false });
+                  },
+              },
           );
           if (layers.length === 0) throw new Error('未收到任何圖層');
-
-          const baseZ = el.zIndex;
-          const GAP = 30; // 原圖與圖層群組之間的間距（world units）
-          // 圖層區塊的左上角 X（原圖右邊緣 + gap）
-          const layerAreaLeft = options.autoArrange ? el.position.x - el.width / 2 + el.width + GAP : el.position.x - el.width / 2;
-          const layerAreaTop  = el.position.y - el.height / 2;
-
-          const newLayerElements: ImageElement[] = layers.map((layer, i) => {
-              // 背景補全可能失敗（不會 push 進 layers），不能用 i === 0 推斷
-              const isBackground = !!layer.isBackground;
-              // 位置夾在 [0, 1] 安全範圍
-              const bboxX = layer.bbox?.x ?? layer.cropRatioX;
-              const bboxY = layer.bbox?.y ?? layer.cropRatioY;
-              const bboxRatioW = layer.bboxW ?? layer.cropRatioW;
-              const bboxRatioH = layer.bboxH ?? layer.cropRatioH;
-              // 多物件被歸為一層時，Gemini bbox 可能只包到其中一部分；和 PNG alpha 的實際範圍取聯集。
-              const unionLeft = Math.max(0, Math.min(bboxX, layer.cropRatioX));
-              const unionTop = Math.max(0, Math.min(bboxY, layer.cropRatioY));
-              const unionRight = Math.min(1, Math.max(bboxX + bboxRatioW, layer.cropRatioX + layer.cropRatioW));
-              const unionBottom = Math.min(1, Math.max(bboxY + bboxRatioH, layer.cropRatioY + layer.cropRatioH));
-              const clampedX = unionLeft;
-              const clampedY = unionTop;
-              const naturalRatio = layer.pixelWidth && layer.pixelHeight
-                  ? layer.pixelWidth / layer.pixelHeight
-                  : layer.cropRatioH > 0 ? layer.cropRatioW / layer.cropRatioH : 1;
-              const bboxW = Math.max(1, (unionRight - unionLeft) * el.width);
-              const bboxH = Math.max(1, (unionBottom - unionTop) * el.height);
-              // GPT 路徑同款：bbox 只當「可放置範圍」，圖片依自身比例等比 contain，絕不硬壓變形。
-              let layerW = isBackground ? el.width : Math.round(layer.cropRatioW * el.width);
-              let layerH = isBackground ? el.height : Math.round(layerW / naturalRatio);
-              if (!isBackground && options.preservePosition) {
-                  layerW = bboxW;
-                  layerH = layerW / naturalRatio;
-                  if (layerH > bboxH) {
-                      layerH = bboxH;
-                      layerW = layerH * naturalRatio;
-                  }
-              }
-              // 中心點以 Gemini bbox 鎖定；等比縮放後仍保持在原圖中的相對中心。
-              const gridColumn = i % 3;
-              const gridRow = Math.floor(i / 3);
-              const cx = isBackground
-                  ? layerAreaLeft + el.width / 2
-                  : options.preservePosition
-                    ? layerAreaLeft + clampedX * el.width + bboxW / 2
-                    : layerAreaLeft + gridColumn * (el.width * 0.38) + layerW / 2;
-              const cy = isBackground
-                  ? (options.autoArrange ? el.position.y : layerAreaTop + el.height / 2)
-                  : options.preservePosition
-                    ? layerAreaTop + clampedY * el.height + bboxH / 2
-                    : layerAreaTop + gridRow * (el.height * 0.38) + layerH / 2;
-              const layerName = layer.name
-                  ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name)
-                  : (isBackground ? `${el.name || '圖片'} 背景` : `${el.name || '圖片'} 圖層 ${i}`);
-              return {
-                  ...el,
-                  id: `${el.id}_layer_${i}_${Date.now() + i}`,
-                  src: layer.base64,
-                  position: { x: cx, y: cy },
-                  width: layerW,
-                  height: layerH,
-                  zIndex: baseZ + i,
-                  name: layerName,
-                  isLocked: false,
-              };
-          });
-
-          // 原圖保持可見，圖層貼在右側
-          setElements(prev => [...prev, ...newLayerElements]);
-          newLayerElements.forEach(le => { if (le.src.startsWith('data:')) cacheImage(le.id, le.src); });
           const objectCount = layers.filter(l => !l.isBackground).length;
           const hasBg = layers.some(l => l.isBackground);
-          showToast(`✅ 魔法分層完成！${objectCount} 個物件圖層${hasBg ? ' + 補全背景' : '（背景補全失敗已略過）'}`);
+          showToast(`✅ 魔法分層完成！${objectCount} 個物件圖層${hasBg ? ' + 補全背景' : ''}${failed ? `，${failed} 層失敗` : ''}`);
       } catch (e: any) {
+          setElements(prev => prev.filter(item => ![...placeholderIds.values()].includes(item.id) || item.type !== 'image' || item.src !== transparentPixel), { addToHistory: false });
           showToast(`❌ 魔法分層失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
       } finally {
+          resumeAutoSave();
           setIsGenerating(false);
           setGeneratingElementIds([]);
+          setGeneratingLabels({});
       }
-  }, [atlasApiKey, effectiveApiKey, falApiKey, imageModel, generationModel, elements, setElements, showToast, setShowKeyModal, setIsGenerating, setGeneratingElementIds]);
+  }, [atlasApiKey, effectiveApiKey, falApiKey, imageModel, generationModel, elements, setElements, showToast, setShowKeyModal, setIsGenerating, setGeneratingElementIds, setGeneratingLabels, pauseAutoSave, resumeAutoSave]);
 
   // --- OCR 文字辨識轉換 ---
   const handleOCRConvert = useCallback(async (elementId: string) => {

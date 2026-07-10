@@ -3,11 +3,11 @@
  *
  * 定位策略：Gemini 回傳 bbox 座標 → 用於回貼位置（接近原圖）
  * 視覺策略：GPT Image 2 Edit 隔離 → BiRefNet/Chroma Key 去背（保持品質）
- * 效能策略：所有物件 Promise.all 平行處理，背景補全同步開跑互不等待
+ * 效能策略：前景任務以 concurrency 3 佇列處理，背景補全同步開跑
  *
  * 流程：
  *   Gemini（bbox + category + bgColor + edgeComplexity）
- *   → [Promise.all] GPT Image 2 隔離 → BiRefNet/Chroma Key 去背（含 timeout）
+ *   → [佇列] GPT Image 2 隔離 → BiRefNet/Chroma Key 去背（含獨立 timeout/retry）
  *     - complex edge：timeout 3min；simple edge：timeout 2min
  *   → [同步] GPT Image 2 背景補全
  *   → LayerResult[]（cropRatio 來自 Gemini bbox，位置接近原圖）
@@ -52,6 +52,11 @@ export interface MagicLayerOptions {
     groupingStrategy: MagicLayerGroupingStrategy;
     /** 執行前確認過的 runtime plan，不進畫布存檔。 */
     plan?: MagicLayerPlan;
+}
+
+export interface MagicLayerExecutionCallbacks {
+    onLayerComplete?: (taskId: string, result: LayerResult) => void;
+    onLayerFailed?: (taskId: string, message: string) => void;
 }
 
 export const DEFAULT_MAGIC_LAYER_OPTIONS: MagicLayerOptions = {
@@ -954,6 +959,7 @@ export async function gptLayerSegment(
     geminiImageModel = 'gemini-3.1-flash-image-preview',
     atlasModel: AtlasGenerationModel = 'gpt-image-2',
     options: Partial<MagicLayerOptions> = {},
+    callbacks: MagicLayerExecutionCallbacks = {},
 ): Promise<LayerResult[]> {
 
     // Step 1：使用面板已確認的 plan；沒有 plan 時才在執行階段補分析。
@@ -988,7 +994,7 @@ export async function gptLayerSegment(
 
     // 背景補全：GPT Inpaint 優先（品質佳）；無 Atlas Key 或失敗才降級 Gemini
     onProgress?.('🗺️ 背景分析，準備補全...');
-    const bgPromise = (async () => {
+    const runBackground = async (): Promise<string | null> => {
         // 路線 0：SAM2 輪廓遮罩 + 本機 LaMa（免費、零框線、洞外像素不動、全解析度）
         try {
             const lamaResult = await lamaBackgroundFill(imageBase64, objects, falKey, onProgress);
@@ -1021,11 +1027,75 @@ export async function gptLayerSegment(
         }
         return geminiInpaintBackground(compressedImage, objects, bgDescription, geminiApiKey, geminiImageModel)
             .catch(e => { console.warn('[magicLayer] Background failed:', e); return null; });
-    })();
+    };
 
-    // 所有物件平行去背
-    const objectResults = await Promise.all(
-        objects.map(async (obj, i) => {
+    const TASK_TIMEOUT_MS = 15 * 60 * 1000;
+    const withTimeout = async <T>(task: Promise<T>, label: string): Promise<T> => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            return await Promise.race([
+                task,
+                new Promise<T>((_, reject) => {
+                    timer = setTimeout(() => reject(new Error(`${label}超過 15 分鐘`)), TASK_TIMEOUT_MS);
+                }),
+            ]);
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    };
+    const runWithRetry = async <T>(factory: () => Promise<T>, label: string): Promise<T> => {
+        let lastError: unknown;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                return await withTimeout(factory(), label);
+            } catch (error) {
+                lastError = error;
+                if (attempt < 2) onProgress?.(`↻「${label}」失敗，單層重試中...`);
+            }
+        }
+        throw lastError;
+    };
+    const mapWithConcurrency = async <T, R>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> => {
+        const results = new Array<R>(items.length);
+        let cursor = 0;
+        const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+            while (cursor < items.length) {
+                const index = cursor++;
+                results[index] = await worker(items[index], index);
+            }
+        });
+        await Promise.all(runners);
+        return results;
+    };
+    const bgPromise = (options.includeBackground === false
+        ? Promise.resolve<string | null>(null)
+        : runWithRetry(runBackground, '背景補全'))
+        .catch(error => {
+            callbacks.onLayerFailed?.('background', error instanceof Error ? error.message : '背景補全失敗');
+            return null;
+        });
+    const backgroundLayerPromise = bgPromise.then(async bgResult => {
+        if (!bgResult || options.includeBackground === false) return null;
+        let bgSrc = bgResult;
+        const origDims = await getDims(imageBase64);
+        if (origDims) bgSrc = await coverCropToAspect(bgSrc, origDims.w / origDims.h);
+        const backgroundLayer: LayerResult = {
+            base64: bgSrc,
+            cropRatioX: 0,
+            cropRatioY: 0,
+            cropRatioW: 1,
+            cropRatioH: 1,
+            name: '補全背景',
+            category: 'SUBJECT',
+            isBackground: true,
+        };
+        callbacks.onLayerComplete?.('background', backgroundLayer);
+        return backgroundLayer;
+    });
+
+    // 前景任務最多同時執行三張；每張獨立 timeout、retry、完成通知。
+    const objectResults = await mapWithConcurrency(objects, 3, async (obj, i) => {
+        try {
             onProgress?.(`🎨 提取第 ${i + 1}/${objects.length} 層：${obj.label}`);
             // B：PRODUCT/TEXT 附原圖 bbox 特寫當參考圖（視角與字形錨點，本機裁切零成本）
             let referenceCrop: string | undefined;
@@ -1035,18 +1105,10 @@ export async function gptLayerSegment(
                     if (rawCrop) referenceCrop = await compressForAtlas(rawCrop, 768, 0.9, false);
                 } catch { /* 參考圖失敗不影響主流程 */ }
             }
-            let result = await extractOneLayer(
-                obj,
-                compressedImage,
-                detectedRatio,
-                atlasKey,
-                atlasModel,
-                falKey,
-                geminiApiKey,
-                geminiImageModel,
-                onProgress,
-                referenceCrop,
-            );
+            let result = await runWithRetry(() => extractOneLayer(
+                obj, compressedImage, detectedRatio, atlasKey, atlasModel, falKey,
+                geminiApiKey, geminiImageModel, onProgress, referenceCrop,
+            ), obj.label);
             const usable = result &&
                 result.base64.startsWith('data:image') &&
                 result.cropRatioW * result.cropRatioH >= 0.0004 &&
@@ -1054,40 +1116,28 @@ export async function gptLayerSegment(
                 (result.pixelHeight ?? 16) >= 12;
             if (!usable) {
                 onProgress?.(`↻「${obj.label}」品質檢查未通過，單層重試中...`);
-                result = await extractOneLayer(
+                result = await withTimeout(extractOneLayer(
                     obj, compressedImage, detectedRatio, atlasKey, atlasModel,
                     falKey, geminiApiKey, geminiImageModel, onProgress, referenceCrop,
-                );
+                ), obj.label);
             }
+            if (result) callbacks.onLayerComplete?.(obj.id, result);
             return result;
-        })
-    );
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '圖層提取失敗';
+            callbacks.onLayerFailed?.(obj.id, message);
+            return null;
+        }
+    });
 
     // 等背景補全結果
     onProgress?.('🌄 等待背景補全完成...');
-    const bgResult = await bgPromise;
+    const backgroundLayer = await backgroundLayerPromise;
 
     // 組合結果（背景放首位）
     const layers: LayerResult[] = [];
 
-    if (bgResult && options.includeBackground !== false) {
-        let bgSrc = typeof bgResult === 'string' ? bgResult : (bgResult as string[])[0];
-        if (bgSrc) {
-            // 裁切到原圖比例，回貼畫布套用原圖寬高時不會被拉伸
-            const origDims = await getDims(imageBase64);
-            if (origDims) bgSrc = await coverCropToAspect(bgSrc, origDims.w / origDims.h);
-            layers.push({
-                base64:       bgSrc,
-                cropRatioX:   0,
-                cropRatioY:   0,
-                cropRatioW:   1,
-                cropRatioH:   1,
-                name:         '補全背景',
-                category:     'SUBJECT',
-                isBackground: true,
-            });
-        }
-    }
+    if (backgroundLayer) layers.push(backgroundLayer);
 
     for (const r of objectResults) {
         if (r) layers.push(r);
