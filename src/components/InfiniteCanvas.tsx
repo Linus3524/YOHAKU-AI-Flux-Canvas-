@@ -1516,9 +1516,10 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                     })()}
                                                                     {(['2K', '4K'] as const).map(tier => {
                                                                         const sizes = getModelSizes(generationModel as any);
+                                                                        const displayTier = tier === '4K' && generationModel === 'seedream-v5-pro' ? '3K' : tier;
                                                                         return (
                                                                             <div key={tier}>
-                                                                                <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-[#86868B] tracking-widest uppercase">{tier}</div>
+                                                                                <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-[#86868B] tracking-widest uppercase">{displayTier}</div>
                                                                                 {sizes.filter(s => tier === '2K' || s.w4k !== s.w2k).map(s => {
                                                                                     const px = tier === '4K' ? s.w4k : s.w2k;
                                                                                     const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');

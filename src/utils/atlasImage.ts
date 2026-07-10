@@ -37,17 +37,17 @@ export const QWEN_SIZES: { ratio: string; label: string; w2k: string; w4k: strin
 ];
 
 /**
- * Seedream v5.0 Pro — 品質優先，總畫素上限 2K (≤4,194,304)，無 4K。
- * 只支援 API enum 內的尺寸；4K 欄位同 2K（Pro 天花板即 2K）。
+ * Seedream v5.0 Pro — 品質優先，支援 2K 與 3K 尺寸。
+ * w2k 為 2K 尺寸，w4k 在此模型映射為 3K 尺寸。
  */
 export const SEEDREAM_PRO_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
-    { ratio: '1:1',  label: '1:1',  w2k: '2048*2048', w4k: '2048*2048' },
-    { ratio: '4:3',  label: '4:3',  w2k: '2304*1728', w4k: '2304*1728' },
-    { ratio: '3:4',  label: '3:4',  w2k: '1728*2304', w4k: '1728*2304' },
-    { ratio: '16:9', label: '16:9', w2k: '2720*1530', w4k: '2720*1530' },
-    { ratio: '9:16', label: '9:16', w2k: '1530*2720', w4k: '1530*2720' },
-    { ratio: '3:2',  label: '3:2',  w2k: '2496*1664', w4k: '2496*1664' },
-    { ratio: '2:3',  label: '2:3',  w2k: '1664*2496', w4k: '1664*2496' },
+    { ratio: '1:1',  label: '1:1',  w2k: '2048*2048', w4k: '3072*3072' },
+    { ratio: '4:3',  label: '4:3',  w2k: '2304*1728', w4k: '3456*2592' },
+    { ratio: '3:4',  label: '3:4',  w2k: '1728*2304', w4k: '2592*3456' },
+    { ratio: '16:9', label: '16:9', w2k: '2720*1530', w4k: '4096*2304' },
+    { ratio: '9:16', label: '9:16', w2k: '1530*2720', w4k: '2304*4096' },
+    { ratio: '3:2',  label: '3:2',  w2k: '2496*1664', w4k: '3744*2496' },
+    { ratio: '2:3',  label: '2:3',  w2k: '1664*2496', w4k: '2496*3744' },
 ];
 
 /** GPT Image 2 — 使用 x 分隔符，quality 控制解析度 */
