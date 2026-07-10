@@ -43,10 +43,11 @@ export function CameraAngleNode({ id, data, selected }: NodeProps) {
       <div className="px-2 py-1 text-[10px] font-semibold text-neutral-500 tracking-wide uppercase border-b border-black/6">
         視角轉換
       </div>
-      <div className="p-3 space-y-2 flex flex-col items-center">
-        <div className="grid grid-cols-3 gap-1 w-fit">
+      <div className="p-2 space-y-2">
+        <div className="grid grid-cols-3 gap-1.5 w-full">
           {CAMERA_ANGLES.map((angle) => {
             const isActive = anglePrompt === angle.prompt;
+            const isCenter = angle.id === 'center';
             return (
               <button
                 key={angle.id}
@@ -55,17 +56,16 @@ export function CameraAngleNode({ id, data, selected }: NodeProps) {
                 onMouseEnter={() => setHoveredLabel(angle.label)}
                 onMouseLeave={() => setHoveredLabel(null)}
                 title={angle.label}
-                className={`nodrag w-7.5 h-7.5 flex items-center justify-center rounded border transition-all ${
+                className={`nodrag h-8 flex items-center justify-center rounded border transition-all ${
                   isActive
                     ? 'bg-neutral-100 border-neutral-400 text-neutral-900 font-medium shadow-sm'
                     : 'bg-neutral-50 text-neutral-400 hover:bg-neutral-100 border-neutral-200 active:bg-neutral-200'
                 }`}
-                style={{ width: '30px', height: '30px' }}
               >
                 <Icon 
                   name={angle.icon} 
-                  size={14} 
-                  filled={angle.id === 'center' ? isActive : undefined} 
+                  size={isCenter ? 8 : 14} 
+                  filled={isCenter ? isActive : undefined} 
                 />
               </button>
             );

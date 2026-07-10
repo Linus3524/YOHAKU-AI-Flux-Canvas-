@@ -1036,7 +1036,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                 height: el.height,
                 transform: `translate(-50%, -50%) rotate(${el.rotation}deg)`,
                 zIndex: el.zIndex + 9999,
-                borderRadius: el.type === 'note' ? '12px' : '6px',
+                borderRadius: el.type === 'note' ? '12px' : undefined,
               }}
             >
               {/* Dark overlay */}
