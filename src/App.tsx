@@ -352,6 +352,7 @@ const App: React.FC = () => {
       atlasApiKey,
       falApiKey,
       imageModel,
+      generationModel,
       zIndexCounter,
       originalMergeLayers,
   });

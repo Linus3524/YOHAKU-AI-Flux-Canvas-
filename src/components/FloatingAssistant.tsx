@@ -54,7 +54,7 @@ const FEATURE_DOCS = [
       { title: "智慧去背", desc: "右鍵「智慧去背」，由 Gemini AI 分析並去除背景，不需額外 API Key。" },
       { title: "快速去背（BiRefNet）", desc: "右鍵「快速去背」，需 fal.ai Key，精度優於智慧去背。6 種模式：輕量（Logo / 純色）、重量級（產品 / 漸層）、人像（人物 / 髮型）、髮絲（毛髮 / 婚紗 / 玻璃）、輕量 2K（高解析大圖）、動態（尺寸不固定）。" },
       { title: "一鍵拆分貼圖", desc: "右鍵選單點擊「一鍵拆分貼圖」，可自動將貼圖套組中的個別子貼紙分割。支援彈出對話框手動輸入預估數量（進行高精度網格谷底均分），或留空使用優化後的自動偵測拆分，拆分後的貼圖將自動去背並個別存入本地快取。" },
-      { title: "魔法分層", desc: "右鍵點擊圖片選「魔法分層」，AI 自動識別圖中人物、產品、文字、裝飾等語意元素，各自去背後以獨立圖層排列於原圖右側，並同步補全背景。最多拆出 10 個物件層。需要 Atlas Key（GPT Image 2 隔離）與 fal.ai Key（BiRefNet 去背）以獲得最佳品質；未設定時自動降級為 Gemini 模式。" },
+      { title: "魔法分層", desc: "右鍵點擊圖片選「魔法分層」，AI 自動識別圖中人物、產品、文字、裝飾等語意元素，各自去背後以獨立圖層排列於原圖右側，並同步補全背景。最多拆出 20 個物件層。可使用 Atlas 的 GPT Image 2 或即夢 Seedream 5.0 Pro，搭配 fal.ai Key（BiRefNet 去背）以獲得最佳品質；未設定時自動降級為 Gemini 模式。" },
       { title: "保留透明背景", desc: "開啟後，透明背景圖片進行風格轉換時會先壓平為安全底色再生成，完成後自動透過 BiRefNet→Gemini→ChromaKey 依序還原透明通道，支援所有生成模型。" },
       { title: "原圖比例輸出", desc: "生成設定選「原圖比例」，AI 依據參考圖的寬高比輸出，結果更貼合原始構圖。" },
       { title: "影像調和", desc: "選取多張圖片，AI 調整光影與色調，融合為一張自然的圖片（支援 2K 高清）。" },
@@ -790,7 +790,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     {/* 魔法分層 */}
                     <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 魔法分層</h4>
-                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 10 個物件層。</p>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素，各自去背排列於原圖右側，並補全背景。最多拆出 20 個物件層。</p>
                       <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 需 <code className="font-mono bg-purple-50 px-1 rounded">Atlas Key</code> + <code className="font-mono bg-purple-50 px-1 rounded">fal.ai Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
                     </div>
 

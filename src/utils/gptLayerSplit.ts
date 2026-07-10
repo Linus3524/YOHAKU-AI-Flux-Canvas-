@@ -14,7 +14,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { callAtlasImg2Img, compressForAtlas, detectClosestRatio } from './atlasImage';
+import { callAtlasImg2Img, compressForAtlas, detectClosestRatio, type AtlasGenerationModel } from './atlasImage';
 import { birefnetRemoveBg, selectBiRefNetModel } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
 
@@ -227,8 +227,8 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     }
     objects = deduplicated;
 
-    // 硬限：最多 10 個物件（避免 API 費用爆炸）
-    if (objects.length > 10) objects = objects.slice(0, 10);
+    // Seedream Pro 最多支援 20 張圖層；仍以語意判斷的實際數量為準。
+    if (objects.length > 20) objects = objects.slice(0, 20);
 
     // 安全夾值：bbox + edgeComplexity 預設值
     return objects.map(o => ({
@@ -586,7 +586,8 @@ async function extractOneLayer(
     obj: DetectedObject,
     compressedImage: string,       // 預壓縮好的圖（只壓一次，給隔離模型用）
     detectedRatio: string,
-    atlasKey: string | undefined,  // 可選：有則用 GPT Image 2，無則降級 Gemini
+    atlasKey: string | undefined,
+    atlasModel: AtlasGenerationModel,
     falKey: string | undefined,
     geminiApiKey: string,          // Gemini fallback 用
     geminiImageModel: string,      // Gemini 隔離 model
@@ -623,7 +624,7 @@ async function extractOneLayer(
                 `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
                 `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.` +
                 perspectiveHint + refHint,
-                'gpt-image-2',
+                atlasModel,
                 atlasKey,
                 compressedImage,
                 1,
@@ -768,6 +769,7 @@ export async function gptLayerSegment(
     falKey?: string,
     onProgress?: (msg: string) => void,
     geminiImageModel = 'gemini-3.1-flash-image-preview',
+    atlasModel: AtlasGenerationModel = 'gpt-image-2',
 ): Promise<LayerResult[]> {
 
     // Step 1：Gemini 識別元素 + bbox + category + bgColor
@@ -812,7 +814,7 @@ export async function gptLayerSegment(
                     bgDescription ? `Background reference: ${bgDescription}` : '',
                 ].filter(Boolean).join(' ');
                 const result = await callAtlasImg2Img(
-                    removalPrompt, 'gpt-image-2', atlasKey, compressedImage, 1, { ratio: detectedRatio },
+                    removalPrompt, atlasModel, atlasKey, compressedImage, 1, { ratio: detectedRatio },
                 );
                 if (result[0]) return result[0];
             } catch (e) {
@@ -840,6 +842,7 @@ export async function gptLayerSegment(
                 compressedImage,
                 detectedRatio,
                 atlasKey,
+                atlasModel,
                 falKey,
                 geminiApiKey,
                 geminiImageModel,

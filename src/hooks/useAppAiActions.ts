@@ -27,6 +27,7 @@ export const useAppAiActions = ({
   atlasApiKey,
   falApiKey,
   imageModel,
+  generationModel,
   zIndexCounter,
   originalMergeLayers,
 }: {
@@ -41,6 +42,7 @@ export const useAppAiActions = ({
   atlasApiKey: string | null;
   falApiKey: string | null;
   imageModel: string;
+  generationModel: string;
   zIndexCounter: MutableRefObject<number>;
   originalMergeLayers: () => void | Promise<void>;
 }) => {
@@ -75,7 +77,8 @@ export const useAppAiActions = ({
 
       setIsGenerating(true);
       setGeneratingElementIds([elementId]);
-      const modeLabel = atlasApiKey ? 'GPT Image 2' : 'Gemini';
+      const useSeedreamPro = generationModel === 'seedream-v5-pro' && !!atlasApiKey;
+      const modeLabel = useSeedreamPro ? '即夢 Seedream 5.0 Pro' : atlasApiKey ? 'GPT Image 2' : 'Gemini';
       showToast(`✨ 魔法分層啟動中（${modeLabel}）...`);
 
       try {
@@ -86,6 +89,7 @@ export const useAppAiActions = ({
               falApiKey || undefined,
               (msg) => showToast(msg),
               imageModel,
+              useSeedreamPro ? 'seedream-v5-pro' : 'gpt-image-2',
           );
           if (layers.length === 0) throw new Error('未收到任何圖層');
 
@@ -143,7 +147,7 @@ export const useAppAiActions = ({
           setIsGenerating(false);
           setGeneratingElementIds([]);
       }
-  }, [atlasApiKey, effectiveApiKey, falApiKey, imageModel, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+  }, [atlasApiKey, effectiveApiKey, falApiKey, imageModel, generationModel, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
 
   // --- OCR 文字辨識轉換 ---
   const handleOCRConvert = useCallback(async (elementId: string) => {
