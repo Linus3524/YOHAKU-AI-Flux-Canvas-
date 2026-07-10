@@ -8,5 +8,6 @@ export function useNodeStatusRing(id: string): string {
   const status = useNodeGraphStore(s => s.nodeStatus[id]);
   if (status === 'running') return 'ring-2 ring-[#007AFF] animate-pulse';
   if (status === 'error') return 'ring-2 ring-red-500';
+  if (status === 'done') return 'ring-2 ring-green-500';
   return '';
 }
