@@ -68,22 +68,64 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
   // D-Pad 按鈕渲染
   const renderDpadButton = (
     dir: 'left' | 'right' | 'top' | 'bottom' | 'all',
-    label: string,
     isActive: boolean,
     tooltip: string
   ) => {
+    const getSvg = () => {
+      const strokeWidth = 2.4;
+      if (dir === 'top') {
+        return (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className="block">
+            <line x1="12" y1="19" x2="12" y2="5"></line>
+            <polyline points="5 12 12 5 19 12"></polyline>
+          </svg>
+        );
+      }
+      if (dir === 'bottom') {
+        return (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className="block">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <polyline points="19 12 12 19 5 12"></polyline>
+          </svg>
+        );
+      }
+      if (dir === 'left') {
+        return (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className="block">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        );
+      }
+      if (dir === 'right') {
+        return (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className="block">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        );
+      }
+      // 'all' 四周
+      return (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className="block">
+          <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+          <rect x="9" y="9" width="6" height="6"></rect>
+        </svg>
+      );
+    };
+
     return (
       <button
         type="button"
         onClick={() => toggleDirection(dir)}
-        className={`nodrag flex h-6 w-6 items-center justify-center text-[10px] font-bold border transition-all active:scale-90 rounded-none cursor-pointer ${
+        className={`nodrag flex h-6 w-6 items-center justify-center border transition-all active:scale-90 rounded-none cursor-pointer ${
           isActive
             ? 'border-black bg-neutral-900 text-white'
             : 'border-black/10 bg-white hover:bg-neutral-100 text-neutral-600'
         }`}
         title={tooltip}
       >
-        {label}
+        {getSvg()}
       </button>
     );
   };
@@ -113,18 +155,18 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
         <div className="p-1.5 space-y-1.5">
           {/* 上半部：D-Pad 十字方向盤 + 下拉選單並排 */}
           <div className="flex gap-2 items-center">
-            {/* D-Pad 十字多選方向盤 - 固定的 78px 寬高，避免任何排版跑版 */}
-            <div className="grid grid-cols-3 gap-0.5 w-[76px] h-[76px] bg-neutral-100 p-0.5 border border-black/8 select-none flex-shrink-0">
+            {/* D-Pad 十字多選方向盤 - 移除寫死寬高，由子按鈕 w-6 h-6 自動撐開以杜絕溢出跑位 */}
+            <div className="grid grid-cols-3 gap-1 bg-neutral-100 p-1 border border-black/8 select-none flex-shrink-0 w-fit h-fit justify-items-center items-center">
               <div />
-              {renderDpadButton('top', '↑', hasTop, '向上外擴')}
+              {renderDpadButton('top', hasTop, '向上外擴')}
               <div />
 
-              {renderDpadButton('left', '←', hasLeft, '向左外擴')}
-              {renderDpadButton('all', '▣', hasAll, '四周外擴')}
-              {renderDpadButton('right', '→', hasRight, '向右外擴')}
+              {renderDpadButton('left', hasLeft, '向左外擴')}
+              {renderDpadButton('all', hasAll, '四周外擴')}
+              {renderDpadButton('right', hasRight, '向右外擴')}
 
               <div />
-              {renderDpadButton('bottom', '↓', hasBottom, '向下外擴')}
+              {renderDpadButton('bottom', hasBottom, '向下外擴')}
               <div />
             </div>
 
@@ -153,22 +195,29 @@ export function OutpaintNode({ id, data, selected }: NodeProps) {
             </div>
           </div>
 
-          {/* 模式 A：自訂像素滑桿微調 */}
+          {/* 模式 A：自訂像素加減微調，解決 range 滑桿原點遮字問題 */}
           {aspectRatio === 'custom' && (
-            <div className="flex flex-col gap-0.5 border border-black/6 bg-neutral-50/50 p-1 select-none">
-              <div className="flex justify-between items-center text-[9px] text-neutral-500 font-medium font-mono">
-                <span>外擴像素微調</span>
-                <span className="text-black font-bold">{pixelOffset}px</span>
+            <div className="flex items-center justify-between border border-black/8 bg-neutral-50/50 p-1 select-none">
+              <span className="text-[9px] text-neutral-500 font-semibold">外擴尺寸微調</span>
+              <div className="flex items-center gap-1.5 font-mono">
+                <button
+                  type="button"
+                  onClick={() => setParams({ pixelOffset: Math.max(64, pixelOffset - 32) })}
+                  className="nodrag h-5 w-5 flex items-center justify-center border border-black/10 bg-white hover:bg-neutral-100 active:scale-95 cursor-pointer font-bold text-[11px] rounded-none shadow-none"
+                  title="減少 32px"
+                >
+                  -
+                </button>
+                <span className="text-[10px] font-bold text-neutral-800 min-w-[36px] text-center">{pixelOffset}px</span>
+                <button
+                  type="button"
+                  onClick={() => setParams({ pixelOffset: Math.min(512, pixelOffset + 32) })}
+                  className="nodrag h-5 w-5 flex items-center justify-center border border-black/10 bg-white hover:bg-neutral-100 active:scale-95 cursor-pointer font-bold text-[11px] rounded-none shadow-none"
+                  title="增加 32px"
+                >
+                  +
+                </button>
               </div>
-              <input
-                type="range"
-                min="64"
-                max="512"
-                step="32"
-                value={pixelOffset}
-                onChange={(e) => setParams({ pixelOffset: parseInt(e.target.value) })}
-                className="nodrag w-full accent-neutral-900 h-1 bg-neutral-200 rounded-none appearance-none cursor-pointer"
-              />
             </div>
           )}
 
