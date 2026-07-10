@@ -59,7 +59,7 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, o
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-4" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-[7000] flex items-center justify-center bg-black/35 p-4" onMouseDown={onClose}>
       <section className="flex max-h-[90vh] w-full max-w-[680px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl" onMouseDown={event => event.stopPropagation()}>
         <header className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <div>
