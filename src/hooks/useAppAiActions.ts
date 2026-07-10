@@ -114,13 +114,22 @@ export const useAppAiActions = ({
               // 背景補全可能失敗（不會 push 進 layers），不能用 i === 0 推斷
               const isBackground = !!layer.isBackground;
               // 位置夾在 [0, 1] 安全範圍
-              const clampedX = Math.max(0, Math.min(1, layer.bbox?.x ?? layer.cropRatioX));
-              const clampedY = Math.max(0, Math.min(1, layer.bbox?.y ?? layer.cropRatioY));
+              const bboxX = layer.bbox?.x ?? layer.cropRatioX;
+              const bboxY = layer.bbox?.y ?? layer.cropRatioY;
+              const bboxRatioW = layer.bboxW ?? layer.cropRatioW;
+              const bboxRatioH = layer.bboxH ?? layer.cropRatioH;
+              // 多物件被歸為一層時，Gemini bbox 可能只包到其中一部分；和 PNG alpha 的實際範圍取聯集。
+              const unionLeft = Math.max(0, Math.min(bboxX, layer.cropRatioX));
+              const unionTop = Math.max(0, Math.min(bboxY, layer.cropRatioY));
+              const unionRight = Math.min(1, Math.max(bboxX + bboxRatioW, layer.cropRatioX + layer.cropRatioW));
+              const unionBottom = Math.min(1, Math.max(bboxY + bboxRatioH, layer.cropRatioY + layer.cropRatioH));
+              const clampedX = unionLeft;
+              const clampedY = unionTop;
               const naturalRatio = layer.pixelWidth && layer.pixelHeight
                   ? layer.pixelWidth / layer.pixelHeight
                   : layer.cropRatioH > 0 ? layer.cropRatioW / layer.cropRatioH : 1;
-              const bboxW = (layer.bboxW ?? layer.cropRatioW) * el.width;
-              const bboxH = (layer.bboxH ?? layer.cropRatioH) * el.height;
+              const bboxW = Math.max(1, (unionRight - unionLeft) * el.width);
+              const bboxH = Math.max(1, (unionBottom - unionTop) * el.height);
               // GPT 路徑同款：bbox 只當「可放置範圍」，圖片依自身比例等比 contain，絕不硬壓變形。
               let layerW = isBackground ? el.width : Math.round(layer.cropRatioW * el.width);
               let layerH = isBackground ? el.height : Math.round(layerW / naturalRatio);
