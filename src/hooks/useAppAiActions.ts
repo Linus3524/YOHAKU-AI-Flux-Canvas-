@@ -3,7 +3,7 @@ import { analyzeImagePrompt } from '../utils/ImageAnalysisService';
 import { downloadImageAsBase64 } from '../utils/atlasImage';
 import { cacheImage } from '../utils/imageCache';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
-import { gptLayerSegment } from '../utils/gptLayerSplit';
+import { gptLayerSegment, seedreamLayerSegment, type MagicLayerOptions } from '../utils/gptLayerSplit';
 import { detectTextBlocks } from '../utils/ocrService';
 import { splitStickerCollectionDetailed } from '../utils/imageProcessing';
 import { drawTextOnCanvas } from '../utils/textCanvas';
@@ -71,32 +71,45 @@ export const useAppAiActions = ({
 
 
   // --- 魔法分層：語意提取 + 背景補圖（GPT Image 2 優先；無 Atlas Key 降級 Gemini）---
-  const handleMagicLayer = useCallback(async (elementId: string) => {
+  const handleMagicLayer = useCallback(async (elementId: string, options: MagicLayerOptions) => {
       const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
       if (!el) return;
 
       setIsGenerating(true);
       setGeneratingElementIds([elementId]);
-      const useSeedreamPro = generationModel === 'seedream-v5-pro' && !!atlasApiKey;
-      const modeLabel = useSeedreamPro ? '即夢 Seedream 5.0 Pro' : atlasApiKey ? 'GPT Image 2' : 'Gemini';
+      const selectedModel = options.model || (generationModel === 'seedream-v5-pro' ? 'seedream-v5-pro' : atlasApiKey ? 'gpt-image-2' : 'gemini');
+      if (selectedModel !== 'gemini' && !atlasApiKey) {
+          showToast('⚠️ 此分層模型需要 Atlas Cloud Key');
+          setShowKeyModal(true);
+          return;
+      }
+      if (selectedModel !== 'seedream-v5-pro' && !effectiveApiKey) {
+          showToast('⚠️ 此分層模型需要 Gemini API Key 進行物件分析');
+          setShowKeyModal(true);
+          return;
+      }
+      const modeLabel = selectedModel === 'seedream-v5-pro' ? '即夢 Seedream 5.0 Pro' : selectedModel === 'gpt-image-2' ? 'GPT Image 2' : 'Gemini';
       showToast(`✨ 魔法分層啟動中（${modeLabel}）...`);
 
       try {
-          const layers = await gptLayerSegment(
-              el.src,
-              effectiveApiKey || '',
-              atlasApiKey || undefined,   // undefined → Gemini fallback
-              falApiKey || undefined,
-              (msg) => showToast(msg),
-              imageModel,
-              useSeedreamPro ? 'seedream-v5-pro' : 'gpt-image-2',
-          );
+          const layers = selectedModel === 'seedream-v5-pro'
+              ? await seedreamLayerSegment(el.src, atlasApiKey!, options, (msg) => showToast(msg))
+              : await gptLayerSegment(
+                  el.src,
+                  effectiveApiKey || '',
+                  selectedModel === 'gpt-image-2' ? atlasApiKey || undefined : undefined,
+                  falApiKey || undefined,
+                  (msg) => showToast(msg),
+                  imageModel,
+                  selectedModel === 'gpt-image-2' ? 'gpt-image-2' : 'gpt-image-2',
+                  options,
+              );
           if (layers.length === 0) throw new Error('未收到任何圖層');
 
           const baseZ = el.zIndex;
           const GAP = 30; // 原圖與圖層群組之間的間距（world units）
           // 圖層區塊的左上角 X（原圖右邊緣 + gap）
-          const layerAreaLeft = el.position.x - el.width / 2 + el.width + GAP;
+          const layerAreaLeft = options.autoArrange ? el.position.x - el.width / 2 + el.width + GAP : el.position.x - el.width / 2;
           const layerAreaTop  = el.position.y - el.height / 2;
 
           const newLayerElements: ImageElement[] = layers.map((layer, i) => {
@@ -113,12 +126,18 @@ export const useAppAiActions = ({
                       ? Math.round(layerW * layer.pixelHeight / layer.pixelWidth)
                       : Math.round(layer.cropRatioH * el.height);
               // 中心點 = 圖層區塊左上角 + bbox 偏移 + 半寬/高
+              const gridColumn = i % 3;
+              const gridRow = Math.floor(i / 3);
               const cx = isBackground
                   ? layerAreaLeft + el.width / 2
-                  : layerAreaLeft + clampedX * el.width + layerW / 2;
+                  : options.preservePosition
+                    ? layerAreaLeft + clampedX * el.width + layerW / 2
+                    : layerAreaLeft + gridColumn * (el.width * 0.38) + layerW / 2;
               const cy = isBackground
-                  ? el.position.y
-                  : layerAreaTop + clampedY * el.height + layerH / 2;
+                  ? (options.autoArrange ? el.position.y : layerAreaTop + el.height / 2)
+                  : options.preservePosition
+                    ? layerAreaTop + clampedY * el.height + layerH / 2
+                    : layerAreaTop + gridRow * (el.height * 0.38) + layerH / 2;
               const layerName = layer.name
                   ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name)
                   : (isBackground ? `${el.name || '圖片'} 背景` : `${el.name || '圖片'} 圖層 ${i}`);
@@ -147,7 +166,7 @@ export const useAppAiActions = ({
           setIsGenerating(false);
           setGeneratingElementIds([]);
       }
-  }, [atlasApiKey, effectiveApiKey, falApiKey, imageModel, generationModel, elements, setElements, showToast, setIsGenerating, setGeneratingElementIds]);
+  }, [atlasApiKey, effectiveApiKey, falApiKey, imageModel, generationModel, elements, setElements, showToast, setShowKeyModal, setIsGenerating, setGeneratingElementIds]);
 
   // --- OCR 文字辨識轉換 ---
   const handleOCRConvert = useCallback(async (elementId: string) => {

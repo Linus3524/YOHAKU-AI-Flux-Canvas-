@@ -14,9 +14,31 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { callAtlasImg2Img, compressForAtlas, detectClosestRatio, type AtlasGenerationModel } from './atlasImage';
+import { callAtlasImg2Img, compressForAtlas, detectClosestRatio, downloadImageAsBase64, type AtlasGenerationModel } from './atlasImage';
 import { birefnetRemoveBg, selectBiRefNetModel } from './geminiLayer';
 import { trimTransparentPixels, LayerResult } from './falImage';
+
+export type MagicLayerModel = 'gemini' | 'gpt-image-2' | 'seedream-v5-pro';
+
+export interface MagicLayerOptions {
+    model: MagicLayerModel;
+    layerCount: 'auto' | number;
+    categories: string[];
+    customInstruction: string;
+    includeBackground: boolean;
+    preservePosition: boolean;
+    autoArrange: boolean;
+}
+
+export const DEFAULT_MAGIC_LAYER_OPTIONS: MagicLayerOptions = {
+    model: 'gemini',
+    layerCount: 'auto',
+    categories: [],
+    customInstruction: '',
+    includeBackground: true,
+    preservePosition: true,
+    autoArrange: true,
+};
 
 // ── 背景色方案 ──────────────────────────────────────────────────────────────
 // 中飽和度版本（非純色）：降低 GPT Image 2 重繪時的 color spill，
@@ -67,11 +89,13 @@ function withTimeout<T>(
 }
 
 // ── Gemini 偵測：bbox + category + bgColor ───────────────────────────────────
-async function detectObjects(imageBase64: string, apiKey: string): Promise<DetectedObject[]> {
+async function detectObjects(imageBase64: string, apiKey: string, options?: Partial<MagicLayerOptions>): Promise<DetectedObject[]> {
     const ai = new GoogleGenAI({ apiKey });
     const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
     const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
 
+    const requestedCategories = options?.categories?.length ? options.categories.join(', ') : '自動判斷最適合的類別';
+    const requestedCount = options?.layerCount && options.layerCount !== 'auto' ? options.layerCount : 'auto';
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: {
@@ -151,6 +175,10 @@ Describe: what it is, appearance, color, pose/state, any notable visual details.
 This will be used as an image generation prompt — be specific and visual.
 Example: "A young East Asian woman in her 20s wearing a white collared shirt, smiling, looking at camera, with long straight dark hair."
 
+━━━ USER REQUEST ━━━
+Preferred layer count: ${requestedCount}. Preferred categories: ${requestedCategories}.
+Additional instruction: ${options?.customInstruction?.trim() || 'None'}.
+
 Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
 [{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman wearing a white shirt, smiling at camera."}]`
                 }
@@ -227,8 +255,10 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     }
     objects = deduplicated;
 
-    // Seedream Pro 最多支援 20 張圖層；仍以語意判斷的實際數量為準。
-    if (objects.length > 20) objects = objects.slice(0, 20);
+    const requestedLimit = typeof options?.layerCount === 'number'
+        ? Math.max(1, Math.min(20, options.layerCount - (options.includeBackground ? 1 : 0)))
+        : 20;
+    if (objects.length > requestedLimit) objects = objects.slice(0, requestedLimit);
 
     // 安全夾值：bbox + edgeComplexity 預設值
     return objects.map(o => ({
@@ -770,11 +800,12 @@ export async function gptLayerSegment(
     onProgress?: (msg: string) => void,
     geminiImageModel = 'gemini-3.1-flash-image-preview',
     atlasModel: AtlasGenerationModel = 'gpt-image-2',
+    options: Partial<MagicLayerOptions> = {},
 ): Promise<LayerResult[]> {
 
     // Step 1：Gemini 識別元素 + bbox + category + bgColor
     onProgress?.('🔍 Gemini 分析圖片語意與位置中...');
-    const objects = await detectObjects(imageBase64, geminiApiKey);
+    const objects = await detectObjects(imageBase64, geminiApiKey, options);
     const bgMethod = falKey ? 'BiRefNet' : 'Chroma Key';
     onProgress?.(`✨ 偵測到 ${objects.length} 個元素，使用 ${bgMethod} 去背，平行處理中...`);
 
@@ -859,7 +890,7 @@ export async function gptLayerSegment(
     // 組合結果（背景放首位）
     const layers: LayerResult[] = [];
 
-    if (bgResult) {
+    if (bgResult && options.includeBackground !== false) {
         let bgSrc = typeof bgResult === 'string' ? bgResult : (bgResult as string[])[0];
         if (bgSrc) {
             // 裁切到原圖比例，回貼畫布套用原圖寬高時不會被拉伸
@@ -884,4 +915,60 @@ export async function gptLayerSegment(
 
     if (layers.length === 0) throw new Error('所有圖層提取均失敗');
     return layers;
+}
+
+/**
+ * Seedream Pro 原生圖層分離：一次呼叫取得背景與透明 PNG 資產。
+ * 不進行 Gemini bbox 偵測、逐物件隔離或額外去背。
+ */
+export async function seedreamLayerSegment(
+    imageBase64: string,
+    atlasKey: string,
+    options: Partial<MagicLayerOptions> = {},
+    onProgress?: (msg: string) => void,
+): Promise<LayerResult[]> {
+    const requestedCount = typeof options.layerCount === 'number'
+        ? Math.max(2, Math.min(20, options.layerCount))
+        : 8;
+    const requestedCategories = options.categories?.length
+        ? options.categories.join(', ')
+        : 'background, main subject, products, text or logo, props, decorative elements';
+    const instruction = options.customInstruction?.trim() || 'Separate only meaningful independently editable visual elements.';
+
+    onProgress?.(`即夢原生分層中，目標 ${requestedCount} 層...`);
+    const outputs = await callAtlasImg2Img(
+        [
+            `Separate this image into up to ${requestedCount} independently editable layers.`,
+            `Include these when present: ${requestedCategories}.`,
+            options.includeBackground === false ? 'Do not return a background layer.' : 'Return one complete background layer plus separate foreground element layers.',
+            'Every foreground output must be a transparent PNG with only one coherent element or grouped visual unit.',
+            'Keep all layers aligned to the original canvas coordinates, preserving original scale, color, lighting, texture and perspective.',
+            'Do not redraw, restyle, merge unrelated objects, add objects, or add a checkerboard background.',
+            instruction,
+        ].join(' '),
+        'seedream-v5-pro',
+        atlasKey,
+        imageBase64,
+        1,
+        { ratio: 'Original', quality: '2K', outputFormat: 'png', keepAlpha: true },
+    );
+
+    const layers = await Promise.all(outputs.map(async (src, index) => {
+        const base64 = src.startsWith('data:') ? src : await downloadImageAsBase64(src);
+        const trimmed = await trimTransparentPixels(base64);
+        const coverage = trimmed.cropRatioW * trimmed.cropRatioH;
+        const isBackground = options.includeBackground !== false && (index === 0 || coverage > 0.94);
+        return {
+            ...trimmed,
+            name: isBackground ? '背景' : `即夢圖層 ${index + 1}`,
+            category: isBackground ? 'BACKGROUND' : 'LAYER',
+            isBackground,
+        } satisfies LayerResult;
+    }));
+
+    const visibleLayers = options.includeBackground === false
+        ? layers.filter(layer => !layer.isBackground)
+        : layers;
+    if (visibleLayers.length === 0) throw new Error('即夢沒有回傳任何圖層');
+    return visibleLayers;
 }

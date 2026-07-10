@@ -19,6 +19,7 @@ import { ImageEditModal } from './components/ImageEditModal';
 import { CrossPlatformModal } from './components/CrossPlatformModal';
 import { BrandKitModal } from './components/BrandKitModal';
 import { ProductMarketingModal } from './components/ProductMarketingModal';
+import { MagicLayerModal } from './components/MagicLayerModal';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { StyleLibraryPanel } from './components/StyleLibraryPanel';
 import { GeneratedResultsModal } from './components/GeneratedResultsModal';
@@ -49,6 +50,7 @@ import type {
     DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement, NodeGroupElement
 } from './types';
 import type { NodeGraphData } from './components/NodeWorkflow/types';
+import type { MagicLayerModel, MagicLayerOptions } from './utils/gptLayerSplit';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 
 const App: React.FC = () => {
@@ -472,6 +474,7 @@ const App: React.FC = () => {
 
   const [resetView, setResetView] = useState<() => void>(() => () => {});
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, worldPoint: Point, elementId: string | null } | null>(null);
+  const [magicLayerTargetId, setMagicLayerTargetId] = useState<string | null>(null);
   const [stylePasteModal, setStylePasteModal] = useState<{ targetIds: string[] } | null>(null);
   const [editingDrawing, setEditingDrawing] = useState<DrawingElement | null>(null);
   const [editingImage, setEditingImage] = useState<ImageElement | null>(null);
@@ -1766,6 +1769,21 @@ const App: React.FC = () => {
         />
       )}
 
+      {magicLayerTargetId && (
+        <MagicLayerModal
+          defaultModel={(generationModel === 'seedream-v5-pro' || generationModel === 'gpt-image-2')
+            ? generationModel as MagicLayerModel
+            : atlasApiKey ? 'gpt-image-2' : 'gemini'}
+          hasAtlasKey={!!atlasApiKey}
+          onClose={() => setMagicLayerTargetId(null)}
+          onStart={(options: MagicLayerOptions) => {
+            const targetId = magicLayerTargetId;
+            setMagicLayerTargetId(null);
+            handleMagicLayer(targetId, options);
+          }}
+        />
+      )}
+
       {contextMenu && (
         <ContextMenu
           menuData={contextMenu}
@@ -1819,7 +1837,7 @@ const App: React.FC = () => {
             extractPrompt: handleExtractPrompt,
             optimizeNotePrompt: handleOptimizeNotePrompt,
             designMaster: handleOpenDesignMaster,
-            magicLayer: handleMagicLayer,
+            magicLayer: (elementId: string) => setMagicLayerTargetId(elementId),
             semanticEditor: handleOpenSemanticEditor,
             ocrConvert: handleOCRConvert,
             splitSticker: handleSplitSticker,
