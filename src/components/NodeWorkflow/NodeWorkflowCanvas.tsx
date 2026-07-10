@@ -23,6 +23,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useNodeGraphStore } from '../../store/nodeGraphStore';
+import { Icon } from '../Icon';
 import { isImageSrc } from './mediaSrc';
 import { NodeWorkflowContext } from './NodeWorkflowContext';
 import { ADDABLE_NODES, DEFAULT_NODE_LABELS, NODE_REGISTRY, nodeTypes, type NodeCategory, type NodeIoType } from './nodeRegistry';
@@ -403,6 +404,74 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   const [quickSearch, setQuickSearch] = useState<{ sx: number; sy: number; flow: { x: number; y: number } } | null>(null);
   const [quickQuery, setQuickQuery] = useState('');
 
+  // 右鍵選單狀態
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    type: 'pane' | 'node';
+    nodeId?: string;
+  } | null>(null);
+
+  // 關閉右鍵選單
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleGlobalClick = () => setContextMenu(null);
+    window.addEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
+  }, [contextMenu]);
+
+  const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      type: 'pane',
+    });
+  }, []);
+
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: any) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      type: 'node',
+      nodeId: node.id,
+    });
+  }, []);
+
+  const handleCopyNode = useCallback((nodeId: string) => {
+    const nodeToCopy = nodes.find(n => n.id === nodeId);
+    if (!nodeToCopy) return;
+    const newId = `${nodeToCopy.data.kind}-${Date.now()}`;
+    const newPosition = { x: nodeToCopy.position.x + 40, y: nodeToCopy.position.y + 40 };
+    const graphNode: GraphNode = {
+      id: newId,
+      kind: nodeToCopy.data.kind as NodeKind,
+      position: newPosition,
+      parentId: nodeToCopy.parentId,
+      data: {
+        label: nodeToCopy.data.label,
+        params: JSON.parse(JSON.stringify(nodeToCopy.data.params || {})),
+      }
+    };
+    const flowNode = toFlowNode(graphNode);
+    setNodes(nds => sortParentBeforeChildren([
+      ...nds.map(n => ({ ...n, selected: false })),
+      { ...flowNode, data: { ...flowNode.data, onDeleteNode: handleNodeDelete }, selected: true }
+    ]));
+  }, [nodes, setNodes, handleNodeDelete]);
+
+  const handleDownloadResult = useCallback((resultSrc: string, label?: string) => {
+    if (!resultSrc) return;
+    const link = document.createElement('a');
+    link.href = resultSrc;
+    link.download = `${label || '結果圖片'}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, []);
+
   const handleRun = useCallback(async () => {
     if (isRunning) {
       abortControllerRef.current?.abort();
@@ -757,6 +826,8 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
         onNodeDragStop={handleNodeDragStop}
         onInit={(inst) => { rfInstanceRef.current = inst; }}
         onDoubleClick={handlePaneDoubleClick}
+        onPaneContextMenu={handlePaneContextMenu}
+        onNodeContextMenu={handleNodeContextMenu}
         zoomOnDoubleClick={false}
         isValidConnection={isValidConnection}
         snapToGrid
@@ -973,6 +1044,199 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
                 ))
               )}
             </div>
+          </div>
+        </>
+      )}
+
+      {/* 右鍵選單 */}
+      {contextMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-[8000]"
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
+          />
+          <div
+            className="fixed z-[8010] min-w-[152px] rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-1.5 ring-1 ring-black/5 pointer-events-auto select-none"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            {/* A. 畫布空白處右鍵選單 */}
+            {contextMenu.type === 'pane' && (
+              <div className="flex flex-col">
+                {/* 新增節點項目 (帶 Hover 子選單) */}
+                <div className="group/submenu relative">
+                  <button
+                    type="button"
+                    className="w-full flex justify-between items-center text-left px-3 py-1.5 text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Icon name="add" size={13} />
+                      <span>新增節點</span>
+                    </div>
+                    <Icon name="chevron_right" size={10} className="text-neutral-400" />
+                  </button>
+                  {/* 子選單 */}
+                  <div className="absolute left-full top-0 ml-0.5 hidden group-hover/submenu:block min-w-[164px] rounded-2xl bg-white/95 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-1.5 ring-1 ring-black/5 max-h-[360px] overflow-y-auto">
+                    {[
+                      { key: 'generate', label: 'AI 生成' },
+                      { key: 'process', label: '影像處理' },
+                      { key: 'analysis', label: '分析優化' },
+                      { key: 'layout-output', label: '版面與輸出' },
+                    ].map((cat) => {
+                      const matched = ADDABLE_NODES.filter((n) => {
+                        if (cat.key === 'layout-output') return n.category === 'layout' || n.category === 'output';
+                        return n.category === cat.key;
+                      });
+                      if (matched.length === 0) return null;
+                      return (
+                        <div key={cat.key}>
+                          <div className="px-3 py-0.5 text-[9px] font-bold text-neutral-400 uppercase tracking-wider mt-1 first:mt-0">
+                            {cat.label}
+                          </div>
+                          {matched.map((n) => (
+                            <button
+                              key={n.kind}
+                              type="button"
+                              onClick={() => {
+                                const flowPos = rfInstanceRef.current?.screenToFlowPosition({
+                                  x: contextMenu.x,
+                                  y: contextMenu.y,
+                                });
+                                addNode(n.kind as any, flowPos);
+                                setContextMenu(null);
+                              }}
+                              className="w-full flex items-center gap-1.5 px-4 py-1 text-left text-[11px] text-neutral-700 hover:bg-neutral-100 transition-colors"
+                            >
+                              <span>{n.label}</span>
+                            </button>
+                          ))}
+                          <div className="border-t border-black/4 my-1 last:hidden" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="border-t border-black/6 my-1" />
+
+                {/* 執行/停止項目 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleRun();
+                    setContextMenu(null);
+                  }}
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                >
+                  <Icon name={isRunning ? 'stop' : 'play_arrow'} size={13} className={isRunning ? 'text-red-500' : 'text-green-600'} />
+                  <span>{isRunning ? '停止執行' : '執行工作流'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* B. 節點右鍵選單 */}
+            {contextMenu.type === 'node' && (() => {
+              const targetNode = nodes.find(n => n.id === contextMenu.nodeId);
+              if (!targetNode) return null;
+              const isGroup = targetNode.type === 'group';
+              const resultSrc = useNodeGraphStore.getState().nodeResults[targetNode.id];
+              const hasImgResult = resultSrc && isImageSrc(resultSrc);
+
+              return (
+                <div className="flex flex-col">
+                  {/* 如果是框組 (group) 節點，最上方顯示色票 */}
+                  {isGroup && (
+                    <>
+                      <div className="px-3 py-0.5 text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                        變更色票顏色
+                      </div>
+                      <div className="px-3 pb-1.5 flex gap-1.5">
+                        {['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'].map(nextColor => (
+                          <button
+                            key={nextColor}
+                            type="button"
+                            onClick={() => {
+                              setNodes(nds => nds.map(n => n.id === targetNode.id ? {
+                                ...n,
+                                data: {
+                                  ...n.data,
+                                  params: { ...(n.data?.params || {}), color: nextColor }
+                                }
+                              } : n));
+                              setContextMenu(null);
+                            }}
+                            className={`h-4.5 w-4.5 rounded-full border shadow-sm transition-transform hover:scale-110 active:scale-95 ${
+                              (targetNode.data?.params as any)?.color === nextColor ? 'border-neutral-950 ring-1 ring-neutral-950' : 'border-white'
+                            }`}
+                            style={{ backgroundColor: nextColor }}
+                            title={`變更為此顏色`}
+                          />
+                        ))}
+                      </div>
+                      <div className="border-t border-black/6 my-1" />
+                    </>
+                  )}
+
+                  {/* 複製 */}
+                  {!isGroup && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleCopyNode(targetNode.id);
+                        setContextMenu(null);
+                      }}
+                      className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                    >
+                      <Icon name="content_copy" size={13} />
+                      <span>複製節點</span>
+                    </button>
+                  )}
+
+                  {/* 匯入大畫布 (如果有結果) */}
+                  {hasImgResult && onDetachImage && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDetachImage(resultSrc, targetNode.data.label);
+                        setContextMenu(null);
+                      }}
+                      className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                    >
+                      <Icon name="add_photo_alternate" size={13} />
+                      <span>匯入圖片到大畫布</span>
+                    </button>
+                  )}
+
+                  {/* 下載圖片 (如果有結果) */}
+                  {hasImgResult && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleDownloadResult(resultSrc, targetNode.data.label);
+                        setContextMenu(null);
+                      }}
+                      className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                    >
+                      <Icon name="download" size={13} />
+                      <span>下載結果圖片</span>
+                    </button>
+                  )}
+
+                  {/* 刪除 */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleNodeDelete(targetNode.id);
+                      setContextMenu(null);
+                    }}
+                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left text-[11px] font-medium text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    <Icon name="delete" size={13} />
+                    <span>刪除{isGroup ? '框組' : '節點'}</span>
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </>
       )}

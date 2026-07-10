@@ -64,21 +64,6 @@ export function GroupNode({ id, data, selected }: NodeProps) {
             {label}
           </button>
         )}
-        <div className="nodrag flex items-center gap-0.5">
-          {GROUP_COLORS.map(nextColor => (
-            <button
-              key={nextColor}
-              type="button"
-              aria-label={`框組顏色 ${nextColor}`}
-              className="h-3.5 w-3.5 border border-white shadow-sm"
-              style={{ backgroundColor: nextColor }}
-              onClick={(event) => {
-                event.stopPropagation();
-                setParams({ color: nextColor });
-              }}
-            />
-          ))}
-        </div>
       </div>
       <div className="pointer-events-auto">
         <NodeDeleteButton onDelete={handleDelete} selected={selected} />
