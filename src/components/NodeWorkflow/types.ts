@@ -1,6 +1,6 @@
 import type { BiRefNetModel } from '../../utils/geminiLayer';
 
-export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'cameraAngle' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'copyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing';
+export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'cameraAngle' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'copyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing' | 'group';
 
 /** 產出「一組」結果的多輸出節點種類（用可折疊 Batch 容器呈現）。 */
 export const MULTI_OUTPUT_KINDS: readonly NodeKind[] = ['layerSplit', 'brandKit', 'crossPlatform', 'productMarketing'];
@@ -76,11 +76,18 @@ export interface ProductMarketingParams {
 export interface LayerSplitParams {
   engine: 'gemini' | 'gpt';
 }
+export interface GroupParams {
+  label?: string;
+  color?: string;
+  width?: number;
+  height?: number;
+}
 
 export interface GraphNode {
   id: string;
   kind: NodeKind;
   position: { x: number; y: number };
+  parentId?: string;
   data: {
     label?: string;
     src?: string;

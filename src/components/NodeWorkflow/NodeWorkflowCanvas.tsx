@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   addEdge,
+  applyNodeChanges,
   Background,
   Controls,
   MiniMap,
@@ -15,6 +16,7 @@ import {
   type Connection,
   type Edge,
   type Node,
+  type NodeChange,
   type OnConnect,
   type OnNodeDrag,
   type EdgeProps,
@@ -116,16 +118,76 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '執行失敗';
 }
 
-const toFlowNode = (node: GraphNode): FlowNode => ({
-  id: node.id,
-  type: node.kind,
-  position: node.position,
-  data: {
-    ...node.data,
-    label: node.data.label ?? DEFAULT_NODE_LABELS[node.kind],
-    kind: node.kind,
-  },
-});
+function sortParentBeforeChildren<T extends { id: string; parentId?: string }>(nodes: T[]): T[] {
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  const ordered: T[] = [];
+
+  const visit = (node: T) => {
+    if (visited.has(node.id)) return;
+    if (visiting.has(node.id)) return;
+    visiting.add(node.id);
+    if (node.parentId) {
+      const parent = byId.get(node.parentId);
+      if (parent) visit(parent);
+    }
+    visiting.delete(node.id);
+    visited.add(node.id);
+    ordered.push(node);
+  };
+
+  nodes.forEach(visit);
+  return ordered;
+}
+
+function getAbsolutePosition(node: FlowNode, nodes: FlowNode[]): { x: number; y: number } {
+  let x = node.position.x;
+  let y = node.position.y;
+  let parentId = node.parentId;
+  const visited = new Set<string>();
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    const parent = nodes.find(candidate => candidate.id === parentId);
+    if (!parent) break;
+    x += parent.position.x;
+    y += parent.position.y;
+    parentId = parent.parentId;
+  }
+  return { x, y };
+}
+
+function getNodeSize(node: FlowNode): { width: number; height: number } {
+  const styleWidth = typeof node.style?.width === 'number' ? node.style.width : undefined;
+  const styleHeight = typeof node.style?.height === 'number' ? node.style.height : undefined;
+  return {
+    width: node.measured?.width ?? styleWidth ?? 1,
+    height: node.measured?.height ?? styleHeight ?? 1,
+  };
+}
+
+const toFlowNode = (node: GraphNode): FlowNode => {
+  const params = node.data.params ?? {};
+  const isGroup = node.kind === 'group';
+  return {
+    id: node.id,
+    type: node.kind,
+    position: node.position,
+    parentId: node.parentId,
+    ...(isGroup ? {
+      zIndex: 0,
+      style: {
+        width: typeof params.width === 'number' ? params.width : 360,
+        height: typeof params.height === 'number' ? params.height : 240,
+      },
+    } : {}),
+    data: {
+      ...node.data,
+      label: node.data.label ?? DEFAULT_NODE_LABELS[node.kind],
+      kind: node.kind,
+    },
+  };
+};
 
 const toGraphNode = (node: FlowNode): GraphNode => {
   const { kind, label, onDeleteNode, ...restData } = node.data;
@@ -133,6 +195,7 @@ const toGraphNode = (node: FlowNode): GraphNode => {
     id: node.id,
     kind,
     position: node.position,
+    parentId: node.parentId,
     data: {
       ...restData,
       label,
@@ -185,9 +248,10 @@ interface NodeWorkflowCanvasProps {
 
 // 拖到畫面底部這個高度內放開 = 移出到大畫布
 const DETACH_ZONE_HEIGHT = 90;
-const NODE_CATEGORY_ORDER: NodeCategory[] = ['process', 'generate', 'analysis', 'output'];
+const NODE_CATEGORY_ORDER: NodeCategory[] = ['layout', 'process', 'generate', 'analysis', 'output'];
 const NODE_CATEGORY_LABELS: Record<NodeCategory, string> = {
   input: '輸入',
+  layout: '版面',
   process: '影像處理',
   generate: '生成資產',
   analysis: '分析文字',
@@ -205,8 +269,8 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   const setNodeBatchResult = useNodeGraphStore(state => state.setNodeBatchResult);
   const resetRuntime = useNodeGraphStore(state => state.resetRuntime);
   const resetRunningStatuses = useNodeGraphStore(state => state.resetRunningStatuses);
-  const [nodes, setNodes, onNodesChange] = useNodesState(
-    useNodeGraphStore.getState().nodes.map(toFlowNode),
+  const [nodes, setNodes] = useNodesState(
+    sortParentBeforeChildren(useNodeGraphStore.getState().nodes.map(toFlowNode)),
   );
 
   const [edges, setEdges, onEdgesChange] = useEdgesState(
@@ -231,9 +295,42 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   }, [setEdges]);
 
   const handleNodeDelete = useCallback((nodeId: string) => {
-    setNodes(nds => nds.filter(n => n.id !== nodeId));
+    setNodes(nds => {
+      const deleting = nds.find(node => node.id === nodeId);
+      if (!deleting) return nds;
+      const next = nds
+        .filter(node => node.id !== nodeId)
+        .map(node => {
+          if (node.parentId !== nodeId) return node;
+          return {
+            ...node,
+            parentId: undefined,
+            position: getAbsolutePosition(node, nds),
+          };
+        });
+      return sortParentBeforeChildren(next);
+    });
     setEdges(eds => eds.filter(e => e.source !== nodeId && e.target !== nodeId));
   }, [setNodes, setEdges]);
+
+  const handleNodesChange = useCallback((changes: NodeChange<FlowNode>[]) => {
+    const removingIds = new Set(
+      changes.filter(change => change.type === 'remove').map(change => change.id),
+    );
+    setNodes(currentNodes => {
+      const prepared = removingIds.size === 0
+        ? currentNodes
+        : currentNodes.map(node => {
+            if (!node.parentId || !removingIds.has(node.parentId)) return node;
+            return {
+              ...node,
+              parentId: undefined,
+              position: getAbsolutePosition(node, currentNodes),
+            };
+          });
+      return sortParentBeforeChildren(applyNodeChanges(changes, prepared));
+    });
+  }, [setNodes]);
 
   useEffect(() => {
     setNodes(nds => nds.map(n => {
@@ -339,6 +436,125 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   // 卸載時清掉計時器
   useEffect(() => () => { if (runTimerRef.current) clearInterval(runTimerRef.current); }, []);
 
+  // ── 歷史記錄（Undo / Redo）─────────────────────────────────────────
+  // 以「拓撲 + 位置 + 參數」為觸發依據（排除選取/量測/拖曳中間態），debounce 後快照。
+  // 快照存的是完整 FlowNode/FlowEdge（含 measured 尺寸），還原時不會破壞 measured 同步。
+  type HistorySnapshot = { nodes: FlowNode[]; edges: FlowEdge[] };
+  const historyPast = useRef<HistorySnapshot[]>([]);
+  const historyFuture = useRef<HistorySnapshot[]>([]);
+  const committedSnapshot = useRef<HistorySnapshot | null>(null);
+  const isRestoring = useRef(false);
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const historyFingerprint = useMemo(() => JSON.stringify({
+    n: nodes.map(n => ({ id: n.id, k: n.data.kind, p: n.position, parentId: n.parentId, d: n.data.params })),
+    e: edges.map(e => ({ id: e.id, s: e.source, t: e.target, sh: e.sourceHandle, th: e.targetHandle })),
+  }), [nodes, edges]);
+
+  useEffect(() => {
+    if (committedSnapshot.current === null) {
+      committedSnapshot.current = { nodes, edges };
+      return;
+    }
+    if (isRestoring.current) {
+      isRestoring.current = false;
+      committedSnapshot.current = { nodes, edges };
+      return;
+    }
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    const snapshotNodes = nodes;
+    const snapshotEdges = edges;
+    commitTimer.current = setTimeout(() => {
+      if (committedSnapshot.current) {
+        historyPast.current.push(committedSnapshot.current);
+        if (historyPast.current.length > 60) historyPast.current.shift();
+        historyFuture.current = [];
+      }
+      committedSnapshot.current = { nodes: snapshotNodes, edges: snapshotEdges };
+    }, 400);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyFingerprint]);
+
+  const undo = useCallback(() => {
+    if (!historyPast.current.length) return;
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    const prev = historyPast.current.pop()!;
+    historyFuture.current.push(committedSnapshot.current ?? { nodes, edges });
+    isRestoring.current = true;
+    committedSnapshot.current = prev;
+    setNodes(sortParentBeforeChildren(prev.nodes));
+    setEdges(prev.edges);
+  }, [nodes, edges, setNodes, setEdges]);
+
+  const redo = useCallback(() => {
+    if (!historyFuture.current.length) return;
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    const next = historyFuture.current.pop()!;
+    historyPast.current.push(committedSnapshot.current ?? { nodes, edges });
+    isRestoring.current = true;
+    committedSnapshot.current = next;
+    setNodes(sortParentBeforeChildren(next.nodes));
+    setEdges(next.edges);
+  }, [nodes, edges, setNodes, setEdges]);
+
+  // ── 複製 / 貼上 ───────────────────────────────────────────────────
+  const clipboardRef = useRef<HistorySnapshot>({ nodes: [], edges: [] });
+
+  const copySelection = useCallback(() => {
+    // Input 節點是唯一來源，不複製；其餘選中的節點連同其內部連線一起複製。
+    const sel = nodes.filter(n => n.selected && n.data.kind !== 'input');
+    if (!sel.length) return;
+    const selIds = new Set(sel.map(n => n.id));
+    const internalEdges = edges.filter(e => selIds.has(e.source) && selIds.has(e.target));
+    clipboardRef.current = { nodes: sel, edges: internalEdges };
+  }, [nodes, edges]);
+
+  const paste = useCallback(() => {
+    const { nodes: cn, edges: ce } = clipboardRef.current;
+    if (!cn.length) return;
+    const now = Date.now();
+    const idMap = new Map<string, string>();
+    const newNodes = cn.map((n, i) => {
+      const nid = `${n.data.kind}-${now}-${i}`;
+      idMap.set(n.id, nid);
+      return {
+        ...n,
+        id: nid,
+        parentId: n.parentId ? idMap.get(n.parentId) ?? n.parentId : undefined,
+        position: { x: n.position.x + 48, y: n.position.y + 48 },
+        selected: true,
+        data: { ...n.data, onDeleteNode: handleNodeDelete },
+      } as FlowNode;
+    });
+    const newEdges = ce.map((e, i) => ({
+      ...e,
+      id: `edge-paste-${now}-${i}`,
+      source: idMap.get(e.source)!,
+      target: idMap.get(e.target)!,
+      type: 'deletable',
+      data: { onDelete: handleEdgeDelete },
+    })) as FlowEdge[];
+    setNodes(nds => sortParentBeforeChildren([...nds.map(n => ({ ...n, selected: false })), ...newNodes]));
+    if (newEdges.length) setEdges(eds => [...eds, ...newEdges]);
+  }, [setNodes, setEdges, handleNodeDelete, handleEdgeDelete]);
+
+  // ── 鍵盤快捷鍵 ───────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+      else if (key === 'y') { e.preventDefault(); redo(); }
+      else if (key === 'c') { copySelection(); }
+      else if (key === 'v') { e.preventDefault(); paste(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo, copySelection, paste]);
+
   useEffect(() => {
     if (graphFingerprintRef.current === null) {
       graphFingerprintRef.current = graphFingerprint;
@@ -395,13 +611,20 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
       : selected
         ? { x: selected.position.x + 240, y: selected.position.y }
         : { x: 260 + nodes.length * 24, y: 260 };
-    const graphNode: GraphNode = { id, kind, position, data: { label: DEFAULT_NODE_LABELS[kind], params: {} } };
+    const parentId = kind !== 'group' ? selected?.parentId : undefined;
+    const params = kind === 'group'
+      ? { label: '節點框組', color: '#6366f1', width: 360, height: 240 }
+      : {};
+    const graphNode: GraphNode = { id, kind, position, parentId, data: { label: DEFAULT_NODE_LABELS[kind], params } };
     const flowNode = toFlowNode(graphNode);
-    setNodes(nds => [
+    setNodes(nds => sortParentBeforeChildren([
       ...nds.map(n => ({ ...n, selected: false })),
       { ...flowNode, data: { ...flowNode.data, onDeleteNode: handleNodeDelete }, selected: true },
-    ]);
-    if (selected) {
+    ]));
+    const canAutoConnect = !!selected
+      && NODE_REGISTRY[selected.data.kind].output !== 'none'
+      && NODE_REGISTRY[kind].input !== 'none';
+    if (selected && canAutoConnect) {
       setEdges(eds => addEdge({
         id: `edge-${selected.id}-${id}`,
         source: selected.id,
@@ -446,17 +669,52 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
     // 落點在底部拖出區內 → 移出到大畫布。
     const clientY = 'clientY' in event ? event.clientY : (event as MouseEvent).clientY;
     const inDetachZone = typeof clientY === 'number' && clientY > window.innerHeight - DETACH_ZONE_HEIGHT;
-    if (!inDetachZone || !onDetachImage) return;
-    // 可拖出的圖片：Input 節點原圖 (data.src) 或動作節點執行後的結果 (nodeResults)。
-    // 只允許圖片（排除便利貼文字等非圖片 payload）。
-    const inlineSrc = typeof node.data?.src === 'string' ? node.data.src : '';
-    const resultSrc = useNodeGraphStore.getState().nodeResults[node.id] ?? '';
-    const src = isImageSrc(inlineSrc) ? inlineSrc : (isImageSrc(resultSrc) ? resultSrc : '');
-    if (src) {
-      const label = typeof node.data?.label === 'string' ? node.data.label : undefined;
-      onDetachImage(src, label);
+    if (inDetachZone) {
+      if (onDetachImage) {
+        // 判定只依螢幕座標；子節點的相對 position 不影響底部拖出。
+        const inlineSrc = typeof node.data?.src === 'string' ? node.data.src : '';
+        const resultSrc = useNodeGraphStore.getState().nodeResults[node.id] ?? '';
+        const src = isImageSrc(inlineSrc) ? inlineSrc : (isImageSrc(resultSrc) ? resultSrc : '');
+        if (src) {
+          const label = typeof node.data?.label === 'string' ? node.data.label : undefined;
+          onDetachImage(src, label);
+        }
+      }
+      return;
     }
-  }, [onDetachImage]);
+
+    if (node.data.kind === 'group') return;
+    setNodes(currentNodes => {
+      const current = currentNodes.find(candidate => candidate.id === node.id);
+      if (!current) return currentNodes;
+      const dragged = { ...current, position: node.position, parentId: node.parentId };
+      const absolute = getAbsolutePosition(dragged, currentNodes);
+      const size = getNodeSize(dragged);
+      const center = { x: absolute.x + size.width / 2, y: absolute.y + size.height / 2 };
+      const targetGroup = [...currentNodes].reverse().find(candidate => {
+        if (candidate.data.kind !== 'group' || candidate.id === node.id) return false;
+        const groupPosition = getAbsolutePosition(candidate, currentNodes);
+        const groupSize = getNodeSize(candidate);
+        return center.x >= groupPosition.x
+          && center.x <= groupPosition.x + groupSize.width
+          && center.y >= groupPosition.y
+          && center.y <= groupPosition.y + groupSize.height;
+      });
+
+      if (targetGroup?.id === dragged.parentId) return currentNodes;
+      const targetPosition = targetGroup
+        ? (() => {
+            const parentAbsolute = getAbsolutePosition(targetGroup, currentNodes);
+            return { x: absolute.x - parentAbsolute.x, y: absolute.y - parentAbsolute.y };
+          })()
+        : absolute;
+      return sortParentBeforeChildren(currentNodes.map(candidate => (
+        candidate.id === node.id
+          ? { ...candidate, position: targetPosition, parentId: targetGroup?.id }
+          : candidate
+      )));
+    });
+  }, [onDetachImage, setNodes]);
 
   return (
     <NodeWorkflowContext.Provider value={{ detachImage: onDetachImage }}>
@@ -466,7 +724,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
         onReconnect={handleReconnect}

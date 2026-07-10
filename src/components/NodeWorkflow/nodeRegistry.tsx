@@ -16,9 +16,10 @@ import { LayerSplitNode } from './nodes/LayerSplitNode';
 import { BrandKitNode } from './nodes/BrandKitNode';
 import { CrossPlatformNode } from './nodes/CrossPlatformNode';
 import { ProductMarketingNode } from './nodes/ProductMarketingNode';
+import { GroupNode } from './nodes/GroupNode';
 
 export type NodeIoType = 'none' | 'image' | 'text' | 'imageOrText' | 'imageBatch';
-export type NodeCategory = 'input' | 'process' | 'generate' | 'analysis' | 'output';
+export type NodeCategory = 'input' | 'layout' | 'process' | 'generate' | 'analysis' | 'output';
 
 export interface NodeRegistryEntry {
   kind: NodeKind;
@@ -196,6 +197,17 @@ export const NODE_REGISTRY = {
     needsUpstream: true,
     input: 'image',
     output: 'imageBatch',
+  },
+  group: {
+    kind: 'group',
+    component: GroupNode,
+    label: '節點框組',
+    addLabel: '＋ 框組',
+    addable: true,
+    category: 'layout',
+    needsUpstream: false,
+    input: 'none',
+    output: 'none',
   },
 } satisfies Record<NodeKind, NodeRegistryEntry>;
 

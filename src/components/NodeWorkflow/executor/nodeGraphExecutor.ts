@@ -634,6 +634,7 @@ interface NodeRunnerContext {
 }
 
 type NodeRunner = (ctx: NodeRunnerContext) => Promise<NodeRunnerResult> | NodeRunnerResult;
+type ExecutableNodeKind = Exclude<NodeKind, 'group'>;
 
 const singleResult = (value: string): NodeRunnerResult => ({ type: 'single', value });
 const batchResult = (values: string[]): NodeRunnerResult => ({ type: 'batch', values });
@@ -643,7 +644,7 @@ const requireInput = (input: string | undefined, nodeName: string): string => {
   return input;
 };
 
-const nodeRunners: Record<NodeKind, NodeRunner> = {
+const nodeRunners: Record<ExecutableNodeKind, NodeRunner> = {
   input: ({ node }) => singleResult(typeof node.data.src === 'string' ? node.data.src : ''),
   output: ({ input }) => singleResult(requireInput(input, '輸出')),
   removeBg: async ({ node, input, engine, onProgress }) => singleResult(await runRemoveBg(
@@ -857,7 +858,7 @@ function blockedByFailedUpstream(
 /** 終端節點 = 沒有任何 edge 以它為 source（鏈的末端）。 */
 function terminalNodeIds(graph: NodeGraphData): Set<string> {
   const hasOutgoing = new Set(graph.edges.map(e => e.source));
-  return new Set(graph.nodes.filter(n => !hasOutgoing.has(n.id)).map(n => n.id));
+  return new Set(graph.nodes.filter(n => n.kind !== 'group' && !hasOutgoing.has(n.id)).map(n => n.id));
 }
 
 /**
@@ -892,6 +893,7 @@ export async function executeGraph(
   let outputSrc: string | null = null;
 
   for (const node of order) {
+    if (node.kind === 'group') continue;
     try {
       throwIfAborted(options.signal);
 
