@@ -81,7 +81,9 @@ export interface ProductMarketingParams {
   lockStyleConsistency: boolean;
 }
 export interface LayerSplitParams {
-  engine: 'gemini' | 'gpt';
+  engine: 'gemini' | 'seedream-v5-pro';
+  prompt?: string;
+  imageSize?: '1K' | '2K';
 }
 export interface GroupParams {
   label?: string;

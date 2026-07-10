@@ -1,7 +1,7 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, BrandKitParams, CameraAngleParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, BrandKitParams, CameraAngleParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, LayerSplitParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
 import type { ImageElement, OutpaintingState } from '../../../types';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
@@ -665,9 +665,25 @@ async function runProductMarketing(
 /** layerSplit 節點：Gemini 語意偵測 + BiRefNet 去背 → 多張圖層（多輸出）。 */
 async function runLayerSplit(
   input: string,
+  params: Partial<LayerSplitParams>,
   engine: ExecutorEngine,
   onProgress?: (message: string) => void,
 ): Promise<string[]> {
+  if (params.engine === 'seedream-v5-pro') {
+    if (!engine.atlasApiKey) throw new Error('即夢圖層分離需要 Atlas API Key');
+    const outputs = await atlasBatch({
+      prompt: params.prompt?.trim() || '將這張圖片拆分成多個獨立、可編輯的圖層。每個輸出只保留一個主要視覺元素，保留原始顏色、材質與主體特徵，背景設為透明。請以多張透明 PNG 圖層輸出。',
+      count: 1,
+      ratio: 'Original',
+      imageSize: params.imageSize ?? '2K',
+      refImage: input,
+      transparentBg: true,
+    }, { model: 'seedream-v5-pro', apiKey: engine.atlasApiKey });
+    const srcs = outputs.filter(isImageSrc);
+    if (srcs.length === 0) throw new Error('即夢圖層分離沒有產生任何圖層');
+    onProgress?.(`即夢已產生 ${srcs.length} 個圖層`);
+    return srcs;
+  }
   if (!engine.geminiApiKey) throw new Error('圖層分離需要 Gemini API Key');
   if (!engine.falApiKey) throw new Error('圖層分離需要 fal.ai API Key');
   const layers = await geminiLayerSegment(input, engine.geminiApiKey, engine.falApiKey, onProgress);
@@ -751,8 +767,9 @@ const nodeRunners: Record<ExecutableNodeKind, NodeRunner> = {
     inputsByHandle,
     engine,
   )),
-  layerSplit: async ({ input, engine, onProgress }) => batchResult(await runLayerSplit(
+  layerSplit: async ({ node, input, engine, onProgress }) => batchResult(await runLayerSplit(
     requireInput(input, '圖層分離'),
+    (node.data.params ?? {}) as Partial<LayerSplitParams>,
     engine,
     onProgress,
   )),
