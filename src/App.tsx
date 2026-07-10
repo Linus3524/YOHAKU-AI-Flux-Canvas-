@@ -823,8 +823,8 @@ const App: React.FC = () => {
       setElements(prev => prev.map(el => (el.id === selectedArrowElement.id && el.type === 'arrow') ? { ...el, ...updates } : el));
   };
 
-  // 設計大師 Logo：生成完成後、顯示結果前，先把背景處理成使用者選的樣子
-  // （白→平整純白、黑→平整純黑、透明→自動去背），結果畫面直接呈現最終版，
+  // 設計大師 Logo：非即夢 Pro 的結果在顯示前先處理背景
+  // （白→平整純白、黑→平整純黑、透明→自動去背），即夢 Pro 透明結果保留原生 Alpha，
   // 加入畫布時不再二次處理。
   const logoBgProcessedRef = useRef<string[] | null>(null);
   useEffect(() => {
@@ -832,10 +832,12 @@ const App: React.FC = () => {
     if (logoBgProcessedRef.current === generatedImages) return; // 已是處理後的結果
     const prompt = generatedImagesMetadata?.[0]?.prompt || '';
     if (!prompt.includes('Design a professional logo for the brand')) return;
+    const isNativeTransparent = generatedImagesMetadata?.[0]?.model === 'seedream-v5-pro';
     const wantWhite = prompt.includes('BACKGROUND: white');
     const wantBlack = prompt.includes('BACKGROUND: black');
     const wantTransparent = prompt.includes('BACKGROUND: transparent');
     if (!wantWhite && !wantBlack && !wantTransparent) return;
+    if (wantTransparent && isNativeTransparent) return;
 
     const sourceImages = generatedImages;
     (async () => {
