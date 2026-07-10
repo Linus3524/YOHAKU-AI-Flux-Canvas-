@@ -956,7 +956,8 @@ CONSTRAINTS:
 
     const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean, customSeed?: number, transparentBgOverride = false) => {
         const generationModel = modelOverride || generationModelGlobal;
-        const wantsTransparent = autoRemoveBg || transparentBgOverride;
+        // 原生透明是 Seedream Pro 專屬；其他模型不自動啟動去背，交由使用者後續選擇工具。
+        const wantsTransparent = generationModel === 'seedream-v5-pro' && (autoRemoveBg || transparentBgOverride);
         const nativeTransparentBg = generationModel === 'seedream-v5-pro' && wantsTransparent;
         const baseSeed = customSeed !== undefined ? customSeed : Math.floor(Math.random() * 2147483647);
         // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定

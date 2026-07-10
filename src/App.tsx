@@ -837,7 +837,8 @@ const App: React.FC = () => {
     const wantBlack = prompt.includes('BACKGROUND: black');
     const wantTransparent = prompt.includes('BACKGROUND: transparent');
     if (!wantWhite && !wantBlack && !wantTransparent) return;
-    if (wantTransparent && isNativeTransparent) return;
+    // 透明背景由使用者自行選擇去背工具；即夢 Pro 已在 API 端原生輸出透明 PNG。
+    if (wantTransparent) return;
 
     const sourceImages = generatedImages;
     (async () => {
