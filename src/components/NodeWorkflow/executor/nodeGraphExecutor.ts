@@ -16,6 +16,7 @@ import { analyzeCopiedStyle, buildCameraAnglePrompt, buildCopiedStylePrompt, bui
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
 import { atlasModelSupportsImg2Img } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
+import { gptLayerSegment } from '../../../utils/gptLayerSplit';
 import { executeDynamicRemoval } from '../../../utils/DynamicBackgroundRemoval';
 import { createGeminiClient } from '../../../ai/geminiClient';
 import { getVisualStyleById } from '../../../skills/styles';
@@ -681,15 +682,27 @@ async function runLayerSplit(
 ): Promise<string[]> {
   if (params.engine === 'seedream-v5-pro') {
     if (!engine.atlasApiKey) throw new Error('即夢圖層分離需要 Atlas API Key');
-    const outputs = await atlasBatch({
-      prompt: params.prompt?.trim() || '將這張圖片拆分成多個獨立、可編輯的圖層。每個輸出只保留一個主要視覺元素，保留原始顏色、材質與主體特徵，背景設為透明。請以多張透明 PNG 圖層輸出。',
-      count: 1,
-      ratio: 'Original',
-      imageSize: params.imageSize ?? '2K',
-      refImage: input,
-      transparentBg: true,
-    }, { model: 'seedream-v5-pro', apiKey: engine.atlasApiKey });
-    const srcs = outputs.filter(isImageSrc);
+    if (!engine.geminiApiKey) throw new Error('即夢圖層分離需要 Gemini API Key 分析物件');
+    const layers = await gptLayerSegment(
+      input,
+      engine.geminiApiKey,
+      engine.atlasApiKey,
+      engine.falApiKey,
+      onProgress,
+      engine.geminiImageModel,
+      'seedream-v5-pro',
+      {
+        model: 'seedream-v5-pro',
+        layerCount: 'auto',
+        categories: [],
+        customInstruction: params.prompt?.trim() || '',
+        includeBackground: true,
+        preservePosition: true,
+        autoArrange: false,
+        groupingStrategy: params.prompt?.trim() ? 'custom' : 'smart',
+      },
+    );
+    const srcs = layers.map(layer => layer.base64).filter(isImageSrc);
     if (srcs.length === 0) throw new Error('即夢圖層分離沒有產生任何圖層');
     onProgress?.(`即夢已產生 ${srcs.length} 個圖層`);
     return srcs;

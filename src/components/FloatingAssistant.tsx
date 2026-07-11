@@ -726,7 +726,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {[
                         { t: '一鍵生成圖片', d: '框選圖片、手繪或便利貼，AI 生成高品質圖片。生成中畫布不鎖定。' },
                         { t: '風格參考圖', d: '圖生圖時，AI 能參考圖片的視覺風格與主體。支援三種搭配方式：1) 便利貼內直接上傳參考圖（最多 4 張）。2) 同時選取便利貼與畫布上的多張圖片一起生成（上限 8 張）。3) 混合參考（例如：便利貼內 4 張 + 畫布 4 張，最多支援 8 張圖進行特徵融合）。' },
-                        { t: '即夢 Seedream 5.0 Pro', d: '新一代旗艦模型，支援精細的文字生成與排版。可啟用「原生透明背景」直接輸出透明 PNG，且最高支援 3K 解析度（例如 1:1 的 3072×3072）。' },
+                        { t: '即夢 Seedream 5.0 Pro', d: '新一代旗艦模型，支援精細的文字生成與排版。需要透明背景時，軟體會在生成完成後自動去背並輸出 PNG。' },
                         { t: '隨機種子 (Seed)', d: '支援開啟自訂 Seed 隨機碼。便於鎖定特定光影特徵或構圖結構，進行連續性的一致畫面生成。' },
                         { t: '圖片逆向分析', d: '右鍵「提取提示詞」，AI 生成中英對照的詠唱咒語。' },
                         { t: '風格複製', d: 'AI 解構色彩、光影、畫風等 10 個維度，紋理/藝術樣式/手動三種貼上方式。' },
@@ -791,8 +791,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     {/* 魔法分層 */}
                     <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 魔法分層 (Magic Layering)</h4>
-                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素進行分割並補全背景。支援「兩階段規劃與圖層清單預覽」，可於生成前自由刪除預計圖層。提供任務佇列與漸進式回貼機制，並利用即夢逐物件透明輸出以完美保留原始不透明度與精確定位。</p>
-                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 支援即夢原生圖層拆分。需 <code className="font-mono bg-purple-50 px-1 rounded">Atlas Key</code> 取得最佳品質；未設定時降級為 Gemini 模式。</div>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素進行分割並補全背景。支援「兩階段規劃與圖層清單預覽」，可於生成前自由刪除預計圖層。提供任務佇列與漸進式回貼機制；即夢負責逐物件隔離生成，再由軟體去背並依分析座標精確回貼。</p>
+                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 支援即夢逐物件生成，並由軟體完成去背與圖層整理。需 <code className="font-mono bg-purple-50 px-1 rounded">Atlas Key</code>；未設定時降級為 Gemini 模式。</div>
                     </div>
 
                     {/* 一鍵拆分貼圖 */}
@@ -966,7 +966,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {[
                         { t: '建立與進入', d: '右鍵選單建立後雙擊該元件即可進入工作流子畫布，可新增多個節點並連線。' },
                         { t: '輸入與輸出節點', d: '輸入節點傳遞原始圖片/文字，輸出節點回傳最終合成結果。工具列「插入圖片」支援工作流內圖片直接合成。' },
-                        { t: '即夢原生圖層分離', d: '在工作流中可串接「圖層分離 (Layer Split)」節點，接入即夢 Seedream 圖層分離技術，將圖像自動切割並單獨處理。' },
+                        { t: '即夢圖層分離', d: '在工作流中可串接「圖層分離 (Layer Split)」節點，由 Gemini 分析物件、即夢逐層生成，再由軟體去背並整理成可編輯圖層。' },
                         { t: '多參考圖生圖', d: '生圖節點（Atlas 路徑）支援連接多張圖片作為風格與特徵參考圖，進行高品質多圖融合生成。' },
                         { t: '豐富的節點種類', d: '包含：生圖、去背、智慧放大、視角轉換、風格複製、產品行銷組圖、品牌套件、跨平台適配、提示詞優化、擴圖等多達 20 餘種專業節點。' },
                         { t: '連線與執行', d: '滑鼠拖曳節點連接埠即可建立連線，點擊節點的「執行」或最外層一鍵批次執行，運算完成後可預覽各節點產出。' },

@@ -335,7 +335,6 @@ async function postGeneration(body: Record<string, unknown>, atlasKey: string): 
 interface AtlasCallOptions {
     ratio?: string;       // '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '3:2' | '2:3' | '21:9'
     quality?: '2K' | '4K';
-    transparentBg?: boolean; // 要求輸出透明背景（background: 'transparent'）
     keepAlpha?: boolean;     // 壓縮時使用 PNG 保留 alpha（預設 JPEG 會破壞透明）
     seed?: number;           // 鎖定隨機種子碼以利批次風格一致
     outputFormat?: 'jpeg' | 'png';
@@ -356,9 +355,6 @@ function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOp
     }
     if (config.supportsBase64Output) {
         extra['enable_base64_output'] = true;
-    }
-    if (options?.transparentBg) {
-        extra['background'] = 'transparent';
     }
     if (options?.outputFormat) {
         extra['output_format'] = options.outputFormat;
@@ -417,9 +413,6 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
     }
     if (config.supportsBase64Output) {
         extra['enable_base64_output'] = true;
-    }
-    if (options?.transparentBg) {
-        extra['background'] = 'transparent';
     }
     if (options?.outputFormat) {
         extra['output_format'] = options.outputFormat;

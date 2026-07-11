@@ -21,7 +21,7 @@ const COUNTS: Array<'auto' | number> = ['auto', 2, 4, 6, 8, 12, 16, 20];
 const MODEL_INFO: Record<MagicLayerModel, { title: string; detail: string }> = {
   gemini: { title: 'Gemini', detail: '語意辨識後逐物件分離' },
   'gpt-image-2': { title: 'GPT Image 2', detail: '精細隔離與背景補全' },
-  'seedream-v5-pro': { title: '即夢 Seedream 5.0 Pro', detail: '逐物件透明 PNG 分離，保留材質與位置' },
+  'seedream-v5-pro': { title: '即夢 Seedream 5.0 Pro', detail: '逐物件生成後自動去背，保留材質與位置' },
 };
 
 export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, onAnalyze }: MagicLayerModalProps) {

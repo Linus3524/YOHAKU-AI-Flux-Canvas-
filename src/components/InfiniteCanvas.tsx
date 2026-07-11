@@ -1586,26 +1586,24 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         )}
                                     </div>}
 
-                                    {/* 便利貼專屬的進階生圖選項（原生透明背景、自訂風格種子） */}
+                                    {/* 便利貼專屬的進階生圖選項（生成後去背、自訂風格種子） */}
                                     {!hasImageOrDrawingOrShape && hasNote && (
                                         <div className="flex flex-col gap-2 border-t border-gray-100 pt-3">
-                                            {generationModel === 'seedream-v5-pro' && (
-                                                <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <div className="text-[11px] font-medium text-gray-600">原生透明背景</div>
-                                                        <div className="mt-0.5 text-[10px] text-gray-400">直接輸出透明 PNG</div>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        role="switch"
-                                                        aria-checked={preserveTransparency}
-                                                        className={`h-6 w-11 rounded-full p-1 transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
-                                                        onClick={() => onSetPreserveTransparency(!preserveTransparency)}
-                                                    >
-                                                        <span className={`block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${preserveTransparency ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                    </button>
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <div className="text-[11px] font-medium text-gray-600">透明背景</div>
+                                                    <div className="mt-0.5 text-[10px] text-gray-400">生成完成後自動去背</div>
                                                 </div>
-                                            )}
+                                                <button
+                                                    type="button"
+                                                    role="switch"
+                                                    aria-checked={preserveTransparency}
+                                                    className={`h-6 w-11 rounded-full p-1 transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
+                                                    onClick={() => onSetPreserveTransparency(!preserveTransparency)}
+                                                >
+                                                    <span className={`block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${preserveTransparency ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </button>
+                                            </div>
 
                                             <div className="flex flex-col gap-1.5">
                                                 <div className="flex items-center justify-between">
@@ -1824,9 +1822,9 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                       {showAdvanced && (
                                         <div className="px-5 pb-4 flex flex-col gap-3">
                                           {/* 保留透明背景 */}
-                                          {(hasImageOrDrawingOrShape || hasNote) && generationModel === 'seedream-v5-pro' && (
+                                          {(hasImageOrDrawingOrShape || hasNote) && (
                                               <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-medium text-gray-500">{generationModel === 'seedream-v5-pro' ? '原生透明背景' : '保留透明背景'}</span>
+                                                  <span className="text-[11px] font-medium text-gray-500">透明背景（生成後自動去背）</span>
                                                   <div
                                                       className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
                                                       onClick={() => onSetPreserveTransparency(!preserveTransparency)}

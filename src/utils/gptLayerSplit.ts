@@ -743,27 +743,6 @@ function cropBBoxWithPad(
     });
 }
 
-/** PNG 格式不必然含 alpha；檢查 Seedream 是否真的交付透明背景。 */
-function hasTransparentPixels(src: string): Promise<boolean> {
-    return new Promise(resolve => {
-        const image = new Image();
-        image.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) { resolve(false); return; }
-            ctx.drawImage(image, 0, 0);
-            const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-            for (let index = 3; index < pixels.length; index += 4) {
-                if (pixels[index] < 250) { resolve(true); return; }
-            }
-            resolve(false);
-        };
-        image.onerror = () => resolve(false);
-        image.src = src;
-    });
-}
-
 // ── 單一物件提取（供 Promise.all 並發）──────────────────────────────────────
 async function extractOneLayer(
     obj: DetectedObject,
@@ -797,13 +776,12 @@ async function extractOneLayer(
             : '';
 
         let isolatedSrc: string;
-        let isNativeTransparent = false;
         if (atlasKey) {
             const isSeedreamPro = atlasModel === 'seedream-v5-pro';
             const isolated = await callAtlasImg2Img(
                 isSeedreamPro
-                    ? `Extract ONLY the "${obj.labelEn}" (${obj.label}) as a true RGBA PNG layer. ` +
-                      `Every pixel outside this object must be fully transparent (alpha 0). Do not use a solid background, checkerboard, shadow plate, border, or matte. ` +
+                    ? `Extract ONLY the "${obj.labelEn}" (${obj.label}) and place it on a perfectly solid, uniform flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
+                      `Do not make the output transparent. Do not add a checkerboard, scenery, shadow plate, border, texture, gradient or matte to the background. ` +
                       `Preserve the exact original position, scale, perspective, colors, materials, lighting and edges. ` +
                       `Preserve the source object's original opacity: solid objects such as paper, sticky notes, labels, products, logos and text panels must remain solid and must not become translucent, faded, ghosted or see-through. ` +
                       `Only preserve translucency when it is clearly present in the source, such as glass, smoke, liquid, sheer fabric or glow. Preserve shadows and highlights without reducing the opacity of the object's main body.` + perspectiveHint + refHint
@@ -819,20 +797,19 @@ async function extractOneLayer(
                 compressedImage,
                 1,
                 isSeedreamPro
-                    ? { ratio: detectedRatio, quality: '2K', outputFormat: 'png', keepAlpha: true }
+                    ? { ratio: detectedRatio, quality: '2K' }
                     : { ratio: detectedRatio },
                 referenceCrop ? [referenceCrop] : undefined,
             );
             if (!isolated[0]) return null;
             isolatedSrc = isolated[0];
-            isNativeTransparent = isSeedreamPro && await hasTransparentPixels(isolatedSrc);
         } else {
             isolatedSrc = await geminiIsolateOnSolidBg(obj, compressedImage, geminiApiKey, geminiImageModel, bgColor, perspectiveHint);
         }
 
         let transparent = isolatedSrc;
-        if (!isNativeTransparent) {
-            // API 未真的交付 alpha 時，才用舊的去背流程保底。
+        {
+            // 所有生成模型都先產生實色背景，再由軟體去背建立 Alpha。
             const fallbackBgColor = atlasModel === 'seedream-v5-pro'
                 ? await detectBackgroundColor(isolatedSrc)
                 : bgColor.hex;

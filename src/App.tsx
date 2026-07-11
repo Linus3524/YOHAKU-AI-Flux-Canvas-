@@ -823,8 +823,8 @@ const App: React.FC = () => {
       setElements(prev => prev.map(el => (el.id === selectedArrowElement.id && el.type === 'arrow') ? { ...el, ...updates } : el));
   };
 
-  // 設計大師 Logo：非即夢 Pro 的結果在顯示前先處理背景
-  // （白→平整純白、黑→平整純黑、透明→自動去背），即夢 Pro 透明結果保留原生 Alpha，
+  // 設計大師 Logo：結果在顯示前先處理背景
+  // （白→平整純白、黑→平整純黑、透明→自動去背），
   // 加入畫布時不再二次處理。
   const logoBgProcessedRef = useRef<string[] | null>(null);
   useEffect(() => {
@@ -832,13 +832,10 @@ const App: React.FC = () => {
     if (logoBgProcessedRef.current === generatedImages) return; // 已是處理後的結果
     const prompt = generatedImagesMetadata?.[0]?.prompt || '';
     if (!prompt.includes('Design a professional logo for the brand')) return;
-    const isNativeTransparent = generatedImagesMetadata?.[0]?.model === 'seedream-v5-pro';
     const wantWhite = prompt.includes('BACKGROUND: white');
     const wantBlack = prompt.includes('BACKGROUND: black');
     const wantTransparent = prompt.includes('BACKGROUND: transparent');
     if (!wantWhite && !wantBlack && !wantTransparent) return;
-    // 透明背景由使用者自行選擇去背工具；即夢 Pro 已在 API 端原生輸出透明 PNG。
-    if (wantTransparent) return;
 
     const sourceImages = generatedImages;
     (async () => {

@@ -27,7 +27,6 @@ export interface AtlasBatchOpts {
     refImage?: string;
     /** 追加參考圖（img2img 的第 2 張起） */
     extraRefImages?: string[];
-    transparentBg?: boolean;
 }
 
 export interface AtlasEngine {
@@ -41,13 +40,7 @@ export interface AtlasEngine {
 export function atlasBatch(opts: AtlasBatchOpts, engine: AtlasEngine): Promise<string[]> {
     const quality: '2K' | '4K' = opts.imageSize === '4K' ? '4K' : '2K';
     const wait = engine.wait ?? (<T,>(fn: () => Promise<T>) => fn());
-    const atlasOpts = {
-        ratio: opts.ratio,
-        quality,
-        transparentBg: opts.transparentBg,
-        seed: opts.seed,
-        outputFormat: opts.transparentBg ? ('png' as const) : undefined
-    };
+    const atlasOpts = { ratio: opts.ratio, quality, seed: opts.seed };
 
     return opts.refImage
         ? wait(() => callAtlasImg2Img(opts.prompt, engine.model, engine.apiKey, opts.refImage!, opts.count, atlasOpts, opts.extraRefImages))

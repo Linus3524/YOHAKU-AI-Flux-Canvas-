@@ -54,7 +54,7 @@ interface UseAIProps {
     falApiKey?: string | null;
 }
 
-/** 透明背景由呼叫端依模型決定：Seedream Pro 走 API 原生透明，其餘模型走生成後去背。 */
+/** 透明背景一律由生成後去背產生；目前生成模型端不視為原生 Alpha 來源。 */
 // 剝掉風格提示詞的「主動改造」前綴，讓它變成純描述語氣
 // 例："Transform into Cyberpunk aesthetic: neon..." → "Cyberpunk aesthetic: neon..."
 //     "將圖片轉換為1980年代台灣..."           → "1980年代台灣..."
@@ -955,13 +955,11 @@ CONSTRAINTS:
 
     const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean, customSeed?: number, transparentBgOverride = false) => {
         const generationModel = modelOverride || generationModelGlobal;
-        // 原生透明是 Seedream Pro 專屬；其他模型不自動啟動去背，交由使用者後續選擇工具。
-        const wantsTransparent = generationModel === 'seedream-v5-pro' && (autoRemoveBg || transparentBgOverride);
-        const nativeTransparentBg = false; // 即夢 Pro 5 並非真正原生輸出透明（仍帶白背景），因此不標記為 nativeTransparentBg，以觸發自動後製去背流程
+        const wantsTransparent = autoRemoveBg || transparentBgOverride;
         const baseSeed = customSeed !== undefined ? customSeed : Math.floor(Math.random() * 2147483647);
         // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定
         const effImageSize = imageSizeOverride || imageSize;
-        setPendingAutoDebg(wantsTransparent && !nativeTransparentBg);
+        setPendingAutoDebg(wantsTransparent);
         // LINE 貼圖去背走泛洪 chroma 主路：null = 非貼圖（用語意去背）；true/false = 貼圖有無白邊
         setPendingStickerBorder(stickerDebgBorder === undefined ? null : stickerDebgBorder);
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
@@ -1040,7 +1038,7 @@ CONSTRAINTS:
                         // 有便利貼參考圖且支援 img2img → 以第一張參考圖為主
                         const imgs = await atlasBatch({
                             prompt: atlasPrompt, count: 1, ratio: frameRatio, imageSize: effImageSize,
-                            seed: frameSeed, transparentBg: wantsTransparent,
+                            seed: frameSeed,
                             refImage: (hasNoteRefs && canDoImg2Img) ? noteRefImgs[0] : undefined,
                             extraRefImages: (hasNoteRefs && canDoImg2Img) ? noteRefImgs.slice(1) : undefined,
                         }, atlasEngine);
@@ -1101,7 +1099,7 @@ CONSTRAINTS:
                     // 便利貼參考圖追加在畫布圖片之後
                     const rawImages = await atlasBatch({
                         prompt: img2imgPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
-                        seed: baseSeed, transparentBg: wantsTransparent,
+                        seed: baseSeed,
                         refImage, extraRefImages: hasNoteRefs ? noteRefImgs : undefined,
                     }, atlasEngine);
                     if (rawImages.length === 0) throw new Error('未收到任何圖片');
@@ -1136,7 +1134,7 @@ CONSTRAINTS:
                 try {
                     const images = await atlasBatch({
                         prompt: atlasPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
-                        seed: baseSeed, transparentBg: wantsTransparent,
+                        seed: baseSeed,
                         refImage: noteRefImgs[0], extraRefImages: noteRefImgs.slice(1),
                     }, atlasEngine);
                     if (images.length === 0) throw new Error('未收到任何圖片');
@@ -1168,7 +1166,7 @@ CONSTRAINTS:
                     prompt: atlasPrompt, count,
                     ratio: (resolvedAtlasRatio === 'Original' || !resolvedAtlasRatio) ? '1:1' : resolvedAtlasRatio,
                     imageSize: effImageSize,
-                    seed: baseSeed, transparentBg: wantsTransparent,
+                    seed: baseSeed,
                 }, atlasEngine);
                 if (images.length === 0) throw new Error('未收到任何圖片');
                 setGeneratedImages(images);

@@ -29,7 +29,7 @@ export function LayerSplitNode({ id, data }: NodeProps) {
           })}
         >
           <option value="gemini">Gemini + 去背</option>
-          <option value="seedream-v5-pro">即夢 Seedream 5.0 Pro</option>
+          <option value="seedream-v5-pro">即夢 Pro + 軟體去背</option>
         </select>
         {engine === 'seedream-v5-pro' && (
           <input
