@@ -90,7 +90,7 @@ export function RemoveBgNode({ id, data, selected }: NodeProps) {
           </div>
           {mode === 'smart' && (
             <div className="text-[9px] leading-snug text-neutral-400 px-0.5">
-              Gemini 智慧去背：自動偵測背景、適合複雜場景
+              智慧去背：跟隨全域模型、自動偵測背景，適合複雜場景
             </div>
           )}
           {mode === 'cloud' && (

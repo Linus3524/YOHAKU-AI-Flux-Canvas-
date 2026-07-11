@@ -206,17 +206,20 @@ async function runRemoveBg(
 ): Promise<string> {
   const mode = params.mode ?? 'local';
 
-  // 智慧去背：Gemini 動態去背（對標主畫布 executeDynamicRemoval）。
+  // 智慧去背：動態去背，跟隨全域生成模型（Gemini / GPT Image 2 / 即夢 Pro，對標主畫布）。
   if (mode === 'smart') {
-    if (engine.geminiApiKey) {
+    const smartModel = engine.generationModel || 'gemini';
+    const hasKey = smartModel === 'gemini' ? !!engine.geminiApiKey : !!engine.atlasApiKey;
+    if (hasKey) {
       return await executeDynamicRemoval(input, {
-        model: 'gemini',
+        model: smartModel,
         geminiApiKey: engine.geminiApiKey,
+        atlasApiKey: engine.atlasApiKey,
         geminiImageModel: engine.geminiImageModel,
         falApiKey: engine.falApiKey,
       }, onFallback);
     }
-    onFallback?.('缺少 Gemini API Key，暫時改用本機去背');
+    onFallback?.(smartModel === 'gemini' ? '缺少 Gemini API Key，暫時改用本機去背' : '缺少 Atlas API Key，暫時改用本機去背');
   }
 
   // 雲端去背：fal.ai BiRefNet v2（重用既有 pipeline，不重寫）。可選 6 種模型。
