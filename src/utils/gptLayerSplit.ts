@@ -188,12 +188,18 @@ bbox = tightest possible rectangle enclosing ALL visible pixels of this element 
 ━━━ ISOLATION BACKGROUND ━━━
 Pick the isolation background with MAXIMUM contrast against the object's own colors. The background will be removed by software matting/chroma-key afterwards, so the chosen color must NOT appear anywhere ON the object itself.
 
-For SUBJECT / PRODUCT / OBJECTS / DECOR (auto-pick among 3 colors + dark gray):
+TRANSLUCENT / TRANSPARENT objects override every other rule below (glass, crystal, ice, plastic bags, sheer fabric, veils, wedding dresses, smoke, tinted glass, colored translucent plastic):
+- The background shows THROUGH a translucent object and mixes into its color, so a saturated background would permanently tint it (blue glass on red → purple). Use NEUTRAL GRAYS ONLY:
+- DARKGRAY: clear/colorless glass, white or pale sheer fabric (veil, wedding dress), plastic bags, smoke — dark gray makes white highlights and pale translucency visible
+- LIGHTGRAY: dark translucent objects (sunglasses, dark bottles, deep-tinted glass)
+- Colored translucent objects (blue glass, red sheer dress): pick DARKGRAY if the object is light/bright, LIGHTGRAY if dark — NEVER its complementary color.
+
+For opaque SUBJECT / PRODUCT / OBJECTS / DECOR (auto-pick among 3 colors + dark gray):
 - GREEN: warm-toned objects (skin, red/orange/yellow/pink/brown) AND objects with white / off-white / pale parts (white clothing, white hair, white products — green rarely appears on them)
 - BLUE: green / plant / nature / teal objects
 - RED: blue / cyan / cool-toned objects
 - DARKGRAY: multicolored objects that already contain green AND blue AND red areas, or when unsure
-- NEVER use WHITE or LIGHTGRAY for these categories — any white/pale part of the object would be eaten by matting.
+- NEVER use WHITE for these categories — any white/pale part of the object would be eaten by matting. LIGHTGRAY is allowed only via the translucent rule above.
 
 For TEXT (typography, logos, wordmarks, labels) use neutral backgrounds only:
 - WHITE: dark or colored text/logo
