@@ -1662,7 +1662,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                 className="w-full py-2.5 bg-[#1e293b] text-white rounded-xl text-[13px] font-medium hover:bg-[#0f172a] transition-colors flex items-center justify-center gap-2"
                                             >
                                                 <Icon name="content_cut" size={17} />
-                                                Gemini 智慧去背
+                                                智慧去背
                                             </button>
                                             {hasFalKey && onBiRefNetRemoveBackground && (() => {
                                                 const birefnetOptions = [
