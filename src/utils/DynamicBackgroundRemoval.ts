@@ -2,6 +2,7 @@
 import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
 import { birefnetRemoveBg } from './geminiLayer';
 import { getClosestAspectRatio } from './helpers';
+import { createGeminiClient } from '../ai/geminiClient';
 
 // Helper to load image
 const loadImage = (src: string): Promise<HTMLImageElement> => {
@@ -18,13 +19,54 @@ const loadImage = (src: string): Promise<HTMLImageElement> => {
 // 白/灰底對白衣白髮主體會被 matting 吃掉，故不再作為預設；
 // 中飽和色（非純色）可將 despill 邊緣染色風險降到最低。
 const CONTRAST_BACKGROUNDS = {
-    GREEN:    { hex: '#00BB44', name: 'MEDIUM GREEN',  rgb: [0, 187, 68] as const },
-    BLUE:     { hex: '#2255CC', name: 'MEDIUM BLUE',   rgb: [34, 85, 204] as const },
-    RED:      { hex: '#CC2200', name: 'MEDIUM RED',    rgb: [204, 34, 0] as const },
-    DARKGRAY: { hex: '#3A3A3A', name: 'DARK GRAY',     rgb: [58, 58, 58] as const },
+    GREEN:     { hex: '#00BB44', name: 'MEDIUM GREEN',  rgb: [0, 187, 68] as const },
+    BLUE:      { hex: '#2255CC', name: 'MEDIUM BLUE',   rgb: [34, 85, 204] as const },
+    RED:       { hex: '#CC2200', name: 'MEDIUM RED',    rgb: [204, 34, 0] as const },
+    DARKGRAY:  { hex: '#3A3A3A', name: 'DARK GRAY',     rgb: [58, 58, 58] as const },
+    LIGHTGRAY: { hex: '#DADADA', name: 'LIGHT GRAY',    rgb: [218, 218, 218] as const },
 } as const;
 
-type ContrastBackground = typeof CONTRAST_BACKGROUNDS[keyof typeof CONTRAST_BACKGROUNDS];
+type BgKey = keyof typeof CONTRAST_BACKGROUNDS;
+type ContrastBackground = typeof CONTRAST_BACKGROUNDS[BgKey];
+
+/**
+ * Gemini 語意判斷隔離底色（辨識半透明/玻璃/薄紗等本地像素看不出的特例）。
+ * 半透明物件：底色會透過物件混進本色，補色會永久污染（藍玻璃×紅底=紫）→ 一律灰階。
+ *   - 淺色/一般有色半透明（玻璃、白紗、藍玻璃）→ 深灰（高光才浮得出）
+ *   - 深色半透明（墨鏡、深酒瓶）→ 淺灰
+ * 不透明物件：取主色補色（暖色/白→綠、綠→藍、藍/冷→紅、多彩→深灰）。
+ */
+const analyzeIsolationBackgroundSemantic = async (
+    imageSrc: string,
+    geminiApiKey: string,
+): Promise<ContrastBackground> => {
+    const ai = createGeminiClient(geminiApiKey);
+    const cleanBase64 = imageSrc.split(',')[1] || imageSrc;
+    const mimeType = imageSrc.match(/data:(.*);base64/)?.[1] ?? 'image/png';
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [
+            { inlineData: { mimeType, data: cleanBase64 } },
+            { text: `You choose the best solid isolation background color for cutting out the MAIN SUBJECT of this image. The background will be removed by software matting afterwards, so it must maximize contrast against the subject AND must never tint the subject.
+
+Return ONLY JSON: {"background":"GREEN|BLUE|RED|DARKGRAY|LIGHTGRAY","translucent":true|false}
+
+RULES (in priority order):
+1. If the subject is TRANSLUCENT or TRANSPARENT (glass, crystal, ice, plastic bag, sheer/veil fabric, wedding dress, tinted glass, colored translucent plastic): the background shows THROUGH it and mixes into its color, so a saturated color would permanently tint it. Use gray only:
+   - "DARKGRAY" for clear/colorless or light/bright colored translucent (glass cup, white veil, blue glass) — dark gray lets highlights show
+   - "LIGHTGRAY" only for a dark translucent subject with no bright highlights (sunglasses, deep dark bottle)
+2. Otherwise (opaque subject), pick the complement of its dominant color:
+   - "GREEN": warm subjects (skin/red/orange/yellow/pink/brown) OR subjects with white/pale parts (white clothes/hair)
+   - "BLUE": green/plant/teal subjects
+   - "RED": blue/cyan/cool subjects
+   - "DARKGRAY": multicolored subjects containing green+blue+red, or when unsure` },
+        ] },
+    });
+    const text = response.text ?? '';
+    const match = text.replace(/```(?:json)?/gi, '').match(/\{[\s\S]*\}/);
+    const key = (match ? (JSON.parse(match[0]).background as string) : '').toUpperCase();
+    return CONTRAST_BACKGROUNDS[key as BgKey] ?? CONTRAST_BACKGROUNDS.GREEN;
+};
 
 /**
  * 自動判斷隔離底色（回到三色＋深灰的補色邏輯）：
@@ -170,8 +212,18 @@ export const executeDynamicRemoval = async (imageSrc: string, engine: DynamicRem
 
     if (onProgress) onProgress(`智慧去背: 使用目前選擇的 ${engine.model === 'gemini' ? 'Gemini' : engine.model === 'gpt-image-2' ? 'GPT Image 2' : '即夢 Pro'} 模型隔離主體`);
 
-    // 1. 本地自動判斷對比底色（三色＋深灰），確保白衣白髮等淺色部位不與底色同色。
-    const background = await analyzeContrastBackground(imageSrc);
+    // 1. 判斷隔離底色。有 Gemini key 時用語意分析（能辨識玻璃/薄紗等半透明特例，
+    //    避免有色半透明被補色永久污染）；否則退回本地像素分析。
+    let background: ContrastBackground;
+    if (engine.geminiApiKey) {
+        try {
+            background = await analyzeIsolationBackgroundSemantic(imageSrc, engine.geminiApiKey);
+        } catch {
+            background = await analyzeContrastBackground(imageSrc);
+        }
+    } else {
+        background = await analyzeContrastBackground(imageSrc);
+    }
     if (onProgress) onProgress(`智慧去背: 分析完成，選用 ${background.name} 隔離底色`);
 
     const prompt1 = `
