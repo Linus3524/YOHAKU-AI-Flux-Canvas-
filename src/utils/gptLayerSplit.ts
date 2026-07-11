@@ -84,6 +84,33 @@ const BG_COLOR_MAP = {
 } as const;
 
 type BgColorKey = keyof typeof BG_COLOR_MAP;
+type BgColorEntry = { hex: string; rgb: string };
+
+/**
+ * 為有色半透明物件產生「帶色調的淡灰」底色（魔法分層用）。
+ * 原理同 DynamicBackgroundRemoval：用物件主色的淡化版當底色，
+ * 透過玻璃/薄紗時自然增強原色而非灰化。
+ */
+function buildTintedGrayForLayer(hue: number, isDark: boolean = false): BgColorEntry {
+    const baseLightness = isDark ? 0.82 : 0.50;
+    const saturation = 0.15;
+    const h = ((hue % 360) + 360) % 360;
+    const c = (1 - Math.abs(2 * baseLightness - 1)) * saturation;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = baseLightness - c / 2;
+    let r1 = 0, g1 = 0, b1 = 0;
+    if (h < 60)       { r1 = c; g1 = x; b1 = 0; }
+    else if (h < 120) { r1 = x; g1 = c; b1 = 0; }
+    else if (h < 180) { r1 = 0; g1 = c; b1 = x; }
+    else if (h < 240) { r1 = 0; g1 = x; b1 = c; }
+    else if (h < 300) { r1 = x; g1 = 0; b1 = c; }
+    else              { r1 = c; g1 = 0; b1 = x; }
+    const r = Math.round((r1 + m) * 255);
+    const g = Math.round((g1 + m) * 255);
+    const b = Math.round((b1 + m) * 255);
+    const hex = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+    return { hex, rgb: `${r},${g},${b}` };
+}
 
 // ── 偵測結果 ─────────────────────────────────────────────────────────────────
 interface DetectedObject {
@@ -101,6 +128,10 @@ interface DetectedObject {
     bbox: { x: number; y: number; w: number; h: number };
     /** Gemini 自動描述（語意編輯器 Prompt 用） */
     description?: string;
+    /** 有色半透明物件的主色色相 (0-359)，用於產生帶色調的淡灰底色 */
+    subjectHue?: number;
+    /** 是否為深色半透明物件（墨鏡、深酒瓶等） */
+    darkTranslucent?: boolean;
 }
 
 // ── withTimeout 包裹 ─────────────────────────────────────────────────────────
@@ -189,10 +220,10 @@ bbox = tightest possible rectangle enclosing ALL visible pixels of this element 
 Pick the isolation background with MAXIMUM contrast against the object's own colors. The background will be removed by software matting/chroma-key afterwards, so the chosen color must NOT appear anywhere ON the object itself.
 
 TRANSLUCENT / TRANSPARENT objects override every other rule below (glass, crystal, ice, plastic bags, sheer fabric, veils, wedding dresses, smoke, tinted glass, colored translucent plastic):
-- The background shows THROUGH a translucent object and mixes into its color, so a saturated background would permanently tint it (blue glass on red → purple). Use NEUTRAL GRAYS ONLY:
-- DARKGRAY: clear/colorless glass, white or pale sheer fabric (veil, wedding dress), plastic bags, smoke — dark gray makes white highlights and pale translucency visible
-- LIGHTGRAY: dark translucent objects (sunglasses, dark bottles, deep-tinted glass)
-- Colored translucent objects (blue glass, red sheer dress): pick DARKGRAY if the object is light/bright, LIGHTGRAY if dark — NEVER its complementary color.
+- The background shows THROUGH a translucent object and mixes into its color.
+- COLORED translucent (blue bottle, amber glass, tinted plastic, colored sheer fabric): return bgColor "TINTED_GRAY" AND add two extra fields: "subjectHue":<0-359> (the object's own dominant hue, e.g. blue glass≈220, amber≈30, red glass≈0, green bottle≈120) and "darkTranslucent":true|false. We will generate a gray tinted with the object's own hue so its color is preserved, not washed out.
+- COLORLESS transparent (clear glass cup, plastic wrap, ice): return bgColor "DARKGRAY" — dark gray lets white highlights and refraction show. No subjectHue needed.
+- DARK translucent (sunglasses, deep dark bottle): return bgColor "TINTED_GRAY" with "darkTranslucent":true — we will use a lighter tinted base.
 
 For opaque SUBJECT / PRODUCT / OBJECTS / DECOR (auto-pick among 3 colors + dark gray):
 - GREEN: warm-toned objects (skin, red/orange/yellow/pink/brown) AND objects with white / off-white / pale parts (white clothing, white hair, white products — green rarely appears on them)
@@ -223,7 +254,7 @@ Preferred categories to notice: ${requestedCategories}.
 Additional instruction: ${options?.customInstruction?.trim() || 'None'}.
 
 Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
-[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman wearing a white shirt, smiling at camera."},{"label":"標題文字","labelEn":"headline text","category":"TEXT","bgColor":"DARKGRAY","edgeComplexity":"simple","bbox":{"x":0.55,"y":0.08,"w":0.38,"h":0.12},"description":"White bold sans-serif headline text in two lines."}]`
+[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman wearing a white shirt, smiling at camera."},{"label":"藍色玻璃瓶","labelEn":"blue glass bottle","category":"PRODUCT","bgColor":"TINTED_GRAY","subjectHue":220,"darkTranslucent":false,"edgeComplexity":"complex","bbox":{"x":0.60,"y":0.20,"w":0.15,"h":0.50},"description":"A translucent blue glass bottle with highlights."},{"label":"標題文字","labelEn":"headline text","category":"TEXT","bgColor":"DARKGRAY","edgeComplexity":"simple","bbox":{"x":0.55,"y":0.08,"w":0.38,"h":0.12},"description":"White bold sans-serif headline text in two lines."}]`
                 }
             ]
         },
@@ -714,18 +745,23 @@ async function geminiIsolateOnSolidBg(
     imageBase64: string,
     apiKey: string,
     model: string,
-    bgColor: { hex: string; rgb: string },
+    bgColor: BgColorEntry,
     perspectiveHint = '',
 ): Promise<string> {
     const ai = new GoogleGenAI({ apiKey });
     const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
     const mimeType    = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
+    const isTintedGray = obj.bgColor === ('TINTED_GRAY' as BgColorKey) && typeof obj.subjectHue === 'number';
+    const translucentHint = isTintedGray
+        ? ` CRITICAL for this translucent/glass/sheer object: keep the object's own coloration and internal transparency VIVID and INTACT. The colored transparency must remain as saturated and vibrant as in the original image. Do NOT desaturate, gray-out, or neutralize the colored transparent areas. The background color (${bgColor.hex}) is intentionally tinted to match the object — let it show through the transparent parts naturally.`
+        : '';
     const prompt =
         `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
         `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
         `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
         `The background must be a perfectly uniform solid color with NO gradients, NO shadows, NO variations. ` +
         `Do NOT blend or feather the object edges into the background. Hard, clean boundary required.` +
+        translucentHint +
         perspectiveHint;
     const response = await ai.models.generateContent({
         model,
@@ -779,8 +815,11 @@ async function extractOneLayer(
     const isTextLayer = obj.category === 'TEXT' || obj.category === 'DECOR';
     const useBiRefNet = !!falKey && !isTextLayer;
     // fallback：文字/Logo 用白底（灰階最安全）；一般物件用中綠（含白色部位也吃得掉）
-    const bgColor = BG_COLOR_MAP[obj.bgColor]
-        ?? (obj.category === 'TEXT' ? BG_COLOR_MAP.WHITE : BG_COLOR_MAP.GREEN);
+    // 有色半透明物件 → 用帶色調的淡灰底色（保留透明色調）
+    const isTintedGray = obj.bgColor === ('TINTED_GRAY' as BgColorKey) && typeof obj.subjectHue === 'number';
+    const bgColor: BgColorEntry = isTintedGray
+        ? buildTintedGrayForLayer(obj.subjectHue!, !!obj.darkTranslucent)
+        : (BG_COLOR_MAP[obj.bgColor] ?? (obj.category === 'TEXT' ? BG_COLOR_MAP.WHITE : BG_COLOR_MAP.GREEN));
 
     try {
         // ── 2a：隔離生成（GPT Image 2 優先；無 Atlas Key 降級 Gemini Flash Image）──
@@ -804,14 +843,18 @@ async function extractOneLayer(
                       `Do not make the output transparent. Do not add a checkerboard, scenery, shadow plate, border, texture, gradient or matte to the background. ` +
                       `Preserve the exact original position, scale, perspective, colors, materials, lighting and edges. ` +
                       `Preserve the source object's original opacity: solid objects such as paper, sticky notes, labels, products, logos and text panels must remain solid and must not become translucent, faded, ghosted or see-through. ` +
-                      `Only preserve translucency when it is clearly present in the source, such as glass, smoke, liquid, sheer fabric or glow. Preserve shadows and highlights without reducing the opacity of the object's main body.` + perspectiveHint + refHint
+                      `Only preserve translucency when it is clearly present in the source, such as glass, smoke, liquid, sheer fabric or glow. Preserve shadows and highlights without reducing the opacity of the object's main body.` +
+                      (isTintedGray ? ` CRITICAL for this translucent/glass/sheer object: keep the object's own coloration and internal transparency VIVID and INTACT. The colored transparency must remain as saturated and vibrant as in the original image. Do NOT desaturate, gray-out, or neutralize the colored transparent areas. The background color (${bgColor.hex}) is intentionally tinted to match the object — let it show through the transparent parts naturally.` : '') +
+                      perspectiveHint + refHint
                     : `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
                       `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
                       `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
                       `The background must be a perfectly uniform solid color with NO gradients, shadows, or variations. ` +
                       `CRITICAL: Do NOT blend or feather the object edges into the background. ` +
                       `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
-                      `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.` + perspectiveHint + refHint,
+                      `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.` +
+                      (isTintedGray ? ` CRITICAL for this translucent/glass/sheer object: keep the object's own coloration and internal transparency VIVID and INTACT. The colored transparency must remain as saturated and vibrant as in the original image. Do NOT desaturate, gray-out, or neutralize the colored transparent areas. The background color (${bgColor.hex}) is intentionally tinted to match the object — let it show through the transparent parts naturally.` : '') +
+                      perspectiveHint + refHint,
                 atlasModel,
                 atlasKey,
                 compressedImage,

@@ -27,12 +27,41 @@ const CONTRAST_BACKGROUNDS = {
 } as const;
 
 type BgKey = keyof typeof CONTRAST_BACKGROUNDS;
-type ContrastBackground = typeof CONTRAST_BACKGROUNDS[BgKey];
+type ContrastBackground = (typeof CONTRAST_BACKGROUNDS)[BgKey] | { hex: string; name: string; rgb: readonly [number, number, number] };
+
+/**
+ * 為有色半透明物件產生「帶色調的淡灰」底色。
+ * 原理：用物件主色的淡化版當底色，透過玻璃/薄紗時自然增強原色而非灰化。
+ * @param hue 物件主色色相 (0-359)
+ * @param isDark 是否為深色半透明（墨鏡等）→ 用較淺的基底
+ */
+const buildTintedGray = (hue: number, isDark: boolean = false): ContrastBackground => {
+    const baseLightness = isDark ? 0.82 : 0.50;
+    const saturation = 0.15; // 15% 飽和度，只帶一點色調
+    // HSL → RGB 轉換
+    const h = ((hue % 360) + 360) % 360;
+    const c = (1 - Math.abs(2 * baseLightness - 1)) * saturation;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = baseLightness - c / 2;
+    let r1 = 0, g1 = 0, b1 = 0;
+    if (h < 60)       { r1 = c; g1 = x; b1 = 0; }
+    else if (h < 120) { r1 = x; g1 = c; b1 = 0; }
+    else if (h < 180) { r1 = 0; g1 = c; b1 = x; }
+    else if (h < 240) { r1 = 0; g1 = x; b1 = c; }
+    else if (h < 300) { r1 = x; g1 = 0; b1 = c; }
+    else              { r1 = c; g1 = 0; b1 = x; }
+    const r = Math.round((r1 + m) * 255);
+    const g = Math.round((g1 + m) * 255);
+    const b = Math.round((b1 + m) * 255);
+    const hex = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+    return { hex, name: `TINTED GRAY (hue ${Math.round(hue)}°)`, rgb: [r, g, b] as const };
+};
 
 /**
  * Gemini 語意判斷隔離底色（辨識半透明/玻璃/薄紗等本地像素看不出的特例）。
- * 半透明物件：底色會透過物件混進本色，補色會永久污染（藍玻璃×紅底=紫）→ 一律灰階。
- *   - 淺色/一般有色半透明（玻璃、白紗、藍玻璃）→ 深灰（高光才浮得出）
+ * 有色半透明物件：用「帶色調的淡灰」（物件主色 15% 飽和度混入淺灰），
+ *   讓底色透進物件時增強原色而非灰化，去背後保留原物件透明色調。
+ *   - 無色透明（透明玻璃杯、保鮮膜）→ 深灰（無色調可混入）
  *   - 深色半透明（墨鏡、深酒瓶）→ 淺灰
  * 不透明物件：取主色補色（暖色/白→綠、綠→藍、藍/冷→紅、多彩→深灰）。
  */
@@ -49,12 +78,18 @@ const analyzeIsolationBackgroundSemantic = async (
             { inlineData: { mimeType, data: cleanBase64 } },
             { text: `You choose the best solid isolation background color for cutting out the MAIN SUBJECT of this image. The background will be removed by software matting afterwards, so it must maximize contrast against the subject AND must never tint the subject.
 
-Return ONLY JSON: {"background":"GREEN|BLUE|RED|DARKGRAY|LIGHTGRAY","translucent":true|false}
+Return ONLY JSON:
+- Opaque subject: {"background":"GREEN|BLUE|RED|DARKGRAY","translucent":false}
+- Translucent subject: {"background":"TINTED_GRAY","translucent":true,"subjectHue":<0-359>,"dark":true|false}
+  subjectHue = the dominant color hue of the translucent object itself (blue glass≈220, amber bottle≈30, red glass≈0, green bottle≈120).
+  dark = true ONLY for very dark translucent objects (sunglasses, dark wine bottles).
+  For COLORLESS transparent (clear glass, plastic wrap, ice) use: {"background":"DARKGRAY","translucent":true}
 
 RULES (in priority order):
-1. If the subject is TRANSLUCENT or TRANSPARENT (glass, crystal, ice, plastic bag, sheer/veil fabric, wedding dress, tinted glass, colored translucent plastic): the background shows THROUGH it and mixes into its color, so a saturated color would permanently tint it. Use gray only:
-   - "DARKGRAY" for clear/colorless or light/bright colored translucent (glass cup, white veil, blue glass) — dark gray lets highlights show
-   - "LIGHTGRAY" only for a dark translucent subject with no bright highlights (sunglasses, deep dark bottle)
+1. If the subject is TRANSLUCENT or TRANSPARENT (glass, crystal, ice, plastic bag, sheer/veil fabric, wedding dress, tinted glass, colored translucent plastic): the background shows THROUGH it and mixes into its color.
+   - COLORED translucent (blue bottle, amber glass, tinted plastic, colored sheer fabric): return "TINTED_GRAY" with the object's own hue in "subjectHue". We will generate a gray tinted with that hue so the object's color is preserved, not washed out.
+   - COLORLESS transparent (clear glass cup, plastic wrap, ice): return "DARKGRAY" — dark gray lets white highlights and refraction show.
+   - DARK translucent (sunglasses, deep dark bottle): return "TINTED_GRAY" with "dark":true — we will use a lighter tinted base.
 2. Otherwise (opaque subject), pick the complement of its dominant color:
    - "GREEN": warm subjects (skin/red/orange/yellow/pink/brown) OR subjects with white/pale parts (white clothes/hair)
    - "BLUE": green/plant/teal subjects
@@ -64,8 +99,18 @@ RULES (in priority order):
     });
     const text = response.text ?? '';
     const match = text.replace(/```(?:json)?/gi, '').match(/\{[\s\S]*\}/);
-    const key = (match ? (JSON.parse(match[0]).background as string) : '').toUpperCase();
-    return CONTRAST_BACKGROUNDS[key as BgKey] ?? CONTRAST_BACKGROUNDS.GREEN;
+    if (!match) return CONTRAST_BACKGROUNDS.GREEN;
+    try {
+        const parsed = JSON.parse(match[0]);
+        const key = (parsed.background as string || '').toUpperCase();
+        // 有色半透明 → 用帶色調的淡灰
+        if (key === 'TINTED_GRAY' && typeof parsed.subjectHue === 'number') {
+            return buildTintedGray(parsed.subjectHue, !!parsed.dark);
+        }
+        return CONTRAST_BACKGROUNDS[key as BgKey] ?? CONTRAST_BACKGROUNDS.GREEN;
+    } catch {
+        return CONTRAST_BACKGROUNDS.GREEN;
+    }
 };
 
 /**
@@ -226,6 +271,7 @@ export const executeDynamicRemoval = async (imageSrc: string, engine: DynamicRem
     }
     if (onProgress) onProgress(`智慧去背: 分析完成，選用 ${background.name} 隔離底色`);
 
+    const isTranslucent = background.name.startsWith('TINTED GRAY');
     const prompt1 = `
     Isolate the main subject from the supplied image without changing its identity, pose, proportions, color, texture, lighting, or composition.
     Place it on exactly one perfectly flat solid background color: ${background.name} (hex ${background.hex}, RGB ${background.rgb.join(',')}).
@@ -233,6 +279,7 @@ export const executeDynamicRemoval = async (imageSrc: string, engine: DynamicRem
     Do NOT let the background color tint, reflect on, or bleed into the subject's edges.
     Preserve every fine edge, including white hair, white fabric, translucent glass, and pale details. Keep the subject at the original scale and position.
     This is an isolation source for software matting, not a transparent PNG request.
+    ${isTranslucent ? `CRITICAL for this translucent/glass/sheer subject: keep the subject's own coloration and internal transparency VIVID and INTACT. The colored transparency (e.g. the blue tint of blue glass, the amber hue of an amber bottle) must remain as saturated and vibrant as in the original image. Do NOT desaturate, gray-out, or neutralize the colored transparent areas. The background color (${background.hex}) is intentionally tinted to match the subject — let it show through the transparent parts naturally.` : ''}
     `;
     const aspectRatio = await detectAspectRatio(imageSrc);
     const generatedSrc = await generateOneImage({ prompt: prompt1, aspectRatio, refImage: imageSrc }, engine);
