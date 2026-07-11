@@ -71,11 +71,16 @@ export const DEFAULT_MAGIC_LAYER_OPTIONS: MagicLayerOptions = {
 };
 
 // ── 隔離背景方案 ────────────────────────────────────────────────────────────
-// 白底最接近商品隔離圖，對 BiRefNet 的細節保留最穩定；
-// 只有白色／極淺色物件才用中性灰，避免高飽和色造成邊緣染色。
+// 物件層：依物件本身顏色自動挑對比色（中飽和三色 + 深灰），
+//   確保物件任何部位（含白衣白髮）都不會與底色同色而被 matting 吃掉。
+// 文字/Logo 層：只用白/淺灰/深灰，避免彩色底在反鋸齒字邊緣染色。
 const BG_COLOR_MAP = {
-    WHITE: { hex: '#FFFFFF', rgb: '255,255,255' },
-    GRAY:  { hex: '#787878', rgb: '120,120,120' },
+    GREEN:     { hex: '#00BB44', rgb: '0,187,68' },    // 中綠：暖色系與白色物件
+    BLUE:      { hex: '#2255CC', rgb: '34,85,204' },   // 中藍：綠色/自然系物件
+    RED:       { hex: '#CC2200', rgb: '204,34,0' },    // 中紅：藍色/冷色系物件
+    DARKGRAY:  { hex: '#3A3A3A', rgb: '58,58,58' },    // 深灰：多彩物件、白色文字
+    WHITE:     { hex: '#FFFFFF', rgb: '255,255,255' }, // 白：深色/彩色文字 Logo
+    LIGHTGRAY: { hex: '#DADADA', rgb: '218,218,218' }, // 淺灰：深淺混合的文字 Logo
 } as const;
 
 type BgColorKey = keyof typeof BG_COLOR_MAP;
@@ -181,10 +186,20 @@ bbox = tightest possible rectangle enclosing ALL visible pixels of this element 
 - If an element is near an edge, x or y can be 0.0; w or h can reach 1.0 only if truly full-width/height
 
 ━━━ ISOLATION BACKGROUND ━━━
-Pick the generated isolation background:
-- WHITE: default for people, products, dark text, colored objects, glass and most subjects.
-- GRAY: ONLY for objects that are predominantly white, off-white, very pale gray, or white typography/logo.
-Never use red, green, blue, black, or a saturated chroma-key color. The output will be removed by software matting after generation.
+Pick the isolation background with MAXIMUM contrast against the object's own colors. The background will be removed by software matting/chroma-key afterwards, so the chosen color must NOT appear anywhere ON the object itself.
+
+For SUBJECT / PRODUCT / OBJECTS / DECOR (auto-pick among 3 colors + dark gray):
+- GREEN: warm-toned objects (skin, red/orange/yellow/pink/brown) AND objects with white / off-white / pale parts (white clothing, white hair, white products — green rarely appears on them)
+- BLUE: green / plant / nature / teal objects
+- RED: blue / cyan / cool-toned objects
+- DARKGRAY: multicolored objects that already contain green AND blue AND red areas, or when unsure
+- NEVER use WHITE or LIGHTGRAY for these categories — any white/pale part of the object would be eaten by matting.
+
+For TEXT (typography, logos, wordmarks, labels) use neutral backgrounds only:
+- WHITE: dark or colored text/logo
+- LIGHTGRAY: logos mixing light and dark elements
+- DARKGRAY: white or very pale text/logo
+- Never use GREEN/BLUE/RED for TEXT — saturated backgrounds tint anti-aliased glyph edges.
 
 ━━━ EDGE COMPLEXITY ━━━
 - "simple": clean geometric or hard edges (products, text, simple shapes, solid objects)
@@ -202,7 +217,7 @@ Preferred categories to notice: ${requestedCategories}.
 Additional instruction: ${options?.customInstruction?.trim() || 'None'}.
 
 Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
-[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"WHITE","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman wearing a white shirt, smiling at camera."}]`
+[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman wearing a white shirt, smiling at camera."},{"label":"標題文字","labelEn":"headline text","category":"TEXT","bgColor":"DARKGRAY","edgeComplexity":"simple","bbox":{"x":0.55,"y":0.08,"w":0.38,"h":0.12},"description":"White bold sans-serif headline text in two lines."}]`
                 }
             ]
         },
@@ -757,7 +772,9 @@ async function extractOneLayer(
     // → 強制走 Chroma Key（純色背景下效果更準確）
     const isTextLayer = obj.category === 'TEXT' || obj.category === 'DECOR';
     const useBiRefNet = !!falKey && !isTextLayer;
-    const bgColor = BG_COLOR_MAP[obj.bgColor] ?? BG_COLOR_MAP.WHITE;
+    // fallback：文字/Logo 用白底（灰階最安全）；一般物件用中綠（含白色部位也吃得掉）
+    const bgColor = BG_COLOR_MAP[obj.bgColor]
+        ?? (obj.category === 'TEXT' ? BG_COLOR_MAP.WHITE : BG_COLOR_MAP.GREEN);
 
     try {
         // ── 2a：隔離生成（GPT Image 2 優先；無 Atlas Key 降級 Gemini Flash Image）──

@@ -14,20 +14,25 @@ const loadImage = (src: string): Promise<HTMLImageElement> => {
     });
 };
 
-// 隔離圖只使用中性白／灰，避免高飽和 chroma key 反射到白髮、白衣與半透明邊緣。
-const NEUTRAL_BACKGROUNDS = {
-    WHITE: { hex: '#FFFFFF', name: 'WHITE' },
-    GRAY: { hex: '#787878', name: 'NEUTRAL GRAY' },
+// 隔離底色：依主體顏色自動挑對比色（中飽和三色 + 深灰）。
+// 白/灰底對白衣白髮主體會被 matting 吃掉，故不再作為預設；
+// 中飽和色（非純色）可將 despill 邊緣染色風險降到最低。
+const CONTRAST_BACKGROUNDS = {
+    GREEN:    { hex: '#00BB44', name: 'MEDIUM GREEN',  rgb: [0, 187, 68] as const },
+    BLUE:     { hex: '#2255CC', name: 'MEDIUM BLUE',   rgb: [34, 85, 204] as const },
+    RED:      { hex: '#CC2200', name: 'MEDIUM RED',    rgb: [204, 34, 0] as const },
+    DARKGRAY: { hex: '#3A3A3A', name: 'DARK GRAY',     rgb: [58, 58, 58] as const },
 } as const;
 
-type NeutralBackground = typeof NEUTRAL_BACKGROUNDS[keyof typeof NEUTRAL_BACKGROUNDS];
+type ContrastBackground = typeof CONTRAST_BACKGROUNDS[keyof typeof CONTRAST_BACKGROUNDS];
 
-export interface DynamicRemovalEngine extends ImageEngineConfig {
-    falApiKey?: string | null;
-}
-
-// 保留輸出層級的中性背景判斷：無論模型最後選白或灰，後段都取實際角落色做備援扣圖。
-const detectNeutralBackground = (imageSrc: string): Promise<NeutralBackground> => {
+/**
+ * 自動判斷隔離底色（回到三色＋深灰的補色邏輯）：
+ * - 主體有明確色相 → 取平均色相的補色區間（紅/綠/藍）
+ * - 色相分散的多彩主體 → 深灰
+ * - 近灰階主體（白衣、白髮、灰白 Logo）→ 綠（白色部位不會與底色同色）
+ */
+export const analyzeContrastBackground = (imageSrc: string): Promise<ContrastBackground> => {
     return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = "anonymous";
@@ -35,22 +40,52 @@ const detectNeutralBackground = (imageSrc: string): Promise<NeutralBackground> =
             const canvas = document.createElement('canvas');
             const size = 100; canvas.width = size; canvas.height = size;
             const ctx = canvas.getContext('2d');
-            if (!ctx) { resolve(NEUTRAL_BACKGROUNDS.WHITE); return; }
-            
+            if (!ctx) { resolve(CONTRAST_BACKGROUNDS.GREEN); return; }
             ctx.drawImage(img, 0, 0, size, size);
             const data = ctx.getImageData(0, 0, size, size).data;
-            
-            const corners = [0, size - 1, (size - 1) * size, size * size - 1];
-            const luminance = corners.reduce((sum, pixelIndex) => {
-                const offset = pixelIndex * 4;
-                return sum + (data[offset] * 0.2126 + data[offset + 1] * 0.7152 + data[offset + 2] * 0.0722);
-            }, 0) / corners.length;
-            resolve(luminance > 190 ? NEUTRAL_BACKGROUNDS.WHITE : NEUTRAL_BACKGROUNDS.GRAY);
+
+            // 只採樣中央 60% 區域（主體通常在中間），避免原背景干擾判斷
+            const lo = Math.floor(size * 0.2), hi = Math.ceil(size * 0.8);
+            const hues: number[] = [];
+            for (let y = lo; y < hi; y++) {
+                for (let x = lo; x < hi; x++) {
+                    const i = (y * size + x) * 4;
+                    const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
+                    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                    const sat = max === 0 ? 0 : (max - min) / max;
+                    if (sat < 0.25 || max < 0.15) continue; // 略過灰階/過暗像素
+                    let h = 0;
+                    if (max === r) h = ((g - b) / (max - min)) % 6;
+                    else if (max === g) h = (b - r) / (max - min) + 2;
+                    else h = (r - g) / (max - min) + 4;
+                    hues.push(((h * 60) + 360) % 360);
+                }
+            }
+
+            const sampled = (hi - lo) * (hi - lo);
+            // 近灰階主體（白衣白髮/銀灰產品）：飽和像素 <8% → 綠底
+            if (hues.length < sampled * 0.08) { resolve(CONTRAST_BACKGROUNDS.GREEN); return; }
+
+            // 色相環平均（向量法，避免 350°+10° 平均成 180° 的錯誤）
+            let sx = 0, sy = 0;
+            for (const h of hues) { sx += Math.cos(h * Math.PI / 180); sy += Math.sin(h * Math.PI / 180); }
+            const resultant = Math.sqrt(sx * sx + sy * sy) / hues.length; // 0~1，越小=色相越分散
+            if (resultant < 0.35) { resolve(CONTRAST_BACKGROUNDS.DARKGRAY); return; } // 多彩主體 → 深灰
+
+            const avgHue = ((Math.atan2(sy, sx) * 180 / Math.PI) + 360) % 360;
+            const complement = (avgHue + 180) % 360;
+            if (complement >= 300 || complement < 60) resolve(CONTRAST_BACKGROUNDS.RED);
+            else if (complement < 180) resolve(CONTRAST_BACKGROUNDS.GREEN);
+            else resolve(CONTRAST_BACKGROUNDS.BLUE);
         };
-        img.onerror = () => resolve(NEUTRAL_BACKGROUNDS.WHITE);
+        img.onerror = () => resolve(CONTRAST_BACKGROUNDS.GREEN);
         img.src = imageSrc;
     });
 };
+
+export interface DynamicRemovalEngine extends ImageEngineConfig {
+    falApiKey?: string | null;
+}
 
 const detectAspectRatio = async (imageSrc: string): Promise<string> => {
     try {
@@ -135,11 +170,15 @@ export const executeDynamicRemoval = async (imageSrc: string, engine: DynamicRem
 
     if (onProgress) onProgress(`智慧去背: 使用目前選擇的 ${engine.model === 'gemini' ? 'Gemini' : engine.model === 'gpt-image-2' ? 'GPT Image 2' : '即夢 Pro'} 模型隔離主體`);
 
-    // 1. 由目前全域模型生成中性隔離圖。白／淺色主體（包含白髮、白衣）明確指定灰底。
+    // 1. 本地自動判斷對比底色（三色＋深灰），確保白衣白髮等淺色部位不與底色同色。
+    const background = await analyzeContrastBackground(imageSrc);
+    if (onProgress) onProgress(`智慧去背: 分析完成，選用 ${background.name} 隔離底色`);
+
     const prompt1 = `
     Isolate the main subject from the supplied image without changing its identity, pose, proportions, color, texture, lighting, or composition.
-    Place it on exactly one perfectly flat neutral background: use PURE WHITE (#FFFFFF) by default. If the subject has white or off-white hair, clothing, fur, feathers, product surfaces, logo/text, or transparent/pale edges, use a uniform NEUTRAL MEDIUM GRAY (#787878) instead.
-    Never use red, green, blue, black, a saturated chroma-key color, a checkerboard, gradients, scenery, shadows, or patterns.
+    Place it on exactly one perfectly flat solid background color: ${background.name} (hex ${background.hex}, RGB ${background.rgb.join(',')}).
+    The background must be perfectly uniform — no gradients, checkerboards, scenery, shadows, or patterns.
+    Do NOT let the background color tint, reflect on, or bleed into the subject's edges.
     Preserve every fine edge, including white hair, white fabric, translucent glass, and pale details. Keep the subject at the original scale and position.
     This is an isolation source for software matting, not a transparent PNG request.
     `;
@@ -147,14 +186,13 @@ export const executeDynamicRemoval = async (imageSrc: string, engine: DynamicRem
     const generatedSrc = await generateOneImage({ prompt: prompt1, aspectRatio, refImage: imageSrc }, engine);
     if (!generatedSrc) throw new Error('隔離生成沒有回傳圖片');
 
-    // 2. BiRefNet 以 alpha matting 去背，避免白／灰背景用硬閾值傷到細髮與半透明材質。
+    // 2. BiRefNet 以 alpha matting 去背（對比底色下 alpha 更乾淨）。
     if (engine.falApiKey) {
         if (onProgress) onProgress('智慧去背: 正在保留細節與透明邊緣...');
         return await birefnetRemoveBg(generatedSrc, engine.falApiKey, 'Matting');
     }
 
-    // 無 fal key 時才使用中性背景的本機備援；不再執行有色 despill／二次重繪。
-    const background = await detectNeutralBackground(generatedSrc);
-    if (onProgress) onProgress(`智慧去背: 使用 ${background.name} 背景備援去背`);
+    // 無 fal key 時的本機備援：直接對選定底色做 chroma key。
+    if (onProgress) onProgress(`智慧去背: 使用 ${background.name} 底色備援去背`);
     return processChromaKey(generatedSrc, background.hex);
 };
