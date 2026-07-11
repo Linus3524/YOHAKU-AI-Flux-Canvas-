@@ -6,7 +6,6 @@
  *  - 生成後：三級去背還原透明（BiRefNet → Gemini 語意去背 → 本機 flood-fill/chroma）
  * 所有 API key 以參數傳入，函式不持有任何 UI 狀態。
  */
-import { GoogleGenAI } from '@google/genai';
 import { hasTransparency, processChromaKey } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
@@ -116,8 +115,12 @@ export async function restoreTransparency(
     // 2. Gemini AI 去背（無 fal key 時）
     if (keys.geminiApiKey) {
         try {
-            const genAI = new GoogleGenAI({ apiKey: keys.geminiApiKey });
-            return await executeDynamicRemoval(resultSrc, genAI, undefined, keys.imageModel);
+            return await executeDynamicRemoval(resultSrc, {
+                model: 'gemini',
+                geminiApiKey: keys.geminiApiKey,
+                geminiImageModel: keys.imageModel,
+                falApiKey: keys.falApiKey,
+            });
         } catch (e) {
             console.warn('[restoreTransparency] Gemini removal failed, fallback chroma key', e);
         }

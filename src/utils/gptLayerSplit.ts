@@ -70,14 +70,12 @@ export const DEFAULT_MAGIC_LAYER_OPTIONS: MagicLayerOptions = {
     groupingStrategy: 'smart',
 };
 
-// ── 背景色方案 ──────────────────────────────────────────────────────────────
-// 中飽和度版本（非純色）：降低 GPT Image 2 重繪時的 color spill，
-// 同時保持足夠對比讓 BiRefNet 邊緣偵測更乾淨
+// ── 隔離背景方案 ────────────────────────────────────────────────────────────
+// 白底最接近商品隔離圖，對 BiRefNet 的細節保留最穩定；
+// 只有白色／極淺色物件才用中性灰，避免高飽和色造成邊緣染色。
 const BG_COLOR_MAP = {
-    GREEN: { hex: '#00BB44', rgb: '0,187,68' },      // 中綠（取代純綠 #00FF00）
-    BLUE:  { hex: '#2255CC', rgb: '34,85,204' },     // 中藍（取代純藍 #0000FF）
-    RED:   { hex: '#CC2200', rgb: '204,34,0' },      // 中紅（取代純紅 #FF0000）
-    GRAY:  { hex: '#787878', rgb: '120,120,120' },   // 中灰（取代淺灰 #DADADA，對比更強）
+    WHITE: { hex: '#FFFFFF', rgb: '255,255,255' },
+    GRAY:  { hex: '#787878', rgb: '120,120,120' },
 } as const;
 
 type BgColorKey = keyof typeof BG_COLOR_MAP;
@@ -182,17 +180,16 @@ bbox = tightest possible rectangle enclosing ALL visible pixels of this element 
 - Bad: whole-image box for a small object. Good: tight box that just wraps the object
 - If an element is near an edge, x or y can be 0.0; w or h can reach 1.0 only if truly full-width/height
 
-━━━ BGCOLOR (chroma-key color) ━━━
-Pick the color that contrasts MOST with the element's dominant visible color:
-- GREEN (#00FF00): skin tones, red/orange/yellow/pink/warm objects
-- BLUE (#0000FF): green/teal/cyan/nature/plant objects
-- RED (#FF0000): blue/purple/indigo/cool-toned objects
-- GRAY (#DADADA): ONLY when the object is multi-colored with no clear dominant color AND edges are simple
+━━━ ISOLATION BACKGROUND ━━━
+Pick the generated isolation background:
+- WHITE: default for people, products, dark text, colored objects, glass and most subjects.
+- GRAY: ONLY for objects that are predominantly white, off-white, very pale gray, or white typography/logo.
+Never use red, green, blue, black, or a saturated chroma-key color. The output will be removed by software matting after generation.
 
 ━━━ EDGE COMPLEXITY ━━━
 - "simple": clean geometric or hard edges (products, text, simple shapes, solid objects)
 - "complex": fine/irregular edges needing AI matting (hair, fur, feathers, transparent glass, smoke, intricate cutouts)
-Note: objects with complex edges should prefer GRAY bgColor to signal AI-based removal.
+Complex edges are handled by software matting; do not change the background choice solely because an edge is complex.
 
 ━━━ DESCRIPTION FIELD ━━━
 Also add a "description" field: a concise English visual description of the element (15-40 words).
@@ -205,7 +202,7 @@ Preferred categories to notice: ${requestedCategories}.
 Additional instruction: ${options?.customInstruction?.trim() || 'None'}.
 
 Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
-[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman wearing a white shirt, smiling at camera."}]`
+[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"WHITE","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman wearing a white shirt, smiling at camera."}]`
                 }
             ]
         },
@@ -760,7 +757,7 @@ async function extractOneLayer(
     // → 強制走 Chroma Key（純色背景下效果更準確）
     const isTextLayer = obj.category === 'TEXT' || obj.category === 'DECOR';
     const useBiRefNet = !!falKey && !isTextLayer;
-    const bgColor = BG_COLOR_MAP[obj.bgColor] ?? BG_COLOR_MAP.GRAY;
+    const bgColor = BG_COLOR_MAP[obj.bgColor] ?? BG_COLOR_MAP.WHITE;
 
     try {
         // ── 2a：隔離生成（GPT Image 2 優先；無 Atlas Key 降級 Gemini Flash Image）──

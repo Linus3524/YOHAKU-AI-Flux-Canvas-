@@ -393,13 +393,17 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
         setIsGenerating(true);
 
         try {
-            const genAI = createAiClient();
-
             for (const element of targetElements) {
                  if (!element.src || element.src.length < 100) continue;
 
                 try {
-                    const processedSrc = await executeDynamicRemoval(element.src, genAI, showToast, imageModel);
+                    const processedSrc = await executeDynamicRemoval(element.src, {
+                        model: generationModelGlobal,
+                        geminiApiKey: apiKey,
+                        atlasApiKey,
+                        geminiImageModel: imageModel,
+                        falApiKey,
+                    }, showToast);
                     setElements(prev => prev.map(el => el.id === element.id ? { ...el, src: processedSrc } : el));
                 } catch (err: any) {
                     throw err;
@@ -413,7 +417,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [selectedElementIds, elements, setElements, showToast, setHasApiKey, apiKey]);
+    }, [selectedElementIds, elements, setElements, showToast, apiKey, imageModel, generationModelGlobal, atlasApiKey, falApiKey]);
 
     const handleHarmonize = useCallback(async () => {
         const selectedEls = elements.filter(el => selectedElementIds.includes(el.id));

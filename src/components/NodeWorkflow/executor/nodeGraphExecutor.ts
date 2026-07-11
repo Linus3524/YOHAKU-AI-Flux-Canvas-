@@ -18,7 +18,6 @@ import { atlasModelSupportsImg2Img } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
 import { gptLayerSegment } from '../../../utils/gptLayerSplit';
 import { executeDynamicRemoval } from '../../../utils/DynamicBackgroundRemoval';
-import { createGeminiClient } from '../../../ai/geminiClient';
 import { getVisualStyleById } from '../../../skills/styles';
 import { loadImage, STYLE_PRESETS } from '../../../utils/helpers';
 import { applyPoissonBlend } from '../../../utils/poissonBlend';
@@ -210,8 +209,12 @@ async function runRemoveBg(
   // 智慧去背：Gemini 動態去背（對標主畫布 executeDynamicRemoval）。
   if (mode === 'smart') {
     if (engine.geminiApiKey) {
-      const genAI = createGeminiClient(engine.geminiApiKey);
-      return await executeDynamicRemoval(input, genAI, onFallback, engine.geminiImageModel);
+      return await executeDynamicRemoval(input, {
+        model: 'gemini',
+        geminiApiKey: engine.geminiApiKey,
+        geminiImageModel: engine.geminiImageModel,
+        falApiKey: engine.falApiKey,
+      }, onFallback);
     }
     onFallback?.('缺少 Gemini API Key，暫時改用本機去背');
   }
