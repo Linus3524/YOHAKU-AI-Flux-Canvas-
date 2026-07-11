@@ -860,36 +860,81 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
             ctx.drawImage(image, 0, 0, width, height);
             ctx.filter = 'none';
 
-            const { highlight, shadow, sharpness } = adjustmentsToApply;
+            const { highlight, shadow, sharpness, temperature, tint } = adjustmentsToApply;
             
             // Only do expensive pixel manipulation if needed
-            if (highlight !== 0 || shadow !== 0 || sharpness !== 0) {
+            if (highlight !== 0 || shadow !== 0 || sharpness !== 0 || temperature !== 0 || tint !== 0) {
                 let imageData = ctx.getImageData(0, 0, width, height);
                 let data = imageData.data;
 
-                // 2. Apply highlight and shadow adjustments using HSL lightness
-                if (highlight !== 0 || shadow !== 0) {
+                // 2. Apply highlight, shadow, temperature, and tint adjustments in a single pass
+                if (highlight !== 0 || shadow !== 0 || temperature !== 0 || tint !== 0) {
                     const hFactor = highlight / 100;
                     const sFactor = shadow / 100;
                     
+                    // Precompute temperature parameters
+                    const tempOpacity = Math.abs(temperature) / 100;
+                    const tempR = temperature > 0 ? 1.0 : 0.0;
+                    const tempG = temperature > 0 ? 165 / 255 : 100 / 255;
+                    const tempB = temperature > 0 ? 0.0 : 1.0;
+
+                    // Precompute tint parameters
+                    const tintOpacity = Math.abs(tint) / 100;
+                    const tintR = tint > 0 ? 1.0 : 0.0;
+                    const tintG = tint > 0 ? 0.0 : 1.0;
+                    const tintB = tint > 0 ? 1.0 : 0.0;
+
+                    // Helper for overlay blend mode
+                    const overlayBlend = (s: number, d: number) => {
+                        return d <= 0.5 ? (2 * s * d) : (1 - 2 * (1 - s) * (1 - d));
+                    };
+
                     for (let i = 0; i < data.length; i += 4) {
-                        let [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
-                        
-                        if (sFactor !== 0) {
-                           // Curve for shadow adjustment (gamma-like)
-                           l = l ** (1 / (1 + sFactor));
-                        }
-                        if (hFactor !== 0) {
-                           // Curve for highlight adjustment (inverted gamma-like)
-                           l = 1 - (1 - l) ** (1 / (1 - hFactor));
+                        if (data[i + 3] === 0) continue; // Keep fully transparent pixels untouched
+
+                        let r = data[i] / 255;
+                        let g = data[i + 1] / 255;
+                        let b = data[i + 2] / 255;
+
+                        // Highlight & Shadow
+                        if (highlight !== 0 || shadow !== 0) {
+                            let [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+                            if (sFactor !== 0) {
+                                l = l ** (1 / (1 + sFactor));
+                            }
+                            if (hFactor !== 0) {
+                                l = 1 - (1 - l) ** (1 / (1 - hFactor));
+                            }
+                            l = Math.max(0, Math.min(1, l));
+                            const [rgbR, rgbG, rgbB] = hslToRgb(h, s, l);
+                            r = rgbR / 255;
+                            g = rgbG / 255;
+                            b = rgbB / 255;
                         }
 
-                        l = Math.max(0, Math.min(1, l)); // Clamp lightness
-                        
-                        const [r, g, b] = hslToRgb(h, s, l);
-                        data[i] = r;
-                        data[i + 1] = g;
-                        data[i + 2] = b;
+                        // Color Temperature (overlay orange or blue)
+                        if (temperature !== 0) {
+                            const blendR = overlayBlend(tempR, r);
+                            const blendG = overlayBlend(tempG, g);
+                            const blendB = overlayBlend(tempB, b);
+                            r = (1 - tempOpacity) * r + tempOpacity * blendR;
+                            g = (1 - tempOpacity) * g + tempOpacity * blendG;
+                            b = (1 - tempOpacity) * b + tempOpacity * blendB;
+                        }
+
+                        // Tint (overlay magenta or green)
+                        if (tint !== 0) {
+                            const blendR = overlayBlend(tintR, r);
+                            const blendG = overlayBlend(tintG, g);
+                            const blendB = overlayBlend(tintB, b);
+                            r = (1 - tintOpacity) * r + tintOpacity * blendR;
+                            g = (1 - tintOpacity) * g + tintOpacity * blendG;
+                            b = (1 - tintOpacity) * b + tintOpacity * blendB;
+                        }
+
+                        data[i] = Math.max(0, Math.min(255, Math.round(r * 255)));
+                        data[i + 1] = Math.max(0, Math.min(255, Math.round(g * 255)));
+                        data[i + 2] = Math.max(0, Math.min(255, Math.round(b * 255)));
                     }
                 }
                 
@@ -937,24 +982,6 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
                 ctx.putImageData(imageData, 0, 0);
             }
 
-            // 4. Apply temperature/tint overlays
-            if (adjustmentsToApply.temperature !== 0) {
-                const tempValue = Math.abs(adjustmentsToApply.temperature) / 100;
-                const color = adjustmentsToApply.temperature > 0 ? `rgba(255, 165, 0, ${tempValue})` : `rgba(0, 100, 255, ${tempValue})`;
-                ctx.globalCompositeOperation = 'overlay';
-                ctx.fillStyle = color;
-                ctx.fillRect(0, 0, width, height);
-            }
-            
-            if (adjustmentsToApply.tint !== 0) {
-                const tintValue = Math.abs(adjustmentsToApply.tint) / 100;
-                const color = adjustmentsToApply.tint > 0 ? `rgba(255, 0, 255, ${tintValue})` : `rgba(0, 255, 0, ${tintValue})`;
-                ctx.globalCompositeOperation = 'overlay';
-                ctx.fillStyle = color;
-                ctx.fillRect(0, 0, width, height);
-            }
-            
-            ctx.globalCompositeOperation = 'source-over';
             resolve(canvas.toDataURL('image/png'));
         };
         image.onerror = (err) => reject(err);
