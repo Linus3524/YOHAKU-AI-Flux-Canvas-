@@ -1,7 +1,7 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, BrandKitParams, CameraAngleParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, LayerSplitParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, AdjustmentsParams, ApplyStyleParams, BrandKitParams, CameraAngleParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, InpaintParams, LayerSplitParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
 import type { ImageElement, OutpaintingState } from '../../../types';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
@@ -26,6 +26,7 @@ import { CROSS_PLATFORM_SPECS } from '../../../skills/crossPlatform';
 import { PRODUCT_MARKETING_DEFAULT_CONFIG, PRODUCT_MARKETING_PLATFORMS } from '../../../skills/marketing';
 import { isImageSrc } from '../mediaSrc';
 import { nodeRequiresUpstream } from '../nodeRegistry';
+import { applyImageAdjustments } from '../../../utils/applyImageAdjustments';
 
 const ATLAS_MODELS = ['seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
 const STYLE_PRESET_BY_KEY: Record<string, string> = {
@@ -70,7 +71,7 @@ function resolveImageEngine(
   return {
     model: 'gemini',
     geminiApiKey: engine.geminiApiKey,
-    geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
+    geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image',
     imageSize: params.imageSize ?? '1K',
   };
 }
@@ -81,7 +82,9 @@ async function runImageGen(
   upstreams: string[],
   engine: ExecutorEngine,
 ): Promise<string> {
-  const refImages = upstreams.filter(src => isImageSrc(src));
+  const allRefImages = upstreams.filter(src => isImageSrc(src));
+  if (allRefImages.length > 8) throw new Error(`生成圖片最多支援 8 張參考圖，目前連接 ${allRefImages.length} 張`);
+  const refImages = allRefImages.slice(0, 8);
   const textInputs: string[] = upstreams.filter(src => !isImageSrc(src));
   const upstreamPrompt = textInputs.map(src => src.trim()).filter(Boolean).join('\n');
   const prompt = [upstreamPrompt, params.prompt].map(part => part?.trim()).filter(Boolean).join('\n\n');
@@ -111,7 +114,7 @@ async function runImageGen(
   parts.push({ text: prompt });
   const src = await geminiGenerateImage(
     { parts, aspectRatio, imageSize: engine.imageSize || '1K' },
-    { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image-preview' },
+    { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image' },
   );
   if (!src) throw new Error('生圖沒有回傳圖片');
   return src;
@@ -150,7 +153,7 @@ async function runStyleTransfer(
       model: useAtlas ? engine.generationModel! : 'gemini',
       geminiApiKey: engine.geminiApiKey,
       atlasApiKey: useAtlas ? engine.atlasApiKey : undefined,
-      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
+      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image',
       imageSize: engine.imageSize || '1K',
     },
   );
@@ -190,7 +193,7 @@ async function runCameraAngle(
       model: useAtlas ? atlasModel as AtlasGenerationModel : 'gemini',
       geminiApiKey: engine.geminiApiKey ?? undefined,
       atlasApiKey: useAtlas ? engine.atlasApiKey : undefined,
-      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
+      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image',
       imageSize: engine.imageSize || '1K',
     },
   );
@@ -270,7 +273,7 @@ Enhance details and sharpness significantly while keeping the structure identica
         model: useAtlas ? engine.generationModel! : 'gemini',
         geminiApiKey: engine.geminiApiKey,
         atlasApiKey: useAtlas ? engine.atlasApiKey : undefined,
-        geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
+        geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image',
         imageSize: requestedResolution,
       },
     );
@@ -513,7 +516,7 @@ async function runOutpaint(
         aspectRatio,
         imageSize: '4K',
       },
-      { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image-preview' },
+      { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image' },
     ) || '';
   }
   if (!generated) throw new Error('外擴沒有回傳圖片');
@@ -533,43 +536,71 @@ async function runOutpaint(
 async function runCopyStyle(
   params: Partial<CopyStyleParams>,
   inputs: string[],
-  inputsByHandle: Record<string, string[]>,
   engine: ExecutorEngine,
 ): Promise<string> {
-  if (!engine.geminiApiKey) throw new Error('拷貝風格需要 Gemini API Key');
-  const images = inputs.filter(isImageValue);
-  const styleSrc = inputsByHandle.style?.find(isImageValue) ?? images[0];
-  const contentSrc = inputsByHandle.content?.find(isImageValue) ?? images.find(src => src !== styleSrc);
-  if (!styleSrc) throw new Error('拷貝風格需要連接「風格圖」');
-  if (!contentSrc) throw new Error('拷貝風格需要連接「內容圖」');
+  if (!engine.geminiApiKey) throw new Error('複製風格需要 Gemini API Key');
+  const styleSrc = inputs.find(isImageValue);
+  if (!styleSrc) throw new Error('複製風格需要連接一張「風格圖」');
   const selectedKeys = Array.isArray(params.selectedKeys) && params.selectedKeys.length > 0
     ? params.selectedKeys.filter(key => COPY_STYLE_KEYS.includes(key))
     : COPY_STYLE_KEYS;
   const analysis = await analyzeCopiedStyle(styleSrc, engine.geminiApiKey);
   const stylePrompt = buildCopiedStylePrompt(analysis, selectedKeys);
-  if (!stylePrompt) throw new Error('拷貝風格沒有可套用的分析項目');
+  if (!stylePrompt) throw new Error('複製風格沒有產生風格資料');
+  return stylePrompt;
+}
+
+async function runApplyStyle(
+  params: Partial<ApplyStyleParams>, inputs: string[], inputsByHandle: Record<string, string[]>, engine: ExecutorEngine,
+): Promise<string> {
+  const stylePrompt = inputsByHandle.style?.find(value => !isImageValue(value)) ?? inputs.find(value => !isImageValue(value));
+  const contentSrc = inputsByHandle.content?.find(isImageValue) ?? inputs.find(isImageValue);
+  if (!stylePrompt) throw new Error('貼上風格需要連接「複製風格」節點的風格資料');
+  if (!contentSrc) throw new Error('貼上風格需要連接要套用的「內容圖」');
+  const requestedModel = params.model ?? engine.generationModel ?? 'gemini';
+  const useAtlas = requestedModel !== 'gemini' && !!engine.atlasApiKey && atlasModelSupportsImg2Img(requestedModel as AtlasGenerationModel);
+  if (!useAtlas && !engine.geminiApiKey) throw new Error('貼上風格需要 Gemini API Key');
   let result = '';
   await generateCopiedStyleAssets({
     targetElements: [createImageElementForPipeline(contentSrc, 'copy-style-content')],
     stylePrompt,
-    preserveTransparency: params.preserveTransparency ?? engine.preserveTransparency ?? false,
+    preserveTransparency: params.preserveTransparency ?? engine.preserveTransparency ?? true,
     transparencyKeys: {
       falApiKey: engine.falApiKey,
       geminiApiKey: engine.geminiApiKey,
       imageModel: engine.geminiImageModel,
     },
     engine: {
-      model: 'gemini',
+      model: useAtlas ? requestedModel : 'gemini',
       geminiApiKey: engine.geminiApiKey,
-      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image-preview',
+      atlasApiKey: useAtlas ? engine.atlasApiKey : null,
+      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image',
       imageSize: engine.imageSize || '1K',
     },
     onAsset: (_source, finalSrc) => {
       result = finalSrc;
     },
   });
-  if (!result) throw new Error('拷貝風格沒有回傳圖片');
+  if (!result) throw new Error('貼上風格沒有回傳圖片');
   return result;
+}
+
+async function runInpaint(
+  params: Partial<InpaintParams>,
+  inputs: string[],
+  inputsByHandle: Record<string, string[]>,
+  engine: ExecutorEngine,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (!engine.atlasApiKey) throw new Error('AI 局部重繪需要 Atlas API Key');
+  const images = inputs.filter(isImageValue);
+  const source = inputsByHandle.image?.find(isImageValue) ?? images[0];
+  const mask = inputsByHandle.mask?.find(isImageValue) ?? images.find(src => src !== source);
+  if (!source) throw new Error('AI 局部重繪需要連接「原圖」');
+  if (!mask) throw new Error('AI 局部重繪需要連接黑白「遮罩」');
+  const references = images.filter(src => src !== source && src !== mask);
+  if (references.length > 6) throw new Error('局部重繪最多支援 6 張額外參考圖（加上原圖與遮罩共 8 張）');
+  return callAtlasInpaint(params.prompt ?? '', source, mask, engine.atlasApiKey, references, undefined, signal);
 }
 
 async function runBrandKit(
@@ -790,11 +821,25 @@ const nodeRunners: Record<ExecutableNodeKind, NodeRunner> = {
     engine,
     onProgress,
   )),
-  copyStyle: async ({ node, inputs, inputsByHandle, engine }) => singleResult(await runCopyStyle(
+  inpaint: async ({ node, inputs, inputsByHandle, engine }) => singleResult(await runInpaint(
+    (node.data.params ?? {}) as Partial<InpaintParams>, inputs, inputsByHandle, engine,
+  )),
+  adjustments: async ({ node, input }) => singleResult(await applyImageAdjustments(
+    requireInput(input, '基礎調色'),
+    {
+      brightness: Number(node.data.params?.brightness ?? 100),
+      contrast: Number(node.data.params?.contrast ?? 100),
+      saturation: Number(node.data.params?.saturation ?? 100),
+      temperature: Number(node.data.params?.temperature ?? 0),
+    },
+  )),
+  copyStyle: async ({ node, inputs, engine }) => singleResult(await runCopyStyle(
     (node.data.params ?? {}) as Partial<CopyStyleParams>,
     inputs,
-    inputsByHandle,
     engine,
+  )),
+  applyStyle: async ({ node, inputs, inputsByHandle, engine }) => singleResult(await runApplyStyle(
+    (node.data.params ?? {}) as Partial<ApplyStyleParams>, inputs, inputsByHandle, engine,
   )),
   layerSplit: async ({ node, input, engine, onProgress }) => batchResult(await runLayerSplit(
     requireInput(input, '圖層分離'),
@@ -851,6 +896,8 @@ export interface ExecuteResult {
 
 export interface ExecuteOptions {
   signal?: AbortSignal;
+  /** 只執行此節點及它的遞迴上游。 */
+  targetNodeId?: string;
 }
 
 class GraphExecutionAbortError extends Error {
@@ -990,6 +1037,17 @@ export async function executeGraph(
     if (srcs[0]) emitResult(id, srcs[0]);
   };
   const terminals = terminalNodeIds(graph);
+  const activeNodeIds = new Set<string>();
+  if (options.targetNodeId) {
+    const visitUpstream = (nodeId: string) => {
+      if (activeNodeIds.has(nodeId)) return;
+      activeNodeIds.add(nodeId);
+      graph.edges.filter(edge => edge.target === nodeId).forEach(edge => visitUpstream(edge.source));
+    };
+    visitUpstream(options.targetNodeId);
+  } else {
+    graph.nodes.forEach(node => activeNodeIds.add(node.id));
+  }
   const unavailableNodeIds = new Set<string>();
   const errors: { id: string; message: string }[] = [];
 
@@ -1004,11 +1062,12 @@ export async function executeGraph(
 
   for (const node of order) {
     if (node.kind === 'group') continue;
+    if (!activeNodeIds.has(node.id)) continue;
     try {
       throwIfAborted(options.signal);
 
       // 孤立節點不予執行，狀態設為 idle，防止亮紅框
-      if (!connectedNodeIds.has(node.id)) {
+      if (!connectedNodeIds.has(node.id) && node.id !== options.targetNodeId) {
         status(node.id, 'idle');
         continue;
       }
@@ -1062,7 +1121,8 @@ export async function executeGraph(
 
   // 決定最終輸出結果：
   // 1. 優先尋找圖中類型為 'output' 且有值的節點結果
-  const outputNodes = order.filter(n => n.kind === 'output');
+  if (options.targetNodeId) outputSrc = results.get(options.targetNodeId) ?? null;
+  const outputNodes = options.targetNodeId ? [] : order.filter(n => n.kind === 'output');
   if (outputNodes.length > 0) {
     for (const n of outputNodes) {
       const r = results.get(n.id);

@@ -40,9 +40,9 @@ export const AppTopStatusBar = ({
             Lite
           </button>
           <button
-            onClick={() => onSetImageModel('gemini-3.1-flash-image-preview')}
+            onClick={() => onSetImageModel('gemini-3.1-flash-image')}
             className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide transition-all duration-200 ${
-              imageModel === 'gemini-3.1-flash-image-preview'
+              imageModel === 'gemini-3.1-flash-image'
                 ? 'bg-white text-[#1D1D1F] shadow-sm'
                 : 'text-gray-400 hover:text-gray-600'
             }`}
@@ -50,9 +50,9 @@ export const AppTopStatusBar = ({
             Flash
           </button>
           <button
-            onClick={() => onSetImageModel('gemini-3-pro-image-preview')}
+            onClick={() => onSetImageModel('gemini-3.1-pro-image')}
             className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide transition-all duration-200 ${
-              imageModel === 'gemini-3-pro-image-preview'
+              imageModel === 'gemini-3.1-pro-image'
                 ? 'bg-white text-[#1D1D1F] shadow-sm'
                 : 'text-gray-400 hover:text-gray-600'
             }`}

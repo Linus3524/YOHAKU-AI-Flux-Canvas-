@@ -73,7 +73,7 @@ const analyzeIsolationBackgroundSemantic = async (
     const cleanBase64 = imageSrc.split(',')[1] || imageSrc;
     const mimeType = imageSrc.match(/data:(.*);base64/)?.[1] ?? 'image/png';
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.1-flash-lite',
         contents: { parts: [
             { inlineData: { mimeType, data: cleanBase64 } },
             { text: `You choose the best solid isolation background color for cutting out the MAIN SUBJECT of this image. The background will be removed by software matting afterwards, so it must maximize contrast against the subject AND must never tint the subject.

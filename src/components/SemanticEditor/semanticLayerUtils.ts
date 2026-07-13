@@ -183,7 +183,7 @@ async function detectObjectsForSegmentation(
     const mimeType    = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.1-flash-lite',
         contents: {
             parts: [
                 { inlineData: { mimeType, data: cleanBase64 } },
@@ -334,7 +334,7 @@ export async function describeLayerWithGemini(
         const mime  = base64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite',
             contents: {
                 parts: [
                     { inlineData: { mimeType: mime, data: clean } },
@@ -629,7 +629,7 @@ async function detectTextBlocks(
     const mimeType    = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.1-flash-lite',
         contents: {
             parts: [
                 { inlineData: { mimeType, data: cleanBase64 } },
@@ -1547,7 +1547,7 @@ async function regenerateTextFullImageGemini({
     parts.push({ text: newPrompt });
 
     const response = await callGeminiWithRetry(() => ai.models.generateContent({
-        model: imageModel || 'gemini-3.1-flash-image-preview',
+        model: imageModel || 'gemini-3.1-flash-image',
         contents: { parts },
     }));
     for (const part of response.candidates?.[0]?.content?.parts ?? []) {
@@ -1724,7 +1724,7 @@ export async function regenerateLayer({
         const cropMime = cropHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
 
         const response = await callGeminiWithRetry(() => ai.models.generateContent({
-            model: imageModel || 'gemini-2.0-flash-preview-image-generation',
+            model: imageModel || 'gemini-3.1-flash-image',
             contents: {
                 parts: [
                     { inlineData: { data: cropData, mimeType: cropMime } },

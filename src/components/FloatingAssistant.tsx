@@ -1100,12 +1100,12 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                                 <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-muted w-1/4">維度</th>
                                 <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-main">3.1 Flash-Lite (極速)</th>
                                 <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-main">3.1 Flash (預設)</th>
-                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">3 Pro</th>
+                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">3.1 Pro</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                               {[
-                                ['底層架構', 'gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'],
+                                ['底層架構', 'gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-3.1-pro-image'],
                                 ['生成速度', '小於 4 秒', '4–6 秒', '8–12 秒'],
                                 ['輸出解析度', '1K', '512 / 1K / 2K / 4K', '1K / 2K / 4K'],
                                 ['文字渲染', '短句・標籤準確', '短句・標籤準確', '長句・複雜排版精準'],

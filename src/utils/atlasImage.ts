@@ -425,15 +425,16 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
         : { model: config.img2imgId, prompt, [imgParam]: imgValue, ...extra };
 }
 
-/** 從 base64 圖片偵測實際尺寸，回傳最接近的 ATLAS_SIZES 比例字串 */
-export async function detectClosestRatio(base64: string): Promise<string> {
+/** 從 base64 圖片偵測實際尺寸，回傳該模型支援的最接近比例。 */
+export async function detectClosestRatio(base64: string, model?: AtlasGenerationModel): Promise<string> {
     return new Promise(resolve => {
         const img = new Image();
         img.onload = () => {
             const targetRatio = img.naturalWidth / img.naturalHeight;
-            let closest = ATLAS_SIZES[0].ratio;
+            const sizes = model ? getModelSizes(model) : ATLAS_SIZES;
+            let closest = sizes[0].ratio;
             let minDiff = Infinity;
-            for (const s of ATLAS_SIZES) {
+            for (const s of sizes) {
                 const [rw, rh] = s.ratio.split(':').map(Number);
                 const diff = Math.abs(rw / rh - targetRatio);
                 if (diff < minDiff) { minDiff = diff; closest = s.ratio; }
@@ -451,7 +452,7 @@ export async function detectClosestRatio(base64: string): Promise<string> {
  * 輸出方形會導致 inpaint 結果與原圖比例不符、貼回時錯位。指定 size 修正此問題。
  */
 export async function gptSizeForImage(base64: string): Promise<string> {
-    const ratio = await detectClosestRatio(base64);
+    const ratio = await detectClosestRatio(base64, 'gpt-image-2');
     const match = GPT_SIZES.find(s => s.ratio === ratio) ?? GPT_SIZES[0];
     return match.w2k;
 }
@@ -508,7 +509,7 @@ export async function callAtlasImg2Img(
     // 「原圖比例」→ 自動偵測參考圖實際比例，換算成最接近的 Atlas 比例字串
     let resolvedOptions = options;
     if (options?.ratio === 'Original') {
-        const detectedRatio = await detectClosestRatio(referenceImageBase64);
+        const detectedRatio = await detectClosestRatio(referenceImageBase64, model);
         resolvedOptions = { ...options, ratio: detectedRatio };
     }
 

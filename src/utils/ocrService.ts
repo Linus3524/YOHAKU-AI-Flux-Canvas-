@@ -51,7 +51,7 @@ export async function detectTextBlocks(
     const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.1-flash-lite',
         contents: {
             parts: [
                 { inlineData: { mimeType, data: cleanBase64 } },

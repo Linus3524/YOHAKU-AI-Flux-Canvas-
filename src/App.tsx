@@ -63,7 +63,7 @@ const App: React.FC = () => {
 
   // --- Image Model Selection ---
   const [imageModel, setImageModel] = useState<string>(
-    () => localStorage.getItem('yohaku_image_model') || 'gemini-3.1-flash-image-preview'
+    () => localStorage.getItem('yohaku_image_model') || 'gemini-3.1-flash-image'
   );
   const handleSetImageModel = (model: string) => {
     localStorage.setItem('yohaku_image_model', model);
@@ -672,24 +672,30 @@ const App: React.FC = () => {
     showToast('已將節點輸出匯入畫布');
   }, [activeNodeGroup, addElement, setSelectedElementIds, showToast]);
 
-  // 拖曳離鏈：把子空間裡帶圖的節點移出為大畫布獨立圖片（落點簡化為畫布中央）
-  const handleDetachNodeImage = useCallback((src: string, name?: string) => {
+  // 將子空間裡帶圖的節點結果匯入為主畫布獨立圖片（落點簡化為畫布中央）
+  const handleDetachNodeImage = useCallback((src: string, _name?: string) => {
     if (!src) return;
     const center = getCenterOfViewport();
+    // 先同步建立元素，不讓匯入成功與否依賴第二次 Image.onload。
+    // Atlas 遠端 URL／已快取圖片偶爾不再觸發 load，舊流程會只顯示 toast 卻沒有加入元素。
+    const id = addElement({ type: 'image', position: center, width: 320, height: 320, rotation: 0, src });
+    setSelectedElementIds([id]);
+
     const img = new Image();
     img.onload = () => {
       const maxSide = 360;
       const scale = Math.min(1, maxSide / Math.max(img.naturalWidth || maxSide, img.naturalHeight || maxSide));
       const w = Math.round((img.naturalWidth || maxSide) * scale) || maxSide;
       const h = Math.round((img.naturalHeight || maxSide) * scale) || maxSide;
-      addElement({ type: 'image', position: center, width: w, height: h, rotation: 0, src });
-    };
-    img.onerror = () => {
-      addElement({ type: 'image', position: center, width: 300, height: 300, rotation: 0, src });
+      setElements(prev => prev.map(element => (
+        element.id === id && element.type === 'image'
+          ? { ...element, width: w, height: h }
+          : element
+      )));
     };
     img.src = src;
-    showToast(`已將「${name || '節點圖片'}」移出到畫布`);
-  }, [addElement, getCenterOfViewport, showToast]);
+    showToast('已將圖片匯入主畫布');
+  }, [addElement, getCenterOfViewport, setElements, setSelectedElementIds, showToast]);
 
   const handleInteractionEnd = useCallback(() => {
     // 歷史已在手勢首幀新增（保住手勢前狀態），這裡只需清除首幀標記，不再 commit 重複
@@ -1317,11 +1323,26 @@ const App: React.FC = () => {
   }, [deleteElement, undo, redo, editingDrawing, editingImage, activeNodeGroupId, outpaintingState, copySelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, placingNote, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
   
   useEffect(() => {
+    const clearDragState = () => {
+      dragCounter.current = 0;
+      setIsDraggingOver(false);
+    };
+
+    // 節點工作流有自己的圖片拖放區。開啟時停用主畫布的 window 級監聽，
+    // 並清除可能已累加的 dragenter 計數，避免主畫布遮罩卡住。
+    clearDragState();
+    if (activeNodeGroupId) return;
+
     const preventDefaults = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
     const handleDragEnter = (e: DragEvent) => { preventDefaults(e); dragCounter.current++; if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) { if (Array.from(e.dataTransfer.items).some(item => item.kind === 'file' && item.type.startsWith('image/'))) setIsDraggingOver(true); } };
-    const handleDragLeave = (e: DragEvent) => { preventDefaults(e); dragCounter.current--; if (dragCounter.current === 0) setIsDraggingOver(false); };
+    const handleDragLeave = (e: DragEvent) => {
+      preventDefaults(e);
+      dragCounter.current = Math.max(0, dragCounter.current - 1);
+      // relatedTarget 為 null 代表已離開瀏覽器視窗，不再等待其他子元素的 leave。
+      if (!e.relatedTarget || dragCounter.current === 0) clearDragState();
+    };
     const handleDrop = (e: DragEvent) => {
-        preventDefaults(e); dragCounter.current = 0; setIsDraggingOver(false);
+        preventDefaults(e); clearDragState();
         const files = e.dataTransfer?.files;
         if (files && files.length > 0 && canvasApiRef.current) {
             const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
@@ -1336,13 +1357,18 @@ const App: React.FC = () => {
     window.addEventListener('dragover', preventDefaults);
     window.addEventListener('dragleave', handleDragLeave);
     window.addEventListener('drop', handleDrop);
+    window.addEventListener('dragend', clearDragState);
+    window.addEventListener('blur', clearDragState);
     return () => {
         window.removeEventListener('dragenter', handleDragEnter);
         window.removeEventListener('dragover', preventDefaults);
         window.removeEventListener('dragleave', handleDragLeave);
         window.removeEventListener('drop', handleDrop);
+        window.removeEventListener('dragend', clearDragState);
+        window.removeEventListener('blur', clearDragState);
+        clearDragState();
     };
-  }, [addImagesToCanvas]);
+  }, [activeNodeGroupId, addImagesToCanvas]);
 
   // 追蹤滑鼠螢幕座標（供貼上定位）
   useEffect(() => {
@@ -1359,6 +1385,8 @@ const App: React.FC = () => {
         ? canvasApiRef.current.screenToWorld(lastPointerScreenRef.current)
         : getCenterOfViewport();
     const handlePaste = (e: ClipboardEvent) => {
+        // 節點工作流開啟時由其自己處理剪貼簿，主畫布不參與。
+        if (activeNodeGroupId) return;
         const target = e.target as HTMLElement;
         // 正在編輯文字輸入框 → 讓瀏覽器正常處理
         const isEditingText =
@@ -1398,7 +1426,7 @@ const App: React.FC = () => {
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [addImagesToCanvas, addText, getCenterOfViewport, pasteSelection]);
+  }, [activeNodeGroupId, addImagesToCanvas, addText, getCenterOfViewport, pasteSelection]);
 
   return (
     <>

@@ -5,8 +5,8 @@
  *   生成前透明壓平 → 引擎 img2img（Atlas / Gemini）→ 生成後透明還原。
  * hook 端只負責：組 stylePrompt、逐元素迴圈、結果錨定插入畫布。
  *
- * 與 generateOneImage 的差異：風格轉移是 img2img 保持原圖比例 —— Gemini 不帶
- * aspectRatio 也不附「Output aspect ratio」提示；Atlas 沿用原本的 1:1 ratio 參數。
+ * 與 generateOneImage 的差異：風格轉移是 img2img，輸出必須保持內容圖的原始比例。
+ * Gemini 不帶「Output aspect ratio」提示；Atlas 預設依參考圖偵測最接近的模型支援比例。
  */
 import { GenerateContentResponse } from '@google/genai';
 import { callGeminiWithRetry } from '../../utils/helpers';
@@ -30,12 +30,65 @@ export interface StyleTransferOpts {
     preserveTransparency: boolean;
     /** 透明還原鏈用的 keys（BiRefNet / Gemini） */
     transparencyKeys: RestoreTransparencyKeys;
-    /** Atlas 的 ratio 參數（預設 '1:1'；視角轉換傳面板比例如 'Original'） */
+    /** Atlas 的 ratio 參數（預設 'Original'，會依內容圖自動偵測） */
     atlasRatio?: string;
     /** true = Gemini 不帶 imageConfig（視角轉換的原始行為：完全交給模型） */
     omitImageConfig?: boolean;
     /** Gemini imageConfig 額外帶 aspectRatio（智能放大用：鎖定輸出比例防變形） */
     geminiAspectRatio?: string;
+}
+
+/**
+ * Atlas 模型只接受離散的輸出尺寸。即使已選最接近比例，某些模型（如 GPT edit）
+ * 仍可能回傳較寬或較高的圖。以中心裁切對齊內容圖比例，保留模型輸出解析度且不拉伸畫面。
+ */
+async function matchReferenceAspect(resultSrc: string, referenceSrc: string): Promise<string> {
+    return await new Promise(resolve => {
+        const reference = new Image();
+        reference.onload = () => {
+            const output = new Image();
+            output.onload = () => {
+                const targetRatio = reference.naturalWidth / reference.naturalHeight;
+                const outputRatio = output.naturalWidth / output.naturalHeight;
+                if (!Number.isFinite(targetRatio) || Math.abs(targetRatio - outputRatio) < 0.002) {
+                    resolve(resultSrc);
+                    return;
+                }
+
+                let sx = 0;
+                let sy = 0;
+                let sw = output.naturalWidth;
+                let sh = output.naturalHeight;
+                if (outputRatio > targetRatio) {
+                    sw = Math.round(sh * targetRatio);
+                    sx = Math.round((output.naturalWidth - sw) / 2);
+                } else {
+                    sh = Math.round(sw / targetRatio);
+                    sy = Math.round((output.naturalHeight - sh) / 2);
+                }
+
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(1, sw);
+                    canvas.height = Math.max(1, sh);
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        resolve(resultSrc);
+                        return;
+                    }
+                    ctx.drawImage(output, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/png'));
+                } catch {
+                    // 極端情況下外部 URL 沒有 CORS，canvas 無法輸出；保留原結果不中斷流程。
+                    resolve(resultSrc);
+                }
+            };
+            output.onerror = () => resolve(resultSrc);
+            output.src = resultSrc;
+        };
+        reference.onerror = () => resolve(resultSrc);
+        reference.src = referenceSrc;
+    });
 }
 
 /** 視角轉換共用提示詞，畫布與節點工作流必須使用同一份。 */
@@ -84,7 +137,7 @@ export async function generateStyledImage(
         const wait = engine.atlasWait ?? (<T,>(fn: () => Promise<T>) => fn());
         const images = await wait(() => callAtlasImg2Img(
             prompt, engine.model as AtlasGenerationModel, engine.atlasApiKey!,
-            refImage, 1, { ratio: opts.atlasRatio ?? '1:1', quality },
+            refImage, 1, { ratio: opts.atlasRatio ?? 'Original', quality },
         ));
         result = images[0] ?? '';
     } else {
@@ -108,6 +161,11 @@ export async function generateStyledImage(
     }
 
     if (!result) return null;
+
+    // 風格轉移預設是保持內容圖尺寸比例；明確指定其他比例的視角轉換等流程不做裁切。
+    if (isAtlasEngine(engine) && (opts.atlasRatio ?? 'Original') === 'Original') {
+        result = await matchReferenceAspect(result, flatSrc);
+    }
 
     if (hadTransparency) {
         try {

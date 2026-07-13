@@ -161,7 +161,7 @@ async function detectObjects(imageBase64: string, apiKey: string, options?: Part
 
     const requestedCategories = options?.categories?.length ? options.categories.join(', ') : '自動判斷最適合的類別';
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.1-flash-lite',
         contents: {
             parts: [
                 { inlineData: { mimeType, data: cleanBase64 } },
@@ -363,7 +363,7 @@ async function planObjectLayers(
 
         const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite',
             contents: { parts: [{ text: `You are selecting editable layers from an atomic object inventory.
 The user's instruction is an EXCLUSIVE WHITELIST. Select only objects explicitly requested by the user. Do not add other detected objects, do not fill a target count, and do not require every object ID to appear.
 Create one group per item requested by the user, unless the user explicitly asks to group items together. If a requested item has multiple atomic parts, include those parts in the same group.
@@ -409,7 +409,7 @@ Objects: ${JSON.stringify(objects.map(object => ({ id: object.id, label: object.
     const ai = new GoogleGenAI({ apiKey });
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite',
             contents: { parts: [{ text: `You are planning editable design layers from an atomic object inventory.
 Create exactly ${targetForegroundCount} foreground layer groups. Every object ID must appear exactly once.
 ${strategyInstruction}
@@ -507,7 +507,7 @@ async function analyzeBackground(imageBase64: string, apiKey: string): Promise<s
         const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
         const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite',
             contents: {
                 parts: [
                     { inlineData: { mimeType, data: cleanBase64 } },
@@ -998,7 +998,7 @@ export async function gptLayerSegment(
     atlasKey: string | undefined,  // 可選：有則用 GPT Image 2，無則 Gemini fallback
     falKey?: string,
     onProgress?: (msg: string) => void,
-    geminiImageModel = 'gemini-3.1-flash-image-preview',
+    geminiImageModel = 'gemini-3.1-flash-image',
     atlasModel: AtlasGenerationModel = 'gpt-image-2',
     options: Partial<MagicLayerOptions> = {},
     callbacks: MagicLayerExecutionCallbacks = {},

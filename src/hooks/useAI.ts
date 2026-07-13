@@ -73,7 +73,7 @@ function buildStyledPrompt(userContent: string, stylePrompt: string, fallbackLab
     return styleDesc || `${fallbackLabel} style`;
 }
 
-export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image-preview', atlasApiKey, generationModel: generationModelGlobal = 'gemini', falApiKey }: UseAIProps) => {
+export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image', atlasApiKey, generationModel: generationModelGlobal = 'gemini', falApiKey }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
     // 設計大師「透明背景」：非 Seedream Pro 的本批生成圖在放入畫布時自動去背
@@ -205,8 +205,14 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
 
         try {
             // 單張後台流程（壓平→img2img→透明還原）在 src/ai/pipelines/styleTransfer.ts
+            const useAtlas = generationModelGlobal !== 'gemini' && !!atlasApiKey && atlasModelSupportsImg2Img(generationModelGlobal as AtlasGenerationModel);
             const engine: ImageEngineConfig = {
-                model: 'gemini', geminiApiKey: apiKey, geminiImageModel: imageModel, imageSize,
+                model: useAtlas ? generationModelGlobal : 'gemini',
+                geminiApiKey: apiKey,
+                atlasApiKey: useAtlas ? atlasApiKey : null,
+                geminiImageModel: imageModel,
+                imageSize,
+                atlasWait: withAtlasWaitToast,
             };
             const transparencyKeys = { falApiKey, geminiApiKey: apiKey, imageModel };
             await generateCopiedStyleAssets({
@@ -238,7 +244,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, falApiKey, imageModel, imageSize]);
+    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, falApiKey, imageModel, imageSize, generationModelGlobal, atlasApiKey, withAtlasWaitToast]);
 
     // handlePasteStyle: 僅供 Style Library 預設風格使用（styleOverride 一定存在）
     // 優先順序：非 Gemini 模型且有 Atlas key → Atlas img2img；否則 → Gemini

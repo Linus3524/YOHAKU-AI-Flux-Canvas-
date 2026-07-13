@@ -1,7 +1,7 @@
 /**
  * 圖像 / 文字分析 pipeline（純 TypeScript，無 React 依賴）
  *
- * 從 useAI.ts 剝離的三個「輕量文字模型」後台呼叫：
+ * 從 useAI.ts 剝離的三個多模態分析後台呼叫：
  *  - optimizePromptWithAI：AI 助手把模糊想法改寫成生圖 prompt
  *  - analyzeImageStyleFull：複製風格用的 11 維度全面風格分析（JSON）
  *  - analyzeProductStyleAnchor：行銷組圖鎖風格用的配色/打光/材質錨點
@@ -10,6 +10,10 @@
 import { GenerateContentResponse } from '@google/genai';
 import { callGeminiWithRetry } from '../../utils/helpers';
 import { createGeminiClient } from '../geminiClient';
+
+// 視覺理解／文字分析一律使用支援圖片輸入、Structured Outputs 與 generateContent 的穩定模型。
+// 不可沿用全域生圖模型，也不要使用不存在的 `gemini-3.1-flash`。
+const GEMINI_ANALYSIS_MODEL = 'gemini-3.1-flash-lite';
 
 const splitDataUrl = (src: string): { data: string; mimeType: string } => {
     const [header, data] = src.split(',');
@@ -20,7 +24,7 @@ const splitDataUrl = (src: string): { data: string; mimeType: string } => {
 export async function optimizePromptWithAI(userPrompt: string, geminiApiKey?: string | null): Promise<string> {
     const genAI = createGeminiClient(geminiApiKey);
     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
+        model: GEMINI_ANALYSIS_MODEL,
         contents: { parts: [{ text: userPrompt }] },
         config: {
             systemInstruction: `You are a professional Creative Director and Prompt Engineer.
@@ -59,7 +63,7 @@ export async function analyzeImageStyleFull(
 }`;
 
     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-        model: 'gemini-3.1-flash',
+        model: GEMINI_ANALYSIS_MODEL,
         contents: { parts: [{ inlineData: { data, mimeType } }, { text: prompt }] },
         config: { responseMimeType: 'application/json' },
     }));
@@ -73,7 +77,7 @@ export async function analyzeBaseImageForCompositing(src: string, geminiApiKey?:
     const genAI = createGeminiClient(geminiApiKey);
     const { data, mimeType } = splitDataUrl(src);
     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-        model: 'gemini-3.1-flash',
+        model: GEMINI_ANALYSIS_MODEL,
         contents: {
             parts: [
                 { inlineData: { data, mimeType } },
@@ -96,7 +100,7 @@ export async function analyzeProductStyleAnchor(src: string, geminiApiKey?: stri
     const { data, mimeType } = splitDataUrl(src);
     const styleAnalysisPrompt = `Analyze this product image. In 2-3 concise bullet points, describe a suitable commercial visual design language for it. Specify: 1. A harmonious color palette (give 2-3 colors with hex codes if applicable). 2. Studio lighting style (e.g. soft diffuse, high contrast). 3. Background materials or visual textures (e.g. marble, matte wood, plain studio). Keep it short and in English. Output ONLY the bullet points.`;
     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
+        model: GEMINI_ANALYSIS_MODEL,
         contents: { parts: [{ inlineData: { data, mimeType } }, { text: styleAnalysisPrompt }] },
     }));
     return response.text ? response.text.trim() : '';

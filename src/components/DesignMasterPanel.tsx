@@ -26,7 +26,7 @@ Keep them visually related, concrete, and easy to draw.
 Return ONLY the list of subjects, one per line. No numbering, no bullets, no extra text.`;
 
   const response = await genAI.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.1-flash-lite',
     contents: prompt,
   });
 

@@ -10,7 +10,7 @@ import type { LayerSplitParams } from '../types';
  * 展開後每個項目：
  *   - 右側有獨立輸出接口 (source handle `item-N`)，可各自接下游節點。
  *   - 有「拖出」鈕，把該圖層單獨移出到大畫布。
- * 底部「整批匯出」：把所有圖層一次移出到畫布。
+ * 底部「整批匯入主畫布」：把所有圖層一次加入主畫布。
  */
 export function LayerSplitNode({ id, data }: NodeProps) {
   const { updateNodeData } = useReactFlow();

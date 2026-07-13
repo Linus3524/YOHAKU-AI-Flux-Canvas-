@@ -26,6 +26,10 @@ interface NodeGraphState {
   setNodeStatus: (id: string, status: NodeRunStatus) => void;
   setNodeResult: (id: string, src: string) => void;
   setNodeBatchResult: (id: string, srcs: string[]) => void;
+  /** 刪除多輸出節點的單張結果，保留其他圖片與節點本身。 */
+  removeNodeBatchResultItem: (id: string, index: number) => void;
+  /** 清除單一節點的執行結果，但保留節點、參數與連線。 */
+  clearNodeResult: (id: string) => void;
   resetRunningStatuses: () => void;
   resetRuntime: () => void;
   exportGraph: () => NodeGraphData;
@@ -80,6 +84,32 @@ export const useNodeGraphStore = create<NodeGraphState>((set, get) => ({
   setNodeBatchResult: (id, srcs) => set(state => ({
     nodeBatchResults: { ...state.nodeBatchResults, [id]: srcs },
   })),
+  removeNodeBatchResultItem: (id, index) => set(state => {
+    const nextItems = (state.nodeBatchResults[id] ?? []).filter((_, itemIndex) => itemIndex !== index);
+    const { [id]: _batch, ...remainingBatchResults } = state.nodeBatchResults;
+    const { [id]: _single, ...remainingNodeResults } = state.nodeResults;
+    return {
+      nodeBatchResults: nextItems.length > 0
+        ? { ...remainingBatchResults, [id]: nextItems }
+        : remainingBatchResults,
+      // batch 的第 0 張同時是單值代表結果，刪除後要同步改成新的第 0 張。
+      nodeResults: nextItems[0]
+        ? { ...remainingNodeResults, [id]: nextItems[0] }
+        : remainingNodeResults,
+      nodeStatus: nextItems.length > 0
+        ? state.nodeStatus
+        : { ...state.nodeStatus, [id]: 'idle' },
+    };
+  }),
+  clearNodeResult: (id) => set(state => {
+    const { [id]: _single, ...nodeResults } = state.nodeResults;
+    const { [id]: _batch, ...nodeBatchResults } = state.nodeBatchResults;
+    return {
+      nodeResults,
+      nodeBatchResults,
+      nodeStatus: { ...state.nodeStatus, [id]: 'idle' },
+    };
+  }),
   resetRunningStatuses: () => set(state => ({
     nodeStatus: Object.fromEntries(
       Object.entries(state.nodeStatus).map(([id, status]) => [id, status === 'running' ? 'idle' : status]),

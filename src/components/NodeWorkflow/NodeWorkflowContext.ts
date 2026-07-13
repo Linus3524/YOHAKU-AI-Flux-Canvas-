@@ -4,6 +4,9 @@ import { createContext, useContext } from 'react';
 export interface NodeWorkflowContextValue {
   /** 把一張圖移出到大畫布（個別項目拖出／整批匯出共用）。 */
   detachImage?: (src: string, name?: string) => void;
+  hasAtlas?: boolean;
+  generationModel?: string;
+  invalidateOutput?: () => void;
 }
 
 export const NodeWorkflowContext = createContext<NodeWorkflowContextValue>({});

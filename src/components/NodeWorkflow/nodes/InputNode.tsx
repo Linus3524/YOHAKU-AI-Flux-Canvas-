@@ -2,6 +2,8 @@ import React from 'react';
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import { useNodeStatusRing } from './useNodeStatusRing';
 import { NodeDeleteButton } from './NodeDeleteButton';
+import { useNodeWorkflowContext } from '../NodeWorkflowContext';
+import { ImagePreviewActions } from './ImagePreviewActions';
 
 /**
  * Input 節點：只顯示圖片或文字本身。
@@ -12,6 +14,7 @@ import { NodeDeleteButton } from './NodeDeleteButton';
 export function InputNode({ id, data, selected }: NodeProps) {
   const { updateNodeData } = useReactFlow();
   const ring = useNodeStatusRing(id);
+  const { detachImage } = useNodeWorkflowContext();
   const onDeleteNode = data?.onDeleteNode;
   const handleDelete = typeof onDeleteNode === 'function'
     ? () => (onDeleteNode as (nodeId: string) => void)(id)
@@ -23,7 +26,7 @@ export function InputNode({ id, data, selected }: NodeProps) {
 
   if (isImage && src) {
     return (
-      <div className={`group relative w-[180px] ${ring}`} style={{ background: 'transparent' }}>
+      <div className={`group/image relative w-[180px] ${ring}`} style={{ background: 'transparent' }}>
         <NodeDeleteButton onDelete={handleDelete} selected={selected} />
         <Handle type="source" position={Position.Right} />
         <img
@@ -32,9 +35,14 @@ export function InputNode({ id, data, selected }: NodeProps) {
           className="block w-full object-contain"
           draggable={false}
         />
+        <ImagePreviewActions
+          onDelete={handleDelete ? (event) => { event.stopPropagation(); handleDelete(); } : undefined}
+          onImport={detachImage ? (event) => { event.stopPropagation(); detachImage(src); } : undefined}
+          deleteTitle="刪除圖片節點"
+        />
         {/* hover 漸層標籤 */}
         <div
-          className="absolute inset-x-0 bottom-0 flex items-end justify-center pb-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
+          className="absolute inset-x-0 bottom-0 flex items-end justify-center pb-1.5 opacity-0 group-hover/image:opacity-100 transition-opacity duration-200 pointer-events-none"
           style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%)', height: '40%' }}
         >
           <span className="text-[10px] font-medium text-white/90 tracking-wide uppercase">{label}</span>

@@ -30,6 +30,8 @@ import { ADDABLE_NODES, DEFAULT_NODE_LABELS, NODE_REGISTRY, nodeTypes, type Node
 import { executeGraph, type ExecutorEngine } from './executor/nodeGraphExecutor';
 import type { GraphEdge, GraphNode, NodeKind } from './types';
 
+const NODE_CLIPBOARD_MIME = 'application/x-yohaku-node-workflow';
+
 function DeletableEdge({
   id,
   sourceX,
@@ -41,6 +43,7 @@ function DeletableEdge({
   style = {},
   markerEnd,
   data,
+  animated,
 }: EdgeProps<FlowEdge>) {
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -53,6 +56,8 @@ function DeletableEdge({
 
   const [isHovered, setIsHovered] = useState(false);
   const onDelete = data?.onDelete;
+  const photonColor = typeof data?.photonColor === 'string' ? data.photonColor : '#8b5cf6';
+  const photonGlowId = `nw-photon-glow-${id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
   return (
     <g
@@ -68,6 +73,36 @@ function DeletableEdge({
         style={{ cursor: 'pointer' }}
       />
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+      {animated && (
+        <>
+          <defs>
+            <filter id={photonGlowId} x="-120%" y="-400%" width="340%" height="900%" colorInterpolationFilters="sRGB">
+              <feGaussianBlur stdDeviation="1.7" result="softGlow" />
+              <feFlood floodColor={photonColor} floodOpacity="0.92" result="glowColor" />
+              <feComposite in="glowColor" in2="softGlow" operator="in" result="coloredGlow" />
+              <feMerge>
+                <feMergeNode in="coloredGlow" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          {/* 單一光點沿原始貝茲路徑移動，不再使用任何 dash 描邊。 */}
+          <g className="nw-photon-signal">
+            <circle r="4.2" fill={photonColor} opacity="0.34" filter={`url(#${photonGlowId})`} />
+            <circle r="2.15" fill={photonColor} opacity="0.92" />
+            <circle r="0.9" fill="#ffffff" />
+            <animateMotion
+              dur="0.92s"
+              repeatCount="indefinite"
+              path={edgePath}
+              calcMode="spline"
+              keyPoints="0;1"
+              keyTimes="0;1"
+              keySplines="0.42 0 1 1"
+            />
+          </g>
+        </>
+      )}
       <EdgeLabelRenderer>
         <div
           style={{
@@ -106,10 +141,12 @@ type FlowNodeData = Record<string, unknown> & {
   label: string;
   kind: NodeKind;
   onDeleteNode?: (id: string) => void;
+  isTerminalNode?: boolean;
 };
 
 interface FlowEdgeData extends Record<string, unknown> {
   onDelete?: (id: string) => void;
+  photonColor?: string;
 }
 
 type FlowNode = Node<FlowNodeData>;
@@ -191,7 +228,7 @@ const toFlowNode = (node: GraphNode): FlowNode => {
 };
 
 const toGraphNode = (node: FlowNode): GraphNode => {
-  const { kind, label, onDeleteNode, ...restData } = node.data;
+  const { kind, label, onDeleteNode, onRunNode, isTerminalNode, ...restData } = node.data;
   return {
     id: node.id,
     kind,
@@ -266,6 +303,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   // 否則每次從 store 重建會洗掉 measured → 節點永遠 visibility:hidden 不顯示）。
   // syncGraph 只更新拓撲，不清 nodeResults/nodeStatus（loadGraph 會清空執行結果）
   const replaceGraph = useNodeGraphStore(state => state.syncGraph);
+  const nodeStatus = useNodeGraphStore(state => state.nodeStatus);
   const setNodeStatus = useNodeGraphStore(state => state.setNodeStatus);
   const setNodeResult = useNodeGraphStore(state => state.setNodeResult);
   const setNodeBatchResult = useNodeGraphStore(state => state.setNodeBatchResult);
@@ -278,6 +316,24 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   const [edges, setEdges, onEdgesChange] = useEdgesState(
     useNodeGraphStore.getState().edges.map(e => toFlowEdge(e))
   );
+  // 信號光跟隨節點執行框色，以流入的目標節點優先：
+  // running=藍、done=綠、error=紅。綠→藍因此是藍光，綠→綠是綠光。
+  const displayedEdges = useMemo(() => {
+    const statusColor = (nodeId: string): string | undefined => {
+      const status = nodeStatus[nodeId];
+      if (status === 'running') return '#007AFF';
+      if (status === 'done') return '#22c55e';
+      if (status === 'error') return '#ef4444';
+      return undefined;
+    };
+
+    return edges.map(edge => {
+      const photonColor = statusColor(edge.target) ?? statusColor(edge.source) ?? '#8b5cf6';
+      return edge.data?.photonColor === photonColor
+        ? edge
+        : { ...edge, data: { ...edge.data, photonColor } };
+    });
+  }, [edges, nodeStatus]);
   // 只追蹤會改變執行結果的 graph 資料；React Flow 量測尺寸與拖曳位置不會使預覽失效。
   const graphFingerprint = useMemo(() => JSON.stringify({
     nodes: nodes.map(toGraphNode).map(({ id, kind, data }) => ({ id, kind, data })),
@@ -405,6 +461,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   // 雙擊畫布空白處的快速搜尋選單
   const [quickSearch, setQuickSearch] = useState<{ sx: number; sy: number; flow: { x: number; y: number } } | null>(null);
   const [quickQuery, setQuickQuery] = useState('');
+  const [isDraggingImages, setIsDraggingImages] = useState(false);
 
   // 右鍵選單狀態
   const [contextMenu, setContextMenu] = useState<{
@@ -502,7 +559,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
     document.body.removeChild(link);
   }, []);
 
-  const handleRun = useCallback(async () => {
+  const handleRun = useCallback(async (targetNodeId?: string) => {
     if (isRunning) {
       abortControllerRef.current?.abort();
       resetRunningStatuses();
@@ -513,8 +570,24 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
     abortControllerRef.current = abortController;
     setIsRunning(true);
     resetRuntime();
-    // 執行流動動畫：把所有連線設為 animated（animated 不進 graphFingerprint，不會使預覽失效）
-    setEdges(eds => eds.map(e => (e.animated ? e : { ...e, animated: true })));
+    // 單節點執行只點亮該節點的遞迴上游；全圖執行才點亮所有連線。
+    const activeEdgeIds = new Set<string>();
+    if (targetNodeId) {
+      const visitUpstream = (nodeId: string) => {
+        edges.filter(edge => edge.target === nodeId).forEach(edge => {
+          if (activeEdgeIds.has(edge.id)) return;
+          activeEdgeIds.add(edge.id);
+          visitUpstream(edge.source);
+        });
+      };
+      visitUpstream(targetNodeId);
+    } else {
+      edges.forEach(edge => activeEdgeIds.add(edge.id));
+    }
+    setEdges(eds => eds.map(edge => {
+      const shouldAnimate = activeEdgeIds.has(edge.id);
+      return edge.animated === shouldAnimate ? edge : { ...edge, animated: shouldAnimate };
+    }));
     // 執行計時
     const startedAt = Date.now();
     setRunElapsed(0);
@@ -538,8 +611,10 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
           setNodeBatchResult(id, srcs);
         },
         onRunError,
-      }, { signal: abortController.signal });
-      if (outputSrc) onOutputChange?.(outputSrc);
+      }, { signal: abortController.signal, targetNodeId });
+      // 單跑中間節點只更新該節點縮圖；全圖或明確 Output 節點才改寫工作流最終輸出。
+      const targetKind = targetNodeId ? nodes.find(node => node.id === targetNodeId)?.data.kind : undefined;
+      if (outputSrc && (!targetNodeId || targetKind === 'output')) onOutputChange?.(outputSrc);
     } catch (e: unknown) {
       console.error('[handleRun] executeGraph error:', e);
       onRunError?.(getErrorMessage(e));
@@ -554,6 +629,43 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
       if (runTimerRef.current) { clearInterval(runTimerRef.current); runTimerRef.current = null; }
     }
   }, [isRunning, resetRuntime, resetRunningStatuses, nodes, edges, engine, setNodes, setEdges, setNodeStatus, setNodeResult, setNodeBatchResult, onOutputChange, onRunError]);
+
+  // handleRun 會隨 graph 更新；節點 data 必須拿到穩定函式，否則每次 render
+  // 都會重寫全部節點 data，形成更新迴圈並讓工作流畫面崩潰。
+  const handleRunRef = useRef(handleRun);
+  useEffect(() => { handleRunRef.current = handleRun; }, [handleRun]);
+  const handleRunNode = useCallback((nodeId: string) => {
+    void handleRunRef.current(nodeId);
+  }, []);
+  const runnableNodeSignature = useMemo(
+    () => nodes.map(node => `${node.id}:${node.data.kind}`).join('|'),
+    [nodes],
+  );
+  const terminalNodeSignature = useMemo(() => {
+    const hasOutgoing = new Set(edges.map(edge => edge.source));
+    return nodes
+      .filter(node => !['input', 'group', 'note'].includes(node.data.kind) && !hasOutgoing.has(node.id))
+      .map(node => node.id)
+      .sort()
+      .join('|');
+  }, [nodes, edges]);
+
+  // 所有標準節點共用的浮動執行按鈕會從 node data 取得此回呼。
+  useEffect(() => {
+    setNodes(nds => {
+      let changed = false;
+      const terminalIds = new Set(terminalNodeSignature ? terminalNodeSignature.split('|') : []);
+      const nextNodes = nds.map(node => {
+        const runnable = !['input', 'group', 'note'].includes(node.data.kind);
+        const next = runnable ? handleRunNode : undefined;
+        const isTerminalNode = runnable && terminalIds.has(node.id);
+        if (node.data.onRunNode === next && node.data.isTerminalNode === isTerminalNode) return node;
+        changed = true;
+        return { ...node, data: { ...node.data, onRunNode: next, isTerminalNode } };
+      });
+      return changed ? nextNodes : nds;
+    });
+  }, [handleRunNode, runnableNodeSignature, terminalNodeSignature, setNodes]);
 
   // 卸載時清掉計時器
   useEffect(() => () => { if (runTimerRef.current) clearInterval(runTimerRef.current); }, []);
@@ -623,8 +735,8 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   const clipboardRef = useRef<HistorySnapshot>({ nodes: [], edges: [] });
 
   const copySelection = useCallback(() => {
-    // Input 節點是唯一來源，不複製；其餘選中的節點連同其內部連線一起複製。
-    const sel = nodes.filter(n => n.selected && n.data.kind !== 'input');
+    // 選中的節點（包含圖片 Input）連同其內部連線一起複製。
+    const sel = nodes.filter(n => n.selected);
     if (!sel.length) return;
     const selIds = new Set(sel.map(n => n.id));
     const internalEdges = edges.filter(e => selIds.has(e.source) && selIds.has(e.target));
@@ -670,12 +782,11 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
       const key = e.key.toLowerCase();
       if (key === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
       else if (key === 'y') { e.preventDefault(); redo(); }
-      else if (key === 'c') { copySelection(); }
-      else if (key === 'v') { e.preventDefault(); paste(); }
+      // C / V 由 copy、paste 事件處理，才能區分「節點剪貼簿」與「系統圖片剪貼簿」。
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, copySelection, paste]);
+  }, [undo, redo]);
 
   useEffect(() => {
     if (graphFingerprintRef.current === null) {
@@ -758,9 +869,9 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   }, [nodes, setNodes, setEdges, handleEdgeDelete, handleNodeDelete]);
 
   // 插入圖片：把上傳的圖建成一個 input 圖片節點，供合成/多參考圖使用。
-  const insertImageNode = useCallback((src: string, name?: string) => {
-    const id = `input-${Date.now()}`;
-    const position = lastMouseFlowPosRef.current ?? getCanvasCenter();
+  const insertImageNode = useCallback((src: string, name?: string, dropPosition?: { x: number; y: number }) => {
+    const id = `input-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const position = dropPosition ?? lastMouseFlowPosRef.current ?? getCanvasCenter();
     const graphNode: GraphNode = {
       id,
       kind: 'input',
@@ -784,6 +895,99 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
     };
     reader.readAsDataURL(file);
   }, [insertImageNode]);
+
+  const handleImageDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    const items = Array.from(event.dataTransfer.items as unknown as ArrayLike<DataTransferItem>);
+    const hasImage = items.some(item => item.kind === 'file' && item.type.startsWith('image/'));
+    if (!hasImage) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+    setIsDraggingImages(true);
+  }, []);
+
+  const handleImageDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setIsDraggingImages(false);
+  }, []);
+
+  const handleImageDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
+    const files = Array.from(event.dataTransfer.files as unknown as ArrayLike<File>).filter(file => file.type.startsWith('image/'));
+    if (files.length === 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingImages(false);
+    const basePosition = rfInstanceRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      ?? lastMouseFlowPosRef.current
+      ?? getCanvasCenter();
+    const sources = await Promise.all(files.map(file => new Promise<{ src: string; name: string }>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === 'string' ? resolve({ src: reader.result, name: file.name }) : reject(new Error('圖片讀取失敗'));
+      reader.onerror = () => reject(reader.error ?? new Error('圖片讀取失敗'));
+      reader.readAsDataURL(file);
+    })));
+    sources.forEach(({ src, name }, index) => {
+      insertImageNode(src, name, { x: basePosition.x + index * 36, y: basePosition.y + index * 36 });
+    });
+  }, [getCanvasCenter, insertImageNode]);
+
+  // 剪貼簿有明確的工作流範圍：複製節點用自訂 MIME，外部圖片則建立 Input 節點。
+  // App 在工作流開啟時會跳過主畫布 paste，因此同一張圖不會同時貼到兩個畫布。
+  useEffect(() => {
+    const isTextEditing = (target: EventTarget | null) => {
+      const element = target as HTMLElement | null;
+      return !!element && (
+        element.tagName === 'INPUT' ||
+        element.tagName === 'TEXTAREA' ||
+        element.tagName === 'SELECT' ||
+        element.isContentEditable
+      );
+    };
+
+    const handleCopy = (event: ClipboardEvent) => {
+      if (isTextEditing(event.target) || !nodes.some(node => node.selected)) return;
+      event.preventDefault();
+      copySelection();
+      event.clipboardData?.setData(NODE_CLIPBOARD_MIME, 'nodes');
+    };
+
+    const handlePaste = (event: ClipboardEvent) => {
+      if (isTextEditing(event.target)) return;
+
+      if (event.clipboardData?.getData(NODE_CLIPBOARD_MIME) === 'nodes') {
+        event.preventDefault();
+        paste();
+        return;
+      }
+
+      const imageFiles = Array.from(event.clipboardData?.items ?? [])
+        .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+        .map(item => item.getAsFile())
+        .filter((file): file is File => !!file);
+      if (imageFiles.length === 0) return;
+
+      event.preventDefault();
+      const basePosition = lastMouseFlowPosRef.current ?? getCanvasCenter();
+      imageFiles.forEach((file, index) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result !== 'string') return;
+          insertImageNode(reader.result, file.name || '剪貼簿圖片', {
+            x: basePosition.x + index * 36,
+            y: basePosition.y + index * 36,
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+
+    window.addEventListener('copy', handleCopy);
+    window.addEventListener('paste', handlePaste);
+    return () => {
+      window.removeEventListener('copy', handleCopy);
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [copySelection, getCanvasCenter, insertImageNode, nodes, paste]);
 
   // 雙擊畫布空白處 → 在游標位置彈出快速搜尋（點在節點/控制項/工具列上不觸發）
   const handlePaneDoubleClick = useCallback((event: React.MouseEvent) => {
@@ -867,11 +1071,22 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
   }, [onDetachImage, setNodes]);
 
   return (
-    <NodeWorkflowContext.Provider value={{ detachImage: onDetachImage }}>
-    <div className="absolute inset-0" onMouseMove={handleMouseMove}>
+    <NodeWorkflowContext.Provider value={{ detachImage: onDetachImage, hasAtlas: !!engine?.atlasApiKey, generationModel: engine?.generationModel, invalidateOutput: onInvalidateOutput }}>
+    <div
+      className="absolute inset-0"
+      onMouseMove={handleMouseMove}
+      onDragOver={handleImageDragOver}
+      onDragLeave={handleImageDragLeave}
+      onDrop={handleImageDrop}
+    >
+      {isDraggingImages && (
+        <div className="pointer-events-none absolute inset-3 z-[9000] flex items-center justify-center border-2 border-dashed border-indigo-500 bg-indigo-50/80 text-sm font-semibold text-indigo-700 backdrop-blur-sm">
+          放開以建立圖片輸入節點
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={displayedEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={handleNodesChange}
@@ -977,14 +1192,19 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
           .node-toolbar-summary::-webkit-details-marker {
             display: none;
           }
-          /* 執行時連線流動動畫 */
+          /* 線本身永遠維持原本的實心細黑線，覆蓋 React Flow 內建 animated 虛線。 */
+          .node-workflow-flow .react-flow__edge .react-flow__edge-path,
           .node-workflow-flow .react-flow__edge.animated .react-flow__edge-path {
-            stroke: #007AFF;
-            stroke-dasharray: 5;
-            animation: nw-edge-flow 0.55s linear infinite;
+            stroke: #111827;
+            stroke-width: 1.35;
+            stroke-dasharray: none !important;
+            stroke-dashoffset: 0 !important;
+            animation: none !important;
+            opacity: 0.78;
+            filter: none;
           }
-          @keyframes nw-edge-flow {
-            to { stroke-dashoffset: -10; }
+          .node-workflow-flow .nw-photon-signal {
+            pointer-events: none;
           }
         `}</style>
         <Background color="#cbd5e1" gap={28} size={1.2} />
@@ -1060,7 +1280,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
             ))}
             <button
               type="button"
-              onClick={handleRun}
+              onClick={() => handleRun()}
               className="bg-neutral-900 px-4 py-1.5 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors border-l border-black/12 tabular-nums"
             >
               {isRunning ? `■ 停止 (${runElapsed.toFixed(1)}s)` : '▶ 執行'}
@@ -1076,7 +1296,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
         className="hidden"
         onChange={handleImageFilePick}
       />
-      {/* 底部拖出區：拖曳節點時浮現，放開帶圖節點於此 → 移出到大畫布 */}
+      {/* 底部匯入區：拖曳節點時浮現，放開帶圖節點於此 → 匯入主畫布 */}
       <div
         className={`pointer-events-none absolute inset-x-0 bottom-0 h-[90px] flex items-center justify-center text-[12px] font-medium transition-opacity ${
           isDraggingNode ? 'opacity-100' : 'opacity-0'
@@ -1086,7 +1306,7 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
           color: '#007AFF',
         }}
       >
-        拖到這裡 → 移出到畫布
+        拖到這裡 → 匯入主畫布
       </div>
       {/* 雙擊畫布空白處的快速搜尋選單 */}
       {quickSearch && (
@@ -1143,6 +1363,15 @@ export function NodeWorkflowCanvas({ onDetachImage, engine, onOutputChange, onIn
             {/* A. 畫布空白處右鍵選單 */}
             {contextMenu.type === 'pane' && (
               <div className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => { imageFileInputRef.current?.click(); setContextMenu(null); }}
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100"
+                >
+                  <Icon name="add_photo_alternate" size={13} />
+                  <span>插入參考圖片</span>
+                </button>
+                <div className="border-t border-neutral-200 my-1" />
                 {/* 新增節點項目 (帶 Hover 子選單) */}
                 <div className="group/submenu relative">
                   <button

@@ -12,6 +12,9 @@ import { PromptOptimizeNode } from './nodes/PromptOptimizeNode';
 import { AnalyzeNode } from './nodes/AnalyzeNode';
 import { OutpaintNode } from './nodes/OutpaintNode';
 import { CopyStyleNode } from './nodes/CopyStyleNode';
+import { ApplyStyleNode } from './nodes/ApplyStyleNode';
+import { InpaintNode } from './nodes/InpaintNode';
+import { AdjustmentsNode } from './nodes/AdjustmentsNode';
 import { LayerSplitNode } from './nodes/LayerSplitNode';
 import { BrandKitNode } from './nodes/BrandKitNode';
 import { CrossPlatformNode } from './nodes/CrossPlatformNode';
@@ -144,16 +147,28 @@ export const NODE_REGISTRY = {
     input: 'image',
     output: 'image',
   },
+  inpaint: {
+    kind: 'inpaint', component: InpaintNode, label: 'AI 局部重繪', addLabel: '＋ AI 局部重繪',
+    addable: true, category: 'process', needsUpstream: true, input: 'image', output: 'image',
+  },
+  adjustments: {
+    kind: 'adjustments', component: AdjustmentsNode, label: '基礎調色', addLabel: '＋ 基礎調色',
+    addable: true, category: 'process', needsUpstream: true, input: 'image', output: 'image',
+  },
   copyStyle: {
     kind: 'copyStyle',
     component: CopyStyleNode,
-    label: '拷貝風格',
-    addLabel: '＋ 拷貝風格',
+    label: '複製風格',
+    addLabel: '＋ 複製風格',
     addable: true,
     category: 'process',
     needsUpstream: true,
     input: 'image',
-    output: 'image',
+    output: 'text',
+  },
+  applyStyle: {
+    kind: 'applyStyle', component: ApplyStyleNode, label: '貼上風格', addLabel: '＋ 貼上風格',
+    addable: true, category: 'process', needsUpstream: true, input: 'imageOrText', output: 'image',
   },
   layerSplit: {
     kind: 'layerSplit',

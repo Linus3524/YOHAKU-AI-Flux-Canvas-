@@ -1,6 +1,6 @@
 import type { BiRefNetModel } from '../../utils/geminiLayer';
 
-export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'cameraAngle' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'copyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing' | 'group' | 'note';
+export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'cameraAngle' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'inpaint' | 'adjustments' | 'copyStyle' | 'applyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing' | 'group' | 'note';
 
 export interface NoteParams {
   text: string;
@@ -53,7 +53,16 @@ export interface OutpaintParams {
 }
 export interface CopyStyleParams {
   selectedKeys: string[];
-  preserveTransparency: boolean;
+}
+export interface ApplyStyleParams { preserveTransparency: boolean; model?: string; }
+export interface InpaintParams {
+  prompt: string;
+}
+export interface AdjustmentsParams {
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  temperature: number;
 }
 export interface BrandKitParams {
   brandName: string;

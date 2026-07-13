@@ -3,6 +3,7 @@ import { useNodeGraphStore } from '../../../store/nodeGraphStore';
 import { isImageSrc } from '../mediaSrc';
 import { NodeWorkflowContext } from '../NodeWorkflowContext';
 import { Icon } from '../../Icon';
+import { ImagePreviewActions } from './ImagePreviewActions';
 
 /**
  * 動作節點的結果預覽：執行後從 store 讀該節點的結果並顯示。
@@ -10,10 +11,9 @@ import { Icon } from '../../Icon';
  */
 export function NodeResultPreview({ id }: { id: string }) {
   const result = useNodeGraphStore(s => s.nodeResults[id]);
-  const nodeLabel = useNodeGraphStore(s => s.nodes.find(n => n.id === id)?.data?.label);
-  const { detachImage } = useContext(NodeWorkflowContext);
+  const clearNodeResult = useNodeGraphStore(s => s.clearNodeResult);
+  const { detachImage, invalidateOutput } = useContext(NodeWorkflowContext);
   
-  const [isHovered, setIsHovered] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // 點擊空白處關閉右鍵選單
@@ -29,8 +29,15 @@ export function NodeResultPreview({ id }: { id: string }) {
   const handleExport = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (detachImage && isImageSrc(result)) {
-      detachImage(result, nodeLabel || '節點圖片');
+      detachImage(result);
     }
+  };
+
+  const handleClearResult = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setContextMenu(null);
+    clearNodeResult(id);
+    invalidateOutput?.();
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -46,13 +53,9 @@ export function NodeResultPreview({ id }: { id: string }) {
   };
 
   return (
-    <div 
-      className="relative border-t border-black/6 group/preview"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <div className="relative border-t border-black/6">
       {isImageSrc(result) ? (
-        <div className="relative w-full h-auto overflow-hidden">
+        <div className="group/image relative w-full h-auto overflow-hidden">
           <img
             src={result}
             alt="結果"
@@ -62,17 +65,11 @@ export function NodeResultPreview({ id }: { id: string }) {
             onContextMenu={handleContextMenu}
           />
           
-          {/* Hover 浮動匯出按鈕 */}
-          {isHovered && detachImage && (
-            <button
-              type="button"
-              onClick={handleExport}
-              className="nodrag absolute right-1.5 top-1.5 w-6 h-6 bg-white/90 backdrop-blur rounded-full border border-black/10 flex items-center justify-center text-neutral-600 hover:text-neutral-900 hover:bg-white hover:scale-105 active:scale-95 shadow-sm transition-all pointer-events-auto cursor-pointer"
-              title="匯出此圖片到大畫布"
-            >
-              <Icon name="add_photo_alternate" size={13} />
-            </button>
-          )}
+          <ImagePreviewActions
+            onDelete={handleClearResult}
+            onImport={detachImage ? handleExport : undefined}
+            deleteTitle="刪除圖片結果（保留節點）"
+          />
 
           {/* 右鍵選單 */}
           {contextMenu && detachImage && (
@@ -92,7 +89,7 @@ export function NodeResultPreview({ id }: { id: string }) {
                   className="nodrag flex items-center gap-1.5 w-full px-3 py-1.5 text-left text-[11px] font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
                 >
                   <Icon name="add_photo_alternate" size={13} />
-                  匯入此圖片到畫布
+                  匯入此圖片到主畫布
                 </button>
               </div>
             </>

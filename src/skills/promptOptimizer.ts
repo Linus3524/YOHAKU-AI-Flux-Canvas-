@@ -156,7 +156,7 @@ export async function optimizePrompt(
   const genAI = new GoogleGenAI({ apiKey });
 
   const response = await genAI.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.1-flash-lite',
     contents: inputContent,
     config: {
       systemInstruction: `${systemPrompt}\n\n${USER_INSTRUCTION}`,
