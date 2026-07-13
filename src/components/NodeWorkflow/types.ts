@@ -1,6 +1,6 @@
 import type { BiRefNetModel } from '../../utils/geminiLayer';
 
-export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'style' | 'cameraAngle' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'inpaint' | 'adjustments' | 'copyStyle' | 'applyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing' | 'group' | 'note';
+export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'lineSticker' | 'style' | 'cameraAngle' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'inpaint' | 'adjustments' | 'copyStyle' | 'applyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing' | 'group' | 'note';
 
 export interface NoteParams {
   text: string;
@@ -22,6 +22,19 @@ export interface ImageGenParams {
   prompt: string;
   model: string;
   aspectRatio?: string;
+}
+export interface LineStickerParams {
+  subject: string;
+  style: string;
+  theme: string;
+  count: number;
+  itemPrompts: string;
+  useStickerBorder: boolean;
+  useFacialFeatures: boolean;
+  textEnabled: boolean;
+  textContent: string;
+  model: string;
+  imageSize: '1K' | '2K' | '4K';
 }
 export interface StyleParams {
   styleKey: string;

@@ -1,7 +1,7 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, AdjustmentsParams, ApplyStyleParams, BrandKitParams, CameraAngleParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, InpaintParams, LayerSplitParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, AdjustmentsParams, ApplyStyleParams, BrandKitParams, CameraAngleParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, InpaintParams, LayerSplitParams, LineStickerParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
 import type { ImageElement, OutpaintingState } from '../../../types';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
@@ -27,6 +27,7 @@ import { PRODUCT_MARKETING_DEFAULT_CONFIG, PRODUCT_MARKETING_PLATFORMS } from '.
 import { isImageSrc } from '../mediaSrc';
 import { nodeRequiresUpstream } from '../nodeRegistry';
 import { applyImageAdjustments } from '../../../utils/applyImageAdjustments';
+import { buildStickerPrompt, STICKER_DEFAULT_CONFIG } from '../../../skills/sticker';
 
 const ATLAS_MODELS = ['seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
 const STYLE_PRESET_BY_KEY: Record<string, string> = {
@@ -118,6 +119,43 @@ async function runImageGen(
   );
   if (!src) throw new Error('生圖沒有回傳圖片');
   return src;
+}
+
+/** LINE 貼圖節點：用既有貼圖 Skill 組成集合圖提示詞，再交給通用生圖 pipeline。 */
+async function runLineSticker(
+  params: Partial<LineStickerParams>,
+  upstreams: string[],
+  engine: ExecutorEngine,
+): Promise<string> {
+  const textInputs: string[] = upstreams.filter(src => !isImageSrc(src));
+  const upstreamText = textInputs
+    .map(src => src.trim())
+    .filter(Boolean);
+  const subject = [...upstreamText, params.subject?.trim()].filter(Boolean).join('\n');
+  const count = Math.max(2, Math.min(20, Number(params.count) || STICKER_DEFAULT_CONFIG.stickerCollectionCount));
+  const itemPrompts = (params.itemPrompts ?? '')
+    .split('\n')
+    .map(item => item.trim())
+    .filter(Boolean)
+    .slice(0, count);
+  const prompt = buildStickerPrompt(subject, {
+    ...STICKER_DEFAULT_CONFIG,
+    style: params.style || STICKER_DEFAULT_CONFIG.style,
+    theme: params.theme || STICKER_DEFAULT_CONFIG.theme,
+    layoutMode: 'collection',
+    stickerCollectionCount: count,
+    collectionItemPrompts: itemPrompts,
+    useStickerBorder: params.useStickerBorder !== false,
+    useFacialFeatures: params.useFacialFeatures !== false,
+    textEnabled: params.textEnabled === true,
+    textContent: params.textContent ?? '',
+  });
+  const referenceImages = upstreams.filter(src => isImageSrc(src));
+  return runImageGen(
+    { prompt, model: params.model || engine.generationModel || 'gemini', aspectRatio: '1:1' },
+    referenceImages,
+    { ...engine, imageSize: params.imageSize || engine.imageSize || '2K' },
+  );
 }
 
 async function runStyleTransfer(
@@ -787,6 +825,11 @@ const nodeRunners: Record<ExecutableNodeKind, NodeRunner> = {
   )),
   imageGen: async ({ node, inputs, engine }) => singleResult(await runImageGen(
     (node.data.params ?? {}) as Partial<ImageGenParams>,
+    inputs,
+    engine,
+  )),
+  lineSticker: async ({ node, inputs, engine }) => singleResult(await runLineSticker(
+    (node.data.params ?? {}) as Partial<LineStickerParams>,
     inputs,
     engine,
   )),

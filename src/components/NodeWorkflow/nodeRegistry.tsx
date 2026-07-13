@@ -5,6 +5,7 @@ import { InputNode } from './nodes/InputNode';
 import { OutputNode } from './nodes/OutputNode';
 import { RemoveBgNode } from './nodes/RemoveBgNode';
 import { ImageGenNode } from './nodes/ImageGenNode';
+import { LineStickerNode } from './nodes/LineStickerNode';
 import { StyleNode } from './nodes/StyleNode';
 import { CameraAngleNode } from './nodes/CameraAngleNode';
 import { UpscaleNode } from './nodes/UpscaleNode';
@@ -75,6 +76,17 @@ export const NODE_REGISTRY = {
     component: ImageGenNode,
     label: '生成圖片',
     addLabel: '＋ 生成圖片',
+    addable: true,
+    category: 'generate',
+    needsUpstream: false,
+    input: 'imageOrText',
+    output: 'image',
+  },
+  lineSticker: {
+    kind: 'lineSticker',
+    component: LineStickerNode,
+    label: '生成 LINE 貼圖',
+    addLabel: '＋ 生成 LINE 貼圖',
     addable: true,
     category: 'generate',
     needsUpstream: false,
