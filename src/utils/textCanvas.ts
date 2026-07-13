@@ -182,7 +182,9 @@ const drawTextContent = (
                 if (el.align === 'left') arcCenterY = y + padding + ySpanLine / 2;
                 else if (el.align === 'right') arcCenterY = y + el.height - padding - ySpanLine / 2;
 
-                let accumulated = 0;
+                // The nth spacing is the closing gap. Split it across both
+                // ends so the curved column stays centred on the arc seam.
+                let accumulated = spacingPx / 2;
                 chars.forEach((char, idx) => {
                     const charH = charHeights[idx];
                     const s = accumulated + charH / 2 - totalColH / 2;
@@ -276,7 +278,9 @@ const drawTextContent = (
             else if (el.align === 'right') arcCenterX = x + el.width - padding - xSpanLine / 2;
 
             // Arc offset s for each char (left → right, relative to text centre)
-            let accumulated = 0;
+            // The nth spacing is the closing gap. Split it across both ends
+            // so the curved line stays centred on the arc seam.
+            let accumulated = spacingPx / 2;
             chars.forEach((char, i) => {
                 const charW = charWidths[i];
                 const s = accumulated + charW / 2 - totalLineWidth / 2;

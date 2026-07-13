@@ -17,6 +17,7 @@ import type {
 import { useHistoryState } from './useHistoryState';
 import { trimCanvas, wrapTextCanvas, loadImage, createShapeDataUrl, createArrowDataUrl, COLORS, getRandomPosition, measureTextVisualBounds, requestTextAutoEdit } from '../utils/helpers';
 import { drawTextOnCanvas } from '../utils/textCanvas'; // ✅ 修改
+import { captureTextElementAsImage } from '../utils/svgCapture';
 import type { CanvasApi } from '../components/InfiniteCanvas';
 import { saveFileHandle, loadFileHandle, clearFileHandle, verifyHandlePermission } from '../utils/fileHandleStore';
 import { computeDragSnap } from '../utils/snapping';
@@ -885,7 +886,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
 
                 } else if (el.type === 'shape') {
                     const shapeEl = el as ShapeElement;
-                    const shapePadding = Math.max(20, shapeEl.strokeWidth * 2);
+                    // padding 必須與 createShapeDataUrl 內部一致（sw/2 + 1），
+                    // 否則繪製尺寸與圖片內容尺寸不匹配 → 形狀被等比放大（所見非所得）。
+                    // 「轉換成圖片」路徑（handleRasterizeShape）即以原尺寸 1:1 使用，這裡對齊同一套。
+                    const shapePadding = (shapeEl.strokeWidth || 0) / 2 + 1;
                     const dataUrl = await createShapeDataUrl(shapeEl);
                     const img = await loadImage(dataUrl);
                     const drawW = shapeEl.width + shapePadding * 2;
@@ -964,9 +968,31 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 } else if (el.type === 'text') {
                     const textEl = el as TextElement;
                     offCtx.save();
-                    // ✅ 修改：座標系配合現有其他元素的 translate 方式
-                    if (textEl.rotation) offCtx.rotate((textEl.rotation * Math.PI) / 180);
-                    drawTextOnCanvas(offCtx, textEl, -textEl.width / 2, -textEl.height / 2);
+                    // 注意：外層 ctx 合成 offCanvas 時已套用 el.rotation（translate+rotate），
+                    // 這裡不得再 rotate 一次，否則旋轉過的文字會被雙重旋轉而跑位。
+                    const isCurved = Math.abs((textEl as any).curveStrength || 0) > 0.1;
+                    if (isCurved) {
+                        // 彎曲文字：與「轉換成圖片」同一套 DOM 截取，確保與畫面一致
+                        // （canvas 重繪會因字符寬度測量誤差導致弧心偏移）
+                        const fxPad = Math.max(
+                            textEl.shadowBlur ? Math.ceil(textEl.shadowBlur + 4) : 0,
+                            textEl.glowBlur ? Math.ceil(textEl.glowBlur) : 0,
+                            Math.ceil((textEl.strokeWidth || 0) / 2),
+                        );
+                        const dataUrl = await captureTextElementAsImage(
+                            textEl.id, textEl.width, textEl.height, fxPad, SCALE,
+                            (textEl.backgroundColor && textEl.backgroundColor !== 'transparent')
+                                ? textEl.backgroundColor : undefined,
+                            textEl.fontFamily, textEl.text,
+                        );
+                        const img = await loadImage(dataUrl);
+                        const drawW = textEl.width + fxPad * 2;
+                        const drawH = textEl.height + fxPad * 2;
+                        offCtx.drawImage(img, -(drawW / 2), -(drawH / 2), drawW, drawH);
+                    } else {
+                        await document.fonts.ready;
+                        drawTextOnCanvas(offCtx, textEl, -textEl.width / 2, -textEl.height / 2);
+                    }
                     offCtx.restore();
 
                 } else if (el.type === 'note') {

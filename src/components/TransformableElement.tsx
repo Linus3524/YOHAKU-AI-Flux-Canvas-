@@ -1213,7 +1213,10 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                         if (el.align === 'left') arcCenterY = padding + ySpanLine / 2;
                                                         else if (el.align === 'right') arcCenterY = el.height - padding - ySpanLine / 2;
 
-                                                        let accumulated = 0;
+                                                        // Centre the wrap-point spacing around the arc seam.  The
+                                                        // circumference includes n gaps, so half of the extra gap
+                                                        // must sit before the first glyph (and half after the last).
+                                                        let accumulated = spacingPx / 2;
                                                         chars.forEach((char, charIdx) => {
                                                             const charH = charHeights[charIdx];
                                                             const s = accumulated + charH / 2 - totalColH / 2;
@@ -1344,7 +1347,9 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                     if (el.align === 'left') arcCenterX = padding + xSpanLine / 2;
                                                     else if (el.align === 'right') arcCenterX = el.width - padding - xSpanLine / 2;
 
-                                                    let accumulated = 0;
+                                                    // Keep the closing gap centred on the seam so the glyph arc
+                                                    // remains symmetric around arcCenterX.
+                                                    let accumulated = spacingPx / 2;
                                                     chars.forEach((char, charIdx) => {
                                                         const charW = charWidths[charIdx];
                                                         const s = accumulated + charW / 2 - totalLineWidth / 2;
