@@ -15,12 +15,30 @@ export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: stri
     { ratio: '1:1',  label: '1:1',  w2k: '2048*2048', w4k: '4096*4096' },
     { ratio: '4:3',  label: '4:3',  w2k: '2304*1728', w4k: '4704*3520' },
     { ratio: '3:4',  label: '3:4',  w2k: '1728*2304', w4k: '3520*4704' },
-    { ratio: '4:5',  label: '4:5',  w2k: '1792*2240', w4k: '3584*4480' },
+    // v4.5 沒有原生 4:5 enum，使用最接近的合法 3:4，避免 API 忽略 size 後回傳方形。
+    { ratio: '4:5',  label: '4:5',  w2k: '1728*2304', w4k: '3520*4704' },
     { ratio: '16:9', label: '16:9', w2k: '2848*1600', w4k: '5504*3040' },
     { ratio: '9:16', label: '9:16', w2k: '1600*2848', w4k: '3040*5504' },
     { ratio: '3:2',  label: '3:2',  w2k: '2496*1664', w4k: '4992*3328' },
     { ratio: '2:3',  label: '2:3',  w2k: '1664*2496', w4k: '3328*4992' },
     { ratio: '21:9', label: '21:9', w2k: '3136*1344', w4k: '6240*2656' },
+    { ratio: '2.6:1', label: '2.6:1', w2k: '3136*1344', w4k: '6240*2656' },
+    { ratio: '3:1', label: '3:1', w2k: '3136*1344', w4k: '6240*2656' },
+];
+
+/** Seedream v5.0 Lite Edit — Atlas 提供 2K／3K 兩檔；w4k 欄位沿用既有「高畫質檔」語意。 */
+export const SEEDREAM_LITE_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
+    { ratio: '1:1',  label: '1:1',  w2k: '2048*2048', w4k: '3072*3072' },
+    { ratio: '4:3',  label: '4:3',  w2k: '2304*1728', w4k: '3456*2592' },
+    { ratio: '3:4',  label: '3:4',  w2k: '1728*2304', w4k: '2592*3456' },
+    { ratio: '4:5',  label: '4:5',  w2k: '1728*2304', w4k: '2592*3456' },
+    { ratio: '16:9', label: '16:9', w2k: '2848*1600', w4k: '4096*2304' },
+    { ratio: '9:16', label: '9:16', w2k: '1600*2848', w4k: '2304*4096' },
+    { ratio: '3:2',  label: '3:2',  w2k: '2496*1664', w4k: '3744*2496' },
+    { ratio: '2:3',  label: '2:3',  w2k: '1664*2496', w4k: '2496*3744' },
+    { ratio: '21:9', label: '21:9', w2k: '3136*1344', w4k: '4704*2016' },
+    { ratio: '2.6:1', label: '2.6:1', w2k: '3136*1344', w4k: '4704*2016' },
+    { ratio: '3:1', label: '3:1', w2k: '3136*1344', w4k: '4704*2016' },
 ];
 
 /** 通義千問 Qwen Image 2.0 — 單層尺寸（每邊最大 2048px，* 分隔） */
@@ -34,33 +52,45 @@ export const QWEN_SIZES: { ratio: string; label: string; w2k: string; w4k: strin
     { ratio: '3:2',  label: '3:2',  w2k: '1536*1024', w4k: '2048*1366' },
     { ratio: '2:3',  label: '2:3',  w2k: '1024*1536', w4k: '1366*2048' },
     { ratio: '21:9', label: '21:9', w2k: '1512*648',  w4k: '2048*878'  },
+    { ratio: '2.6:1', label: '2.6:1', w2k: '1664*640', w4k: '1664*640' },
+    { ratio: '3:1', label: '3:1', w2k: '1920*640', w4k: '1920*640' },
 ];
 
 /**
- * Seedream v5.0 Pro — 品質優先，支援 2K 與 3K 尺寸。
- * w2k 為 2K 尺寸，w4k 在此模型映射為 3K 尺寸。
+ * Seedream v5.0 Pro — Atlas Edit 端點總畫素上限為 4,194,304，沒有 4K 檔。
+ * UI 選到 4K 時仍必須收斂到 API enum 允許的最大 2K 尺寸，否則請求會直接失敗。
+ * 4:5、21:9 沒有原生 enum，分別使用最接近的 3:4、16:9 完整輸出，不做裁切或拉伸。
  */
 export const SEEDREAM_PRO_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
-    { ratio: '1:1',  label: '1:1',  w2k: '2048*2048', w4k: '3072*3072' },
-    { ratio: '4:3',  label: '4:3',  w2k: '2304*1728', w4k: '3456*2592' },
-    { ratio: '3:4',  label: '3:4',  w2k: '1728*2304', w4k: '2592*3456' },
-    { ratio: '16:9', label: '16:9', w2k: '2720*1530', w4k: '4096*2304' },
-    { ratio: '9:16', label: '9:16', w2k: '1530*2720', w4k: '2304*4096' },
-    { ratio: '3:2',  label: '3:2',  w2k: '2496*1664', w4k: '3744*2496' },
-    { ratio: '2:3',  label: '2:3',  w2k: '1664*2496', w4k: '2496*3744' },
+    { ratio: '1:1',  label: '1:1',  w2k: '2048*2048', w4k: '2048*2048' },
+    { ratio: '4:3',  label: '4:3',  w2k: '2304*1728', w4k: '2304*1728' },
+    { ratio: '3:4',  label: '3:4',  w2k: '1728*2304', w4k: '1728*2304' },
+    { ratio: '4:5',  label: '4:5',  w2k: '1728*2304', w4k: '1728*2304' },
+    { ratio: '16:9', label: '16:9', w2k: '2720*1530', w4k: '2720*1530' },
+    { ratio: '9:16', label: '9:16', w2k: '1530*2720', w4k: '1530*2720' },
+    { ratio: '3:2',  label: '3:2',  w2k: '2496*1664', w4k: '2496*1664' },
+    { ratio: '2:3',  label: '2:3',  w2k: '1664*2496', w4k: '1664*2496' },
+    { ratio: '21:9', label: '21:9', w2k: '2720*1530', w4k: '2720*1530' },
+    { ratio: '2.6:1', label: '2.6:1', w2k: '2720*1530', w4k: '2720*1530' },
+    { ratio: '3:1', label: '3:1', w2k: '2720*1530', w4k: '2720*1530' },
 ];
 
-/** GPT Image 2 — 使用 x 分隔符，quality 控制解析度 */
+/**
+ * GPT Image 2 Edit — Atlas 現已接受任意 WIDTHxHEIGHT（寬高須為 16 的倍數，比例 1:3～3:1）。
+ * Medium／High 只由 quality 控制，兩檔使用相同的精確平台比例，避免切換畫質時構圖尺寸跟著改變。
+ */
 export const GPT_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
     { ratio: '1:1',  label: '1:1',  w2k: '1024x1024', w4k: '1024x1024' },
-    { ratio: '4:3',  label: '4:3',  w2k: '1536x1024', w4k: '1536x1024' },
-    { ratio: '3:4',  label: '3:4',  w2k: '1024x1536', w4k: '1024x1536' },
-    // GPT Image 2 無原生 4:5，吸附至最接近的直式 1024x1536（實際 2:3）
-    { ratio: '4:5',  label: '4:5',  w2k: '1024x1536', w4k: '1024x1536' },
-    { ratio: '16:9', label: '16:9', w2k: '2560x1440', w4k: '3840x2160' },
-    { ratio: '9:16', label: '9:16', w2k: '1440x2560', w4k: '2160x3840' },
+    { ratio: '4:3',  label: '4:3',  w2k: '1536x1152', w4k: '1536x1152' },
+    { ratio: '3:4',  label: '3:4',  w2k: '1152x1536', w4k: '1152x1536' },
+    { ratio: '4:5',  label: '4:5',  w2k: '1280x1600', w4k: '1280x1600' },
+    { ratio: '16:9', label: '16:9', w2k: '1536x864',  w4k: '1536x864' },
+    { ratio: '9:16', label: '9:16', w2k: '864x1536',  w4k: '864x1536' },
     { ratio: '3:2',  label: '3:2',  w2k: '1536x1024', w4k: '1536x1024' },
     { ratio: '2:3',  label: '2:3',  w2k: '1024x1536', w4k: '1024x1536' },
+    { ratio: '21:9', label: '21:9', w2k: '2016x864',  w4k: '2016x864' },
+    { ratio: '2.6:1', label: '2.6:1', w2k: '2080x800', w4k: '2080x800' },
+    { ratio: '3:1', label: '3:1', w2k: '2304x768', w4k: '2304x768' },
 ];
 
 /** 依模型取對應的尺寸表（供 UI 使用） */
@@ -68,6 +98,7 @@ export function getModelSizes(model: AtlasGenerationModel) {
     if (model === 'gpt-image-2') return GPT_SIZES;
     if (model === 'qwen-image-2' || model === 'flux-2-pro') return QWEN_SIZES;
     if (model === 'seedream-v5-pro') return SEEDREAM_PRO_SIZES;
+    if (model === 'seedream-v5') return SEEDREAM_LITE_SIZES;
     return ATLAS_SIZES;
 }
 
@@ -78,6 +109,7 @@ interface ModelConfig {
     sizeParam?: string;           // API 尺寸欄位名稱（e.g. 'size', 'image_size'）
     useGptSizes?: boolean;        // true = 使用 GPT_SIZES（x 分隔）；false/undefined = ATLAS_SIZES（* 分隔）
     useQwenSizes?: boolean;       // true = 使用 QWEN_SIZES（* 分隔，max 2048px）
+    useSeedreamLiteSizes?: boolean; // true = 使用 Seedream v5 Lite 的 2K／3K 尺寸表
     useSeedreamProSizes?: boolean; // true = 使用 SEEDREAM_PRO_SIZES（* 分隔，總畫素 ≤2K）
     supportsBase64Output?: boolean; // 支援 enable_base64_output
     supportsQualityParam?: boolean; // 支援 quality: low/medium/high（GPT Image 2）
@@ -117,6 +149,7 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         id: 'bytedance/seedream-v5.0-lite',
         useInputWrapper: false,
         sizeParam: 'size',
+        useSeedreamLiteSizes: true,
         supportsBase64Output: true,
         img2imgId: 'bytedance/seedream-v5.0-lite/edit',
         img2imgUseInputWrapper: false,
@@ -164,10 +197,12 @@ function resolveSize(
     quality: '2K' | '4K',
     useGptSizes?: boolean,
     useQwenSizes?: boolean,
+    useSeedreamLiteSizes?: boolean,
     useSeedreamProSizes?: boolean,
 ): string | undefined {
     const table = useGptSizes ? GPT_SIZES
         : useQwenSizes ? QWEN_SIZES
+        : useSeedreamLiteSizes ? SEEDREAM_LITE_SIZES
         : useSeedreamProSizes ? SEEDREAM_PRO_SIZES
         : ATLAS_SIZES;
     const entry = table.find(s => s.ratio === ratio);
@@ -306,7 +341,7 @@ async function pollPrediction(
         }
     }
 
-    throw new Error('Atlas 生成逾時（超過 2 分鐘），請稍後再試');
+    throw new Error('Atlas 生成逾時（單張超過 10 分鐘），請稍後再試');
 }
 
 async function postGeneration(body: Record<string, unknown>, atlasKey: string): Promise<string> {
@@ -347,7 +382,7 @@ function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
 function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOptions) {
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
     if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
-        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes, config.useSeedreamProSizes);
+        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes, config.useSeedreamLiteSizes, config.useSeedreamProSizes);
         if (size) extra[config.sizeParam] = size;
     }
     if (config.supportsQualityParam) {
@@ -388,12 +423,21 @@ export async function callAtlasGenerate(
     const predIds = submitResults
         .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
         .map(r => r.value);
-    if (predIds.length === 0) throw new Error('Atlas: 所有生成請求均失敗');
+    if (predIds.length === 0) {
+        const rejected = submitResults.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+        if (rejected) throw rejected.reason;
+        throw new Error('Atlas: 所有生成請求均失敗');
+    }
     const results = await Promise.allSettled(predIds.map(id => pollPrediction(id, atlasKey)));
-    return results
+    const images = results
         .filter((r): r is PromiseFulfilledResult<string[]> => r.status === 'fulfilled')
         .flatMap(r => r.value)
         .filter(Boolean);
+    if (images.length === 0) {
+        const rejected = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+        if (rejected) throw rejected.reason;
+    }
+    return images;
 }
 
 // ── 圖生圖 ─────────────────────────────────────────────
@@ -405,7 +449,7 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
     const imgValue = isArray ? images : images[0];
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
     if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
-        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes, config.useSeedreamProSizes);
+        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes, config.useSeedreamLiteSizes, config.useSeedreamProSizes);
         if (size) extra[config.sizeParam] = size;
     }
     if (config.supportsQualityParam) {
@@ -529,12 +573,21 @@ export async function callAtlasImg2Img(
     const predIds = submitResults
         .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
         .map(r => r.value);
-    if (predIds.length === 0) throw new Error('Atlas img2img: 所有生成請求均失敗');
+    if (predIds.length === 0) {
+        const rejected = submitResults.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+        if (rejected) throw rejected.reason;
+        throw new Error('Atlas img2img: 所有生成請求均失敗');
+    }
     const results = await Promise.allSettled(predIds.map(id => pollPrediction(id, atlasKey)));
-    return results
+    const images = results
         .filter((r): r is PromiseFulfilledResult<string[]> => r.status === 'fulfilled')
         .flatMap(r => r.value)
         .filter(Boolean);
+    if (images.length === 0) {
+        const rejected = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+        if (rejected) throw rejected.reason;
+    }
+    return images;
 }
 
 /**

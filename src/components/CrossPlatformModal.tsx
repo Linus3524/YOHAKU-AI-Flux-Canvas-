@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CROSS_PLATFORM_SPECS } from '../skills/crossPlatform';
+import { CROSS_PLATFORM_SPECS, crossPlatformRatioForModel } from '../skills/crossPlatform';
 
 const MODEL_OPTIONS: { id: string; label: string; badge: string; needsAtlas: boolean }[] = [
   { id: 'gemini', label: 'Gemini 3 Flash / Pro', badge: 'Gemini Key', needsAtlas: false },
@@ -22,11 +22,17 @@ interface CrossPlatformModalProps {
 }
 
 const DEFAULT_SELECTED = ['instagram-feed'];
-// Atlas quality 只有 2K/4K 兩檔（無 1K），這裡只給真實存在的檔位，避免假選項
-const SIZE_OPTIONS: { id: '2K' | '4K'; label: string }[] = [
-  { id: '2K', label: '2K（建議）' },
-  { id: '4K', label: '4K（慢，較貴）' },
-];
+type ResolutionOption = { id: '2K' | '4K'; label: string };
+
+/** UI 的 4K value 代表「模型高畫質檔」；顯示名稱依 Atlas 真實能力切換。 */
+function resolutionOptionsForModel(model: string): ResolutionOption[] {
+  if (model === 'seedream-v5-pro') return [{ id: '2K', label: '2K（最高）' }];
+  if (model === 'seedream-v5') return [{ id: '2K', label: '2K' }, { id: '4K', label: '3K（高畫質）' }];
+  if (model === 'seedream-v4.5') return [{ id: '2K', label: '2K' }, { id: '4K', label: '4K（高畫質）' }];
+  if (model === 'qwen-image-2' || model === 'flux-2-pro') return [{ id: '2K', label: '約 1.5K' }, { id: '4K', label: '2K（最高）' }];
+  if (model === 'gpt-image-2') return [{ id: '2K', label: 'Medium' }, { id: '4K', label: 'High' }];
+  return [{ id: '2K', label: '2K' }, { id: '4K', label: '4K' }];
+}
 
 export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageName, defaultModel, hasAtlas = false, onGenerate, onClose }) => {
   const [selected, setSelected] = useState<string[]>(DEFAULT_SELECTED);
@@ -38,6 +44,7 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
   const [useCustomSeed, setUseCustomSeed] = useState(false);
   const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
   const isGemini = model === 'gemini';
+  const resolutionOptions = resolutionOptionsForModel(model);
 
   const toggle = (id: string) =>
     setSelected(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
@@ -107,6 +114,7 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
                             disabled={isDisabled}
                             onClick={() => {
                               setModel(opt.id);
+                              if (opt.id === 'seedream-v5-pro') setImageSize('2K');
                               setIsModelDropdownOpen(false);
                             }}
                             className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs transition-colors ${
@@ -138,8 +146,8 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
         </div>
 
         <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">輸出解析度</div>
-        <div className="grid grid-cols-2 gap-1.5 bg-[#F1F5F9] p-0.5 rounded-xl mb-1">
-          {SIZE_OPTIONS.map(o => (
+        <div className={`grid gap-1.5 bg-[#F1F5F9] p-0.5 rounded-xl mb-1 ${resolutionOptions.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          {resolutionOptions.map(o => (
             <button
               key={o.id}
               type="button"
@@ -155,13 +163,21 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
           ))}
         </div>
         <p className="text-[10px] text-[#86868B] mb-4">
-          僅影響生圖輸出的畫質等級。解析度越高生成時間越長。
+          {model === 'seedream-v5-pro'
+            ? 'Seedream 5 Pro Edit 的 Atlas 輸出上限為 2K；3K 是 Seedream 5 Lite 的高畫質檔。'
+            : model === 'seedream-v5'
+              ? 'Seedream 5 Lite 提供 2K／3K 兩檔。'
+              : model === 'qwen-image-2' || model === 'flux-2-pro'
+                ? '此 Edit 模型最長邊上限為 2048px。'
+            : '僅影響生圖輸出的畫質等級。解析度越高生成時間越長。'}
         </p>
 
         <div className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide mb-2">選擇平台</div>
         <div className="grid grid-cols-2 gap-1.5 mb-4">
           {CROSS_PLATFORM_SPECS.map(spec => {
             const on = selected.includes(spec.id);
+            const effectiveRatio = crossPlatformRatioForModel(model, spec.atlasRatio);
+            const fallbackRatio = effectiveRatio !== spec.atlasRatio ? effectiveRatio : null;
             return (
               <button
                 key={spec.id}
@@ -180,7 +196,14 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
                 >
                   {on ? '✓' : ''}
                 </span>
-                {spec.name}
+                <span className="min-w-0">
+                  <span className="block">{spec.name}</span>
+                  {fallbackRatio && (
+                    <span className={`mt-0.5 block text-[9px] font-medium ${on ? 'text-[#AF52DE]/70' : 'text-[#94A3B8]'}`}>
+                      此模型將以最接近的 {fallbackRatio} 完整生成
+                    </span>
+                  )}
+                </span>
               </button>
             );
           })}

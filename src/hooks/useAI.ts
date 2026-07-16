@@ -39,6 +39,7 @@ import { applyPoissonBlend } from '../utils/poissonBlend';
 import { runExtendBrandKitPipeline, runLogoBrandKitPipeline } from '../ai/pipelines/brandKit';
 import { runProductMarketingPipeline } from '../ai/pipelines/productMarketing';
 import { runCrossPlatformPipeline } from '../ai/pipelines/crossPlatform';
+import { crossPlatformSpec, type CrossPlatformSpec } from '../skills/crossPlatform';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -50,8 +51,10 @@ interface UseAIProps {
     imageModel?: string;
     atlasApiKey?: string | null;
     generationModel?: string;
-
     falApiKey?: string | null;
+    setGeneratingLabels: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+    pauseAutoSave: () => void;
+    resumeAutoSave: () => void;
 }
 
 /** 透明背景一律由生成後去背產生；目前生成模型端不視為原生 Alpha 來源。 */
@@ -73,7 +76,7 @@ function buildStyledPrompt(userContent: string, stylePrompt: string, fallbackLab
     return styleDesc || `${fallbackLabel} style`;
 }
 
-export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image', atlasApiKey, generationModel: generationModelGlobal = 'gemini', falApiKey }: UseAIProps) => {
+export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image', atlasApiKey, generationModel: generationModelGlobal = 'gemini', falApiKey, setGeneratingLabels, pauseAutoSave, resumeAutoSave }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
     // 設計大師「透明背景」：非 Seedream Pro 的本批生成圖在放入畫布時自動去背
@@ -1398,10 +1401,48 @@ CONSTRAINTS:
         if (!useAtlas && !apiKey) { setHasApiKey(false); showToast('⚠️ 跨平台適配需要 Gemini 或 Atlas API Key'); return; }
 
         const imgEl = el as ImageElement;
+        const specs = platformIds.map(id => crossPlatformSpec(id)).filter(Boolean) as CrossPlatformSpec[];
+        if (specs.length === 0) { showToast('⚠️ 請至少選擇一個平台'); return; }
+
+        // 和魔法分層相同：先在來源圖右側建立每張結果的等待位置，
+        // 生成完成後以相同 id 原位替換，避免全部完成前畫布沒有回饋。
+        const rowHeight = 220;
+        const gap = 24;
+        const batchId = Date.now();
+        const transparentPixel = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        let cursorX = imgEl.position.x + imgEl.width / 2 + 60;
+        const baseTop = imgEl.position.y - imgEl.height / 2;
+        const placeholders: ImageElement[] = specs.map((spec, index) => {
+            const width = Math.round(rowHeight * spec.ratioValue);
+            const placeholder: ImageElement = {
+                ...imgEl,
+                id: `${imgEl.id}_xplatform_${batchId}_${index}`,
+                src: transparentPixel,
+                name: `${spec.name}生成中`,
+                position: { x: cursorX + width / 2, y: baseTop + rowHeight / 2 },
+                width,
+                height: rowHeight,
+                rotation: 0,
+                zIndex: zIndexCounter.current++,
+                groupId: null,
+                isVisible: true,
+                isLocked: true,
+            };
+            cursorX += width + gap;
+            return placeholder;
+        });
+        const placeholderIds = placeholders.map(item => item.id);
 
         setIsGenerating(true);
-        setGeneratingElementIds([elementId]);
+        pauseAutoSave();
+        setElements(prev => [...prev, ...placeholders]);
+        setGeneratingElementIds(placeholderIds);
+        setGeneratingLabels(Object.fromEntries(placeholders.map((placeholder, index) => [
+            placeholder.id,
+            `等待中 0/${specs.length} · ${specs[index].name}`,
+        ])));
 
+        let completed = 0;
         try {
             // 引擎設定組裝一次，單張生成統一走 src/ai/generateImage.ts 原語
             const engine: ImageEngineConfig = {
@@ -1419,19 +1460,56 @@ CONSTRAINTS:
                 engine,
                 nextZIndex: () => zIndexCounter.current++,
                 onToast: showToast,
-                onAsset: (newEl) => {
-                    setElements(prev => [...prev, newEl]);
-                    if (newEl.src.startsWith('data:')) cacheImage(newEl.id, newEl.src);
+                onItemStart: (index, spec) => {
+                    const placeholderId = placeholderIds[index];
+                    setGeneratingLabels(prev => ({
+                        ...prev,
+                        [placeholderId]: `生成中 ${index + 1}/${specs.length} · ${spec.name}`,
+                    }));
+                },
+                onItemFailed: (index) => {
+                    const placeholderId = placeholderIds[index];
+                    setElements(prev => prev.filter(item => item.id !== placeholderId));
+                    setGeneratingElementIds(prev => prev.filter(id => id !== placeholderId));
+                    setGeneratingLabels(prev => {
+                        const { [placeholderId]: _removed, ...remaining } = prev;
+                        return remaining;
+                    });
+                },
+                onAsset: (newEl, index) => {
+                    completed += 1;
+                    const slot = placeholders[index];
+                    const completedElement: ImageElement = {
+                        ...newEl,
+                        id: slot.id,
+                        position: slot.position,
+                        // 不裁切也不拉伸：完成後改用模型實際回傳比例。
+                        width: newEl.width,
+                        height: newEl.height,
+                        zIndex: slot.zIndex,
+                        isLocked: false,
+                    };
+                    setElements(prev => prev.map(item => item.id === slot.id ? completedElement : item));
+                    setGeneratingElementIds(prev => prev.filter(id => id !== slot.id));
+                    setGeneratingLabels(prev => {
+                        const { [slot.id]: _completed, ...remaining } = prev;
+                        return remaining;
+                    });
+                    if (completedElement.src.startsWith('data:')) cacheImage(completedElement.id, completedElement.src);
                 },
             });
-            showToast('✅ 跨平台適配完成！');
+            showToast(`✅ 跨平台適配完成！${completed}/${specs.length} 張`);
         } catch (error) {
             handleAIError(error, '跨平台適配');
         } finally {
+            // 只清除仍是透明圖的等待框；已完成並原位替換的圖片保留。
+            setElements(prev => prev.filter(item => !placeholderIds.includes(item.id) || item.type !== 'image' || item.src !== transparentPixel));
             setGeneratingElementIds([]);
+            setGeneratingLabels(prev => Object.fromEntries(Object.entries(prev).filter(([id]) => !placeholderIds.includes(id))));
             setIsGenerating(false);
+            resumeAutoSave();
         }
-    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast]);
+    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast, setGeneratingLabels, pauseAutoSave, resumeAutoSave]);
 
     /**
      * 品牌視覺套件生成：依品牌簡報循序生成 5 張成品圖（主Logo、備用Logo、品牌視覺板、App圖示、應用預覽），並排放至右側。

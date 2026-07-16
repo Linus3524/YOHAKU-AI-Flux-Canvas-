@@ -85,12 +85,14 @@ export async function generateOneImage(
     }
     parts.push({ text: `${prompt}\nOutput aspect ratio: ${aspectRatio}.` });
 
+    const geminiSupportedRatios = new Set(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9']);
+    const geminiAspectRatio = geminiSupportedRatios.has(aspectRatio) ? aspectRatio : '16:9';
     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
         model: engine.geminiImageModel,
         contents: { parts },
         config: {
             ...(seed !== undefined ? { seed } : {}),
-            imageConfig: { aspectRatio, imageSize: engine.imageSize },
+            imageConfig: { aspectRatio: geminiAspectRatio, imageSize: engine.imageSize },
         },
     }));
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);

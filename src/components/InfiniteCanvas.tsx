@@ -1043,8 +1043,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
               <div className="absolute inset-0 bg-black/25" />
               {/* Shimmer sweep */}
               <div className="absolute inset-0 animate-shimmer" />
-              {/* Center badge — 多張時只顯示在最大元素 */}
-              {el.id === badgeId && (
+              {/* 有個別任務標籤的 placeholder 各自顯示 badge；一般多選運算仍只顯示最大元素。 */}
+              {(generatingLabels[el.id] != null || el.id === badgeId) && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   {generatingProgress != null ? (
                     // 確定進度（本機去背/本機放大）：彩色進度條 + 百分比，不跳 toast

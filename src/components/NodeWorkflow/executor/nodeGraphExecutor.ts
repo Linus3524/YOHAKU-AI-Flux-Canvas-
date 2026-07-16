@@ -681,6 +681,7 @@ async function runCrossPlatform(
   input: string,
   engine: ExecutorEngine,
   onProgress?: (message: string) => void,
+  onBatchProgress?: (srcs: string[]) => void,
 ): Promise<string[]> {
   if (!isImageSrc(input)) throw new Error('跨平台適配節點需要上游圖片');
   const platformIds = Array.isArray(params.platformIds) && params.platformIds.length > 0
@@ -699,7 +700,10 @@ async function runCrossPlatform(
     nextZIndex: () => zIndex++,
     onToast: message => onProgress?.(message),
     onAsset: asset => {
-      if (asset.src) assets.push(asset.src);
+      if (asset.src) {
+        assets.push(asset.src);
+        onBatchProgress?.([...assets]);
+      }
     },
   });
   if (assets.length === 0) throw new Error('跨平台適配沒有產生任何圖片');
@@ -801,6 +805,7 @@ interface NodeRunnerContext {
   inputsByHandle: Record<string, string[]>;
   engine: ExecutorEngine;
   onProgress: (message: string) => void;
+  onBatchProgress: (srcs: string[]) => void;
 }
 
 type NodeRunner = (ctx: NodeRunnerContext) => Promise<NodeRunnerResult> | NodeRunnerResult;
@@ -896,11 +901,12 @@ const nodeRunners: Record<ExecutableNodeKind, NodeRunner> = {
     engine,
     onProgress,
   )),
-  crossPlatform: async ({ node, input, engine, onProgress }) => batchResult(await runCrossPlatform(
+  crossPlatform: async ({ node, input, engine, onProgress, onBatchProgress }) => batchResult(await runCrossPlatform(
     (node.data.params ?? {}) as Partial<CrossPlatformParams>,
     requireInput(input, '跨平台適配'),
     engine,
     onProgress,
+    onBatchProgress,
   )),
   productMarketing: async ({ node, input, engine, onProgress }) => batchResult(await runProductMarketing(
     (node.data.params ?? {}) as Partial<ProductMarketingParams>,
@@ -1139,6 +1145,8 @@ export async function executeGraph(
         inputsByHandle: upstreamSrcsByHandle(node.id, graph, results, batchResults),
         engine,
         onProgress: message => status(node.id, 'running', message),
+        // 只更新節點預覽；下游仍等完整 batch 正式寫入後才執行。
+        onBatchProgress: srcs => callbacks.onNodeBatchResult?.(node.id, srcs),
       });
 
       if (runnerResult.type === 'batch') {

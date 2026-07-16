@@ -130,7 +130,7 @@ export const CROSS_PLATFORM_SPECS: CrossPlatformSpec[] = [
     id: 'facebook-cover',
     name: 'FB 封面 2.6:1',
     promptLabel: 'Facebook page cover banner',
-    atlasRatio: '21:9',
+    atlasRatio: '2.6:1',
     ratioValue: 2.6,
     standard: 'Facebook page cover is a wide banner (~2.6:1); on mobile the left/right and bottom get cropped, so keep focus centered.',
     safeArea: 'Keep the subject, title and logo within the central safe area; left/right edges and bottom may be cropped on mobile, so put nothing critical there.',
@@ -143,7 +143,7 @@ export const CROSS_PLATFORM_SPECS: CrossPlatformSpec[] = [
     id: 'desktop-banner-3-1',
     name: '桌機廣告 3:1 (2160x720)',
     promptLabel: 'Desktop wide billboard banner',
-    atlasRatio: '21:9',
+    atlasRatio: '3:1',
     ratioValue: 3,
     standard: 'Desktop wide banner / billboard ad uses a horizontal 3:1 ratio (2160x720); it must stay highly visible on wide desktop screens.',
     safeArea: 'Keep core branding, face, product focus, and headlines centered within the middle 70% safe area; left/right edges may be cropped or overlayed on smaller viewports.',
@@ -156,6 +156,23 @@ export const CROSS_PLATFORM_SPECS: CrossPlatformSpec[] = [
 
 export function crossPlatformSpec(id: string): CrossPlatformSpec | undefined {
   return CROSS_PLATFORM_SPECS.find(s => s.id === id);
+}
+
+/** 平台適配時，換成模型端點真正接受的最接近比例；不裁切、不拉伸。 */
+export function crossPlatformRatioForModel(model: string, desiredRatio: string): string {
+  if (model === 'gpt-image-2' || model === 'qwen-image-2' || model === 'flux-2-pro') return desiredRatio;
+  if (model === 'seedream-v5-pro') {
+    if (desiredRatio === '4:5') return '3:4';
+    if (['21:9', '2.6:1', '3:1'].includes(desiredRatio)) return '16:9';
+    return desiredRatio;
+  }
+  if (model === 'seedream-v5' || model === 'seedream-v4.5') {
+    if (desiredRatio === '4:5') return '3:4';
+    if (desiredRatio === '2.6:1' || desiredRatio === '3:1') return '21:9';
+    return desiredRatio;
+  }
+  if (['21:9', '2.6:1', '3:1'].includes(desiredRatio)) return '16:9';
+  return desiredRatio;
 }
 
 export interface CrossPlatformPromptOptions {

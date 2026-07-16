@@ -334,6 +334,9 @@ const App: React.FC = () => {
       atlasApiKey,
       generationModel,
       falApiKey,
+      setGeneratingLabels,
+      pauseAutoSave,
+      resumeAutoSave,
   });
 
   const {
