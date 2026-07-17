@@ -22,6 +22,7 @@ import type { CanvasApi } from '../components/InfiniteCanvas';
 import { saveFileHandle, loadFileHandle, clearFileHandle, verifyHandlePermission } from '../utils/fileHandleStore';
 import { computeDragSnap } from '../utils/snapping';
 import { persistCanvasSplit, resolveLightElements, hasPayloadMarkers } from '../utils/canvasPersistence';
+import { cacheImage } from '../utils/imageCache';
 
 export type AlignMode = 'left' | 'h-center' | 'right' | 'top' | 'v-center' | 'bottom' | 'distribute-h' | 'distribute-v';
 
@@ -483,6 +484,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             reader.onload = (e) => {
               const src = e.target?.result as string;
               if (!src) return resolve(null);
+              // 匯入當下即建立獨立快取；之後即使來源是外接硬碟或自動存檔中斷，
+              // 仍可從瀏覽器本機 IndexedDB 還原圖片。
               const img = new Image();
               img.onload = () => {
                 const MAX_DIMENSION = 300;
@@ -514,6 +517,7 @@ export const useCanvas = (showToast: (msg: string) => void) => {
               ...prev,
               ...newElements.map((el, i) => ({
                 ...el,
+                // cacheImage 使用最終 element id；先前的 pending 快取只作為匯入期間的保護。
                 id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
                 zIndex: zIndexCounter.current++,
                 isVisible: true,
@@ -521,7 +525,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 name: `Image ${count + i}`,
                 groupId: null
               } as CanvasElement))
-            ]);
+            ]).map((el: any) => {
+              if (el.type === 'image' && el.src?.startsWith('data:')) cacheImage(el.id, el.src);
+              return el;
+            });
           }
         });
     }, [setElements, elements.length]);
