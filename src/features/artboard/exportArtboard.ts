@@ -175,7 +175,8 @@ export const exportArtboardAsImage = async (
 
             } else if (el.type === 'shape') {
                 const shapeEl = el as ShapeElement;
-                const shapePadding = Math.max(20, shapeEl.strokeWidth * 2);
+                // padding 必須與 createShapeDataUrl 內部一致（sw/2 + 1），否則形狀被等比放大（與合併圖層同一個修正）
+                const shapePadding = (shapeEl.strokeWidth || 0) / 2 + 1;
                 const dataUrl = await createShapeDataUrl(shapeEl);
                 const img = await loadImage(dataUrl);
                 const drawW = shapeEl.width + shapePadding * 2;

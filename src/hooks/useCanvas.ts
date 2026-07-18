@@ -87,6 +87,17 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     const [creatingShapeId, setCreatingShapeId] = useState<string | null>(null);
     const shapeStartPointRef = useRef<Point | null>(null);
     const zIndexCounter = useRef(1);
+    /**
+     * 取下一個 zIndex（自癒版）：取「計數器」與「當下元素最大 zIndex + 1」的較大者。
+     * 計數器可能因 Undo（重編後計數器被調低、ref 不在歷史裡）或旁路直寫 zIndex 而失準，
+     * 在取號瞬間對齊實際狀態，保證新元素永遠在最上層。
+     */
+    const nextZIndex = useCallback((els: CanvasElement[]): number => {
+        const maxZ = els.length ? Math.max(...els.map(el => el.zIndex || 0)) : 0;
+        const next = Math.max(zIndexCounter.current, maxZ + 1);
+        zIndexCounter.current = next + 1;
+        return next;
+    }, []);
     const canvasApiRef = useRef<CanvasApi>(null);
     // 拖曳/縮放/旋轉手勢中：true = 下一次 updateElements 是手勢首幀，需新增一筆歷史（保住手勢前狀態）
     const transformPendingRef = useRef(false);
@@ -238,9 +249,16 @@ export const useCanvas = (showToast: (msg: string) => void) => {
 
     // Mount 時 hydrate：IndexedDB（權威）→ 舊版 localStorage 遷移 → 全新使用者歡迎便利貼。
     useEffect(() => {
+        // 還原後必須把 zIndexCounter 對齊既有元素的最大 zIndex，
+        // 否則計數器從 1 重數 → 新增的元素排在所有舊元素下面（圖層面板不在最上方）。
+        // 開檔/匯入路徑已各自同步，這裡補上「啟動自動還原」這條路。
+        const syncZIndexCounter = (els: CanvasElement[]) => {
+            const maxZ = Math.max(0, ...els.map(el => el.zIndex || 0));
+            zIndexCounter.current = maxZ + 1;
+        };
         (async () => {
             const fromIDB = await loadFromIndexedDB();
-            if (fromIDB) { setElements(fromIDB); return; }
+            if (fromIDB) { setElements(fromIDB); syncZIndexCounter(fromIDB); return; }
             // IDB 無資料 → 嘗試從舊版 localStorage 遷移（只取有真實內容的）
             try {
                 const saved = localStorage.getItem(STORAGE_KEY);
@@ -249,7 +267,9 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                     if (Array.isArray(parsed) && parsed.length > 0 &&
                         !(parsed.length === 1 && parsed[0].id === 'welcome-note')) {
                         // 輕量 meta（含拆分標記）需先從 IDB 取回 payload 還原
-                        setElements(hasPayloadMarkers(saved) ? await resolveLightElements(parsed) : parsed);
+                        const restored = hasPayloadMarkers(saved) ? await resolveLightElements(parsed) : parsed;
+                        setElements(restored);
+                        syncZIndexCounter(restored);
                         return;
                     }
                 }
@@ -340,15 +360,15 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         const elementWithId: CanvasElement = {
             ...newElement,
             id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-            zIndex: newElement.type === 'artboard' ? -1 : zIndexCounter.current++,
+            zIndex: newElement.type === 'artboard' ? -1 : nextZIndex(elements),
             isVisible: true,
             isLocked: false,
             name: baseName,
             groupId: null
         } as CanvasElement;
          setElements(prev => [...prev, elementWithId]);
-         return elementWithId.id; 
-    }, [setElements, elements]);
+         return elementWithId.id;
+    }, [setElements, elements, nextZIndex]);
 
     const addArtboard = useCallback((
         preset: { name: string; w: number; h: number },
@@ -513,9 +533,11 @@ export const useCanvas = (showToast: (msg: string) => void) => {
           const newElements = results.filter((el): el is Omit<ImageElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | null => el !== null);
           if (newElements.length > 0) {
             const count = elements.length + 1;
-            setElements(prev => [
-              ...prev,
-              ...newElements.map((el, i) => ({
+            setElements(prev => {
+              // 自癒：計數器可能因 Undo / 旁路直寫而低於實際最大 zIndex，取號前先對齊
+              const maxZ = prev.length ? Math.max(...prev.map(e => e.zIndex || 0)) : 0;
+              if (zIndexCounter.current <= maxZ) zIndexCounter.current = maxZ + 1;
+              const appended = newElements.map((el, i) => ({
                 ...el,
                 // cacheImage 使用最終 element id；先前的 pending 快取只作為匯入期間的保護。
                 id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -524,10 +546,11 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 isLocked: false,
                 name: `Image ${count + i}`,
                 groupId: null
-              } as CanvasElement))
-            ]).map((el: any) => {
-              if (el.type === 'image' && el.src?.startsWith('data:')) cacheImage(el.id, el.src);
-              return el;
+              } as CanvasElement));
+              appended.forEach((el: any) => {
+                if (el.type === 'image' && el.src?.startsWith('data:')) cacheImage(el.id, el.src);
+              });
+              return [...prev, ...appended];
             });
           }
         });
@@ -1105,14 +1128,16 @@ export const useCanvas = (showToast: (msg: string) => void) => {
     
         try {
             const newSrc = await createShapeDataUrl(element);
-            // 尺寸與原 SVG 一致，不加額外 padding（stroke 已在 createShapeDataUrl 中處理）
+            // createShapeDataUrl 的圖含 stroke 邊距（sw/2+1），圖片元素尺寸要用同一個含邊距尺寸，
+            // 形狀本體才會維持 1:1（畫布顯示已是真實尺寸，viewBox 不再膨脹）。中心點不變。
+            const rasterPad = (element.strokeWidth || 0) / 2 + 1;
             const newImage: ImageElement = {
                 id: element.id,
                 type: 'image',
                 src: newSrc,
                 position: element.position,
-                width: element.width,
-                height: element.height,
+                width: element.width + rasterPad * 2,
+                height: element.height + rasterPad * 2,
                 rotation: element.rotation,
                 zIndex: element.zIndex,
                 isVisible: element.isVisible,

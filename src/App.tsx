@@ -2012,7 +2012,8 @@ const App: React.FC = () => {
             width:    origEl?.width  ?? 400,
             height:   origEl?.height ?? 400,
             rotation: 0,
-            zIndex:   elements.length + 1,
+            // 用實際最大 zIndex+1（length+1 在 zIndex 有跳號時會偏低 → 新元素沉底）
+            zIndex:   (elements.length ? Math.max(...elements.map(e => e.zIndex || 0)) : 0) + 1,
             isVisible: true,
             isLocked:  false,
             groupId:   null,

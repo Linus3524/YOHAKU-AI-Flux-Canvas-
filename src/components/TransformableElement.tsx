@@ -1707,7 +1707,9 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
 
                         return (
                             <div style={style}>
-                                <svg width="100%" height="100%" viewBox={`${-el.strokeWidth/2} ${-el.strokeWidth/2} ${el.width + el.strokeWidth} ${el.height + el.strokeWidth}`} style={{ overflow: 'visible' }}>
+                                {/* viewBox 貼齊 element 尺寸（不加 strokeWidth 邊距），形狀才會填滿方框、選取框貼合；
+                                    描邊超出的部分由 overflow:visible 自然外溢，不需要靠 viewBox 留邊。 */}
+                                <svg width="100%" height="100%" viewBox={`0 0 ${el.width} ${el.height}`} style={{ overflow: 'visible' }}>
                                     {isGradient(el.fillColor) && (() => {
                                         const parsed = parseLinearGradient(el.fillColor);
                                         if (!parsed) return null;
