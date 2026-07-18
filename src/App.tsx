@@ -2042,6 +2042,10 @@ const App: React.FC = () => {
           const origLeft = origEl.position.x - origEl.width  / 2;
           const origTop  = origEl.position.y - origEl.height / 2;
 
+          const baseZ = Math.max(
+            0,
+            ...elements.filter(element => element.type !== 'artboard').map(element => element.zIndex),
+          ) + 1;
           const newEls: ImageElement[] = smartLayers.map((layer, i) => {
             // cropRatio 是 0–1，相對原圖尺寸
             const layerW = Math.round(layer.cropRatio.w * origEl.width);
@@ -2061,7 +2065,7 @@ const App: React.FC = () => {
               width:    layerW,
               height:   layerH,
               rotation: 0,
-              zIndex:   origEl.zIndex + i + 1,
+              zIndex:   baseZ + i,
               isVisible: true,
               isLocked:  false,
               groupId:   null,

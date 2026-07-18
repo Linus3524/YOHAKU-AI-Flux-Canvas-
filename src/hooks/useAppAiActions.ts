@@ -1,4 +1,4 @@
-import { useCallback, type MutableRefObject } from 'react';
+import { useCallback, useEffect, type MutableRefObject } from 'react';
 import { analyzeImagePrompt } from '../utils/ImageAnalysisService';
 import { downloadImageAsBase64 } from '../utils/atlasImage';
 import { cacheImage } from '../utils/imageCache';
@@ -53,6 +53,12 @@ export const useAppAiActions = ({
   zIndexCounter: MutableRefObject<number>;
   originalMergeLayers: () => void | Promise<void>;
 }) => {
+  // 與主畫布目前最大層級持續同步；長任務完成時不使用過期計數器。
+  useEffect(() => {
+      const nextTop = Math.max(0, ...elements.filter(element => element.type !== 'artboard').map(element => element.zIndex)) + 1;
+      if (zIndexCounter.current < nextTop) zIndexCounter.current = nextTop;
+  }, [elements, zIndexCounter]);
+
   // --- BiRefNet v2 去背 ---
   const handleBiRefNetRemoveBackground = useCallback(async (model: string = 'Matting') => {
       if (!falApiKey) { showToast('需要 fal.ai API Key，請在設定中輸入'); setShowKeyModal(true); return; }
@@ -106,6 +112,11 @@ export const useAppAiActions = ({
       const batchId = Date.now();
       const placeholderIds = new Map(taskIds.map((taskId, index) => [taskId, `${el.id}_magic_${batchId}_${index}`]));
       const taskIndex = new Map(taskIds.map((taskId, index) => [taskId, index]));
+      const batchBaseZ = Math.max(
+          zIndexCounter.current,
+          Math.max(0, ...elements.filter(element => element.type !== 'artboard').map(element => element.zIndex)) + 1,
+      );
+      zIndexCounter.current = batchBaseZ + taskIds.length;
       const layerAreaLeft = options.autoArrange ? el.position.x + el.width / 2 + 30 : el.position.x - el.width / 2;
       const layerAreaTop = el.position.y - el.height / 2;
       const transparentPixel = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
@@ -119,7 +130,7 @@ export const useAppAiActions = ({
           },
           width: Math.max(100, el.width * 0.3),
           height: Math.max(80, el.height * 0.3),
-          zIndex: el.zIndex + index + 1,
+          zIndex: batchBaseZ + index,
           name: taskId === 'background' ? '背景處理中' : `${plan.layers.find(layer => layer.id === taskId)?.label || '圖層'}處理中`,
           isLocked: true,
       }));
@@ -155,7 +166,7 @@ export const useAppAiActions = ({
           const gridRow = Math.floor(index / 3);
           const x = isBackground ? layerAreaLeft + el.width / 2 : options.preservePosition ? layerAreaLeft + unionLeft * el.width + bboxW / 2 : layerAreaLeft + gridColumn * (el.width * 0.38) + width / 2;
           const y = isBackground ? (options.autoArrange ? el.position.y : layerAreaTop + el.height / 2) : options.preservePosition ? layerAreaTop + unionTop * el.height + bboxH / 2 : layerAreaTop + gridRow * (el.height * 0.38) + height / 2;
-          return { ...el, id: placeholderIds.get(taskId)!, src: layer.base64, position: { x, y }, width, height, zIndex: el.zIndex + index + 1, name: layer.name ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name) : `圖層 ${index + 1}`, isLocked: false };
+          return { ...el, id: placeholderIds.get(taskId)!, src: layer.base64, position: { x, y }, width, height, zIndex: batchBaseZ + index, name: layer.name ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name) : `圖層 ${index + 1}`, isLocked: false };
       };
 
       try {
@@ -212,6 +223,11 @@ export const useAppAiActions = ({
           const blocks = await detectTextBlocks(el.src, effectiveApiKey || '');
           if (blocks.length === 0) { showToast('未偵測到文字'); return; }
 
+          const baseZ = Math.max(
+              zIndexCounter.current,
+              Math.max(0, ...elements.filter(element => element.type !== 'artboard').map(element => element.zIndex)) + 1,
+          );
+          zIndexCounter.current = baseZ + blocks.length;
           const newTextElements: TextElement[] = blocks.map((block, i) => {
               // 以圖片在畫布的實際像素換算 TextElement 的 position / width / height / fontSize
               const imgLeft   = el.position.x - el.width  / 2;
@@ -233,7 +249,7 @@ export const useAppAiActions = ({
                   width:  blockW,
                   height: blockH,
                   rotation: 0,
-                  zIndex: el.zIndex + i + 1,
+                  zIndex: baseZ + i,
                   isVisible: true,
                   isLocked: false,
                   name: `文字 ${i + 1}`,

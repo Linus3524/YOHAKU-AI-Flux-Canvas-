@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 import type { CanvasElement, ImageElement, NoteElement, TextElement, FrameElement, ShapeElement, DrawingElement, OutpaintingState } from '../types';
 import {
@@ -98,6 +98,12 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
     const [showStyleLibrary, setShowStyleLibrary] = useState(false);
     const zIndexCounter = useRef(Math.max(0, ...elements.map(e => e.zIndex)) + 1);
+    // AI 任務可能跨越數分鐘；期間使用者可重排、貼上或建立物件。
+    // 每次畫布變更都把 AI 計數器往上同步，避免完成時使用啟動任務前的舊層級。
+    useEffect(() => {
+        const nextTop = Math.max(0, ...elements.filter(e => e.type !== 'artboard').map(e => e.zIndex)) + 1;
+        if (zIndexCounter.current < nextTop) zIndexCounter.current = nextTop;
+    }, [elements]);
 
     /**
      * 包住 Atlas 長時間請求：每 30 秒跳一次提示 toast，避免用戶誤以為卡死

@@ -23,6 +23,14 @@ import { saveFileHandle, loadFileHandle, clearFileHandle, verifyHandlePermission
 import { computeDragSnap } from '../utils/snapping';
 import { persistCanvasSplit, resolveLightElements, hasPayloadMarkers } from '../utils/canvasPersistence';
 import { cacheImage } from '../utils/imageCache';
+import {
+    arrangeLayerSelection,
+    nextTopLayerIndex,
+    normalizeLayerOrder,
+    reindexLayerOrder,
+    reorderGroupByPanelDrop,
+    reorderLayerByPanelDrop,
+} from '../utils/layerOrder';
 
 export type AlignMode = 'left' | 'h-center' | 'right' | 'top' | 'v-center' | 'bottom' | 'distribute-h' | 'distribute-v';
 
@@ -258,7 +266,12 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         };
         (async () => {
             const fromIDB = await loadFromIndexedDB();
-            if (fromIDB) { setElements(fromIDB); syncZIndexCounter(fromIDB); return; }
+            if (fromIDB) {
+                const normalized = normalizeLayerOrder(fromIDB);
+                setElements(normalized);
+                syncZIndexCounter(normalized);
+                return;
+            }
             // IDB 無資料 → 嘗試從舊版 localStorage 遷移（只取有真實內容的）
             try {
                 const saved = localStorage.getItem(STORAGE_KEY);
@@ -268,8 +281,9 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                         !(parsed.length === 1 && parsed[0].id === 'welcome-note')) {
                         // 輕量 meta（含拆分標記）需先從 IDB 取回 payload 還原
                         const restored = hasPayloadMarkers(saved) ? await resolveLightElements(parsed) : parsed;
-                        setElements(restored);
-                        syncZIndexCounter(restored);
+                        const normalized = normalizeLayerOrder(restored);
+                        setElements(normalized);
+                        syncZIndexCounter(normalized);
                         return;
                     }
                 }
@@ -1304,36 +1318,19 @@ export const useCanvas = (showToast: (msg: string) => void) => {
 
     const handleLayerDragDrop = useCallback((sourceId: string, targetId: string) => {
         if (sourceId === targetId) return;
-
         setElements(prev => {
-            const sourceIndex = prev.findIndex(el => el.id === sourceId);
-            const targetIndex = prev.findIndex(el => el.id === targetId);
-
-            if (sourceIndex === -1 || targetIndex === -1) return prev;
-
-            const newElements = [...prev];
-            const [movedElement] = newElements.splice(sourceIndex, 1);
-            newElements.splice(targetIndex, 0, movedElement);
-
-            return newElements.map((el, index) => ({ ...el, zIndex: index + 1 }));
+            const reordered = reorderLayerByPanelDrop(prev, sourceId, targetId);
+            zIndexCounter.current = nextTopLayerIndex(reordered);
+            return reordered;
         });
     }, [setElements]);
 
     /** Move all members of a group to be adjacent to targetId in layer order */
     const handleGroupLayerDragDrop = useCallback((groupId: string, targetId: string) => {
         setElements(prev => {
-            const groupMembers = prev.filter(el => el.groupId === groupId);
-            if (groupMembers.length === 0) return prev;
-            // If the target is itself a group member, do nothing
-            if (groupMembers.some(m => m.id === targetId)) return prev;
-            // Remove all group members from the array
-            const withoutGroup = prev.filter(el => el.groupId !== groupId);
-            const targetIndex = withoutGroup.findIndex(el => el.id === targetId);
-            if (targetIndex === -1) return prev;
-            // Insert group members right before the target position
-            const result = [...withoutGroup];
-            result.splice(targetIndex, 0, ...groupMembers);
-            return result.map((el, index) => ({ ...el, zIndex: index + 1 }));
+            const reordered = reorderGroupByPanelDrop(prev, groupId, targetId);
+            zIndexCounter.current = nextTopLayerIndex(reordered);
+            return reordered;
         });
     }, [setElements]);
 
@@ -1411,13 +1408,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 finalElements.push(...newObjects);
                 
                 // Re-assign zIndexes to ensure they are sequential and correct
-                const reindexedElements = finalElements.map((el, index) => ({
-                    ...el,
-                    zIndex: index + 1
-                }));
+                const reindexedElements = reindexLayerOrder(finalElements);
                 
                 // Update the global zIndex counter
-                zIndexCounter.current = reindexedElements.length + 1;
+                zIndexCounter.current = nextTopLayerIndex(reindexedElements);
                 
                 return reindexedElements;
             });
@@ -1494,13 +1488,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 finalElements.push(...newObjects);
                 
                 // Re-assign zIndexes to ensure they are sequential and correct
-                const reindexedElements = finalElements.map((el, index) => ({
-                    ...el,
-                    zIndex: index + 1
-                }));
+                const reindexedElements = reindexLayerOrder(finalElements);
                 
                 // Update the global zIndex counter
-                zIndexCounter.current = reindexedElements.length + 1;
+                zIndexCounter.current = nextTopLayerIndex(reindexedElements);
                 
                 return reindexedElements;
             });
@@ -1656,13 +1647,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 });
                 
                 // Re-assign zIndexes to ensure they are sequential and correct
-                const reindexedElements = finalElements.map((el, index) => ({
-                    ...el,
-                    zIndex: index + 1
-                }));
+                const reindexedElements = reindexLayerOrder(finalElements);
                 
                 // Update the global zIndex counter
-                zIndexCounter.current = reindexedElements.length + 1;
+                zIndexCounter.current = nextTopLayerIndex(reindexedElements);
                 
                 return reindexedElements;
             });
@@ -1675,74 +1663,39 @@ export const useCanvas = (showToast: (msg: string) => void) => {
 
     const bringToFront = useCallback(() => {
         if (selectedElementIds.length === 0) return;
-        const selectedSet = new Set(selectedElementIds);
-        const targetElements = elements.filter(el => selectedSet.has(el.id));
-        const isArtboard = targetElements.every(el => el.type === 'artboard');
-        
-        if (isArtboard) {
-            // artboard 移至最前只能超過其他 artboard，不能超過一般元素
-            const artboards = elements.filter(e => e.type === 'artboard');
-            const maxArtboardZ = Math.max(...artboards.map(e => e.zIndex), 0);
-            setElements(prev => prev.map(el => selectedSet.has(el.id) ? { ...el, zIndex: maxArtboardZ + 1 } : el));
-        } else {
-            // 一般元素移至最前維持現有邏輯
-            const maxZ = Math.max(...elements.map(el => el.zIndex), 0);
-            setElements(prev => prev.map(el => selectedSet.has(el.id) ? { ...el, zIndex: maxZ + 1 } : el));
-            zIndexCounter.current = maxZ + 2;
-        }
-    }, [selectedElementIds, elements, setElements]);
+        setElements(prev => {
+            const arranged = arrangeLayerSelection(prev, selectedElementIds, 'front');
+            zIndexCounter.current = nextTopLayerIndex(arranged);
+            return arranged;
+        });
+    }, [selectedElementIds, setElements]);
     
     const bringForward = useCallback(() => {
         if (selectedElementIds.length === 0) return;
-        const selectedSet = new Set(selectedElementIds);
-        const currentMaxZ = Math.max(...elements.filter(el => selectedSet.has(el.id)).map(el => el.zIndex));
-        const above = elements
-            .filter(el => !selectedSet.has(el.id) && el.zIndex > currentMaxZ)
-            .sort((a, b) => a.zIndex - b.zIndex);
-        if (above.length === 0) return; // already at top
-        const swapZ = above[0].zIndex;
-        setElements(prev => prev.map(el => {
-            if (selectedSet.has(el.id)) return { ...el, zIndex: swapZ + 1 };
-            if (el.zIndex === swapZ) return { ...el, zIndex: currentMaxZ };
-            return el;
-        }));
-    }, [selectedElementIds, elements, setElements]);
+        setElements(prev => {
+            const arranged = arrangeLayerSelection(prev, selectedElementIds, 'forward');
+            zIndexCounter.current = nextTopLayerIndex(arranged);
+            return arranged;
+        });
+    }, [selectedElementIds, setElements]);
 
     const sendBackward = useCallback(() => {
         if (selectedElementIds.length === 0) return;
-        const selectedSet = new Set(selectedElementIds);
-        const currentMinZ = Math.min(...elements.filter(el => selectedSet.has(el.id)).map(el => el.zIndex));
-        const below = elements
-            .filter(el => !selectedSet.has(el.id) && el.zIndex < currentMinZ)
-            .sort((a, b) => b.zIndex - a.zIndex);
-        if (below.length === 0) return; // already at bottom
-        const swapZ = below[0].zIndex;
-        setElements(prev => prev.map(el => {
-            if (selectedSet.has(el.id)) return { ...el, zIndex: swapZ - 1 };
-            if (el.zIndex === swapZ) return { ...el, zIndex: currentMinZ };
-            return el;
-        }));
-    }, [selectedElementIds, elements, setElements]);
+        setElements(prev => {
+            const arranged = arrangeLayerSelection(prev, selectedElementIds, 'backward');
+            zIndexCounter.current = nextTopLayerIndex(arranged);
+            return arranged;
+        });
+    }, [selectedElementIds, setElements]);
 
     const sendToBack = useCallback(() => {
         if (selectedElementIds.length === 0) return;
-        const selectedSet = new Set(selectedElementIds);
-        const targetId = selectedElementIds[0]; // 假設單選或多選處理邏輯一致
-
-        // ✅ 修改：確保 artboard 永遠在所有非 artboard 元素的最底層
-        const artboardMaxZ = Math.max(
-            ...elements.filter(e => e.type === 'artboard').map(e => e.zIndex),
-            -1
-        );
-        const nonArtboardMinZ = Math.min(
-            ...elements.filter(e => e.type !== 'artboard' && !selectedSet.has(e.id)).map(e => e.zIndex),
-            artboardMaxZ + 2
-        );
-        
-        const newZIndex = Math.max(artboardMaxZ + 1, nonArtboardMinZ - 1);
-        
-        setElements(prev => prev.map(el => selectedSet.has(el.id) ? { ...el, zIndex: newZIndex } : el));
-    }, [selectedElementIds, elements, setElements]);
+        setElements(prev => {
+            const arranged = arrangeLayerSelection(prev, selectedElementIds, 'back');
+            zIndexCounter.current = nextTopLayerIndex(arranged);
+            return arranged;
+        });
+    }, [selectedElementIds, setElements]);
 
     // --- 多物件對齊 / 分佈（靜態，一次到位，含歷史）---
     // position 為中心點，故元素框 left = x - w/2、top = y - h/2（不考慮旋轉，採未旋轉 AABB）
@@ -1913,13 +1866,13 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 showToast('檔案格式錯誤');
                 return true;
             }
-            const normalizedElements = importedElements.map(el => ({
+            const normalizedElements = normalizeLayerOrder(importedElements.map(el => ({
                 ...el,
                 isVisible: el.isVisible ?? true,
                 isLocked: el.isLocked ?? false,
                 name: el.name ?? `${el.type} (Imported)`,
                 groupId: el.groupId ?? null,
-            }));
+            })));
             setElements(normalizedElements);
             const maxZ = Math.max(0, ...normalizedElements.map(el => el.zIndex || 0));
             zIndexCounter.current = maxZ + 1;
@@ -1969,13 +1922,13 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                 if (!Array.isArray(importedElements) || (importedElements.length > 0 && !importedElements[0].id)) throw new Error("Invalid file format.");
                 
                 // Normalize imported elements
-                const normalizedElements = importedElements.map(el => ({
+                const normalizedElements = normalizeLayerOrder(importedElements.map(el => ({
                     ...el,
                     isVisible: el.isVisible ?? true,
                     isLocked: el.isLocked ?? false,
                     name: el.name ?? `${el.type} (Imported)`,
                     groupId: el.groupId ?? null
-                }));
+                })));
                 
                 setElements(normalizedElements);
                 const maxZ = Math.max(0, ...normalizedElements.map(el => el.zIndex || 0));
