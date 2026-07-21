@@ -1111,15 +1111,30 @@ CONSTRAINTS:
                 }
                 const { src: refImage, hadTransparency: refHadTransparency, bgColor: refBgColor } = await prepareForGeneration(rawRefImage);
                 const img2imgPrompt = atlasPrompt || 'Keep the overall composition, enhance details and quality';
-                setGeneratingElementIds(firstImg ? [firstImg.id] : []);
+
+                // 除了主參考圖，畫布上其餘一併選取的圖片/手繪/形狀也要當額外參考圖送出，
+                // 否則多選只有第一張真正被使用（callAtlasImg2Img 底層最多支援 8 張，這裡才是實際收集端）。
+                const otherCanvasEls = imageElements.filter(el => el.id !== firstImg?.id);
+                const otherCanvasRefs = (await Promise.all(otherCanvasEls.map(async (el) => {
+                    try {
+                        if (el.type === 'shape') return await createShapeDataUrl(el as ShapeElement);
+                        let src = (el as ImageElement | DrawingElement).src;
+                        if (!src) return null;
+                        if (!src.startsWith('data:')) src = await downloadImageAsBase64(src);
+                        return src.startsWith('data:') ? src : null;
+                    } catch { return null; }
+                }))).filter((s): s is string => !!s);
+                const allExtraRefs = [...otherCanvasRefs, ...(hasNoteRefs ? noteRefImgs : [])];
+
+                setGeneratingElementIds(imageElements.map(el => el.id));
                 setIsGenerating(true);
                 setGeneratedImages(null);
                 try {
-                    // 便利貼參考圖追加在畫布圖片之後
+                    // 主參考圖 + 其餘畫布圖片 + 便利貼參考圖，一起送出
                     const rawImages = await atlasBatch({
                         prompt: img2imgPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
                         seed: baseSeed,
-                        refImage, extraRefImages: hasNoteRefs ? noteRefImgs : undefined,
+                        refImage, extraRefImages: allExtraRefs.length > 0 ? allExtraRefs : undefined,
                     }, atlasEngine);
                     if (rawImages.length === 0) throw new Error('未收到任何圖片');
                     // 若來源有透明背景，生成後自動還原透明
