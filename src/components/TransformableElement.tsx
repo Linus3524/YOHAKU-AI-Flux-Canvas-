@@ -2,12 +2,14 @@
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useDisplaySrc } from '../utils/displayThumb';
-import type { CanvasElement, Point, ArrowElement, NoteElement, TextElement, ShapeElement, NodeGroupElement } from '../types';
+import type { CanvasElement, Point, ArrowElement, NoteElement, NoteReferenceMode, NoteReferenceRole, TextElement, ShapeElement, NodeGroupElement } from '../types';
 import { wrapTextCanvas, getArrowHeadPath, isCJK, measureTextVisualBounds, getTextBoxPadding, consumeTextAutoEdit } from '../utils/helpers';
+import { NOTE_REFERENCE_LIMIT, NOTE_REFERENCE_ROLE_OPTIONS } from '../utils/noteReferences';
 import { getLayerColor } from './LayerPanel';
 import { generateSimpleMaskCSS } from '../utils/maskHelpers';
 import { isImageSrc } from './NodeWorkflow/mediaSrc';
 import { isGradient, parseLinearGradient, gradientAngleToSVG } from '../utils/gradientUtils'; // ✅ 修改 A (import)
+import { measureAutoNoteHeight, positionForTopAnchoredHeight, resizeNoteToContent } from '../utils/noteSizing';
 
 interface TransformableElementProps {
   element: CanvasElement;
@@ -55,12 +57,17 @@ type Interaction = {
   resizeHandle?: ResizeHandle;
 } | null;
 
-// ─── Fan-out positions per image count ───────────────────────────────────────
-const NOTE_FAN: Record<1|2|3|4, Array<{tx:number;ty:number;rot:number}>> = {
-    1: [{ tx:-220, ty:-220, rot:-5 }],
-    2: [{ tx:-270, ty:-90, rot:-10 }, { tx:-90, ty:-270, rot:10 }],
-    3: [{ tx:-295, ty:-40, rot:-15 }, { tx:-212, ty:-212, rot:0 }, { tx:-40, ty:-295, rot:15 }],
-    4: [{ tx:-305, ty:0, rot:-15 }, { tx:-264, ty:-154, rot:-5 }, { tx:-154, ty:-264, rot:5 }, { tx:0, ty:-305, rot:15 }],
+// ─── Fan-out positions (1–8 張沿左上四分之一圓展開) ─────────────────────────
+const getNoteFanPosition = (count: number, index: number) => {
+    if (count <= 1) return { tx: -220, ty: -220, rot: -5 };
+    const progress = index / (count - 1);
+    const angle = Math.PI + (Math.PI / 2) * progress;
+    const radius = 305 + Math.max(0, count - 4) * 18;
+    return {
+        tx: Math.cos(angle) * radius,
+        ty: Math.sin(angle) * radius,
+        rot: -15 + 30 * progress,
+    };
 };
 const NOTE_STACK = [
     'rotate(-6deg) translate(-2px, 2px)',
@@ -75,11 +82,31 @@ interface NoteGalleryProps {
     noteWidth: number;   // 便利貼世界寬度，用來限制卡片上限
     onUpload: (idx: number, file: File) => void;
     onRemove: (idx: number) => void;
+    referenceMode: NoteReferenceMode;
+    referenceRoles: (NoteReferenceRole[] | null)[];
+    referencePrimaryIndex?: number;
+    onChangeMode: (mode: NoteReferenceMode) => void;
+    onChangeRoles: (idx: number, roles: NoteReferenceRole[]) => void;
+    onChangePrimary: (idx: number) => void;
     onHoverChange: (hovered: boolean) => void;
 }
 
-const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, noteWidth, onUpload, onRemove, onHoverChange }) => {
+const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({
+    refImgs,
+    zoom,
+    noteWidth,
+    onUpload,
+    onRemove,
+    referenceMode,
+    referenceRoles,
+    referencePrimaryIndex,
+    onChangeMode,
+    onChangeRoles,
+    onChangePrimary,
+    onHoverChange,
+}) => {
     const [hovered, setHovered] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
     // 縮放補償：zoom>100% 鎖住螢幕 92px；zoom 30-100% 固定 92 world-px；zoom<30% 停止膨脹
     const BASE_GS = 92;
@@ -100,7 +127,7 @@ const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, noteW
     const filled = (refImgs as (string|null)[]).reduce(
         (acc: {src:string;origIdx:number;filledIdx:number}[], img, origIdx) => { if (img) acc.push({src:img,origIdx,filledIdx:acc.length}); return acc; }, [] as {src:string;origIdx:number;filledIdx:number}[]
     );
-    const count = filled.length as 0|1|2|3|4;
+    const count = filled.length;
 
     const setH = (v: boolean) => { setHovered(v); onHoverChange(v); };
 
@@ -122,25 +149,25 @@ const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, noteW
             style={{ position:'absolute', bottom:MARGIN, right:MARGIN, width:GS, height:GS,
                 zIndex: hovered ? 9999 : 10, overflow:'visible' }}
             onMouseEnter={() => setH(true)}
-            onMouseLeave={() => setH(false)}
+            onMouseLeave={() => { if (!settingsOpen) setH(false); }}
             onMouseDown={e => e.stopPropagation()}
         >
             {/* Invisible shield: keeps hover alive as mouse moves toward fanned photos */}
             {hovered && (
                 <div style={{ position:'absolute',
-                    top: -Math.round(360 * gsScale), left: -Math.round(360 * gsScale),
+                    top: -Math.round(450 * gsScale), left: -Math.round(450 * gsScale),
                     right:-20, bottom:-20, zIndex:-1, pointerEvents:'auto' }} />
             )}
 
             {/* Photo cards */}
             {filled.map(({ src, origIdx, filledIdx }) => {
                 const fanBase = hovered && count > 0
-                    ? (NOTE_FAN[count as 1|2|3|4] ?? [])[filledIdx] : null;
+                    ? getNoteFanPosition(count, filledIdx) : null;
                 const fanPos = fanBase
                     ? { tx: fanBase.tx * gsScale, ty: fanBase.ty * gsScale, rot: fanBase.rot } : null;
                 const transform = fanPos
                     ? `translate(${fanPos.tx}px,${fanPos.ty}px) rotate(${fanPos.rot}deg) scale(1.1)`
-                    : NOTE_STACK[filledIdx] ?? NOTE_STACK[0];
+                    : NOTE_STACK[filledIdx % NOTE_STACK.length];
                 return (
                     // Outer wrapper: handles transform, overflow:visible so delete btn is never clipped
                     <div key={origIdx} style={{
@@ -185,11 +212,11 @@ const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, noteW
             })}
 
             {/* Add (+) button — always on top when not hovered, sinks behind when fanning */}
-            {count < 4 && (
+            {count < NOTE_REFERENCE_LIMIT && (
                 <button
                     onClick={triggerUpload}
                     onMouseDown={e => e.stopPropagation()}
-                    title={`上傳參考圖 (${count}/4)`}
+                    title={`上傳參考圖 (${count}/${NOTE_REFERENCE_LIMIT})`}
                     style={{
                         position:'absolute', inset:0, width:'100%', height:'100%',
                         borderRadius:6, border:'none',
@@ -238,6 +265,176 @@ const NoteReferenceGallery: React.FC<NoteGalleryProps> = ({ refImgs, zoom, noteW
                         );
                     })()}
                 </button>
+            )}
+
+            {count > 0 && (hovered || settingsOpen) && (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setSettingsOpen(open => !open);
+                        setH(true);
+                    }}
+                    style={{
+                        position: 'absolute',
+                        right: 0,
+                        bottom: GS + Math.round(10 / Math.max(zoom, 0.1)),
+                        transform: `scale(${1 / Math.max(zoom, 0.1)})`,
+                        transformOrigin: 'bottom right',
+                        height: 28,
+                        padding: '0 10px',
+                        borderRadius: 999,
+                        border: '1px solid rgba(0,0,0,0.1)',
+                        background: 'rgba(255,255,255,0.96)',
+                        boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+                        color: '#4b5563',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                        zIndex: 40,
+                    }}
+                >
+                    {referenceMode === 'directed' ? '指定用途' : '自由融合'} · {count}/{NOTE_REFERENCE_LIMIT}
+                </button>
+            )}
+
+            {settingsOpen && (
+                <div
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                        position: 'absolute',
+                        right: 0,
+                        bottom: GS + Math.round(46 / Math.max(zoom, 0.1)),
+                        width: 360,
+                        maxHeight: 480,
+                        transform: `scale(${1 / Math.max(zoom, 0.1)})`,
+                        transformOrigin: 'bottom right',
+                        borderRadius: 18,
+                        border: '1px solid rgba(0,0,0,0.08)',
+                        background: 'rgba(255,255,255,0.98)',
+                        boxShadow: '0 20px 55px rgba(0,0,0,0.2)',
+                        color: '#1f2937',
+                        overflow: 'hidden',
+                        zIndex: 60,
+                    }}
+                >
+                    <div style={{ padding: 14, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                            <div style={{ fontSize: 13, fontWeight: 800 }}>參考圖使用方式</div>
+                            <div style={{ marginTop: 2, fontSize: 10.5, color: '#94a3b8' }}>不確定怎麼分類時，使用自由融合即可。</div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => { setSettingsOpen(false); setH(false); }}
+                            style={{ width: 26, height: 26, border: 0, borderRadius: 999, background: '#f1f5f9', color: '#64748b', cursor: 'pointer' }}
+                        >
+                            ×
+                        </button>
+                    </div>
+
+                    <div style={{ padding: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        {([
+                            ['blend', '自由融合', 'AI 自行綜合所有圖片'],
+                            ['directed', '指定用途', '設定每張圖片要參考什麼'],
+                        ] as const).map(([mode, label, desc]) => (
+                            <button
+                                key={mode}
+                                type="button"
+                                onClick={() => onChangeMode(mode)}
+                                style={{
+                                    padding: '9px 10px',
+                                    textAlign: 'left',
+                                    borderRadius: 12,
+                                    border: referenceMode === mode ? '1px solid #a855f7' : '1px solid #e2e8f0',
+                                    background: referenceMode === mode ? '#faf5ff' : '#fff',
+                                    color: referenceMode === mode ? '#7e22ce' : '#475569',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <div style={{ fontSize: 11.5, fontWeight: 800 }}>{label}</div>
+                                <div style={{ marginTop: 2, fontSize: 9.5, opacity: 0.72 }}>{desc}</div>
+                            </button>
+                        ))}
+                    </div>
+
+                    {referenceMode === 'blend' ? (
+                        <div style={{ margin: '0 12px 12px', padding: 11, borderRadius: 12, background: '#f8fafc', color: '#64748b', fontSize: 10.5, lineHeight: 1.5 }}>
+                            AI 會把所有參考圖視為同一份視覺情緒板，自由融合主體、風格、材質、色彩與構圖，並避免做成拼貼。
+                        </div>
+                    ) : (
+                        <div style={{ maxHeight: 330, overflowY: 'auto', padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                            {filled.map(({ src, origIdx }) => {
+                                const selectedRoles = referenceRoles[origIdx] ?? [];
+                                const isPrimary = referencePrimaryIndex === origIdx
+                                    || (referencePrimaryIndex == null && origIdx === filled[0]?.origIdx);
+                                return (
+                                    <div key={origIdx} style={{ padding: 9, border: isPrimary ? '1px solid #c084fc' : '1px solid #e2e8f0', borderRadius: 13, background: isPrimary ? '#fdfaff' : '#fff' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                            <img src={src} alt={`參考圖 ${origIdx + 1}`} style={{ width: 42, height: 42, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
+                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                                    <span style={{ fontSize: 11, fontWeight: 800 }}>參考圖 {origIdx + 1}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onChangePrimary(origIdx)}
+                                                        title="設為主要參考圖"
+                                                        style={{
+                                                            border: 0,
+                                                            borderRadius: 999,
+                                                            padding: '3px 7px',
+                                                            background: isPrimary ? '#a855f7' : '#f1f5f9',
+                                                            color: isPrimary ? '#fff' : '#94a3b8',
+                                                            fontSize: 9.5,
+                                                            fontWeight: 800,
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        {isPrimary ? '★ 主要' : '☆ 設為主要'}
+                                                    </button>
+                                                </div>
+                                                <div style={{ marginTop: 3, fontSize: 9.5, color: '#94a3b8' }}>最多選擇 2 個用途</div>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                                            {NOTE_REFERENCE_ROLE_OPTIONS.map(option => {
+                                                const active = selectedRoles.includes(option.id);
+                                                const disabled = !active && selectedRoles.length >= 2;
+                                                return (
+                                                    <button
+                                                        key={option.id}
+                                                        type="button"
+                                                        disabled={disabled}
+                                                        onClick={() => {
+                                                            const next = active
+                                                                ? selectedRoles.filter(role => role !== option.id)
+                                                                : [...selectedRoles, option.id];
+                                                            onChangeRoles(origIdx, next);
+                                                        }}
+                                                        style={{
+                                                            borderRadius: 999,
+                                                            border: active ? '1px solid #c084fc' : '1px solid #e2e8f0',
+                                                            background: active ? '#faf5ff' : '#fff',
+                                                            color: active ? '#7e22ce' : '#64748b',
+                                                            padding: '4px 7px',
+                                                            fontSize: 9.5,
+                                                            fontWeight: 700,
+                                                            cursor: disabled ? 'not-allowed' : 'pointer',
+                                                            opacity: disabled ? 0.4 : 1,
+                                                        }}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );
@@ -573,6 +770,7 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
                 ...startElement,
                 width: newWidth,
                 height: newHeight,
+                ...(startElement.type === 'note' ? { sizeMode: 'fixed' as const } : {}),
                 ...(isText && !isTextCornerScale ? {
                     isWidthLocked: !isVerticalEl ? true : (startElement as TextElement).isWidthLocked,
                     isHeightLocked: isVerticalEl ? true : (startElement as TextElement).isHeightLocked
@@ -1033,7 +1231,15 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
 
                 switch (el.type) {
                     case 'note': {
-                        const refImgs = el.referenceImages ?? [null, null, null, null];
+                        const refImgs = Array.from(
+                            { length: NOTE_REFERENCE_LIMIT },
+                            (_, idx) => el.referenceImages?.[idx] ?? null,
+                        );
+                        const referenceMode = el.referenceMode ?? 'blend';
+                        const referenceRoles = Array.from(
+                            { length: NOTE_REFERENCE_LIMIT },
+                            (_, idx) => el.referenceRoles?.[idx] ?? null,
+                        );
 
                         const handleRefUpload = (idx: number, file: File) => {
                             const reader = new FileReader();
@@ -1041,7 +1247,14 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                 const src = ev.target?.result as string;
                                 const newRefs = [...refImgs];
                                 newRefs[idx] = src;
-                                onUpdate({ ...el, referenceImages: newRefs });
+                                const updated = {
+                                    ...el,
+                                    referenceImages: newRefs,
+                                    referencePrimaryIndex: el.referencePrimaryIndex ?? idx,
+                                };
+                                onUpdate((el.sizeMode ?? 'auto-height') === 'auto-height'
+                                    ? resizeNoteToContent(updated)
+                                    : updated);
                             };
                             reader.readAsDataURL(file);
                         };
@@ -1049,7 +1262,20 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                         const handleRefRemoveIdx = (idx: number) => {
                             const newRefs = [...refImgs];
                             newRefs[idx] = null;
-                            onUpdate({ ...el, referenceImages: newRefs });
+                            const newRoles = [...referenceRoles];
+                            newRoles[idx] = null;
+                            const nextPrimary = el.referencePrimaryIndex === idx
+                                ? newRefs.findIndex(Boolean)
+                                : el.referencePrimaryIndex;
+                            const updated = {
+                                ...el,
+                                referenceImages: newRefs,
+                                referenceRoles: newRoles,
+                                referencePrimaryIndex: nextPrimary >= 0 ? nextPrimary : undefined,
+                            };
+                            onUpdate((el.sizeMode ?? 'auto-height') === 'auto-height'
+                                ? resizeNoteToContent(updated)
+                                : updated);
                         };
 
                         // 與 NoteReferenceGallery 完全相同的 GS 計算（保持同步）
@@ -1086,8 +1312,27 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                         ref={textareaRef}
                                         value={el.content}
                                         readOnly={!isEditing || el.isLocked || interactionMode === 'hand'}
-                                        onChange={(e) => onUpdate({ ...el, content: e.target.value })}
-                                        onBlur={() => setIsEditing(false)}
+                                        onChange={(e) => {
+                                            const content = e.target.value;
+                                            if ((el.sizeMode ?? 'auto-height') === 'fixed') {
+                                                onUpdate({ ...el, content });
+                                                return;
+                                            }
+                                            const measuredHeight = measureAutoNoteHeight({ ...el, content });
+                                            const nextHeight = Math.max(el.height, measuredHeight);
+                                            onUpdate({
+                                                ...el,
+                                                content,
+                                                height: nextHeight,
+                                                position: positionForTopAnchoredHeight(el, nextHeight),
+                                            });
+                                        }}
+                                        onBlur={(e) => {
+                                            setIsEditing(false);
+                                            if ((el.sizeMode ?? 'auto-height') === 'auto-height') {
+                                                onUpdate(resizeNoteToContent(el, e.currentTarget.value));
+                                            }
+                                        }}
                                         onMouseDown={(e) => {
                                             if (e.button !== 0 || el.isLocked || interactionMode === 'hand') return;
                                             onSelect(element.id, e.shiftKey);
@@ -1116,6 +1361,20 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                         noteWidth={el.width}
                                         onUpload={handleRefUpload}
                                         onRemove={handleRefRemoveIdx}
+                                        referenceMode={referenceMode}
+                                        referenceRoles={referenceRoles}
+                                        referencePrimaryIndex={el.referencePrimaryIndex}
+                                        onChangeMode={mode => onUpdate({ ...el, referenceMode: mode })}
+                                        onChangeRoles={(idx, roles) => {
+                                            const nextRoles = [...referenceRoles];
+                                            nextRoles[idx] = roles;
+                                            onUpdate({ ...el, referenceMode: 'directed', referenceRoles: nextRoles });
+                                        }}
+                                        onChangePrimary={idx => onUpdate({
+                                            ...el,
+                                            referenceMode: 'directed',
+                                            referencePrimaryIndex: idx,
+                                        })}
                                         onHoverChange={setGalleryHovered}
                                     />
                                 )}

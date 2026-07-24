@@ -33,7 +33,7 @@ const FEATURE_DOCS = [
     category: "3. 創作工具 (CREATION TOOLS)",
     color: "text-yohaku-text-main",
     items: [
-      { title: "便利貼", desc: "快速記錄想法，支援上傳最多 4 張參考圖（①②③④），AI 生成時同時參考視覺風格。" },
+      { title: "便利貼", desc: "快速記錄想法，支援上傳最多 8 張參考圖；可使用自由融合，或逐張指定人物、服裝、姿勢、風格、背景與光線用途。" },
       { title: "文字工具", desc: "橫書/直書/曲線文字，進階效果：邊框、背景色、陰影、光暈。右鍵可轉換為 3x 高清圖片。" },
       { title: "手繪工具", desc: "自由繪製草圖，具有筆刷與橡皮擦功能，支援透明背景繪圖。" },
       { title: "線條/箭頭", desc: "支援直線、單向/雙向箭頭、圓點端點，可自訂虛線樣式與顏色。" },
@@ -636,7 +636,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     { color: 'bg-purple-50 text-purple-600', emoji: '🎨', title: '設計大師 (Design Master)', desc: '整合 60+ 種 Markdown 設計系統規格書、50+ 套品牌規格書與 9 大排版創作技能，支援常用比例、裝置解析度選擇及客製化受眾，並提供 AI 提示詞優化以生成極具設計感的排版圖卡。' },
                     { color: 'bg-amber-50 text-amber-600', emoji: '📐', title: '專業工作區域系統', desc: '建立多個獨立設計版面，內建 IG、A4、名片等預設尺寸，一鍵同時匯出多個工作區域。' },
                     { color: 'bg-emerald-50 text-emerald-600', emoji: '📸', title: '設計師級影像處理', desc: '風格複製、圖片調和、AI 去背、高畫質放大、外擴繪圖、局部重繪，Moodboard 製作效率倍增。' },
-                    { color: 'bg-rose-50 text-rose-600', emoji: '📝', title: '便利貼即是 AI 指令', desc: '便利貼不只是記事，更是生圖的起點。支援上傳最多 4 張參考圖，想法直接轉化為視覺素材。' },
+                    { color: 'bg-rose-50 text-rose-600', emoji: '📝', title: '便利貼即是 AI 指令', desc: '便利貼不只是記事，更是生圖的起點。支援上傳最多 8 張參考圖，可自由融合或指定每張用途。' },
                     { color: 'bg-blue-50 text-blue-600', emoji: '🖋️', title: '完整排版工具', desc: '多字體、彎曲文字、精細行距字距、邊框陰影光暈，讓文字排版也能設計到底。' },
                   ].map((item, i) => (
                     <div key={i} className="flex gap-4 p-4 rounded-xl bg-white/60 border border-yohaku-border-light shadow-sm hover:shadow-md transition-shadow">
@@ -704,7 +704,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">3. 創作工具 (Creation Tools)</h3>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                       {[
-                        { t: '便利貼', d: '記錄想法或作為 AI 提示詞。可上傳最多 4 張參考圖，生成時參考風格構圖。' },
+                        { t: '便利貼', d: '記錄想法或作為 AI 提示詞。可上傳最多 8 張參考圖，並選擇自由融合或逐張指定用途。' },
                         { t: '文字工具', d: '橫/直書、曲線文字、字距調整。進階效果含邊框、背景色、陰影、光暈、3x 高清轉換。' },
                         { t: '手繪工具', d: '自由繪製草圖，筆刷與橡皮擦，支援透明背景繪圖。' },
                         { t: '線條 / 箭頭', d: '直線、雙向箭頭、圓點端點，可自訂虛線與顏色。' },
@@ -725,7 +725,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-4">
                       {[
                         { t: '一鍵生成圖片', d: '框選圖片、手繪或便利貼，AI 生成高品質圖片。生成中畫布不鎖定。' },
-                        { t: '風格參考圖', d: '圖生圖時，AI 能參考圖片的視覺風格與主體。支援三種搭配方式：1) 便利貼內直接上傳參考圖（最多 4 張）。2) 同時選取便利貼與畫布上的多張圖片一起生成（上限 8 張）。3) 混合參考（例如：便利貼內 4 張 + 畫布 4 張，最多支援 8 張圖進行特徵融合）。' },
+                        { t: '多參考圖', d: '便利貼可直接上傳最多 8 張參考圖。「自由融合」讓 AI 綜合全部視覺線索；「指定用途」可標記人物、服裝、姿勢、風格、背景與光線。便利貼與畫布圖片混合生成時，送入模型的圖片總上限仍為 8 張。' },
                         { t: '即夢 Seedream 5.0 Pro', d: '新一代旗艦模型，支援精細的文字生成與排版。需要透明背景時，軟體會在生成完成後自動去背並輸出 PNG。' },
                         { t: '隨機種子 (Seed)', d: '支援開啟自訂 Seed 隨機碼。便於鎖定特定光影特徵或構圖結構，進行連續性的一致畫面生成。' },
                         { t: '圖片逆向分析', d: '右鍵「提取提示詞」，AI 生成中英對照的詠唱咒語。' },

@@ -28,8 +28,22 @@ export interface NoteElement extends BaseElement {
   content: string;
   color: string;
   textAlign?: 'left' | 'center' | 'right';
-  referenceImages?: (string | null)[];  // 最多4張參考圖，null = 空槽
+  /**
+   * auto-height：輸入時依內容增高、結束編輯時收合。
+   * fixed：維持使用者手動設定的尺寸。舊便利貼缺少此欄位時視為 auto-height。
+   */
+  sizeMode?: 'auto-height' | 'fixed';
+  referenceImages?: (string | null)[];  // 最多 8 張參考圖，null = 空槽
+  /** 舊便利貼沒有此欄位時視為自由融合，確保舊檔相容。 */
+  referenceMode?: NoteReferenceMode;
+  /** 每個參考圖插槽可指定 1～2 個用途；自由融合模式下保留但不套用。 */
+  referenceRoles?: (NoteReferenceRole[] | null)[];
+  /** 指定用途模式的主要參考圖插槽索引。 */
+  referencePrimaryIndex?: number;
 }
+
+export type NoteReferenceMode = 'blend' | 'directed';
+export type NoteReferenceRole = 'subject' | 'outfit' | 'pose' | 'style' | 'background' | 'lighting';
 
 export interface ImageElement extends BaseElement {
   type: 'image';

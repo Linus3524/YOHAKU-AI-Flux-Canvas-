@@ -183,8 +183,19 @@ export function buildSkillPrompt(type: SkillType, content: string, config: any, 
     const selectedStyleId = config[styleKey];
     if (selectedStyleId === 'ref-style') {
       const refIdx = config.refStyleIndex !== undefined ? config.refStyleIndex : 0;
-      const circledNums = ['①','②','③','④'];
-      basePrompt = `${basePrompt}\n\n============================================================\n[MANDATORY REFERENCE RULE - STYLE & STRUCTURE INHERITANCE]\nYou must emulate both the semantic content (pose, layout, subject) and the exact artistic style (color choices, line weights, materials, lighting, aesthetic rendering) of "Reference Image ${circledNums[refIdx]}". Make the output visually identical in style.\n============================================================`;
+      const refScope = config.refStyleScope || 'all';
+      const circledNums = ['①','②','③','④','⑤','⑥','⑦','⑧'];
+      const referenceRule = refScope === 'style-only'
+        ? `[MANDATORY REFERENCE RULE - STYLE ONLY]
+"Reference Image ${circledNums[refIdx]}" is a STYLE SOURCE ONLY.
+Inherit its color palette, line weights, materials, lighting, texture, brushwork, and aesthetic rendering.
+DO NOT copy or inherit its subject identity, pose, action, composition, framing, camera angle, spatial layout, text, or object arrangement.
+The semantic content, subject, pose, composition, and layout must follow the user's content and the other design settings in this prompt.`
+        : `[MANDATORY REFERENCE RULE - STYLE & STRUCTURE INHERITANCE]
+Use "Reference Image ${circledNums[refIdx]}" as the primary style and structure source.
+Inherit its pose, layout, subject treatment, composition, color choices, line weights, materials, lighting, and aesthetic rendering.
+Adapt those characteristics to the user's requested content while keeping the output visually consistent with the selected reference.`;
+      basePrompt = `${basePrompt}\n\n============================================================\n${referenceRule}\n============================================================`;
     } else {
       const visualTemplate = VISUAL_STYLE_TEMPLATES.find(t => t.id === selectedStyleId)
         || DESIGN_MD_TEMPLATES.find(t => t.id === selectedStyleId);
@@ -200,13 +211,8 @@ export function buildSkillPrompt(type: SkillType, content: string, config: any, 
     }
   }
 
-  // 若有上傳參考圖但「沒有」選取「維持參考圖風格」→ 注入結構繼承、風格分離規則
-  if (referenceImages && referenceImages.some(Boolean)) {
-    const isRefStyle = styleKey && config && config[styleKey] === 'ref-style';
-    if (!isRefStyle) {
-      basePrompt = `${basePrompt}\n\n============================================================\n[MANDATORY REFERENCE RULE - STRUCTURE ONLY, IGNORE STYLE]\nYou must analyze the attached Reference Images and inherit ONLY their structural layout, subject pose, camera angle, and composition (including: spatial layout, pose/action, silhouettes, perspective, object relationships). STRICTLY IGNORE and discard the original rendering medium, lighting, color palette, brushstrokes, and material textures of the reference images. Render the new output using the chosen visual style/preset.\n============================================================`;
-    }
-  }
+  // 一般參考圖的自由融合／指定用途規則由生成管線依實際圖片順序附加；
+  // 此處只處理使用者在設計大師明確選擇的「維持參考圖風格」設定。
 
   const visualKey = SKILL_VISUAL_KEYS[type];
   if (visualKey && config && config[visualKey]) {

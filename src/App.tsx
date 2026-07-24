@@ -12,6 +12,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { InfiniteCanvas, CanvasApi } from './components/InfiniteCanvas';
 import { ContextMenu } from './components/ContextMenu';
+import { resizeNoteToContent } from './utils/noteSizing';
 import { StylePasteModal } from './components/StylePasteModal';
 import { DesignMasterPanel } from './components/DesignMasterPanel';
 import { DrawingModal } from './components/DrawingModal';
@@ -1909,6 +1910,13 @@ const App: React.FC = () => {
             toggleSnapToObjects,
             toggleShowImageSizes,
             resizeImage: (elementId: string) => setResizeImageTargetId(elementId),
+            setNoteSizeMode: (elementId, mode) => {
+              setElements(prev => prev.map(item => {
+                if (item.id !== elementId || item.type !== 'note') return item;
+                const note = { ...item, sizeMode: mode } as NoteElement;
+                return mode === 'auto-height' ? resizeNoteToContent(note) : note;
+              }));
+            },
           }}
           canChangeColor={canChangeColor}
           elementType={contextMenuElement?.type || null}
@@ -1973,7 +1981,25 @@ const App: React.FC = () => {
               );
             }}
             referenceImages={el.type === 'note' ? (el as NoteElement).referenceImages : undefined}
-            onUpdateReferenceImages={el.type === 'note' ? (refs) => updateElements({ ...(el as NoteElement), referenceImages: refs }) : undefined}
+            referenceMode={el.type === 'note' ? (el as NoteElement).referenceMode : undefined}
+            referenceRoles={el.type === 'note' ? (el as NoteElement).referenceRoles : undefined}
+            referencePrimaryIndex={el.type === 'note' ? (el as NoteElement).referencePrimaryIndex : undefined}
+            onUpdateReferenceImages={el.type === 'note' ? (refs) => {
+              setElements(prev => prev.map(item =>
+                item.id === el.id && item.type === 'note'
+                  ? ((item.sizeMode ?? 'auto-height') === 'auto-height'
+                    ? resizeNoteToContent({ ...item, referenceImages: refs } as NoteElement)
+                    : { ...item, referenceImages: refs })
+                  : item
+              ));
+            } : undefined}
+            onUpdateReferenceSettings={el.type === 'note' ? (settings) => {
+              setElements(prev => prev.map(item =>
+                item.id === el.id && item.type === 'note'
+                  ? { ...item, ...settings }
+                  : item
+              ));
+            } : undefined}
             initialState={designMasterStates[el.id]}
             onPersistState={(s) => {
               // 記住這張便利貼的設定（下次重複進入還原）

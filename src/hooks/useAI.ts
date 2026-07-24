@@ -40,6 +40,11 @@ import { runExtendBrandKitPipeline, runLogoBrandKitPipeline } from '../ai/pipeli
 import { runProductMarketingPipeline } from '../ai/pipelines/productMarketing';
 import { runCrossPlatformPipeline } from '../ai/pipelines/crossPlatform';
 import { crossPlatformSpec, type CrossPlatformSpec } from '../skills/crossPlatform';
+import {
+    buildNoteReferencePrompt,
+    NOTE_REFERENCE_LIMIT,
+    type NoteReferencePromptEntry,
+} from '../utils/noteReferences';
 
 interface UseAIProps {
     elements: CanvasElement[];
@@ -985,6 +990,57 @@ CONSTRAINTS:
         const noteElements = selectedElements.filter(el => el.type === 'note' || el.type === 'text') as (NoteElement | TextElement)[];
         const frameElements = selectedElements.filter(el => el.type === 'frame') as FrameElement[];
 
+        // 便利貼參考圖共用資料流：舊便利貼缺少模式時自動視為自由融合。
+        // 每張圖的用途與主要參考資訊會依「實際送入模型的順序」建立提示詞。
+        const collectedNoteRefs = noteElements.flatMap(note => {
+            if (note.type !== 'note' || !note.referenceImages) return [];
+            const refs = note.referenceImages.slice(0, NOTE_REFERENCE_LIMIT);
+            const firstValidIndex = refs.findIndex(Boolean);
+            const configuredPrimary = note.referencePrimaryIndex;
+            const primaryIndex = configuredPrimary != null && refs[configuredPrimary]
+                ? configuredPrimary
+                : firstValidIndex;
+            return refs.flatMap((src, slotIndex) => src ? [{
+                src,
+                slotIndex,
+                mode: note.referenceMode ?? 'blend',
+                roles: note.referenceRoles?.[slotIndex] ?? [],
+                isPrimary: (note.referenceMode ?? 'blend') === 'directed' && slotIndex === primaryIndex,
+            }] : []);
+        });
+        const preferredRefPos = refStyleIndex == null
+            ? collectedNoteRefs.findIndex(ref => ref.isPrimary)
+            : collectedNoteRefs.findIndex(ref => ref.slotIndex === refStyleIndex);
+        const orderedNoteRefs = [...collectedNoteRefs];
+        if (preferredRefPos > 0) {
+            const [preferred] = orderedNoteRefs.splice(preferredRefPos, 1);
+            orderedNoteRefs.unshift(preferred);
+        }
+        const noteRefImgs = orderedNoteRefs.map(ref => ref.src);
+        if (imageElements.length + noteRefImgs.length > NOTE_REFERENCE_LIMIT) {
+            showToast(`參考圖片合計 ${imageElements.length + noteRefImgs.length} 張，模型最多接收 ${NOTE_REFERENCE_LIMIT} 張；將依畫布圖片、主要參考圖、其餘參考圖的順序採用前 ${NOTE_REFERENCE_LIMIT} 張。`);
+        }
+        const noteRefPromptEntries: NoteReferencePromptEntry[] = orderedNoteRefs.map(ref => ({
+            mode: refStyleIndex != null && ref.slotIndex === refStyleIndex ? 'directed' : ref.mode,
+            roles: refStyleIndex != null && ref.slotIndex === refStyleIndex
+                ? (refStyleScope === 'style-only'
+                    ? ['style']
+                    : ['subject', 'pose', 'style'])
+                : ref.roles,
+            isPrimary: ref.isPrimary || (refStyleIndex != null && ref.slotIndex === refStyleIndex),
+        }));
+        const appendNoteReferencePrompt = (
+            basePrompt: string,
+            startImageIndex: number,
+            entryCount = noteRefPromptEntries.length,
+        ) => {
+            const referencePrompt = buildNoteReferencePrompt(
+                noteRefPromptEntries.slice(0, entryCount),
+                startImageIndex,
+            );
+            return referencePrompt ? `${basePrompt}\n\n${referencePrompt}`.trim() : basePrompt;
+        };
+
         if (frameElements.length > 0 && noteElements.length === 0) {
             showToast("畫框需要搭配便利貼輸入提示詞後才可生成 ⚠️");
             return;
@@ -1012,29 +1068,6 @@ CONSTRAINTS:
                 atlasPrompt = buildStyledPrompt(atlasPrompt, styleObj?.prompt ?? '', imageStyle);
             }
 
-            // 收集便利貼中的參考圖（base64）
-            const noteRefImgs: string[] = [];
-            let chosenRefSrc: string | null = null;
-            for (const note of noteElements) {
-                if (note.type === 'note' && (note as NoteElement).referenceImages) {
-                    const refs = (note as NoteElement).referenceImages || [];
-                    if (refStyleIndex !== undefined && refs[refStyleIndex]) {
-                        chosenRefSrc = refs[refStyleIndex];
-                    }
-                }
-            }
-            for (const note of noteElements) {
-                if (note.type === 'note' && (note as NoteElement).referenceImages) {
-                    (note as NoteElement).referenceImages!.forEach(src => {
-                        if (src && src !== chosenRefSrc) {
-                            noteRefImgs.push(src);
-                        }
-                    });
-                }
-            }
-            if (chosenRefSrc) {
-                noteRefImgs.unshift(chosenRefSrc);
-            }
             const hasNoteRefs = noteRefImgs.length > 0;
             const canDoImg2Img = atlasModelSupportsImg2Img(atlasModel);
             // 引擎葉子統一走 src/ai/pipelines/generate.ts 的 atlasBatch
@@ -1054,9 +1087,12 @@ CONSTRAINTS:
                         let frameRatio = frame.aspectRatioLabel;
                         if (!['1:1', '3:4', '4:3', '9:16', '16:9'].includes(frameRatio)) frameRatio = '1:1';
                         const frameSeed = baseSeed + idx;
+                        const framePrompt = hasNoteRefs && canDoImg2Img
+                            ? appendNoteReferencePrompt(atlasPrompt, 1)
+                            : atlasPrompt;
                         // 有便利貼參考圖且支援 img2img → 以第一張參考圖為主
                         const imgs = await atlasBatch({
-                            prompt: atlasPrompt, count: 1, ratio: frameRatio, imageSize: effImageSize,
+                            prompt: framePrompt, count: 1, ratio: frameRatio, imageSize: effImageSize,
                             seed: frameSeed,
                             refImage: (hasNoteRefs && canDoImg2Img) ? noteRefImgs[0] : undefined,
                             extraRefImages: (hasNoteRefs && canDoImg2Img) ? noteRefImgs.slice(1) : undefined,
@@ -1069,7 +1105,7 @@ CONSTRAINTS:
                             metadata: {
                                 seed: frameSeed,
                                 model: generationModel,
-                                prompt: atlasPrompt
+                                prompt: framePrompt
                             }
                         };
                         return newImageElement;
@@ -1110,7 +1146,7 @@ CONSTRAINTS:
                     if (!rawRefImage.startsWith('data:')) { showToast("無法讀取參考圖片，請確認圖片已正確載入 ⚠️"); return; }
                 }
                 const { src: refImage, hadTransparency: refHadTransparency, bgColor: refBgColor } = await prepareForGeneration(rawRefImage);
-                const img2imgPrompt = atlasPrompt || 'Keep the overall composition, enhance details and quality';
+                const baseImg2imgPrompt = atlasPrompt || 'Keep the overall composition, enhance details and quality';
 
                 // 除了主參考圖，畫布上其餘一併選取的圖片/手繪/形狀也要當額外參考圖送出，
                 // 否則多選只有第一張真正被使用（callAtlasImg2Img 底層最多支援 8 張，這裡才是實際收集端）。
@@ -1124,7 +1160,16 @@ CONSTRAINTS:
                         return src.startsWith('data:') ? src : null;
                     } catch { return null; }
                 }))).filter((s): s is string => !!s);
-                const allExtraRefs = [...otherCanvasRefs, ...(hasNoteRefs ? noteRefImgs : [])];
+                const availableNoteRefSlots = Math.max(0, NOTE_REFERENCE_LIMIT - 1 - otherCanvasRefs.length);
+                const includedNoteRefImgs = hasNoteRefs
+                    ? noteRefImgs.slice(0, availableNoteRefSlots)
+                    : [];
+                const allExtraRefs = [...otherCanvasRefs, ...includedNoteRefImgs];
+                const img2imgPrompt = appendNoteReferencePrompt(
+                    baseImg2imgPrompt,
+                    2 + otherCanvasRefs.length,
+                    includedNoteRefImgs.length,
+                );
 
                 setGeneratingElementIds(imageElements.map(el => el.id));
                 setIsGenerating(true);
@@ -1166,8 +1211,9 @@ CONSTRAINTS:
                 setIsGenerating(true);
                 setGeneratedImages(null);
                 try {
+                    const noteOnlyPrompt = appendNoteReferencePrompt(atlasPrompt, 1);
                     const images = await atlasBatch({
-                        prompt: atlasPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
+                        prompt: noteOnlyPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
                         seed: baseSeed,
                         refImage: noteRefImgs[0], extraRefImages: noteRefImgs.slice(1),
                     }, atlasEngine);
@@ -1176,7 +1222,7 @@ CONSTRAINTS:
                     setGeneratedImagesMetadata(images.map((_, idx) => ({
                         seed: baseSeed + idx,
                         model: generationModel,
-                        prompt: atlasPrompt
+                        prompt: noteOnlyPrompt
                     })));
                 } catch (e: any) {
                     showToast(`生成失敗：${e.message}`);
@@ -1232,41 +1278,20 @@ CONSTRAINTS:
               finalInstructions = buildStyledPrompt(instructions, styleObj?.prompt ?? '', imageStyle);
           }
 
-          // 收集便利貼的參考圖（最多4張，按編號①②③④）
-          const circledNums = ['①','②','③','④'];
-          const noteRefImages: { idx: number; data: string; mimeType: string }[] = [];
-          for (const note of noteElements) {
-              if (note.type === 'note' && note.referenceImages) {
-                  note.referenceImages.forEach((src, i) => {
-                      if (src) {
-                          const [header, data] = src.split(',');
-                          const mimeType = header.match(/data:(.*);base64/)?.[1] || 'image/png';
-                          noteRefImages.push({ idx: i, data, mimeType });
-                      }
-                  });
-              }
-          }
-          if (refStyleIndex !== undefined) {
-              const targetPos = noteRefImages.findIndex(r => r.idx === refStyleIndex);
-              if (targetPos > -1) {
-                  const [chosen] = noteRefImages.splice(targetPos, 1);
-                  noteRefImages.unshift(chosen);
-              }
-          }
-
-          // 如果有參考圖，在 prompt 末尾加說明
-          let promptWithRefHint = finalInstructions;
-          if (noteRefImages.length > 0) {
-              const refNote = noteRefImages.map(r => `參考圖${circledNums[r.idx]}`).join('、');
-              promptWithRefHint = finalInstructions
-                  ? `${finalInstructions}\n\n（已附上 ${refNote} 作為視覺參考，請依照提示詞的指示使用這些參考圖）`
-                  : `請參考附上的 ${refNote} 生成圖片`;
-          }
+          // 便利貼參考圖沿用 Atlas 相同排序與用途規則，最多 8 張。
+          const noteRefImages = orderedNoteRefs.map(ref => {
+              const [header, data] = ref.src.split(',');
+              return {
+                  data,
+                  mimeType: header.match(/data:(.*);base64/)?.[1] || 'image/png',
+              };
+          });
 
           if (frameElements.length > 0) {
               setGeneratingElementIds(frameElements.map(f => f.id));
               const generatePromises = frameElements.map(async (frame, idx) => {
-                  const promptText = `Generate an image based on this description: "${promptWithRefHint}".`;
+                  const framePrompt = appendNoteReferencePrompt(finalInstructions, 1);
+                  const promptText = `Generate an image based on this description:\n${framePrompt}`;
                   const refParts = noteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
                   const textPart = { text: promptText };
                   let targetRatio = frame.aspectRatioLabel;
@@ -1285,7 +1310,7 @@ CONSTRAINTS:
                           metadata: {
                               seed: frameSeed,
                               model: 'gemini',
-                              prompt: promptWithRefHint
+                              prompt: framePrompt
                           }
                       };
                       return newImageElement;
@@ -1310,6 +1335,7 @@ CONSTRAINTS:
           setGeneratingElementIds(imageElements.length > 0 ? imageElements.map(el => el.id) : []);
 
           let parts: ({ inlineData: { data: string; mimeType: string; }; } | { text: string; })[];
+          let effectivePrompt = finalInstructions;
           let targetAspectRatio = aspectRatioOverride || imageAspectRatio;
           if (targetAspectRatio === 'Original' && imageElements.length > 0) {
               const firstImage = imageElements[0];
@@ -1349,15 +1375,23 @@ CONSTRAINTS:
                   return { inlineData: { data, mimeType } };
               });
               const resolvedImageParts = (await Promise.all(imagePartsPromises)).filter(p => p !== null);
+              const availableNoteRefSlots = Math.max(0, NOTE_REFERENCE_LIMIT - resolvedImageParts.length);
+              const includedNoteRefImages = noteRefImages.slice(0, availableNoteRefSlots);
 
-              const promptForEditing = promptWithRefHint || "Creatively reimagine and enhance the image(s).";
+              effectivePrompt = appendNoteReferencePrompt(
+                  finalInstructions || 'Creatively reimagine and enhance the image(s).',
+                  resolvedImageParts.length + 1,
+                  includedNoteRefImages.length,
+              );
+              const promptForEditing = effectivePrompt;
 
               const textPart = { text: promptForEditing };
-              const noteRefParts = noteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
+              const noteRefParts = includedNoteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
               parts = [...resolvedImageParts as any, ...noteRefParts, textPart];
           } else {
+              effectivePrompt = appendNoteReferencePrompt(finalInstructions, 1);
               const promptText = noteRefImages.length > 0
-                  ? `Generate a new image based on this description: "${promptWithRefHint}"`
+                  ? `Generate a new image based on this description:\n${effectivePrompt}`
                   : `Generate a completely new image based on this description: "${finalInstructions}"`;
               const textPart = { text: promptText };
               const noteRefParts = noteRefImages.map(r => ({ inlineData: { data: r.data, mimeType: r.mimeType } }));
@@ -1388,7 +1422,7 @@ CONSTRAINTS:
           setGeneratedImagesMetadata(validImages.map((_, idx) => ({
               seed: baseSeed + idx,
               model: 'gemini',
-              prompt: imageElements.length > 0 ? (promptWithRefHint || "Creatively reimagine and enhance the image(s).") : (noteRefImages.length > 0 ? promptWithRefHint : finalInstructions)
+              prompt: effectivePrompt
           })));
 
         } catch (error: any) {

@@ -14,6 +14,8 @@ import {
 } from '../skills';
 import { UI_PLATFORMS, UI_RESOLUTIONS, resolveAspectFromResolution } from '../skills/uiWebpage';
 import { optimizePrompt } from '../skills/promptOptimizer';
+import type { NoteReferenceMode, NoteReferenceRole } from '../types';
+import { NOTE_REFERENCE_LIMIT, NOTE_REFERENCE_ROLE_OPTIONS } from '../utils/noteReferences';
 import { Smartphone, Tablet, Monitor, Globe } from 'lucide-react';
 
 const generateCollectionItemPrompts = async (theme: string, count: number, apiKey: string): Promise<string[]> => {
@@ -53,9 +55,17 @@ interface DesignMasterPanelProps {
   showToast: (msg: string) => void;
   onGenerate: (prompt: string, count: 1 | 2 | 3 | 4, model: string, autoRemoveBg: boolean, aspect?: string, imageSize?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean, customSeed?: number) => void;
   onClose: () => void;
-  /** 便利貼本身的參考圖插槽（最多4張），讓所有 skill 模式都能用同一份參考圖生成 */
+  /** 便利貼本身的參考圖插槽（最多 8 張），讓所有 skill 模式都能用同一份參考圖生成 */
   referenceImages?: (string | null)[];
   onUpdateReferenceImages?: (refs: (string | null)[]) => void;
+  referenceMode?: NoteReferenceMode;
+  referenceRoles?: (NoteReferenceRole[] | null)[];
+  referencePrimaryIndex?: number;
+  onUpdateReferenceSettings?: (settings: {
+    referenceMode?: NoteReferenceMode;
+    referenceRoles?: (NoteReferenceRole[] | null)[];
+    referencePrimaryIndex?: number;
+  }) => void;
   /** 該便利貼上次的設計大師設定（重複進入同一張便利貼時還原；新便利貼為 undefined → 用預設） */
   initialState?: DesignMasterPersistState;
   /** 將目前設定回存（生成或關閉時呼叫），供下次進入同一張便利貼還原 */
@@ -94,6 +104,10 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
   onClose,
   referenceImages,
   onUpdateReferenceImages,
+  referenceMode = 'blend',
+  referenceRoles,
+  referencePrimaryIndex,
+  onUpdateReferenceSettings,
   initialState,
   onPersistState,
   onGenerateBrandKit,
@@ -419,7 +433,14 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
 
           {/* 參考圖（與便利貼上的參考圖插槽同步，所有 skill 模式共用） */}
           {onUpdateReferenceImages && (() => {
-            const refs = referenceImages ?? [null, null, null, null];
+            const refs = Array.from(
+              { length: NOTE_REFERENCE_LIMIT },
+              (_, idx) => referenceImages?.[idx] ?? null,
+            );
+            const roles = Array.from(
+              { length: NOTE_REFERENCE_LIMIT },
+              (_, idx) => referenceRoles?.[idx] ?? null,
+            );
             const handleRefUpload = (idx: number, file: File) => {
               const reader = new FileReader();
               reader.onload = ev => {
@@ -427,6 +448,9 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                 const newRefs = [...refs];
                 newRefs[idx] = src;
                 onUpdateReferenceImages(newRefs);
+                if (referencePrimaryIndex == null) {
+                  onUpdateReferenceSettings?.({ referencePrimaryIndex: idx });
+                }
               };
               reader.readAsDataURL(file);
             };
@@ -434,11 +458,46 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
               const newRefs = [...refs];
               newRefs[idx] = null;
               onUpdateReferenceImages(newRefs);
+              const newRoles = [...roles];
+              newRoles[idx] = null;
+              const nextPrimary = referencePrimaryIndex === idx
+                ? newRefs.findIndex(Boolean)
+                : referencePrimaryIndex;
+              onUpdateReferenceSettings?.({
+                referenceRoles: newRoles,
+                referencePrimaryIndex: typeof nextPrimary === 'number' && nextPrimary >= 0 ? nextPrimary : undefined,
+              });
             };
+            const filledRefs = refs
+              .map((src, idx) => ({ src, idx }))
+              .filter((item): item is { src: string; idx: number } => !!item.src);
             return (
               <div>
-                <div className="text-[12px] font-bold text-[#475569] mb-2 flex items-center gap-1.5">
-                  參考圖 <span className="font-normal text-gray-400 text-[11px]">(選填，最多 4 張，AI 生成時會參考)</span>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="text-[12px] font-bold text-[#475569] flex items-center gap-1.5">
+                    參考圖 <span className="font-normal text-gray-400 text-[11px]">(選填，最多 {NOTE_REFERENCE_LIMIT} 張)</span>
+                  </div>
+                  {filledRefs.length > 0 && onUpdateReferenceSettings && (
+                    <div className="flex rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-0.5">
+                      {([
+                        ['blend', '自由融合'],
+                        ['directed', '指定用途'],
+                      ] as const).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => onUpdateReferenceSettings({ referenceMode: mode })}
+                          className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
+                            referenceMode === mode
+                              ? 'bg-white text-[#AF52DE] shadow-sm'
+                              : 'text-[#64748B] hover:text-[#334155]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {refs.map((src, idx) => (
@@ -451,6 +510,9 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                       {src ? (
                         <>
                           <img src={src} alt={`參考圖 ${idx + 1}`} className="w-full h-full object-cover" />
+                          <span className="absolute top-1 left-1 min-w-5 h-5 px-1 rounded-full bg-black/65 text-white text-[9px] font-bold flex items-center justify-center">
+                            {idx + 1}
+                          </span>
                           <button
                             type="button"
                             onClick={e => { e.preventDefault(); e.stopPropagation(); handleRefRemove(idx); }}
@@ -477,6 +539,77 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                     </label>
                   ))}
                 </div>
+                {filledRefs.length > 0 && (
+                  referenceMode === 'blend' ? (
+                    <div className="mt-2.5 px-3 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-[10.5px] text-[#64748B] leading-relaxed">
+                      AI 會把所有參考圖視為同一份視覺情緒板，自由綜合主體、風格、材質、色彩與構圖，並避免做成拼貼。
+                    </div>
+                  ) : (
+                    <div className="mt-2.5 grid grid-cols-1 xl:grid-cols-2 gap-2">
+                      {filledRefs.map(({ src, idx }) => {
+                        const selectedRoles = roles[idx] ?? [];
+                        const isPrimary = referencePrimaryIndex === idx
+                          || (referencePrimaryIndex == null && idx === filledRefs[0]?.idx);
+                        return (
+                          <div key={idx} className={`rounded-xl border p-2.5 ${isPrimary ? 'border-purple-300 bg-purple-50/30' : 'border-[#E2E8F0] bg-white'}`}>
+                            <div className="flex items-center gap-2">
+                              <img src={src} alt={`參考圖 ${idx + 1}`} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10.5px] font-bold text-[#334155]">參考圖 {idx + 1}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => onUpdateReferenceSettings?.({
+                                      referenceMode: 'directed',
+                                      referencePrimaryIndex: idx,
+                                    })}
+                                    className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                      isPrimary ? 'bg-[#AF52DE] text-white' : 'bg-[#F1F5F9] text-[#94A3B8]'
+                                    }`}
+                                  >
+                                    {isPrimary ? '★ 主要' : '☆ 主要'}
+                                  </button>
+                                </div>
+                                <div className="text-[9px] text-[#94A3B8] mt-0.5">最多選擇 2 個用途</div>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {NOTE_REFERENCE_ROLE_OPTIONS.map(option => {
+                                const active = selectedRoles.includes(option.id);
+                                const disabled = !active && selectedRoles.length >= 2;
+                                return (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    disabled={disabled}
+                                    onClick={() => {
+                                      const nextRoles = active
+                                        ? selectedRoles.filter(role => role !== option.id)
+                                        : [...selectedRoles, option.id];
+                                      const next = [...roles];
+                                      next[idx] = nextRoles;
+                                      onUpdateReferenceSettings?.({
+                                        referenceMode: 'directed',
+                                        referenceRoles: next,
+                                      });
+                                    }}
+                                    className={`px-1.5 py-1 rounded-full border text-[9px] font-semibold transition-all ${
+                                      active
+                                        ? 'border-purple-300 bg-purple-50 text-purple-700'
+                                        : 'border-[#E2E8F0] bg-white text-[#64748B]'
+                                    } ${disabled ? 'opacity-35 cursor-not-allowed' : 'hover:border-purple-200'}`}
+                                  >
+                                    {option.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
               </div>
             );
           })()}
@@ -1495,7 +1628,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                         <div className="flex flex-wrap gap-2.5">
                           {referenceImages.map((src, idx) => {
                             if (!src) return null;
-                            const circledNums = ['①','②','③','④'];
+                            const circledNums = ['①','②','③','④','⑤','⑥','⑦','⑧'];
                             const isSelected = (configs[activeSkill].refStyleIndex ?? 0) === idx;
                             return (
                               <button

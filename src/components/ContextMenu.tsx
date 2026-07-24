@@ -71,6 +71,7 @@ interface ContextMenuProps {
     toggleSnapToObjects?: () => void;
     toggleShowImageSizes?: () => void;
     resizeImage?: (elementId: string) => void;
+    setNoteSizeMode?: (elementId: string, mode: 'auto-height' | 'fixed') => void;
   };
   canChangeColor: boolean;
   elementType: ElementType | null;
@@ -319,6 +320,22 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
                         {(elementType === 'note' || elementType === 'text') && (
                              <>
+                                {elementType === 'note' && actions.setNoteSizeMode && (
+                                    <MenuItem
+                                        icon={<Icon name={(selectedElement?.sizeMode ?? 'auto-height') === 'auto-height' ? 'height' : 'aspect_ratio'} size={14} />}
+                                        onClick={() => handleAction(() => actions.setNoteSizeMode!(
+                                            menuData.elementId!,
+                                            (selectedElement?.sizeMode ?? 'auto-height') === 'auto-height' ? 'fixed' : 'auto-height',
+                                        ))}
+                                    >
+                                        <span className="flex items-center justify-between gap-2">
+                                            <span>
+                                                便利貼尺寸：{(selectedElement?.sizeMode ?? 'auto-height') === 'auto-height' ? '自動高度' : '固定尺寸'}
+                                            </span>
+                                            <Icon name="swap_vert" size={12} className="text-[#86868B]" />
+                                        </span>
+                                    </MenuItem>
+                                )}
                                 <MenuItem icon={<MenuIcons.Magic />} onClick={() => handleAction(() => actions.optimizeNotePrompt(menuData.elementId!))}>
                                     AI 提示詞優化
                                 </MenuItem>
