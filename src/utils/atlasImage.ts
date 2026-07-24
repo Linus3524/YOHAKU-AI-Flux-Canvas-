@@ -510,22 +510,28 @@ export async function compressForAtlas(
     maxPx = 1024,
     quality = 0.85,
     keepAlpha = false,  // true → PNG（保留透明），false → JPEG（較小）
+    forceReencode = false, // true → 即使尺寸已夠小也轉成指定格式
 ): Promise<string> {
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
-            const { naturalWidth: w, naturalHeight: h } = img;
-            const scale = w > h ? maxPx / w : maxPx / h;
-            // 已經夠小就不放大，直接用原圖
-            if (scale >= 1) { resolve(base64); return; }
-            const canvas = document.createElement('canvas');
-            canvas.width  = Math.round(w * scale);
-            canvas.height = Math.round(h * scale);
-            const ctx = canvas.getContext('2d')!;
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(keepAlpha
-                ? canvas.toDataURL('image/png')
-                : canvas.toDataURL('image/jpeg', quality));
+            try {
+                const { naturalWidth: w, naturalHeight: h } = img;
+                const scale = Math.min(1, maxPx / Math.max(w, h));
+                // 已經夠小且不需統一格式時，直接用原圖
+                if (scale >= 1 && !forceReencode) { resolve(base64); return; }
+                const canvas = document.createElement('canvas');
+                canvas.width  = Math.max(1, Math.round(w * scale));
+                canvas.height = Math.max(1, Math.round(h * scale));
+                const ctx = canvas.getContext('2d')!;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(keepAlpha
+                    ? canvas.toDataURL('image/png')
+                    : canvas.toDataURL('image/jpeg', quality));
+            } catch {
+                // 跨網域 URL 若污染 canvas，保留原 URL 交由 Atlas 直接抓取。
+                resolve(base64);
+            }
         };
         img.onerror = () => resolve(base64); // 壓縮失敗就用原圖
         img.src = base64;
@@ -677,10 +683,12 @@ export async function callAtlasInpaint(
     surroundingContext?: string,
     signal?: AbortSignal,    // ← 傳入後可中止輪詢
     size?: string,           // ← 指定輸出尺寸（外擴必填，e.g. '1024x1536'）；同尺寸 inpaint 可省略
-    seed?: number,           // ← 隨機種子碼
 ): Promise<string> {
     // 透明遮罩圖：讓 GPT Image 2 Edit 知道哪裡需要重新生成
     const transparentImage = await createTransparentMaskedImage(imageBase64, maskBase64);
+    // GPT Image 2 Edit 官方輸入只支援 JPG / PNG。主圖保留 PNG 透明遮罩；
+    // 額外參考圖統一轉 JPEG，並限制最長邊，避免多圖 JSON payload 過大。
+    const preparedMainImage = await compressForAtlas(transparentImage, 1536, 1, true, true);
 
     const hasRefs = referenceImages && referenceImages.length > 0;
     const isRemove = !prompt.trim() && !hasRefs;
@@ -688,27 +696,47 @@ export async function callAtlasInpaint(
         ? ` Surrounding environment: ${surroundingContext} — match this lighting, color temperature, materials and atmosphere exactly.`
         : '';
 
+    const trimmedPrompt = prompt.trim();
     let editPrompt: string;
-    if (isRemove) {
+    if (trimmedPrompt) {
+        // 呼叫端已組好精確指令（含「參考圖用途」等）→ 直接採用為主體，
+        // 不再前置「自行判斷是物件還是風格」這類會製造歧義的通用描述。
+        // 只補上「僅改透明區、其餘保留」與環境匹配提示。
+        editPrompt = `${trimmedPrompt} Only regenerate the transparent area; keep every pixel outside it unchanged. Match the surrounding lighting, shadows, color temperature, and perspective so the fill blends seamlessly.${ctxHint}`;
+    } else if (isRemove) {
         editPrompt = `Seamlessly reconstruct the transparent area to match the surrounding background. Extend the nearby textures, colors, and patterns naturally inward so the result looks like the object was never there.${ctxHint}`;
     } else if (hasRefs) {
-        const extraDesc = prompt.trim() ? ` Additional instruction: ${prompt.trim()}.` : '';
-        editPrompt = `Use the reference image(s) to fill the transparent area. If the reference shows a specific object or subject, place it naturally into the scene. If it shows a style, texture, or aesthetic, apply that to the fill instead. In either case, adapt the lighting, shadows, color temperature, and perspective to seamlessly match the surrounding image.${ctxHint}${extraDesc}`;
+        // 保底：有參考圖卻完全沒有任何指令（實務上呼叫端已避免此情況）
+        editPrompt = `Use the reference image(s) to fill the transparent area. If the reference shows a specific object or subject, place it naturally into the scene; if it shows a style, texture, or aesthetic, apply that to the fill. Adapt the lighting, shadows, color temperature, and perspective to seamlessly match the surrounding image.${ctxHint}`;
     } else {
-        editPrompt = `In the transparent area only: ${prompt.trim()}. Make it look completely natural and seamlessly blended.${ctxHint}`;
+        editPrompt = `Seamlessly reconstruct the transparent area to match the surrounding background.${ctxHint}`;
     }
 
-    // images[0] = masked base image; images[1..] = optional reference images
-    const images = [transparentImage, ...(hasRefs ? referenceImages! : [])];
+    // images[0] = masked base image; images[1..] = optional reference images。
+    // 遠端 URL 不經 canvas 轉檔；Atlas 可直接下載，亦避免 CORS 污染 canvas。
+    const preparedReferences = hasRefs
+        ? await Promise.all(referenceImages!
+            .filter(Boolean)
+            .slice(0, 9)
+            .map(async image => {
+                if (image.startsWith('http')) return image;
+                const prepared = await compressForAtlas(image, 1536, 0.9, false, true);
+                if (!/^data:image\/(?:jpeg|png);base64,/.test(prepared)) {
+                    throw new Error('GPT Image 2 參考圖轉檔失敗，請改用 JPG 或 PNG 圖片');
+                }
+                return prepared;
+            }))
+        : [];
+    const images = [preparedMainImage, ...preparedReferences];
 
     const body: Record<string, unknown> = {
         model: 'openai/gpt-image-2/edit',
         prompt: editPrompt,
         images,
+        quality: 'medium',
         enable_base64_output: true,
         output_format: 'png',
         ...(size ? { size } : {}),
-        ...(seed !== undefined ? { seed } : {}),
     };
     const predId = await postGeneration(body, atlasKey);
     const results = await pollPrediction(predId, atlasKey, signal);

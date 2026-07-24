@@ -1839,7 +1839,7 @@ export async function regenerateLayer({
         compressForAtlas(maskBase64,     1024, 1.0,  true),   // PNG，keepAlpha=true
     ]);
 
-    let newCompositeBase64 = await callAtlasInpaint(
+    const newCompositeBase64 = await callAtlasInpaint(
         inpaintPrompt,
         compOrig,
         compMask,
@@ -1849,13 +1849,6 @@ export async function regenerateLayer({
         signal,      // AbortSignal → 取消後立即停止輪詢
         gptSize,     // 輸出尺寸 = 原圖比例，避免方形錯位
     );
-
-    // 只取遮罩區的重繪像素貼回全解析度原圖，其餘維持原始畫質（避免多次 Apply 畫質遞減）
-    try {
-        newCompositeBase64 = await pasteInpaintRegion(originalBase64, newCompositeBase64, maskBase64);
-    } catch (e) {
-        console.warn('[regenerateLayer] 全解析度貼回失敗，沿用 inpaint 輸出:', e);
-    }
 
     // ── Step 3：SAM2 從 inpainted 結果重新切出物件（更新 SmartLayer）────────
     let newLayerBase64 = layer.base64;

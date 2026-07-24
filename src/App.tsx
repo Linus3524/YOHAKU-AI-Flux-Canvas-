@@ -62,9 +62,13 @@ const App: React.FC = () => {
   }, []);
 
   // --- Image Model Selection ---
-  const [imageModel, setImageModel] = useState<string>(
-    () => localStorage.getItem('yohaku_image_model') || 'gemini-3.1-flash-image'
-  );
+  // localStorage 可能殘留改名前的舊模型 ID（如 *-image-preview），與 Lite/Flash/Pro 三顆按鈕
+  // 的現行 ID 都對不上 → 造成「三顆都沒選中」。讀取時驗證，非法值一律落回 Flash 預設。
+  const [imageModel, setImageModel] = useState<string>(() => {
+    const VALID_IMAGE_MODELS = ['gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-3-pro-image'];
+    const saved = localStorage.getItem('yohaku_image_model');
+    return saved && VALID_IMAGE_MODELS.includes(saved) ? saved : 'gemini-3.1-flash-image';
+  });
   const handleSetImageModel = (model: string) => {
     localStorage.setItem('yohaku_image_model', model);
     setImageModel(model);

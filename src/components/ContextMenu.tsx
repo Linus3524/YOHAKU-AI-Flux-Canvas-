@@ -420,7 +420,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                     {activeSubMenu === 'aiImageTools' && (
                                         <div style={subMenuStyle} className="w-[176px] rounded-2xl bg-white/90 backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-white/50 py-1 ring-1 ring-black/5">
                                             <MenuItem icon={<MenuIcons.Edit />} onClick={() => handleAction(() => actions.startImageEdit(menuData.elementId!))}>
-                                                局部重繪與圖片編輯
+                                                筆刷局部重繪
                                             </MenuItem>
                                             <MenuItem icon={<MenuIcons.Expand />} onClick={() => handleAction(() => actions.startOutpainting(menuData.elementId!))}>
                                                 擴展圖片 (Outpainting)

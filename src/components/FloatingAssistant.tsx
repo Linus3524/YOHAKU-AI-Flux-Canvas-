@@ -70,7 +70,7 @@ const FEATURE_DOCS = [
     category: "5. 圖片編輯 (IMAGE EDITING)",
     color: "text-yohaku-text-main",
     items: [
-      { title: "局部重繪與手繪編輯", desc: "支援雙模式切換。1) AI 重繪：塗抹遮罩並替換或移除物體，支援 LaMa/MI-GAN 本機推理與自動超分；2) 手繪編輯：本機直接像素塗改，支援軟硬筆刷、去背橡皮擦（擦除為透明 PNG）、吸管吸色與拉幾何色塊覆蓋，並具備獨立的 Undo/Redo 歷史堆疊。" },
+      { title: "筆刷局部重繪", desc: "支援雙模式切換。1) AI 重繪：塗抹遮罩並替換或移除物體，支援 LaMa/MI-GAN 本機推理與自動超分；2) 手繪編輯：本機直接像素塗改，支援軟硬筆刷、去背橡皮擦（擦除為透明 PNG）、吸管吸色與拉幾何色塊覆蓋，並具備獨立的 Undo/Redo 歷史堆疊。" },
       { title: "基礎/進階調整", desc: "亮度、對比、飽和度、色溫、亮部、陰影、銳化。" },
       { title: "圖片裁剪", desc: "非破壞性裁剪，可自由調整裁切範圍與旋轉角度。" },
       { title: "混合模式", desc: "支援正常、色彩增值、濾色、覆蓋、柔光等多種混合模式。" },
@@ -770,9 +770,9 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 內建 60+ 種藝術風格與 50+ 品牌預設。支援 <code className="font-mono bg-purple-50 px-1 rounded">16:9 / 4:3 / 1:1 / 3:4 / 9:16</code> 等比例與多種手機/平板/桌面/瀏覽器解析度。各模式均支援「✨ AI 提示詞優化」重寫最佳指令。</div>
                     </div>
 
-                    {/* 局部重繪與手繪編輯 */}
+                    {/* 筆刷局部重繪 */}
                     <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
-                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 局部重繪與手繪編輯</h4>
+                      <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 筆刷局部重繪</h4>
                       <p className="text-[11px] text-gray-700 leading-relaxed mb-2">支援雙模式切換，整合 AI 智慧填充與經典數位繪圖工具：</p>
                       <div className="grid grid-cols-2 gap-1.5 mb-2">
                         {[
@@ -1180,7 +1180,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         </div>
                         <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
                           <p className="text-[10px] text-blue-700 leading-relaxed">
-                            <span className="font-bold">🎨 局部重繪 / 圖片編輯：</span>設定 Atlas Cloud Key 後，自動升級為 <span className="font-bold">GPT Image 2 Edit</span>（OpenAI 原生 inpainting 模型，透明遮罩精準填充）。未設定 Atlas Key 時，使用 <span className="font-bold">Gemini</span> 作為預設引擎。
+                            <span className="font-bold">🎨 筆刷局部重繪：</span>設定 Atlas Cloud Key 後，自動升級為 <span className="font-bold">GPT Image 2 Edit</span>（OpenAI 原生 inpainting 模型，透明遮罩精準填充）。未設定 Atlas Key 時，使用 <span className="font-bold">Gemini</span> 作為預設引擎。
                           </p>
                         </div>
                       </div>

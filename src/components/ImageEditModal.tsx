@@ -5,7 +5,7 @@ import type { ImageElement, Point } from '../types';
 import { callGeminiWithRetry, analyzeDominantColor, loadImage } from '../utils/helpers';
 import { Icon } from './Icon';
 import { rgbToHsl, hslToRgb, compositeImagesPixelPerfect, createPrefilledImage } from '../utils/imageProcessing';
-import { callAtlasImg2Img, callAtlasInpaint } from '../utils/atlasImage';
+import { callAtlasImg2Img, callAtlasInpaint, compressForAtlas, gptSizeForImage } from '../utils/atlasImage';
 import { getModelStatus } from '../utils/onnxModelCache';
 import { runLamaInWorker, warmUpLamaWorker, getLamaBackend } from '../utils/lamaWorkerClient';
 import { runUpscaleInWorker } from '../utils/upscaleWorkerClient';
@@ -30,9 +30,12 @@ interface GenerationContext {
   maskDataUrl: string;
   prompt: string;
   type: 'remove' | 'edit';
+  referenceIntent: ReferenceIntent;
 }
 
-export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-3.1-flash-image', atlasKey, canvasImages = [] }) => {
+type ReferenceIntent = 'subject' | 'style' | 'background';
+
+export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-3.1-flash-image', atlasKey }) => {
   const imageRef = useRef<HTMLImageElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -98,7 +101,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
 
   // Reference images (max 3)
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
-  const [showCanvasPicker, setShowCanvasPicker] = useState(false);
+  const [referenceIntent, setReferenceIntent] = useState<ReferenceIntent>('subject');
   const refFileInputRef = useRef<HTMLInputElement>(null);
 
   // Inpaint engine selector
@@ -1204,12 +1207,29 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       if (atlasKey && inpaintEngine === 'gpt') {
         // 先用 Gemini Flash Lite 分析周圍環境，幫助 GPT Image 2 更好融合
         const surroundingContext = await analyzeSurroundingContext(context.baseImageSrc, bwMaskBase64Url);
+        const outputSize = await gptSizeForImage(context.baseImageSrc);
 
+        const referenceIntentPrompt: Record<ReferenceIntent, string> = {
+          subject: 'Use the reference image(s) only as visual evidence for the subject or object that belongs inside the selected region. Preserve its recognizable identity, shape, materials, colors, and important details, but do not copy the reference background, framing, text, or unrelated objects.',
+          style: 'Use the reference image(s) only for style, material, texture, and color cues inside the selected region. Keep the original subject and structure from the target image; do not transplant subjects, backgrounds, layout, or text from the references.',
+          background: 'Use the reference image(s) only as background or environment guidance for the selected region. Extend or reconstruct compatible scenery, surfaces, and lighting; do not import foreground subjects, layout, or text from the references.',
+        };
+        const userInstruction = context.prompt.trim();
         const fluxPrompt = context.type === 'remove'
           ? (context.prompt?.trim()
               ? `Remove the selected object. Background hint: ${context.prompt}. Seamlessly fill with natural background.`
               : 'Remove the selected object. Seamlessly reconstruct the background with natural texture and lighting.')
-          : context.prompt;
+          : referenceImages.length > 0
+            ? `${referenceIntentPrompt[context.referenceIntent]} ${
+                userInstruction
+                  ? `The user's edit instruction is authoritative: "${userInstruction}".`
+                  : context.referenceIntent === 'subject'
+                    ? 'Default edit: place the principal subject or object from the first reference image naturally inside the selected region. Treat additional references only as supporting visual evidence for the same result; never create a collage.'
+                    : context.referenceIntent === 'style'
+                      ? 'Default edit: apply the references’ style, material, texture, and color treatment only to the existing content inside the selected region.'
+                      : 'Default edit: reconstruct the selected region using the references as environment and background guidance.'
+              } Keep every visible part outside the selected region, including faces, pose, composition, and text, as unchanged as possible.`
+            : userInstruction;
 
         const generatedBase64 = await callAtlasInpaint(
           fluxPrompt,
@@ -1219,8 +1239,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
           referenceImages.length > 0 ? referenceImages : undefined,
           surroundingContext || undefined,
           undefined,
-          undefined,
-          activeSeed
+          outputSize,
         );
 
         // GPT Image 2 Edit 原生支援透明遮罩 inpainting，
@@ -1278,6 +1297,13 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
 - IMAGE 1: The original photo to edit.
 - IMAGE 2: A black-and-white mask. WHITE = the primary region to change. BLACK = keep the scene essentially the same — only very subtle, low-magnitude adjustments are allowed there (e.g. minor lighting/color/grain consistency with the edited region), never a different subject or composition change.`;
 
+      const fallbackEditInstruction = context.referenceIntent === 'subject'
+        ? 'Place the principal subject or object from the first reference image naturally inside the WHITE region.'
+        : context.referenceIntent === 'style'
+          ? 'Apply the reference images’ style, material, texture, and color treatment to the existing content inside the WHITE region.'
+          : 'Reconstruct the WHITE region using the reference images as background and environment guidance.';
+      const requestedEdit = context.prompt.trim() || fallbackEditInstruction;
+
       let textPrompt = '';
       if (context.type === 'remove') {
         const userHint = context.prompt?.trim()
@@ -1299,7 +1325,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
 TASK: GENERATIVE EDITING
 
 Step 1 – Identify: Use IMAGE 2 to locate the WHITE masked region in IMAGE 1.
-Step 2 – Edit: Within that region, apply this change: ${context.prompt}.
+Step 2 – Edit: Within that region, apply this change: ${requestedEdit}
 Step 3 – Integrate: Match the surrounding image's lighting direction, color temperature, perspective, and texture so the edit feels native to the photo.
 
 Render the full image. Outside the white mask, keep everything as close to IMAGE 1 as possible — only allow minor, low-magnitude adjustments needed for a seamless, natural result.`.trim();
@@ -1311,8 +1337,13 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
         const refMime = refHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
         return { inlineData: { data: refData, mimeType: refMime } };
       });
+      const geminiReferenceHint: Record<ReferenceIntent, string> = {
+        subject: 'The images after IMAGE 2 are visual references for the subject or object only. Use their identity, shape, materials, colors, and relevant details inside the WHITE region. Do not copy their backgrounds, framing, text, or unrelated objects.',
+        style: 'The images after IMAGE 2 are style references only. Transfer their style, material, texture, and color cues to the existing content inside the WHITE region. Do not import their subjects, backgrounds, composition, or text.',
+        background: 'The images after IMAGE 2 are background/environment references only. Use their scenery, surface, palette, and lighting cues to reconstruct the WHITE region. Do not import foreground subjects, composition, or text.',
+      };
       const refHint = referenceImages.length > 0
-        ? `\n\nReference images are provided after the mask image. Use them to fill the WHITE masked region: if they show a specific object or subject, place it naturally into the scene; if they show a style, texture, or aesthetic, apply that to the fill. In either case, adapt lighting, shadows, color temperature, and perspective to seamlessly match the surrounding image.`
+        ? `\n\n${geminiReferenceHint[context.referenceIntent]} The user's written instruction has priority over all reference images. Additional references support the same edit and must not be combined as a collage. Adapt scale, perspective, lighting, shadows, color temperature, and grain to the surrounding target image.`
         : '';
 
       const response = await callGeminiWithRetry(() => ai.models.generateContent({
@@ -1390,6 +1421,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
         maskDataUrl: maskCanvas.toDataURL(),
         prompt: prompt,
         type,
+        referenceIntent,
       };
       setGenerationContext(newContext);
       await runGeneration(newContext);
@@ -1474,7 +1506,9 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
   const dotSizeMap: Record<number, string> = { 10: 'w-1.5 h-1.5', 20: 'w-2.5 h-2.5', 40: 'w-3.5 h-3.5', 60: 'w-[18px] h-[18px]' };
 
   return (
-    <div className="fixed inset-0 z-[7000] bg-[#F5F5F7]/90 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
+    // 防呆：不綁背景點擊關閉。生成的結果（previewImageSrc）只有按「套用」才會存進畫布，
+    // 誤點背景會直接丟棄尚未儲存的生成結果；改成只能按右上角 × 明確退出。
+    <div className="fixed inset-0 z-[7000] bg-[#F5F5F7]/90 backdrop-blur-sm flex items-center justify-center p-6">
       {/* Custom slider CSS */}
       <style>{`
         .img-editor-slider { -webkit-appearance:none; appearance:none; width:100%; height:4px; background:#e2e8f0; border-radius:2px; outline:none; margin:12px 0; cursor:pointer; }
@@ -1497,7 +1531,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
         {/* ── Header ── */}
         <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100 bg-white flex-shrink-0">
           <div className="flex items-center gap-3">
-            <h1 className="text-[16px] font-bold text-gray-900">局部重繪與圖片編輯</h1>
+            <h1 className="text-[16px] font-bold text-gray-900">筆刷局部重繪</h1>
 
             {/* Mode Tab Switcher */}
             <div className="flex bg-gray-100 p-0.5 rounded-lg ml-4 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] border border-gray-200">
@@ -1541,9 +1575,9 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                     }}
                     className="appearance-none bg-transparent py-1 pl-2 pr-6 text-[11px] font-bold text-purple-600 focus:outline-none cursor-pointer"
                   >
-                    {atlasKey && <option value="gpt">GPT Image 2</option>}
+                    {atlasKey && <option value="gpt">GPT Image 2（建議）</option>}
                     {atlasKey && <option value="seedream-v5-pro">即夢 Seedream 5.0 Pro</option>}
-                    <option value="gemini" disabled={!apiKey}>Gemini{!apiKey ? ' (需 Key)' : ''}</option>
+                    <option value="gemini" disabled={!apiKey}>Gemini（相容模式）{!apiKey ? ' (需 Key)' : ''}</option>
                   </select>
                   <svg className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                 </div>
@@ -1803,7 +1837,11 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                     }}
                     placeholder={
                       referenceImages.length > 0
-                        ? '✨ 已有參考圖，可額外補充描述（選填）...'
+                        ? referenceIntent === 'subject'
+                          ? '✨ 例如：把遮罩區換成參考圖 1 的紅色外套，保留人物臉、姿勢與背景...'
+                          : referenceIntent === 'style'
+                            ? '✨ 例如：只讓遮罩區套用參考圖的金屬材質，保留原本形狀...'
+                            : '✨ 例如：用參考圖的木質牆面補滿遮罩區，匹配原圖光線...'
                         : pendingAction === 'remove'
                         ? '✨ 描述移除後希望填補的背景內容（選填）...'
                         : '✨ 輸入描述，或上傳參考圖指定替換物件，再點選右側按鈕...'
@@ -1820,6 +1858,9 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                     {referenceImages.map((src, idx) => (
                       <div key={idx} className="relative w-9 h-9 flex-shrink-0 rounded-lg overflow-hidden border border-gray-200 group">
                         <img src={src} alt={`參考圖 ${idx + 1}`} className="w-full h-full object-cover" />
+                        <span className="absolute left-0.5 top-0.5 min-w-4 h-4 px-1 rounded bg-black/70 text-white text-[9px] font-bold flex items-center justify-center pointer-events-none">
+                          {idx + 1}
+                        </span>
                         <button
                           onClick={() => setReferenceImages(prev => prev.filter((_, i) => i !== idx))}
                           className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold"
@@ -1828,34 +1869,50 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                       </div>
                     ))}
 
-                    {/* Add buttons */}
+                    {/* Add button（參考圖僅限上傳；「從畫布」入口已移除——畫布圖多時挑選/壓縮會卡） */}
                     {referenceImages.length < MAX_REFERENCE_IMAGES && (
-                      <>
-                        <button
-                          onClick={() => refFileInputRef.current?.click()}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 transition-colors"
-                        >
-                          <Icon name="upload" size={13} />
-                          上傳
-                        </button>
-                        {canvasImages.filter(img => img.id !== element.id).length > 0 && (
-                          <button
-                            onClick={() => setShowCanvasPicker(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 transition-colors"
-                          >
-                            <Icon name="image" size={13} />
-                            從畫布
-                          </button>
-                        )}
-                      </>
+                      <button
+                        onClick={() => refFileInputRef.current?.click()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 transition-colors"
+                      >
+                        <Icon name="upload" size={13} />
+                        上傳
+                      </button>
                     )}
 
                     <span className="text-[11px] text-gray-400 ml-1 hidden lg:inline">
                       {referenceImages.length > 0
-                        ? `${referenceImages.length}/${MAX_REFERENCE_IMAGES} 張・AI 將把遮罩區替換成參考圖的物件或風格`
+                        ? `${referenceImages.length}/${MAX_REFERENCE_IMAGES} 張・參考圖只會用於遮罩區`
                         : '可上傳參考圖，讓 AI 將遮罩區替換成指定物件或套用風格'}
                     </span>
                   </div>
+
+                  {referenceImages.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap border-t border-gray-50 pt-2.5">
+                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex-shrink-0">參考用途</span>
+                      {([
+                        ['subject', '物件／外觀'],
+                        ['style', '風格／材質'],
+                        ['background', '背景／修補'],
+                      ] as const).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setReferenceIntent(value)}
+                          className={`px-2.5 py-1 rounded-md border text-[11px] font-bold transition-colors ${
+                            referenceIntent === value
+                              ? 'bg-purple-50 border-purple-200 text-purple-700'
+                              : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      <span className="text-[10.5px] text-gray-400">
+                        請在提示詞寫清楚要取用參考圖的哪個內容，避免 AI 自行猜測。
+                      </span>
+                    </div>
+                  )}
 
                   {/* Seed control row */}
                   <div className="flex items-center gap-2 flex-wrap border-t border-gray-50 pt-2.5">
@@ -1977,10 +2034,22 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                   onChange={e => {
                     const files = Array.from(e.target.files ?? []).slice(0, MAX_REFERENCE_IMAGES - referenceImages.length);
                     files.forEach((file: File) => {
+                      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+                        alert(`不支援「${file.name}」的圖片格式，請使用 JPG、PNG 或 WebP。`);
+                        return;
+                      }
                       const reader = new FileReader();
-                      reader.onload = ev => {
+                      reader.onload = async ev => {
                         const src = ev.target?.result as string;
-                        if (src) setReferenceImages(prev => [...prev, src].slice(0, MAX_REFERENCE_IMAGES));
+                        if (!src) return;
+                        // GPT Image 2 Edit 僅接受 JPG / PNG；WebP 在前端轉成 JPG，
+                        // 同時限制尺寸，避免加上原圖與遮罩後超過 Atlas 請求大小。
+                        const prepared = await compressForAtlas(src, 1536, 0.9, false, true);
+                        if (!/^data:image\/(?:jpeg|png);base64,/.test(prepared)) {
+                          alert(`無法讀取「${file.name}」，請先轉成 JPG 或 PNG 後再試。`);
+                          return;
+                        }
+                        setReferenceImages(prev => [...prev, prepared].slice(0, MAX_REFERENCE_IMAGES));
                       };
                       reader.readAsDataURL(file);
                     });
@@ -2319,54 +2388,6 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
         </div>
       </div>
 
-      {/* Canvas image picker */}
-      {showCanvasPicker && (
-        <div className="fixed inset-0 z-[7001] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setShowCanvasPicker(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 w-[480px] max-h-[60vh] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between flex-shrink-0">
-              <div>
-                <p className="text-sm font-bold text-[#1D1D1F]">從畫布選取參考圖</p>
-                <p className="text-xs text-[#86868B] mt-0.5">最多可再選 {MAX_REFERENCE_IMAGES - referenceImages.length} 張</p>
-              </div>
-              <button onClick={() => setShowCanvasPicker(false)} className="text-[#86868B] hover:text-[#1D1D1F] text-xl leading-none transition-colors">&times;</button>
-            </div>
-            <div className="overflow-y-auto grid grid-cols-4 gap-3">
-              {canvasImages.filter(img => img.id !== element.id).map(img => {
-                const alreadySelected = referenceImages.includes(img.src);
-                const canSelect = !alreadySelected && referenceImages.length < MAX_REFERENCE_IMAGES;
-                return (
-                  <button
-                    key={img.id}
-                    disabled={!canSelect && !alreadySelected}
-                    onClick={() => {
-                      if (alreadySelected) setReferenceImages(prev => prev.filter(s => s !== img.src));
-                      else if (canSelect) setReferenceImages(prev => [...prev, img.src]);
-                    }}
-                    className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
-                      alreadySelected ? 'border-[#AF52DE] ring-2 ring-[#AF52DE]/30'
-                        : canSelect ? 'border-transparent hover:border-gray-300'
-                        : 'border-transparent opacity-40 cursor-not-allowed'
-                    }`}
-                  >
-                    <img src={img.src} alt={img.name || '圖片'} className="w-full h-full object-cover" />
-                    {alreadySelected && (
-                      <div className="absolute inset-0 bg-[#AF52DE]/20 flex items-center justify-center">
-                        <div className="w-6 h-6 rounded-full bg-[#AF52DE] text-white flex items-center justify-center text-xs font-bold">✓</div>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              onClick={() => setShowCanvasPicker(false)}
-              className="flex-shrink-0 w-full py-2.5 text-sm font-semibold text-white bg-black hover:bg-gray-800 rounded-full transition-all"
-            >
-              確認 ({referenceImages.length} 張已選)
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
