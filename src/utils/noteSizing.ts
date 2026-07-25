@@ -5,7 +5,9 @@ const NOTE_LINE_HEIGHT = 1.6;
 const NOTE_HORIZONTAL_PADDING = 24;
 const NOTE_VERTICAL_PADDING = 16;
 const NOTE_GALLERY_BOTTOM_PADDING = 121;
-const NOTE_MIN_HEIGHT = 140;
+// 自動高度要能真的「貼合內容」，最小高度只需容納一行文字 + 上下內距，
+// 太大的下限會讓短文字便利貼永遠停在同一尺寸，感覺不出與「固定尺寸」的差異。
+const NOTE_MIN_HEIGHT = 64;
 const NOTE_MAX_HEIGHT = 1200;
 
 /**

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { modelSupportsSeed } from '../utils/atlasImage';
 import {
   LOGO_DEFAULT_CONFIG, LOGO_BRAND_OUTPUTS, type LogoSkillConfig,
 } from '../skills/logo';
@@ -408,7 +409,8 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
           </button>
         </div>
 
-        {/* 進階風格控制 (Seed) */}
+        {/* 進階風格控制 (Seed)：不支援 seed 的模型（GPT Image 2）不顯示，避免設了無效 */}
+        {modelSupportsSeed(model) && (
         <div className="mb-4 pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide">進階風格控制 (Seed)</span>
@@ -440,6 +442,7 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
             </div>
           )}
         </div>
+        )}
 
         {/* 按鈕 */}
         {(() => {

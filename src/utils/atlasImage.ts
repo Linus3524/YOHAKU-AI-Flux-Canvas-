@@ -113,6 +113,7 @@ interface ModelConfig {
     useSeedreamProSizes?: boolean; // true = 使用 SEEDREAM_PRO_SIZES（* 分隔，總畫素 ≤2K）
     supportsBase64Output?: boolean; // 支援 enable_base64_output
     supportsQualityParam?: boolean; // 支援 quality: low/medium/high（GPT Image 2）
+    supportsSeed?: boolean;         // 支援 seed 種子碼（OpenAI gpt-image 系列不支援）
     extraParams?: Record<string, unknown>; // 固定附加參數
     // 圖生圖
     img2imgId?: string;
@@ -136,6 +137,7 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         img2imgImageIsArray: true,
     },
     'seedream-v4.5': {
+        supportsSeed: true,
         id: 'bytedance/seedream-v4.5',
         useInputWrapper: false,
         sizeParam: 'size',
@@ -146,6 +148,7 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         img2imgImageIsArray: true,
     },
     'seedream-v5': {
+        supportsSeed: true,
         id: 'bytedance/seedream-v5.0-lite',
         useInputWrapper: false,
         sizeParam: 'size',
@@ -157,6 +160,7 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         img2imgImageIsArray: true,
     },
     'seedream-v5-pro': {
+        supportsSeed: true,
         id: 'bytedance/seedream-v5.0-pro/text-to-image',
         useInputWrapper: false,
         sizeParam: 'size',
@@ -168,6 +172,7 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         img2imgImageIsArray: true,
     },
     'qwen-image-2': {
+        supportsSeed: true,
         id: 'qwen/qwen-image-2.0/text-to-image',
         useInputWrapper: false,
         sizeParam: 'size',
@@ -179,6 +184,7 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         img2imgImageIsArray: true,
     },
     'flux-2-pro': {
+        supportsSeed: true,
         id: 'black-forest-labs/flux-2-pro/text-to-image',
         useInputWrapper: false,
         sizeParam: 'size',
@@ -275,6 +281,8 @@ async function pollPrediction(
     signal?: AbortSignal,
 ): Promise<string[]> {
     const startTime = Date.now();
+    const MAX_CONSECUTIVE_POLL_FAILURES = 5;
+    let consecutiveFailures = 0;
 
     while (Date.now() - startTime < MAX_WAIT_MS) {
         // AbortSignal 已觸發 → 立即中止輪詢
@@ -284,12 +292,33 @@ async function pollPrediction(
 
         if (signal?.aborted) throw new Error('使用者取消操作');
 
-        const res = await fetch(`${ATLAS_BASE_URL}/model/result/${predictionId}`, {
-            headers: { Authorization: `Bearer ${atlasKey}` },
-            signal,   // fetch 本身也帶 signal，abort 後 fetch 立即拋錯
-        });
+        // 輪詢期間的單次抖動（暫時性 5xx、網路不穩）不應讓整張圖報廢——
+        // 雲端那邊多半仍在正常生成。累計連續失敗達上限才判定失敗。
+        let res: Response;
+        try {
+            res = await fetch(`${ATLAS_BASE_URL}/model/result/${predictionId}`, {
+                headers: { Authorization: `Bearer ${atlasKey}` },
+                signal,   // fetch 本身也帶 signal，abort 後 fetch 立即拋錯
+            });
+        } catch (e) {
+            if (signal?.aborted) throw e;   // 使用者取消不算失敗重試
+            consecutiveFailures++;
+            if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                throw new Error(`Atlas 輪詢連續失敗 ${consecutiveFailures} 次：${e instanceof Error ? e.message : String(e)}`);
+            }
+            continue;
+        }
 
-        if (!res.ok) throw new Error(`Atlas poll error: ${res.status}`);
+        if (!res.ok) {
+            consecutiveFailures++;
+            // 401/403 等金鑰問題重試無用，直接中止
+            if (!isRetryableStatus(res.status) || consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                throw new Error(`Atlas poll error: ${res.status}`);
+            }
+            continue;
+        }
+
+        consecutiveFailures = 0;   // 成功一次就重置
 
         const json: AtlasApiResponse = await res.json();
         const pred = json.data ?? (json as unknown as AtlasPredictionData);
@@ -344,25 +373,49 @@ async function pollPrediction(
     throw new Error('Atlas 生成逾時（單張超過 10 分鐘），請稍後再試');
 }
 
-async function postGeneration(body: Record<string, unknown>, atlasKey: string): Promise<string> {
-    const res = await fetch(`${ATLAS_BASE_URL}/model/generateImage`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${atlasKey}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-    });
+/** 429 限流與 5xx 屬雲端暫時性錯誤，值得重試；4xx（參數/金鑰錯誤）重試無意義。 */
+const isRetryableStatus = (status: number) => status === 429 || status >= 500;
 
-    if (!res.ok) {
+async function postGeneration(body: Record<string, unknown>, atlasKey: string): Promise<string> {
+    const MAX_ATTEMPTS = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        let res: Response;
+        try {
+            res = await fetch(`${ATLAS_BASE_URL}/model/generateImage`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${atlasKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+            });
+        } catch (e) {
+            // 網路層失敗（斷線、DNS、CORS 前的連線錯誤）→ 可重試
+            lastError = e instanceof Error ? e : new Error(String(e));
+            if (attempt < MAX_ATTEMPTS) {
+                await new Promise(r => setTimeout(r, 1000 * attempt)); // 線性退避 1s, 2s
+                continue;
+            }
+            throw lastError;
+        }
+
+        if (res.ok) {
+            const json: AtlasApiResponse = await res.json();
+            const predId = json.data?.id ?? json.id;
+            if (!predId) throw new Error(`Atlas 未回傳 prediction ID，回應：${JSON.stringify(json)}`);
+            return predId;
+        }
+
         const errText = await res.text();
-        throw new Error(`Atlas 請求失敗 (${res.status}): ${errText}`);
+        lastError = new Error(`Atlas 請求失敗 (${res.status}): ${errText}`);
+        // 參數或金鑰問題重試也不會過，直接拋出讓使用者看到真正原因
+        if (!isRetryableStatus(res.status) || attempt === MAX_ATTEMPTS) throw lastError;
+        await new Promise(r => setTimeout(r, 1000 * attempt));
     }
 
-    const json: AtlasApiResponse = await res.json();
-    const predId = json.data?.id ?? json.id;
-    if (!predId) throw new Error(`Atlas 未回傳 prediction ID，回應：${JSON.stringify(json)}`);
-    return predId;
+    throw lastError ?? new Error('Atlas 請求失敗');
 }
 
 // ── 文生圖 ─────────────────────────────────────────────
@@ -394,7 +447,8 @@ function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOp
     if (options?.outputFormat) {
         extra['output_format'] = options.outputFormat;
     }
-    if (options?.seed !== undefined) {
+    // 僅支援 seed 的模型才送；OpenAI gpt-image 系列沒有此參數，送了是多餘欄位。
+    if (options?.seed !== undefined && config.supportsSeed) {
         extra['seed'] = options.seed;
     }
     return config.useInputWrapper
@@ -461,7 +515,8 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
     if (options?.outputFormat) {
         extra['output_format'] = options.outputFormat;
     }
-    if (options?.seed !== undefined) {
+    // 僅支援 seed 的模型才送；OpenAI gpt-image 系列沒有此參數，送了是多餘欄位。
+    if (options?.seed !== undefined && config.supportsSeed) {
         extra['seed'] = options.seed;
     }
     return config.img2imgUseInputWrapper
@@ -541,6 +596,16 @@ export async function compressForAtlas(
 /** 某模型是否支援圖生圖 */
 export function atlasModelSupportsImg2Img(model: AtlasGenerationModel): boolean {
     return !!MODEL_CONFIGS[model].img2imgId;
+}
+
+/**
+ * 該模型是否支援 seed 種子碼。UI 應據此隱藏 Seed 選項，
+ * 避免使用者設定了卻無效（OpenAI gpt-image 系列不支援）。
+ * 非 Atlas 模型（如 'gemini'）走各自 SDK，一律視為支援。
+ */
+export function modelSupportsSeed(model: string): boolean {
+    const config = MODEL_CONFIGS[model as AtlasGenerationModel];
+    return config ? !!config.supportsSeed : true;
 }
 
 /** 圖生圖：主參考圖 + 可選的便利貼附加參考圖，回傳生成結果 base64 陣列 */

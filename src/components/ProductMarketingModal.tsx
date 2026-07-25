@@ -1,3 +1,4 @@
+import { modelSupportsSeed } from '../utils/atlasImage';
 import React, { useState, useEffect } from 'react';
 import {
   PRODUCT_MARKETING_PLATFORMS,
@@ -231,7 +232,8 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
                 </div>
               </label>
 
-              {lockStyleConsistency && (
+              {/* 不支援 seed 的模型（GPT Image 2）不顯示種子碼設定，避免設了無效 */}
+              {lockStyleConsistency && modelSupportsSeed(model) && (
                 <div className="pt-2 border-t border-purple-100/50 mt-1 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-gray-500">自訂風格種子碼 (Seed)</span>

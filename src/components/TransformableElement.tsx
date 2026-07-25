@@ -1322,8 +1322,8 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                 onUpdate({ ...el, content });
                                                 return;
                                             }
-                                            const measuredHeight = measureAutoNoteHeight({ ...el, content });
-                                            const nextHeight = Math.max(el.height, measuredHeight);
+                                            // 自動高度＝完全貼合內容：打字即時增高、刪字即時收合
+                                            const nextHeight = measureAutoNoteHeight({ ...el, content });
                                             onUpdate({
                                                 ...el,
                                                 content,

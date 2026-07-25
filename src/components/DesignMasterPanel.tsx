@@ -1,4 +1,5 @@
 // 設計大師面板 — 更加精緻的 iOS/macOS 玻璃質感介面，解決多重滾動條與按鈕沉重感
+import { modelSupportsSeed } from '../utils/atlasImage';
 import React, { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { STYLE_PRESETS } from '../utils/helpers';
@@ -1697,7 +1698,8 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                 </div>
               );
             })}
-          {/* 進階選項 (Seed 設定) */}
+          {/* 進階選項 (Seed 設定)：不支援 seed 的模型（GPT Image 2）不顯示，避免設了無效 */}
+          {modelSupportsSeed(model) && (
           <div className="mt-6 pt-5 border-t border-gray-100/80 pb-2">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-1.5">
@@ -1741,6 +1743,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
               固定 Seed 能讓您在微調 Prompt 提示詞時，維持生成人物長相、背景架構與視覺風格的一致性。
             </p>
           </div>
+          )}
 
           </div>
 

@@ -123,8 +123,8 @@ export const GeneratedResultsModal = ({
         })}
       </div>
 
-      {/* 底部提示 */}
-      <p className="text-center text-[11px] text-[#AEAEB2] mt-5">點擊視窗外部區域可關閉</p>
+      {/* 底部提示：背景點擊已停用（避免尚未存圖就誤觸關閉），只能按右上角 × 關閉 */}
+      <p className="text-center text-[11px] text-[#AEAEB2] mt-5">請先儲存需要的圖片，完成後按右上角 ✕ 關閉</p>
     </div>
   </div>
 );

@@ -3,7 +3,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import type { Point, ElementType } from '../types';
 import { COLORS } from '../utils/helpers';
 import { Icon } from './Icon';
-import { SaveAll, PencilRuler, SquareBottomDashedScissors, SwatchBook } from 'lucide-react';
+import { SaveAll, PencilRuler, SquareBottomDashedScissors, SwatchBook, UnfoldVertical, RectangleHorizontal } from 'lucide-react';
 
 interface ContextMenuData {
     x: number;
@@ -328,7 +328,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                              <>
                                 {actions.setNoteSizeMode && (
                                     <MenuItem
-                                        icon={<Icon name={(selectedElement?.sizeMode ?? 'auto-height') === 'auto-height' ? 'height' : 'aspect_ratio'} size={14} />}
+                                        icon={(selectedElement?.sizeMode ?? 'auto-height') === 'auto-height'
+                                            ? <UnfoldVertical size={14} strokeWidth={1.75} style={{ display: 'block' }} />
+                                            : <RectangleHorizontal size={14} strokeWidth={1.75} style={{ display: 'block' }} />}
                                         onClick={() => handleAction(() => actions.setNoteSizeMode!(
                                             menuData.elementId!,
                                             (selectedElement?.sizeMode ?? 'auto-height') === 'auto-height' ? 'fixed' : 'auto-height',

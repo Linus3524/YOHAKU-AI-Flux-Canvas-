@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { modelSupportsSeed } from '../utils/atlasImage';
 import { CROSS_PLATFORM_SPECS, crossPlatformRatioForModel } from '../skills/crossPlatform';
 
 const MODEL_OPTIONS: { id: string; label: string; badge: string; needsAtlas: boolean }[] = [
@@ -222,7 +223,8 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
           </label>
         </div>
 
-        {/* 進階風格控制 (Seed) */}
+        {/* 進階風格控制 (Seed)：不支援 seed 的模型（GPT Image 2）不顯示，避免設了無效 */}
+        {modelSupportsSeed(model) && (
         <div className="mb-4 pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-[#86868B] uppercase tracking-wide">進階風格控制 (Seed)</span>
@@ -254,6 +256,7 @@ export const CrossPlatformModal: React.FC<CrossPlatformModalProps> = ({ imageNam
             </div>
           )}
         </div>
+        )}
 
         <div className="flex gap-2">
           <button onClick={onClose}
