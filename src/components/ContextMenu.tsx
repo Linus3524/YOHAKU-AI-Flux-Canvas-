@@ -39,6 +39,9 @@ interface ContextMenuProps {
     exportArtboard: (elementId: string) => void;
     copyStyle: (elementId: string) => void;
     pasteStyle: (elementIds: string[]) => void;
+    /** 文字格式複製／貼上（字體、字級、粗細、描邊、陰影…），與上方圖片 AI 風格無關 */
+    copyTextStyle: (elementId: string) => void;
+    pasteTextStyle: (elementIds: string[]) => void;
     exportCanvas: () => void;
     importCanvas: () => void;
     saveFile?: () => void;
@@ -76,6 +79,7 @@ interface ContextMenuProps {
   canChangeColor: boolean;
   elementType: ElementType | null;
   hasCopiedStyle: boolean;
+  hasCopiedTextStyle: boolean;
   // State props
   selectionCount: number;
   selectedElementIds: string[];
@@ -169,6 +173,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     canChangeColor,
     elementType,
     hasCopiedStyle,
+    hasCopiedTextStyle,
     selectionCount,
     selectedElementIds,
     isGrouped,
@@ -318,9 +323,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                         </div>
                         <div className="border-t my-0.5 border-gray-100/50" />
 
-                        {(elementType === 'note' || elementType === 'text') && (
+                        {/* 便利貼專用：AI 提示詞相關功能（文字物件不適用，故不顯示） */}
+                        {elementType === 'note' && (
                              <>
-                                {elementType === 'note' && actions.setNoteSizeMode && (
+                                {actions.setNoteSizeMode && (
                                     <MenuItem
                                         icon={<Icon name={(selectedElement?.sizeMode ?? 'auto-height') === 'auto-height' ? 'height' : 'aspect_ratio'} size={14} />}
                                         onClick={() => handleAction(() => actions.setNoteSizeMode!(
@@ -342,17 +348,28 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                 <MenuItem icon={<MenuIcons.Design />} onClick={() => handleAction(() => actions.designMaster(menuData.elementId!))}>
                                     設計大師
                                 </MenuItem>
-                                {elementType === 'note' && (
-                                    <MenuItem icon={<MenuIcons.NodeWorkflow />} onClick={() => handleAction(() => actions.createNodeWorkflow(menuData.elementId!))}>
-                                        建立節點工作流
-                                    </MenuItem>
-                                )}
+                                <MenuItem icon={<MenuIcons.NodeWorkflow />} onClick={() => handleAction(() => actions.createNodeWorkflow(menuData.elementId!))}>
+                                    建立節點工作流
+                                </MenuItem>
                                 <div className="border-t my-0.5 border-gray-100/50" />
                             </>
                         )}
 
                         {elementType === 'text' && (
                              <>
+                                <MenuItem icon={<MenuIcons.CopyStyle />} onClick={() => handleAction(() => actions.copyTextStyle(menuData.elementId!))}>
+                                    複製文字樣式
+                                </MenuItem>
+                                <MenuItem
+                                    icon={<MenuIcons.Paste />}
+                                    onClick={() => handleAction(() => actions.pasteTextStyle(
+                                        selectedElementIds.length > 1 ? selectedElementIds : [menuData.elementId!]
+                                    ))}
+                                    disabled={!hasCopiedTextStyle}
+                                >
+                                    貼上文字樣式
+                                </MenuItem>
+                                <div className="border-t my-0.5 border-gray-100/50" />
                                 <MenuItem icon={<MenuIcons.Rasterize />} onClick={() => handleAction(() => actions.rasterizeText(menuData.elementId!))}>
                                     轉換為圖片 (Rasterize)
                                 </MenuItem>

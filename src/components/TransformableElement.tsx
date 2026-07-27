@@ -549,6 +549,10 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
   }, [
       element.type === 'text' ? element.text : null,
       element.type === 'text' ? element.fontSize : null,
+      // 字體與粗斜體同樣影響文字量測（如貼上樣式只換字體、字級不變時需重排）
+      element.type === 'text' ? element.fontFamily : null,
+      element.type === 'text' ? element.isBold : null,
+      element.type === 'text' ? element.isItalic : null,
       element.type === 'text' ? element.lineHeight : null,
       element.type === 'text' ? element.letterSpacing : null,
       element.type === 'text' ? element.strokeWidth : null,

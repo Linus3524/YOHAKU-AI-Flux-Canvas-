@@ -126,6 +126,22 @@ export interface TextElement extends BaseElement {
   isHeightLocked?: boolean;
 }
 
+/**
+ * 文字樣式（格式）快照的欄位清單 —— 複製／貼上樣式的單一真實來源。
+ * 只含「外觀」，不含文字內容與版面狀態（位置、尺寸、isWidthLocked 等），
+ * 這樣貼上樣式時文字框會由既有的自動重排 effect 依新字體/字級重新量測。
+ */
+export const TEXT_STYLE_KEYS = [
+  'fontFamily', 'fontSize', 'color', 'align', 'letterSpacing', 'lineHeight',
+  'isBold', 'isItalic', 'isUnderline',
+  'strokeColor', 'strokeWidth', 'backgroundColor',
+  'shadowColor', 'shadowBlur', 'glowColor', 'glowBlur',
+  'writingMode', 'curveStrength',
+] as const satisfies readonly (keyof TextElement)[];
+
+/** 可複製／貼上的文字樣式快照。 */
+export type TextStyleSnapshot = Partial<Pick<TextElement, typeof TEXT_STYLE_KEYS[number]>>;
+
 export type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'pentagon' | 'hexagon' | 'star' | 'heart' | 'rounded_rect'
     | 'diamond' | 'octagon' | 'cloud' | 'cross' | 'trapezoid' | 'parallelogram'
     | 'arrow_right' | 'arrow_left' | 'arrow_up' | 'arrow_down';

@@ -48,8 +48,9 @@ import { NodeWorkflowOverlay } from './components/NodeWorkflow/NodeWorkflowOverl
 import { useNodeGraphStore } from './store/nodeGraphStore';
 import { detectBackgroundColor, repairStickerTransparency, flattenBackgroundToColor } from './utils/imageProcessing';
 import type {
-    DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement, NodeGroupElement
+    DrawingElement, ImageElement, TextElement, ShapeElement, Point, ShapeType, ArrowElement, FrameElement, NoteElement, CanvasElement, ArtboardElement, NodeGroupElement, TextStyleSnapshot
 } from './types';
+import { TEXT_STYLE_KEYS } from './types';
 import type { NodeGraphData } from './components/NodeWorkflow/types';
 import { analyzeMagicLayerPlan, type MagicLayerModel, type MagicLayerOptions } from './utils/gptLayerSplit';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
@@ -400,6 +401,40 @@ const App: React.FC = () => {
           });
       }
   }, [originalUpdateElements, outpaintingState, setOutpaintingState]);
+
+  // --- 文字樣式（格式）複製／貼上 ---
+  // 只搬外觀（字體/字級/粗細/顏色/描邊/陰影/發光/直書/彎曲…），不動文字內容與位置尺寸；
+  // 貼上後由 TransformableElement 既有的自動重排 effect 依新樣式重新量測文字框。
+  const [copiedTextStyle, setCopiedTextStyle] = useState<TextStyleSnapshot | null>(null);
+
+  const handleCopyTextStyle = useCallback((elementId: string) => {
+      const el = elements.find(e => e.id === elementId);
+      if (!el || el.type !== 'text') return;
+      const snapshot: TextStyleSnapshot = {};
+      for (const key of TEXT_STYLE_KEYS) {
+          const value = (el as TextElement)[key];
+          if (value !== undefined) (snapshot as Record<string, unknown>)[key] = value;
+      }
+      setCopiedTextStyle(snapshot);
+      showToast('已複製文字樣式 🎨');
+  }, [elements, showToast]);
+
+  const handlePasteTextStyle = useCallback((elementIds: string[]) => {
+      if (!copiedTextStyle) return;
+      const targets = elements.filter(e => elementIds.includes(e.id) && e.type === 'text' && !e.isLocked);
+      if (targets.length === 0) {
+          showToast('請選擇文字物件再貼上樣式');
+          return;
+      }
+      // 貼上樣式會改變文字尺寸 → 解除寬高鎖定，讓文字框依新樣式自動重排
+      updateMultipleElements(targets.map(el => ({
+          ...el,
+          ...copiedTextStyle,
+          isWidthLocked: false,
+          isHeightLocked: false,
+      }) as CanvasElement));
+      showToast(targets.length > 1 ? `已套用文字樣式到 ${targets.length} 個物件 ✨` : '已貼上文字樣式 ✨');
+  }, [copiedTextStyle, elements, updateMultipleElements, showToast]);
 
 
   // --- OVERRIDE addArrow TO SUPPORT BOTH POINT AND CONFIG ---
@@ -1875,6 +1910,8 @@ const App: React.FC = () => {
             downloadImages,
             copyStyle: handleCopyStyle,
             pasteStyle: (elementIds: string[]) => setStylePasteModal({ targetIds: elementIds }),
+            copyTextStyle: handleCopyTextStyle,
+            pasteTextStyle: handlePasteTextStyle,
             exportCanvas: handleExportCanvas,
             exportArtboard: (elementId: string) => {
                 const artboard = elements.find(e => e.id === elementId) as ArtboardElement;
@@ -1921,6 +1958,7 @@ const App: React.FC = () => {
           canChangeColor={canChangeColor}
           elementType={contextMenuElement?.type || null}
           hasCopiedStyle={!!copiedStyle}
+          hasCopiedTextStyle={!!copiedTextStyle}
           selectionCount={selectedElementIds.length}
           selectedElementIds={selectedElementIds}
           isGrouped={!!isGrouped}
