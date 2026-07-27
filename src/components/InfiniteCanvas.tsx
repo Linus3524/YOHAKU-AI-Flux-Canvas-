@@ -341,12 +341,17 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   // 用來隱藏拖曳期間位置不會跟動的 overlay：群組邊框、選取動作選單）
   const [isElementDragging, setIsElementDragging] = useState(false);
 
-  // 只在所有選取元素都屬同一個 groupId 時顯示群組邊框
+  // 多選（≥2）即顯示群組邊框，可一起縮放/旋轉：
+  // 已建群組 → 用 groupId 當識別；臨時多選 → 用排序後的 id 組合當識別，
+  // 選取內容一改變 gid 就變，旋轉累積角度自動重置。
   const groupBounds = useMemo(() => {
     if (selectedElementIds.length < 2) return null;
     const sel = elements.filter(el => selectedElementIds.includes(el.id));
-    const gid = sel[0]?.groupId;
-    if (!gid || !sel.every(el => el.groupId === gid)) return null;
+    if (sel.length < 2) return null;
+    const sharedGid = sel[0]?.groupId;
+    const gid = (sharedGid && sel.every(el => el.groupId === sharedGid))
+      ? sharedGid
+      : `sel:${sel.map(el => el.id).sort().join(',')}`;
     // position 是中心點，左上角 = position - size/2
     const minX = Math.min(...sel.map(el => el.position.x - el.width  / 2));
     const minY = Math.min(...sel.map(el => el.position.y - el.height / 2));
