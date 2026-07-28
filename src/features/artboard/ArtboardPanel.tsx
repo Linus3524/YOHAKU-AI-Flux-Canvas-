@@ -7,6 +7,7 @@ interface ArtboardPanelProps {
     element: ArtboardElement;
     onUpdate: (updates: Partial<ArtboardElement>) => void;
     onExport: () => void;
+    onExportPDF: (mode: 'editable-text' | 'outlines') => void;
     onExportSVG: () => void;
     onClose: () => void;
     selectedArtboardCount?: number;
@@ -19,7 +20,7 @@ const ArtboardIcon = () => (
     </svg>
 );
 
-export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate, onExport, onExportSVG, onClose, selectedArtboardCount = 1, onBatchExport }) => {
+export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate, onExport, onExportPDF, onExportSVG, onClose, selectedArtboardCount = 1, onBatchExport }) => {
     const [widthInput, setWidthInput]   = useState(String(Math.round(element.width)));
     const [heightInput, setHeightInput] = useState(String(Math.round(element.height)));
     
@@ -242,6 +243,27 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                             匯出工作區域（PNG）
                         </button>
                     )}
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                            onClick={() => onExportPDF('editable-text')}
+                            className="py-2 bg-white text-[#1D1D1F] border border-gray-200 rounded-xl text-[11px] font-bold hover:bg-gray-50 transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-1"
+                            title="保留文字內容，不嵌入字型；Illustrator 開啟後可自行替換字型"
+                        >
+                            <Icon name="text_fields" size={13} />
+                            可編輯文字
+                        </button>
+                        <button
+                            onClick={() => onExportPDF('outlines')}
+                            className="py-2 bg-white text-[#1D1D1F] border border-gray-200 rounded-xl text-[11px] font-bold hover:bg-gray-50 transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-1"
+                            title="所有文字轉為向量外框，外觀固定且不需要字型"
+                        >
+                            <Icon name="polyline" size={13} />
+                            文字外框
+                        </button>
+                    </div>
+                    <div className="text-[9px] text-[#86868B] leading-snug px-1">
+                        可編輯文字不嵌入字型，Illustrator 可能提示替換字型
+                    </div>
                     <button
                         onClick={onExportSVG}
                         className="w-full py-2 bg-[#1D1D1F] text-white rounded-xl text-xs font-bold hover:bg-[#333] transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-1.5"

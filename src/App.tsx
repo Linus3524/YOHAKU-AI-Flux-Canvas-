@@ -1747,6 +1747,25 @@ const App: React.FC = () => {
                   el.id === artboardForPanel.id ? { ...el, ...updates } : el
               ))}
               onExport={() => downloadArtboard(artboardForPanel, elements)}
+              onExportPDF={(textMode) => {
+                  const selectedArtboards = selectedElements
+                      .filter((el): el is ArtboardElement => el.type === 'artboard')
+                      .sort((a, b) => b.zIndex - a.zIndex);
+                  const artboardsToExport = selectedArtboards.length > 0
+                      ? selectedArtboards
+                      : [artboardForPanel];
+                  const filename = artboardsToExport.length === 1
+                      ? (artboardsToExport[0].artboardName || 'YOHAKU-export')
+                      : 'YOHAKU-artboards';
+                  void exportArtboardsAsPDF(artboardsToExport, elements, filename, textMode)
+                      .then(() => showToast(textMode === 'outlines'
+                          ? '已匯出文字外框 PDF'
+                          : '已匯出可編輯文字 PDF'))
+                      .catch(error => {
+                          console.error('PDF export failed:', error);
+                          showToast('PDF 匯出失敗，請稍後再試');
+                      });
+              }}
               onExportSVG={() => setShowSVGExportModal(true)}
               onClose={() => setSelectedElementIds([])}
               selectedArtboardCount={selectedElements.filter(el => el.type === 'artboard').length}

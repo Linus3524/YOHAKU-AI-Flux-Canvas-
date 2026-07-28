@@ -78,7 +78,7 @@ const fontCSSCache = new Map<string, string>();
  * Build @font-face CSS for `fontFamily`, embedding only the font files
  * needed to render `textContent`.  Results are cached.
  */
-async function getEmbeddedFontCSS(fontFamily: string, textContent: string): Promise<string> {
+export async function getEmbeddedFontCSS(fontFamily: string, textContent: string): Promise<string> {
     const cacheKey = `${fontFamily.toLowerCase()}|||${textContent}`;
     if (fontCSSCache.has(cacheKey)) return fontCSSCache.get(cacheKey)!;
 
@@ -141,6 +141,82 @@ async function getEmbeddedFontCSS(fontFamily: string, textContent: string): Prom
 
 // ── Main capture function ─────────────────────────────────────────────────────
 
+async function svgToCanvas(
+    svg: SVGElement,
+    totalW: number,
+    totalH: number,
+    scale: number,
+): Promise<HTMLCanvasElement> {
+    const svgString = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(totalW * scale);
+    canvas.height = Math.ceil(totalH * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        URL.revokeObjectURL(url);
+        throw new Error('Unable to create SVG capture canvas');
+    }
+    ctx.scale(scale, scale);
+
+    try {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = reject;
+            image.src = url;
+        });
+        ctx.drawImage(img, 0, 0, totalW, totalH);
+        return canvas;
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+}
+
+async function cloneTextSvg(
+    elementId: string,
+    worldWidth: number,
+    worldHeight: number,
+    effectPadding: number,
+    fontFamily?: string,
+    textContent?: string,
+): Promise<SVGElement> {
+    await document.fonts.ready;
+
+    const container = document.querySelector(`[data-element-id="${elementId}"]`);
+    if (!container) throw new Error(`Element ${elementId} not found in DOM`);
+
+    const svgEl = container.querySelector('svg');
+    if (!svgEl) throw new Error(`No SVG found for element ${elementId}`);
+
+    const cloned = svgEl.cloneNode(true) as SVGElement;
+    const totalW = worldWidth + effectPadding * 2;
+    const totalH = worldHeight + effectPadding * 2;
+
+    cloned.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    cloned.setAttribute('width', String(totalW));
+    cloned.setAttribute('height', String(totalH));
+    cloned.setAttribute('viewBox', `-${effectPadding} -${effectPadding} ${totalW} ${totalH}`);
+    cloned.setAttribute('overflow', 'visible');
+
+    if (fontFamily && textContent) {
+        const fontCSS = await getEmbeddedFontCSS(fontFamily, textContent);
+        if (fontCSS) {
+            let defs = cloned.querySelector('defs');
+            if (!defs) {
+                defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                cloned.insertBefore(defs, cloned.firstChild);
+            }
+            const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            style.textContent = fontCSS;
+            defs.insertBefore(style, defs.firstChild);
+        }
+    }
+
+    return cloned;
+}
+
 /**
  * Capture the live SVG for a text element and return a PNG data URL.
  *
@@ -163,67 +239,82 @@ export async function captureTextElementAsImage(
     fontFamily?: string,
     textContent?: string
 ): Promise<string> {
-    await document.fonts.ready;
-
-    const container = document.querySelector(`[data-element-id="${elementId}"]`);
-    if (!container) throw new Error(`Element ${elementId} not found in DOM`);
-
-    const svgEl = container.querySelector('svg');
-    if (!svgEl) throw new Error(`No SVG found for element ${elementId}`);
-
-    const cloned = svgEl.cloneNode(true) as SVGElement;
-
     const totalW = worldWidth  + effectPadding * 2;
     const totalH = worldHeight + effectPadding * 2;
-
-    cloned.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    cloned.setAttribute('width',  String(totalW));
-    cloned.setAttribute('height', String(totalH));
-    cloned.setAttribute('viewBox', `-${effectPadding} -${effectPadding} ${totalW} ${totalH}`);
-    cloned.setAttribute('overflow', 'visible');
-
-    // Embed fonts (only the subsets needed for this text)
-    if (fontFamily && textContent) {
-        const fontCSS = await getEmbeddedFontCSS(fontFamily, textContent);
-        if (fontCSS) {
-            let defs = cloned.querySelector('defs');
-            if (!defs) {
-                defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-                cloned.insertBefore(defs, cloned.firstChild);
-            }
-            const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-            style.textContent = fontCSS;
-            defs.insertBefore(style, defs.firstChild);
-        }
-    }
-
-    const svgString = new XMLSerializer().serializeToString(cloned);
-    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-
-    const canvas = document.createElement('canvas');
-    canvas.width  = Math.ceil(totalW * scale);
-    canvas.height = Math.ceil(totalH * scale);
-
+    const cloned = await cloneTextSvg(
+        elementId,
+        worldWidth,
+        worldHeight,
+        effectPadding,
+        fontFamily,
+        textContent,
+    );
+    const canvas = await svgToCanvas(cloned, totalW, totalH, scale);
     const ctx = canvas.getContext('2d')!;
-    ctx.scale(scale, scale);
 
     if (backgroundColor && backgroundColor !== 'transparent') {
+        const content = document.createElement('canvas');
+        content.width = canvas.width;
+        content.height = canvas.height;
+        const contentCtx = content.getContext('2d')!;
+        contentCtx.drawImage(canvas, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = backgroundColor;
         ctx.fillRect(effectPadding, effectPadding, worldWidth, worldHeight);
-    }
-
-    try {
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-            const image = new Image();
-            image.onload = () => resolve(image);
-            image.onerror = reject;
-            image.src = url;
-        });
-        ctx.drawImage(img, 0, 0, totalW, totalH);
-    } finally {
-        URL.revokeObjectURL(url);
+        ctx.drawImage(content, 0, 0, totalW, totalH);
     }
 
     return canvas.toDataURL('image/png');
+}
+
+/**
+ * Capture only the pixels produced by text shadow/glow filters.
+ * The source glyphs are removed so a live-text or outline layer can sit above
+ * the raster effect without leaving a duplicate copy of the original text.
+ */
+export async function captureTextElementEffectsAsImage(
+    elementId: string,
+    worldWidth: number,
+    worldHeight: number,
+    effectPadding: number,
+    scale: number,
+    fontFamily?: string,
+    textContent?: string,
+): Promise<string> {
+    const totalW = worldWidth + effectPadding * 2;
+    const totalH = worldHeight + effectPadding * 2;
+    const fullSvg = await cloneTextSvg(
+        elementId,
+        worldWidth,
+        worldHeight,
+        effectPadding,
+        fontFamily,
+        textContent,
+    );
+    const baseSvg = fullSvg.cloneNode(true) as SVGElement;
+
+    // The filtered group contains SourceGraphic + shadow/glow. Removing it
+    // leaves the normal stroke/fill passes, which become the subtraction mask.
+    baseSvg.querySelectorAll('[filter]').forEach(node => node.remove());
+
+    const [fullCanvas, baseCanvas] = await Promise.all([
+        svgToCanvas(fullSvg, totalW, totalH, scale),
+        svgToCanvas(baseSvg, totalW, totalH, scale),
+    ]);
+    const ctx = fullCanvas.getContext('2d');
+    if (!ctx) throw new Error('Unable to create text effect canvas');
+    ctx.globalCompositeOperation = 'destination-out';
+    // A single alpha subtraction leaves a dark anti-aliased fringe because
+    // SourceGraphic and the unfiltered pass overlap with fractional alpha.
+    // Erase a tiny expanded mask so the raster layer contains only the effect,
+    // never a second copy of the glyph beneath editable/outlined text.
+    const eraseRadius = Math.max(1, Math.ceil(scale));
+    for (let y = -eraseRadius; y <= eraseRadius; y++) {
+        for (let x = -eraseRadius; x <= eraseRadius; x++) {
+            ctx.drawImage(baseCanvas, x, y);
+        }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    return fullCanvas.toDataURL('image/png');
 }

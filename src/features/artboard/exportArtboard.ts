@@ -2,6 +2,8 @@ import type { CanvasElement, ArtboardElement, ImageElement, TextElement, ShapeEl
 import { loadImage, createShapeDataUrl, getTextBoxPadding } from '../../utils/helpers';
 import { getTextEffectPadding } from '../../utils/textEffects';
 import { rasterizeTextElement } from '../../utils/textRasterize';
+import { addEditableTextElementToPdf, type PdfTextMode } from '../../utils/pdfText';
+import { removeEmbeddedFontPrograms } from '../../utils/pdfPostprocess';
 import { jsPDF } from 'jspdf';
 
 // 判斷元素是否與工作區域有交集 (Bounding Box Intersection)
@@ -30,7 +32,12 @@ export const isElementInArtboard = (el: CanvasElement, ab: ArtboardElement): boo
 export const exportArtboardAsImage = async (
     artboard: ArtboardElement,
     allElements: CanvasElement[],
-    scale: number = 2
+    scale: number = 2,
+    options: {
+        transparentBackground?: boolean;
+        includeElementIds?: ReadonlySet<string>;
+        drawBorder?: boolean;
+    } = {},
 ): Promise<string> => {
     // Wait for fonts to load so measureText uses the same metrics as SVG display
     await document.fonts.ready;
@@ -41,9 +48,11 @@ export const exportArtboardAsImage = async (
     const ctx = canvas.getContext('2d')!;
     ctx.scale(scale, scale);
 
-    // 1. 白色背景
-    ctx.fillStyle = artboard.backgroundColor || '#ffffff';
-    ctx.fillRect(0, 0, artboard.width, artboard.height);
+    // 1. 背景（分層 PDF 可要求透明，只輸出指定的非文字區段）
+    if (!options.transparentBackground) {
+        ctx.fillStyle = artboard.backgroundColor || '#ffffff';
+        ctx.fillRect(0, 0, artboard.width, artboard.height);
+    }
 
     // 2. 裁切遮罩 (移除，因為我們需要繪製超出範圍的物件)
     // ctx.save();
@@ -53,7 +62,11 @@ export const exportArtboardAsImage = async (
 
     // 3. 找出範圍內的物件，按 zIndex 排序
     const targets = allElements
-        .filter(el => isElementInArtboard(el, artboard) && el.type !== 'note')
+        .filter(el =>
+            isElementInArtboard(el, artboard) &&
+            el.type !== 'note' &&
+            (!options.includeElementIds || options.includeElementIds.has(el.id))
+        )
         .sort((a, b) => a.zIndex - b.zIndex);
 
     // 4. 依序繪製
@@ -305,7 +318,7 @@ export const exportArtboardAsImage = async (
     }
 
     // 5. 繪製工作區域邊框
-    if (artboard.showBorder) {
+    if ((options.drawBorder ?? true) && artboard.showBorder) {
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 2;
         ctx.strokeRect(0, 0, artboard.width, artboard.height);
@@ -349,39 +362,125 @@ export const downloadMultipleArtboards = async (
 };
 
 /**
- * 將所有工作區域匯出為一份 PDF（每個 Artboard 一頁）
- * 頁面尺寸依 Artboard 實際比例決定，以 pt 為單位（1px = 0.75pt）
+ * 將所有工作區域匯出為一份 Illustrator 友善 PDF（每個 Artboard 一頁）。
+ * - editable-text：保留文字物件，輸出前移除嵌入字型，交由 Illustrator 替換
+ * - outlines：所有文字轉為向量外框，不在 PDF 內放入字型
+ * - 陰影／光暈：只有效果像素局部點陣化
+ * - 其他元素：依 z-index 分段點陣化，確保文字前後的圖層順序不改變
  */
-export const exportArtboardsAsPDF = async (
+export const createArtboardsPDF = async (
     artboards: ArtboardElement[],
     allElements: CanvasElement[],
     filename = 'YOHAKU-export',
-): Promise<void> => {
-    if (artboards.length === 0) return;
+    textMode: PdfTextMode = 'editable-text',
+): Promise<jsPDF | null> => {
+    if (artboards.length === 0) return null;
 
-    // 渲染第一張決定方向，之後每頁各自設定
     const PX_TO_PT = 0.75;
-
     let pdf: jsPDF | null = null;
 
     for (let i = 0; i < artboards.length; i++) {
         const ab = artboards[i];
-        const dataUrl = await exportArtboardAsImage(ab, allElements, 2); // 2x 高清
-
         const wPt = ab.width  * PX_TO_PT;
         const hPt = ab.height * PX_TO_PT;
         const orientation = wPt >= hPt ? 'landscape' : 'portrait';
 
         if (i === 0) {
-            pdf = new jsPDF({ orientation, unit: 'pt', format: [wPt, hPt] });
+            pdf = new jsPDF({
+                orientation,
+                unit: 'pt',
+                format: [wPt, hPt],
+                compress: true,
+                putOnlyUsedFonts: true,
+            });
+            pdf.setProperties({
+                title: filename,
+                subject: 'YOHAKU editable vector PDF',
+                creator: 'YOHAKU AI Flux Canvas',
+            });
         } else {
             pdf!.addPage([wPt, hPt], orientation);
         }
 
-        pdf!.addImage(dataUrl, 'PNG', 0, 0, wPt, hPt, undefined, 'FAST');
+        pdf!.setFillColor(ab.backgroundColor || '#ffffff');
+        pdf!.rect(0, 0, wPt, hPt, 'F');
+
+        const targets = allElements
+            .filter(el => isElementInArtboard(el, ab) && el.type !== 'note')
+            .sort((a, b) => a.zIndex - b.zIndex);
+
+        let rasterSegment: CanvasElement[] = [];
+        const flushRasterSegment = async () => {
+            if (rasterSegment.length === 0) return;
+            const ids = new Set(rasterSegment.map(element => element.id));
+            const layer = await exportArtboardAsImage(ab, rasterSegment, 2, {
+                transparentBackground: true,
+                includeElementIds: ids,
+                drawBorder: false,
+            });
+            pdf!.addImage(layer, 'PNG', 0, 0, wPt, hPt, undefined, 'FAST');
+            rasterSegment = [];
+        };
+
+        for (const element of targets) {
+            if (element.type !== 'text') {
+                rasterSegment.push(element);
+                continue;
+            }
+
+            await flushRasterSegment();
+            await addEditableTextElementToPdf(pdf!, element as TextElement, ab, textMode);
+        }
+        await flushRasterSegment();
+
+        if (ab.showBorder) {
+            pdf!.setDrawColor('#000000');
+            pdf!.setLineWidth(1.5);
+            pdf!.rect(0, 0, wPt, hPt, 'S');
+        }
     }
 
-    pdf!.save(`${filename}.pdf`);
+    return pdf;
+};
+
+export const exportArtboardsAsPDF = async (
+    artboards: ArtboardElement[],
+    allElements: CanvasElement[],
+    filename = 'YOHAKU-export',
+    textMode: PdfTextMode = 'editable-text',
+): Promise<void> => {
+    const bytes = await createArtboardsPDFBytes(artboards, allElements, filename, textMode);
+    if (!bytes) return;
+
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filename}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+/**
+ * 建立最終 PDF 位元組。獨立於下載動作，方便桌面端與自動化驗證：
+ * - editable-text 會移除字型程式，但保留文字物件與 Unicode 對照。
+ * - outlines 不含文字物件，只有向量路徑。
+ */
+export const createArtboardsPDFBytes = async (
+    artboards: ArtboardElement[],
+    allElements: CanvasElement[],
+    filename = 'YOHAKU-export',
+    textMode: PdfTextMode = 'editable-text',
+): Promise<Uint8Array | null> => {
+    const pdf = await createArtboardsPDF(artboards, allElements, filename, textMode);
+    if (!pdf) return null;
+
+    const output = pdf.output('arraybuffer');
+    return textMode === 'editable-text'
+        ? removeEmbeddedFontPrograms(output)
+        : new Uint8Array(output);
 };
 
 // ─── SVG 匯出 ───────────────────────────────────────────────────────────────
