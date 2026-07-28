@@ -85,9 +85,9 @@ const Icons = {
     Bold: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg>,
     Italic: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg>,
     Underline: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path><line x1="4" y1="21" x2="20" y2="21"></line></svg>,
-    AlignLeft: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>,
-    AlignCenter: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>,
-    AlignRight: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg>,
+    AlignLeft: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>,
+    AlignCenter: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>,
+    AlignRight: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg>,
     More: () => <Icon name="more_horiz" size={14} />,
     Check: () => <Icon name="check" size={14} />,
     Grip: () => <Icon name="drag_indicator" size={16} className="text-black/20" />,
@@ -95,8 +95,8 @@ const Icons = {
     TextHorizontal: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16M4 12l4-4m-4 4l4 4"/></svg>,
     TextVertical: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v16M12 4l-4 4m4-4l4 4"/></svg>,
     CurveText: () => (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 17 C 8 12, 16 12, 20 17" strokeWidth="2.2" />
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 17 C 8 12, 16 12, 20 17" strokeWidth="1.8" />
             <path d="M9 11 L12 4 L15 11" />
             <path d="M10 9 H14" />
         </svg>
@@ -214,10 +214,10 @@ const SliderControl = ({ icon, customIcon, label, value, onChange, onDragStart, 
 }) => {
     const precision = decimals ?? (step < 1 ? 1 : 0);
     return (
-    <div className={`flex items-center gap-2 min-h-7 px-1 rounded-lg w-full ${disabled ? 'opacity-40' : ''}`}>
+    <div className={`flex items-center gap-1.5 min-h-8 px-1 rounded-lg w-full ${disabled ? 'opacity-40' : ''}`}>
         <Tooltip text={label}>
             <div className="w-6 h-6 rounded-md flex items-center justify-center text-yohaku-text-muted flex-shrink-0">
-                {customIcon ? customIcon : <Icon name={icon || ''} size={13} />}
+                {customIcon ? customIcon : <Icon name={icon || ''} size={16} />}
             </div>
         </Tooltip>
 
@@ -376,7 +376,7 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
                     >
                         <Icon 
                             name={iconName} 
-                            size={14} 
+                            size={16} 
                             style={{ 
                                 color: isActive 
                                     ? (displayColor === '#FFFFFF' || displayColor === '#FFCC00' ? '#1D1D1F' : '#FFFFFF') 
@@ -417,8 +417,6 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
                 )}
             </div>
 
-            <span className="w-[30px] text-[11px] font-medium text-[#3A3A3C] flex-shrink-0">{tooltip}</span>
-
             {/* Slider 軌道與圓點 */}
             <div className="flex-1 flex items-center h-4 min-w-0">
                 <input
@@ -431,7 +429,7 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
                     onTouchStart={() => onDragStart?.()}
                     onChange={(e) => onValueChange(Number(e.target.value))}
                     aria-label={`${tooltip}強度`}
-                    className={`slider-thumb-sm w-full cursor-pointer ${!isActive ? 'opacity-40' : ''}`}
+                    className="slider-thumb-sm w-full cursor-pointer"
                 />
             </div>
 
@@ -442,9 +440,10 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
                 max={max}
                 step={step}
                 decimals={0}
+                unit="px"
                 onFocus={onDragStart}
                 onChange={onValueChange}
-                className="w-10 bg-white/80 ring-black/[0.04]"
+                className="w-[60px] h-6 bg-transparent hover:bg-[#F5F5F7]"
             />
 
             {/* Eye toggle */}
@@ -553,13 +552,11 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
     return (
         <div
             ref={panelRef}
-            className="fixed z-[1000] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.12)] border border-black/[0.06] p-2 flex flex-col gap-2 animate-fade-in-up transition-shadow duration-200"
+            className="fixed z-[1000] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.12)] border border-black/[0.06] p-2 pb-1.5 flex flex-col animate-fade-in-up transition-shadow duration-200"
             style={{
                 left: position.x,
                 top: position.y,
                 width: 330,
-                maxHeight: 'calc(100vh - 24px)',
-                overflowY: 'auto',
                 cursor: isDragging ? 'grabbing' : 'default',
                 boxShadow: isDragging ? '0 20px 60px rgba(0,0,0,0.18)' : '0 10px 40px rgba(0,0,0,0.12)'
             }}
@@ -567,16 +564,16 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
             onClick={(e) => e.stopPropagation()}
         >
             {/* ── 常駐頂部區：精緻兩排前後對齊結構 ── */}
-            <div className="flex flex-col gap-1.5 w-full">
+            <div className="flex flex-col w-full">
                 
                 {/* 第一排：拖拽 · 字型選單 · 字號 · 更多 · 完成 */}
-                <div className="flex items-center gap-1.5 w-full justify-between">
+                <div className="flex items-center gap-1.5 w-full justify-between pb-1.5">
                     <div className="px-0.5 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors flex-shrink-0">
                         <Icons.Grip />
                     </div>
 
                     {/* Font dropdown */}
-                    <div className="relative flex-1 min-w-0">
+                    <div className="relative flex-1 min-w-0 max-w-[130px]">
                         <select
                             value={element.fontFamily}
                             onChange={(e) => onUpdate({ fontFamily: e.target.value })}
@@ -631,8 +628,11 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                     </button>
                 </div>
 
+                {/* 第一條分隔線 */}
+                <div className="h-px bg-gray-100/80 w-full" />
+
                 {/* 第二排：直/橫書 · 對齊 · B/I/U · 顏色按鈕 (前後整齊對齊) */}
-                <div className="flex items-center justify-between w-full pt-0.5 border-t border-gray-100/80">
+                <div className="flex items-center justify-between w-full py-1.5">
                     {/* 直/橫書 */}
                     <div className="flex bg-yohaku-bg-main rounded-lg p-0.5">
                         <Tooltip text="橫向排版">
@@ -698,10 +698,11 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
 
             {/* ── 展開折疊區：排版與外觀分頁 ── */}
             {showMore && (
-                <div className="flex flex-col px-0.5 pb-1 pt-0.5" onMouseDown={(e) => e.stopPropagation()}>
-                    <div className="h-px bg-gray-100 w-full mb-1.5" />
+                <div className="flex flex-col px-0.5 pb-0" onMouseDown={(e) => e.stopPropagation()}>
+                    {/* 第二條分隔線 */}
+                    <div className="h-px bg-gray-100/80 w-full" />
 
-                    <div className="grid grid-cols-2 gap-0.5 p-0.5 bg-[#F5F5F7] rounded-lg mb-1.5">
+                    <div className="grid grid-cols-2 gap-0.5 p-0.5 bg-[#F5F5F7] rounded-lg mt-1.5 mb-1.5">
                         {([
                             ['typography', '排版'],
                             ['appearance', '外觀'],
@@ -722,6 +723,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                         ))}
                     </div>
 
+                    <div className="min-h-[100px]">
                     {advancedTab === 'typography' ? (
                         <div className="flex flex-col gap-0.5">
                             <SliderControl
@@ -757,7 +759,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                                 min={-100}
                                 max={100}
                                 step={1}
-                                unit=""
+                                unit="°"
                                 decimals={0}
                             />
                         </div>
@@ -798,6 +800,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                             />
                         </div>
                     )}
+                    </div>
                 </div>
             )}
         </div>

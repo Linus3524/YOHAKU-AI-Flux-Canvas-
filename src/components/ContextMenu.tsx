@@ -102,6 +102,7 @@ const MenuIcons = {
   Frame:        () => <Icon name="crop_free" size={15} />,
   Copy:         () => <Icon name="content_copy" size={15} />,
   CopyStyle:    () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"/><path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"/><circle cx="13" cy="7" r="1" fill="currentColor"/><rect x="8" y="2" width="14" height="14" rx="2"/></svg>,
+  CopyTextStyle: () => <Icon name="type_specimen" size={15} />,
   Magic:        () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M10 3H8"/><path d="m15.007 5.008 3.987 3.986"/><path d="M20 15v4"/><path d="M21.174 6.813a2.82 2.82 0 0 0-3.986-3.987L3.842 16.175a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="M22 17h-4"/><path d="M4 5v4"/><path d="M6 7H2"/><path d="M9 2v2"/></svg>,
   Design:       () => <PencilRuler size={13} strokeWidth={1.75} style={{ display: 'block' }} />,
   Rasterize:    () => <Icon name="reset_image" size={15} />,
@@ -359,7 +360,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
                         {elementType === 'text' && (
                              <>
-                                <MenuItem icon={<MenuIcons.CopyStyle />} onClick={() => handleAction(() => actions.copyTextStyle(menuData.elementId!))}>
+                                <MenuItem icon={<MenuIcons.CopyTextStyle />} onClick={() => handleAction(() => actions.copyTextStyle(menuData.elementId!))}>
                                     複製文字樣式
                                 </MenuItem>
                                 <MenuItem
