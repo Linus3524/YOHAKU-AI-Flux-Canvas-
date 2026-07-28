@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import type { TextElement } from '../types';
 import { Icon } from './Icon';
@@ -10,7 +9,7 @@ interface TextPropertyPanelProps {
   onClose: () => void;
 }
 
-// Organized Font Groups with new additions
+// Organized Font Groups
 const FONT_GROUPS = [
   {
     label: '繁體中文 - 黑體/無襯線',
@@ -81,6 +80,7 @@ const FONT_GROUPS = [
 
 const PRESET_COLORS = ['#1D1D1F', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#AF52DE', '#8E8E93', '#FFFFFF', 'transparent'];
 
+// ── SVG Icons ──────────────────────────────────────────────────────────────
 const Icons = {
     Bold: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg>,
     Italic: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg>,
@@ -90,71 +90,147 @@ const Icons = {
     AlignRight: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg>,
     More: () => <Icon name="more_horiz" size={14} />,
     Check: () => <Icon name="check" size={14} />,
-    Close: () => <Icon name="close" size={14} />,
     Grip: () => <Icon name="drag_indicator" size={16} className="text-black/20" />,
     ChevronDown: () => <Icon name="expand_more" size={8} />,
     TextHorizontal: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16M4 12l4-4m-4 4l4 4"/></svg>,
-    TextVertical: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v16M12 4l-4 4m4-4l4 4"/></svg>
+    TextVertical: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v16M12 4l-4 4m4-4l4 4"/></svg>,
+    CurveText: () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17C8 7 16 7 21 17"/></svg>
 }
 
-// Simple Slider Control
-const SliderControl = ({ label, value, onChange, onDragStart, min, max, step = 1, unit = "", decimals }: { label: string, value: number, onChange: (val: number) => void, onDragStart?: () => void, min: number, max: number, step?: number, unit?: string, decimals?: number }) => (
-    <div className="flex flex-col gap-1 w-full">
-        <div className="flex justify-between items-center">
-             <span className="text-[10px] font-bold text-yohaku-text-muted uppercase tracking-wider">{label}</span>
-             <span className="text-[10px] font-mono text-yohaku-text-main">{value.toFixed(decimals ?? (step < 1 ? 2 : 0))}{unit}</span>
+// ── Tooltip ─────────────────────────────────────────────────────────────────
+const Tooltip = ({ text, children, position = 'top' }: { text: string; children: React.ReactNode; position?: 'top' | 'bottom' }) => {
+    const [show, setShow] = useState(false);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const handleEnter = () => {
+        timerRef.current = setTimeout(() => setShow(true), 300);
+    };
+    const handleLeave = () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        setShow(false);
+    };
+
+    return (
+        <div className="relative inline-flex" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+            {children}
+            {show && (
+                <div className={`absolute left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gray-800 text-white text-[10px] font-medium rounded whitespace-nowrap z-[9999] pointer-events-none shadow-md ${position === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
+                    {text}
+                </div>
+            )}
         </div>
-        <input
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            onMouseDown={() => onDragStart?.()}
-            onTouchStart={() => onDragStart?.()}
-            onChange={(e) => onChange(Number(e.target.value))}
-            className="slider-thumb-sm w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer text-yohaku-accent"
-        />
+    );
+};
+
+// ── Icon Slider Control ─────────────────────────────────────────────────────
+const SliderControl = ({ icon, customIcon, tooltip, value, onChange, onDragStart, min, max, step = 1, unit = "", decimals }: {
+    icon?: string;
+    customIcon?: React.ReactNode;
+    tooltip: string;
+    value: number;
+    onChange: (val: number) => void;
+    onDragStart?: () => void;
+    min: number;
+    max: number;
+    step?: number;
+    unit?: string;
+    decimals?: number;
+}) => (
+    <div className="flex items-center gap-2 py-1 px-1 rounded-lg w-full">
+        {/* 左側 Icon */}
+        <Tooltip text={tooltip}>
+            <div className="w-6 h-6 rounded-md flex items-center justify-center text-yohaku-text-muted flex-shrink-0">
+                {customIcon ? customIcon : <Icon name={icon || ''} size={14} />}
+            </div>
+        </Tooltip>
+        
+        {/* Slider 軌道與圓點 */}
+        <div className="flex-1 flex items-center h-4">
+            <input
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={value}
+                onMouseDown={() => onDragStart?.()}
+                onTouchStart={() => onDragStart?.()}
+                onChange={(e) => onChange(Number(e.target.value))}
+                className="slider-thumb-sm w-full cursor-pointer"
+            />
+        </div>
+
+        {/* Value */}
+        <span className="text-[10px] font-mono text-yohaku-text-muted w-7 text-right flex-shrink-0">
+            {value.toFixed(decimals ?? (step < 1 ? 1 : 0))}{unit}
+        </span>
     </div>
 );
 
-// Reusable Color Picker
-const ColorPickerButton = ({ color, onChange, label }: { color: string | undefined, onChange: (c: string) => void, label?: string }) => {
+// ── Color Picker Button (Icon 直接反映顏色，無額外橫條) ──────────────────────────
+const ColorPickerButton = ({ color, onChange, iconName, tooltip, isBackground = false }: {
+    color: string | undefined;
+    onChange: (c: string) => void;
+    iconName: string;
+    tooltip: string;
+    isBackground?: boolean;
+}) => {
     const [isOpen, setIsOpen] = useState(false);
-    
+    const displayColor = color || 'transparent';
+    const isTransparent = displayColor === 'transparent';
+
     return (
-        <div className="relative flex flex-col gap-1">
-             {label && <span className="text-[9px] font-bold text-yohaku-text-muted uppercase tracking-wider">{label}</span>}
-            <button 
-                onClick={() => setIsOpen(!isOpen)}
-                onMouseDown={(e) => e.stopPropagation()}
-                className="w-8 h-8 rounded-lg border border-black/10 shadow-sm flex items-center justify-center hover:scale-105 transition-transform bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3uCTZhw1gGGYhAGBZIA/nYDCgBDAm9BGDWAAJyRCgLaBCAAgXwixzAS0pgAAAABJRU5ErkJggg==')]"
-            >
-                 <div className="w-full h-full rounded-lg" style={{ backgroundColor: color || 'transparent' }} />
-            </button>
+        <div className="relative">
+            <Tooltip text={tooltip}>
+                <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-all"
+                    style={{
+                        backgroundColor: isBackground && !isTransparent ? displayColor : undefined,
+                    }}
+                >
+                    {isBackground ? (
+                        <Icon 
+                            name={iconName} 
+                            size={16} 
+                            style={{ 
+                                color: !isTransparent ? (displayColor === '#FFFFFF' || displayColor === '#FFCC00' ? '#1D1D1F' : '#FFFFFF') : '#1D1D1F' 
+                            }} 
+                        />
+                    ) : (
+                        <Icon 
+                            name={iconName} 
+                            size={16} 
+                            style={{ 
+                                color: isTransparent ? '#1D1D1F' : displayColor 
+                            }} 
+                        />
+                    )}
+                </button>
+            </Tooltip>
             {isOpen && (
-                <div 
-                    className="absolute bottom-full left-0 mb-3 bg-white p-3 rounded-xl shadow-xl border border-gray-100 grid grid-cols-5 gap-2 w-48 cursor-default z-50"
+                <div
+                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white p-3 rounded-xl shadow-xl border border-gray-100 grid grid-cols-5 gap-2 w-48 cursor-default z-50 animate-fade-in-up"
                     onMouseDown={(e) => e.stopPropagation()}
                 >
-                     <div className="col-span-5 flex justify-between items-center mb-1">
-                        <span className="text-[10px] font-bold text-yohaku-text-muted uppercase">Select Color</span>
-                        <button onClick={() => setIsOpen(false)} className="text-yohaku-text-muted hover:text-black">&times;</button>
-                     </div>
+                    <div className="col-span-5 flex justify-between items-center pb-1 mb-1 border-b border-gray-100">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{tooltip}</span>
+                        <button onClick={() => setIsOpen(false)} className="text-yohaku-text-muted hover:text-black text-xs font-bold">&times;</button>
+                    </div>
                     {PRESET_COLORS.map(c => (
                         <button
                             key={c}
                             onClick={() => { onChange(c); setIsOpen(false); }}
-                            className={`w-6 h-6 rounded-full border border-black/5 hover:scale-110 transition-transform bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3uCTZhw1gGGYhAGBZIA/nYDCgBDAm9BGDWAAJyRCgLaBCAAgXwixzAS0pgAAAABJRU5ErkJggg==')]`}
+                            className={`w-6 h-6 rounded-full border hover:scale-110 transition-transform ${c === displayColor ? 'border-yohaku-accent border-2 scale-110' : 'border-black/10'} bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3uCTZhw1gGGYhAGBZIA/nYDCgBDAm9BGDWAAJyRCgLaBCAAgXwixzAS0pgAAAABJRU5ErkJggg==')]`}
                         >
                             <div className="w-full h-full rounded-full" style={{ backgroundColor: c }} />
                         </button>
                     ))}
                     <label className="w-6 h-6 rounded-full border border-gray-200 bg-white flex items-center justify-center cursor-pointer hover:bg-gray-50 text-[10px] text-black">
                         +
-                        <input 
-                            type="color" 
-                            value={color === 'transparent' ? '#ffffff' : (color || '#000000')} 
+                        <input
+                            type="color"
+                            value={color === 'transparent' ? '#ffffff' : (color || '#000000')}
                             onChange={(e) => onChange(e.target.value)}
                             className="hidden"
                         />
@@ -162,8 +238,129 @@ const ColorPickerButton = ({ color, onChange, label }: { color: string | undefin
                 </div>
             )}
         </div>
-    )
-}
+    );
+};
+
+// ── Effect Row (Icon 結合色票按鈕 + Slider + Eye Toggle) ────────────────────
+const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChange, onDragStart, min, max, step = 1 }: {
+    iconName: string;
+    tooltip: string;
+    color: string | undefined;
+    onColorChange: (c: string) => void;
+    value: number;
+    onValueChange: (val: number) => void;
+    onDragStart?: () => void;
+    min: number;
+    max: number;
+    step?: number;
+}) => {
+    const [colorPickerOpen, setColorPickerOpen] = useState(false);
+    const isActive = value > 0;
+    const lastValueRef = useRef(value || Math.round((max - min) / 4 + min));
+
+    useEffect(() => {
+        if (value > 0) lastValueRef.current = value;
+    }, [value]);
+
+    const toggleEffect = () => {
+        if (isActive) {
+            onValueChange(0);
+        } else {
+            onValueChange(lastValueRef.current || Math.round((max - min) / 4 + min));
+        }
+    };
+
+    const displayColor = color || '#007AFF';
+
+    return (
+        <div className={`flex items-center gap-2 py-1 px-1 rounded-lg transition-colors ${isActive ? 'bg-yohaku-bg-main/70' : ''}`}>
+            {/* 色票與 Icon 直接結合 */}
+            <div className="relative flex-shrink-0">
+                <Tooltip text={`${tooltip}顏色`}>
+                    <button
+                        onClick={() => setColorPickerOpen(!colorPickerOpen)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="w-6 h-6 rounded-md flex items-center justify-center hover:scale-105 transition-transform"
+                        style={{
+                            backgroundColor: isActive ? displayColor : '#E5E5EA',
+                        }}
+                    >
+                        <Icon 
+                            name={iconName} 
+                            size={14} 
+                            style={{ 
+                                color: isActive 
+                                    ? (displayColor === '#FFFFFF' || displayColor === '#FFCC00' ? '#1D1D1F' : '#FFFFFF') 
+                                    : '#8E8E93' 
+                            }} 
+                        />
+                    </button>
+                </Tooltip>
+
+                {colorPickerOpen && (
+                    <div
+                        className="absolute bottom-full left-0 mb-2 bg-white p-2.5 rounded-xl shadow-xl border border-gray-100 grid grid-cols-5 gap-1.5 w-44 cursor-default z-50 animate-fade-in-up"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <div className="col-span-5 flex justify-between items-center pb-1 mb-1 border-b border-gray-100">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{tooltip}顏色</span>
+                            <button onClick={() => setColorPickerOpen(false)} className="text-yohaku-text-muted hover:text-black text-xs font-bold">&times;</button>
+                        </div>
+                        {PRESET_COLORS.filter(c => c !== 'transparent').map(c => (
+                            <button
+                                key={c}
+                                onClick={() => { onColorChange(c); setColorPickerOpen(false); }}
+                                className={`w-5 h-5 rounded-full border hover:scale-110 transition-transform ${c === displayColor ? 'border-yohaku-accent border-2 scale-110' : 'border-black/10'}`}
+                            >
+                                <div className="w-full h-full rounded-full" style={{ backgroundColor: c }} />
+                            </button>
+                        ))}
+                        <label className="w-5 h-5 rounded-full border border-gray-200 bg-white flex items-center justify-center cursor-pointer hover:bg-gray-50 text-[9px] text-black">
+                            +
+                            <input
+                                type="color"
+                                value={color || '#007AFF'}
+                                onChange={(e) => onColorChange(e.target.value)}
+                                className="hidden"
+                            />
+                        </label>
+                    </div>
+                )}
+            </div>
+
+            {/* Slider 軌道與圓點 */}
+            <div className="flex-1 flex items-center h-4">
+                <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={value}
+                    onMouseDown={() => onDragStart?.()}
+                    onTouchStart={() => onDragStart?.()}
+                    onChange={(e) => onValueChange(Number(e.target.value))}
+                    className={`slider-thumb-sm w-full cursor-pointer ${!isActive ? 'opacity-40' : ''}`}
+                />
+            </div>
+
+            {/* Value */}
+            <span className="text-[10px] font-mono text-yohaku-text-muted w-7 text-right flex-shrink-0">
+                {Math.round(value)}
+            </span>
+
+            {/* Eye toggle */}
+            <Tooltip text={isActive ? '關閉效果' : '開啟效果'}>
+                <button
+                    onClick={toggleEffect}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className={`w-6 h-6 flex items-center justify-center rounded-md transition-all ${isActive ? 'text-yohaku-accent hover:bg-blue-50' : 'text-yohaku-text-muted/40 hover:bg-gray-100'}`}
+                >
+                    <Icon name={isActive ? 'visibility' : 'visibility_off'} size={14} />
+                </button>
+            </Tooltip>
+        </div>
+    );
+};
 
 
 export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, onUpdate, onSnapshot, onClose }) => {
@@ -171,7 +368,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
     const [showMore, setShowMore] = useState(false);
     
     // Draggable State
-    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 190, y: window.innerHeight - 320 });
+    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 165, y: window.innerHeight - 300 });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef({ x: 0, y: 0 });
 
@@ -180,14 +377,10 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
         setShowMore(false);
     }, [element.id]);
 
-    // --- NEW HANDLER: Toggle Writing Mode with Auto-Resize ---
+    // --- Toggle Writing Mode with Auto-Resize ---
     const handleWritingModeChange = (mode: 'horizontal' | 'vertical') => {
         if (mode === element.writingMode) return;
         
-        // When switching modes, we intelligently swap the dimensions to provide a better starting point
-        // for the new orientation. 
-        // e.g. Horizontal (300w, 100h) -> Vertical (100w, 300h)
-        // This gives the "long narrow box" effect for vertical text immediately.
         const newWidth = element.height;
         const newHeight = element.width;
         
@@ -233,148 +426,192 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
 
     return (
         <div
-            className="fixed z-[1000] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-gray-100 p-2 flex flex-col gap-2 animate-fade-in-up transition-shadow duration-200"
+            className="fixed z-[1000] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.12)] border border-black/[0.06] p-2 flex flex-col gap-2 animate-fade-in-up transition-shadow duration-200"
             style={{
                 left: position.x,
                 top: position.y,
-                minWidth: showMore ? 440 : 340,
+                width: 330,
                 cursor: isDragging ? 'grabbing' : 'default',
-                boxShadow: isDragging ? '0 20px 60px rgba(0,0,0,0.2)' : '0 10px 40px rgba(0,0,0,0.15)'
+                boxShadow: isDragging ? '0 20px 60px rgba(0,0,0,0.18)' : '0 10px 40px rgba(0,0,0,0.12)'
             }}
             onMouseDown={handleMouseDown}
             onClick={(e) => e.stopPropagation()}
         >
-            {/* ── Top Bar: Font · Size · Text Color · More · Done ── */}
-            <div className="flex items-end gap-2">
-                <div className="pb-1.5 px-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors">
-                    <Icons.Grip />
-                </div>
-
-                {/* Font dropdown */}
-                <div className="relative">
-                    <select
-                        value={element.fontFamily}
-                        onChange={(e) => onUpdate({ fontFamily: e.target.value })}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        className="appearance-none bg-yohaku-bg-main hover:bg-gray-100 text-yohaku-text-main text-sm font-medium rounded-lg pl-3 pr-8 py-1.5 outline-none cursor-pointer w-44 truncate transition-colors"
-                        style={{ fontFamily: element.fontFamily }}
-                    >
-                        {FONT_GROUPS.map(group => (
-                            <optgroup key={group.label} label={group.label}>
-                                {group.options.map(f => (
-                                    <option key={f.name} value={f.family} style={{ fontFamily: f.family }}>
-                                        {f.label}
-                                    </option>
-                                ))}
-                            </optgroup>
-                        ))}
-                    </select>
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-yohaku-text-muted">
-                        <Icons.ChevronDown />
+            {/* ── 常駐頂部區：精緻兩排前後對齊結構 ── */}
+            <div className="flex flex-col gap-1.5 w-full">
+                
+                {/* 第一排：拖拽 · 字型選單 · 字號 · 更多 · 完成 */}
+                <div className="flex items-center gap-1.5 w-full justify-between">
+                    <div className="px-0.5 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors flex-shrink-0">
+                        <Icons.Grip />
                     </div>
+
+                    {/* Font dropdown */}
+                    <div className="relative flex-1 min-w-0">
+                        <select
+                            value={element.fontFamily}
+                            onChange={(e) => onUpdate({ fontFamily: e.target.value })}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="appearance-none bg-yohaku-bg-main hover:bg-gray-100 text-yohaku-text-main text-xs font-medium rounded-lg pl-2.5 pr-6 py-1.5 outline-none cursor-pointer w-full truncate transition-colors"
+                            style={{ fontFamily: element.fontFamily }}
+                        >
+                            {FONT_GROUPS.map(group => (
+                                <optgroup key={group.label} label={group.label}>
+                                    {group.options.map(f => (
+                                        <option key={f.name} value={f.family} style={{ fontFamily: f.family }}>
+                                            {f.label}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            ))}
+                        </select>
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-yohaku-text-muted">
+                            <Icons.ChevronDown />
+                        </div>
+                    </div>
+
+                    {/* Font size */}
+                    <input
+                        type="number"
+                        value={Math.round(element.fontSize)}
+                        min={1} max={999}
+                        onChange={(e) => {
+                            const val = Math.min(999, Math.max(1, Number(e.target.value)));
+                            if (!isNaN(val)) onUpdate({ fontSize: val });
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="bg-yohaku-bg-main hover:bg-gray-100 text-yohaku-text-main text-xs font-medium rounded-lg px-1 py-1.5 outline-none w-11 text-center transition-colors flex-shrink-0"
+                    />
+
+                    <div className="w-px h-4 bg-gray-200 flex-shrink-0" />
+
+                    {/* More toggle */}
+                    <Tooltip text={showMore ? '收合設定' : '更多設定'}>
+                        <button
+                            onClick={() => setShowMore(!showMore)}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className={`w-7 h-7 flex items-center justify-center rounded-lg text-yohaku-text-main transition-colors flex-shrink-0 ${showMore ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        >
+                            <Icons.More />
+                        </button>
+                    </Tooltip>
+
+                    {/* Done */}
+                    <button onClick={handleDone} onMouseDown={(e) => e.stopPropagation()} className="w-7 h-7 flex items-center justify-center rounded-lg text-[#AF52DE] bg-purple-50 hover:bg-[#AF52DE] hover:text-white transition-colors flex-shrink-0">
+                        <Icons.Check />
+                    </button>
                 </div>
 
-                {/* Font size */}
-                <input
-                    type="number"
-                    value={Math.round(element.fontSize)}
-                    min={1} max={999}
-                    onChange={(e) => {
-                        const val = Math.min(999, Math.max(1, Number(e.target.value)));
-                        if (!isNaN(val)) onUpdate({ fontSize: val });
-                    }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    className="bg-yohaku-bg-main hover:bg-gray-100 text-yohaku-text-main text-sm font-medium rounded-lg px-2 py-1.5 outline-none w-14 text-center transition-colors"
-                />
+                {/* 第二排：直/橫書 · 對齊 · B/I/U · 顏色按鈕 (前後整齊對齊) */}
+                <div className="flex items-center justify-between w-full pt-0.5 border-t border-gray-100/80">
+                    {/* 直/橫書 */}
+                    <div className="flex bg-yohaku-bg-main rounded-lg p-0.5">
+                        <Tooltip text="橫向排版">
+                            <button onClick={() => handleWritingModeChange('horizontal')} className={`p-1 rounded-md transition-all ${(!element.writingMode || element.writingMode === 'horizontal') ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.TextHorizontal /></button>
+                        </Tooltip>
+                        <Tooltip text="直向排版">
+                            <button onClick={() => handleWritingModeChange('vertical')} className={`p-1 rounded-md transition-all ${element.writingMode === 'vertical' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.TextVertical /></button>
+                        </Tooltip>
+                    </div>
 
-                <div className="w-px h-8 bg-gray-200" />
+                    <div className="w-px h-4 bg-gray-200 flex-shrink-0" />
 
-                <div className="flex-1" />
+                    {/* 對齊 */}
+                    <div className="flex bg-yohaku-bg-main rounded-lg p-0.5">
+                        <Tooltip text="靠左對齊">
+                            <button onClick={() => onUpdate({ align: 'left' })} className={`p-1 rounded-md transition-all ${element.align === 'left' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.AlignLeft /></button>
+                        </Tooltip>
+                        <Tooltip text="置中對齊">
+                            <button onClick={() => onUpdate({ align: 'center' })} className={`p-1 rounded-md transition-all ${element.align === 'center' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.AlignCenter /></button>
+                        </Tooltip>
+                        <Tooltip text="靠右對齊">
+                            <button onClick={() => onUpdate({ align: 'right' })} className={`p-1 rounded-md transition-all ${element.align === 'right' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.AlignRight /></button>
+                        </Tooltip>
+                    </div>
 
-                {/* 文字色 + 背景色 — always in top bar with label; items-end aligns all at bottom */}
-                <ColorPickerButton label="文字色" color={element.color} onChange={(c) => onUpdate({ color: c })} />
-                <ColorPickerButton label="背景色" color={element.backgroundColor ?? 'transparent'} onChange={(c) => onUpdate({ backgroundColor: c })} />
+                    <div className="w-px h-4 bg-gray-200 flex-shrink-0" />
 
-                <div className="w-px h-8 bg-gray-200" />
+                    {/* B / I / U */}
+                    <div className="flex gap-0.5">
+                        <Tooltip text="粗體">
+                            <button onClick={() => onUpdate({ isBold: !element.isBold })} className={`p-1 rounded-md transition-all ${element.isBold ? 'bg-black text-white' : 'hover:bg-gray-100 text-yohaku-text-main'}`}><Icons.Bold /></button>
+                        </Tooltip>
+                        <Tooltip text="斜體">
+                            <button onClick={() => onUpdate({ isItalic: !element.isItalic })} className={`p-1 rounded-md transition-all ${element.isItalic ? 'bg-black text-white' : 'hover:bg-gray-100 text-yohaku-text-main'}`}><Icons.Italic /></button>
+                        </Tooltip>
+                        <Tooltip text="底線">
+                            <button onClick={() => onUpdate({ isUnderline: !element.isUnderline })} className={`p-1 rounded-md transition-all ${element.isUnderline ? 'bg-black text-white' : 'hover:bg-gray-100 text-yohaku-text-main'}`}><Icons.Underline /></button>
+                        </Tooltip>
+                    </div>
 
-                <button
-                    onClick={() => setShowMore(!showMore)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-yohaku-text-main transition-colors ${showMore ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-                >
-                    <Icons.More />
-                </button>
+                    <div className="w-px h-4 bg-gray-200 flex-shrink-0" />
 
-                <button onClick={handleDone} onMouseDown={(e) => e.stopPropagation()} className="w-8 h-8 flex items-center justify-center rounded-lg text-[#AF52DE] bg-purple-50 hover:bg-[#AF52DE] hover:text-white transition-colors">
-                    <Icons.Check />
-                </button>
+                    {/* Text Color + Background Color */}
+                    <div className="flex items-center gap-1">
+                        <ColorPickerButton
+                            iconName="format_color_text"
+                            tooltip="文字顏色"
+                            color={element.color}
+                            onChange={(c) => onUpdate({ color: c })}
+                        />
+                        <ColorPickerButton
+                            iconName="format_color_fill"
+                            tooltip="背景顏色"
+                            color={element.backgroundColor ?? 'transparent'}
+                            onChange={(c) => onUpdate({ backgroundColor: c })}
+                            isBackground={true}
+                        />
+                    </div>
+
+                </div>
+
             </div>
 
-            {/* ── Expanded Panel ── */}
+            {/* ── 展開折疊區：純拉桿微調（間距拉桿與效果拉桿列表） ── */}
             {showMore && (
-                <div className="flex flex-col gap-0 p-1 pt-0.5" onMouseDown={(e) => e.stopPropagation()}>
-                    <div className="h-px bg-gray-100 w-full mb-2.5" />
+                <div className="flex flex-col gap-0 px-0.5 pb-1 pt-1" onMouseDown={(e) => e.stopPropagation()}>
+                    <div className="h-px bg-gray-100 w-full mb-2" />
 
-                    {/* Two-column layout */}
-                    <div className="flex gap-0">
+                    {/* 間距拉桿 (行距 · 字距 · 彎曲) */}
+                    <div className="flex flex-col gap-1.5 pb-2">
+                        <SliderControl icon="format_line_spacing" tooltip="行距" value={element.lineHeight} onDragStart={onSnapshot} onChange={(val) => onUpdate({ lineHeight: val }, { addToHistory: false })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
+                        <SliderControl icon="format_letter_spacing" tooltip="字距" value={element.letterSpacing || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ letterSpacing: val }, { addToHistory: false })} min={-20} max={100} step={1} unit="" decimals={0} />
+                        <SliderControl customIcon={<Icons.CurveText />} tooltip="彎曲" value={(element as any).curveStrength || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ curveStrength: val } as any, { addToHistory: false })} min={-100} max={100} step={1} unit="" decimals={0} />
+                    </div>
 
-                        {/* ── LEFT COLUMN: Typography & Layout ── */}
-                        <div className="flex flex-col flex-1 pr-3">
-
-                            {/* Row: Writing mode + Align + B/I/U on one line */}
-                            <div className="flex items-center gap-1.5">
-                                {/* 直/橫書 */}
-                                <div className="flex bg-yohaku-bg-main rounded-lg p-0.5">
-                                    <button onClick={() => handleWritingModeChange('horizontal')} className={`p-1.5 rounded-md transition-all ${(!element.writingMode || element.writingMode === 'horizontal') ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.TextHorizontal /></button>
-                                    <button onClick={() => handleWritingModeChange('vertical')} className={`p-1.5 rounded-md transition-all ${element.writingMode === 'vertical' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.TextVertical /></button>
-                                </div>
-                                <div className="w-px h-4 bg-gray-200" />
-                                {/* 對齊 */}
-                                <div className="flex bg-yohaku-bg-main rounded-lg p-0.5">
-                                    <button onClick={() => onUpdate({ align: 'left' })} className={`p-1.5 rounded-md transition-all ${element.align === 'left' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.AlignLeft /></button>
-                                    <button onClick={() => onUpdate({ align: 'center' })} className={`p-1.5 rounded-md transition-all ${element.align === 'center' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.AlignCenter /></button>
-                                    <button onClick={() => onUpdate({ align: 'right' })} className={`p-1.5 rounded-md transition-all ${element.align === 'right' ? 'bg-white shadow-sm text-black' : 'text-yohaku-text-muted hover:text-gray-600'}`}><Icons.AlignRight /></button>
-                                </div>
-                                <div className="w-px h-4 bg-gray-200" />
-                                {/* B / I / U */}
-                                <div className="flex gap-0.5">
-                                    <button onClick={() => onUpdate({ isBold: !element.isBold })} className={`p-1.5 rounded-lg transition-all ${element.isBold ? 'bg-black text-white' : 'hover:bg-gray-100 text-yohaku-text-main'}`}><Icons.Bold /></button>
-                                    <button onClick={() => onUpdate({ isItalic: !element.isItalic })} className={`p-1.5 rounded-lg transition-all ${element.isItalic ? 'bg-black text-white' : 'hover:bg-gray-100 text-yohaku-text-main'}`}><Icons.Italic /></button>
-                                    <button onClick={() => onUpdate({ isUnderline: !element.isUnderline })} className={`p-1.5 rounded-lg transition-all ${element.isUnderline ? 'bg-black text-white' : 'hover:bg-gray-100 text-yohaku-text-main'}`}><Icons.Underline /></button>
-                                </div>
-                            </div>
-
-                            {/* Sliders — fill the space below the toolbar, justify-between
-                                spreads the three evenly with 彎曲 aligned to 光暈 at the bottom */}
-                            <div className="flex flex-col flex-1 justify-between pt-2.5 pb-3">
-                                <SliderControl label="行距" value={element.lineHeight} onDragStart={onSnapshot} onChange={(val) => onUpdate({ lineHeight: val }, { addToHistory: false })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
-                                <SliderControl label="字距" value={element.letterSpacing || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ letterSpacing: val }, { addToHistory: false })} min={-20} max={100} step={1} unit="px" decimals={0} />
-                                <SliderControl label="彎曲" value={(element as any).curveStrength || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ curveStrength: val } as any, { addToHistory: false })} min={-100} max={100} step={1} unit="" decimals={0} />
-                            </div>
-                        </div>
-
-                        {/* ── Vertical divider ── */}
-                        <div className="w-px bg-gray-100 mx-1 self-stretch" />
-
-                        {/* ── RIGHT COLUMN: Effects (文字色/背景色 are in top bar) ── */}
-                        <div className="flex flex-col gap-2 pl-2.5" style={{ width: 152 }}>
-                            {/* 邊框 */}
-                            <div className="flex items-center gap-2">
-                                <ColorPickerButton label="邊框" color={element.strokeColor ?? '#FF3B30'} onChange={(c) => onUpdate({ strokeColor: c })} />
-                                <SliderControl label="粗細" value={element.strokeWidth || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ strokeWidth: val }, { addToHistory: false })} min={0} max={20} />
-                            </div>
-                            {/* 陰影 */}
-                            <div className="flex items-center gap-2">
-                                <ColorPickerButton label="陰影" color={element.shadowColor} onChange={(c) => onUpdate({ shadowColor: c })} />
-                                <SliderControl label="模糊" value={element.shadowBlur || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ shadowBlur: val }, { addToHistory: false })} min={0} max={50} />
-                            </div>
-                            {/* 光暈 */}
-                            <div className="flex items-center gap-2">
-                                <ColorPickerButton label="光暈" color={element.glowColor} onChange={(c) => onUpdate({ glowColor: c })} />
-                                <SliderControl label="強度" value={element.glowBlur || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ glowBlur: val }, { addToHistory: false })} min={0} max={50} />
-                            </div>
-                        </div>
-
+                    {/* 效果拉桿 (邊框 · 陰影 · 光暈) */}
+                    <div className="h-px bg-gray-100 w-full mb-1.5" />
+                    <div className="flex flex-col gap-0.5">
+                        <EffectRow
+                            iconName="border_color"
+                            tooltip="邊框"
+                            color={element.strokeColor ?? '#FF3B30'}
+                            onColorChange={(c) => onUpdate({ strokeColor: c })}
+                            value={element.strokeWidth || 0}
+                            onValueChange={(val) => onUpdate({ strokeWidth: val }, { addToHistory: false })}
+                            onDragStart={onSnapshot}
+                            min={0} max={20}
+                        />
+                        <EffectRow
+                            iconName="shadow"
+                            tooltip="陰影"
+                            color={element.shadowColor}
+                            onColorChange={(c) => onUpdate({ shadowColor: c })}
+                            value={element.shadowBlur || 0}
+                            onValueChange={(val) => onUpdate({ shadowBlur: val }, { addToHistory: false })}
+                            onDragStart={onSnapshot}
+                            min={0} max={50}
+                        />
+                        <EffectRow
+                            iconName="flare"
+                            tooltip="光暈"
+                            color={element.glowColor}
+                            onColorChange={(c) => onUpdate({ glowColor: c })}
+                            value={element.glowBlur || 0}
+                            onValueChange={(val) => onUpdate({ glowBlur: val }, { addToHistory: false })}
+                            onDragStart={onSnapshot}
+                            min={0} max={50}
+                        />
                     </div>
                 </div>
             )}
