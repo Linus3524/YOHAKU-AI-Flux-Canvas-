@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { TextElement } from '../types';
 import { Icon } from './Icon';
 
@@ -94,11 +94,17 @@ const Icons = {
     ChevronDown: () => <Icon name="expand_more" size={8} />,
     TextHorizontal: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16M4 12l4-4m-4 4l4 4"/></svg>,
     TextVertical: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v16M12 4l-4 4m4-4l4 4"/></svg>,
-    CurveText: () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17C8 7 16 7 21 17"/></svg>
+    CurveText: () => (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 17 C 8 12, 16 12, 20 17" strokeWidth="2.2" />
+            <path d="M9 11 L12 4 L15 11" />
+            <path d="M10 9 H14" />
+        </svg>
+    )
 }
 
 // ── Tooltip ─────────────────────────────────────────────────────────────────
-const Tooltip = ({ text, children, position = 'top' }: { text: string; children: React.ReactNode; position?: 'top' | 'bottom' }) => {
+const Tooltip = ({ text, children, position = 'top', className = '' }: { text: string; children: React.ReactNode; position?: 'top' | 'bottom'; className?: string }) => {
     const [show, setShow] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -111,7 +117,7 @@ const Tooltip = ({ text, children, position = 'top' }: { text: string; children:
     };
 
     return (
-        <div className="relative inline-flex" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+        <div className={`relative inline-flex ${className}`} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
             {children}
             {show && (
                 <div className={`absolute left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gray-800 text-white text-[10px] font-medium rounded whitespace-nowrap z-[9999] pointer-events-none shadow-md ${position === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
@@ -122,11 +128,80 @@ const Tooltip = ({ text, children, position = 'top' }: { text: string; children:
     );
 };
 
-// ── Icon Slider Control ─────────────────────────────────────────────────────
-const SliderControl = ({ icon, customIcon, tooltip, value, onChange, onDragStart, min, max, step = 1, unit = "", decimals }: {
+const NumericInput = ({ label, value, min, max, step, decimals, unit, disabled = false, onFocus, onChange, className = '' }: {
+    label: string;
+    value: number;
+    min: number;
+    max: number;
+    step: number;
+    decimals: number;
+    unit?: string;
+    disabled?: boolean;
+    onFocus?: () => void;
+    onChange: (value: number) => void;
+    className?: string;
+}) => {
+    const format = useCallback((next: number) => next.toFixed(decimals), [decimals]);
+    const [draft, setDraft] = useState(() => format(value));
+    const [isFocused, setIsFocused] = useState(false);
+
+    useEffect(() => {
+        if (!isFocused) setDraft(format(value));
+    }, [value, isFocused, format]);
+
+    const commit = (raw: string) => {
+        const parsed = Number(raw);
+        const next = Number.isFinite(parsed)
+            ? Math.min(max, Math.max(min, parsed))
+            : value;
+        setDraft(format(next));
+        if (next !== value) onChange(next);
+    };
+
+    return (
+        <div className={`h-7 flex items-center rounded-md bg-[#F5F5F7] ring-1 ring-transparent focus-within:ring-[#AF52DE]/25 flex-shrink-0 ${className}`}>
+            <input
+                type="number"
+                min={min}
+                max={max}
+                step={step}
+                value={draft}
+                onFocus={() => {
+                    setIsFocused(true);
+                    onFocus?.();
+                }}
+                onBlur={(e) => {
+                    setIsFocused(false);
+                    commit(e.currentTarget.value);
+                }}
+                onChange={(e) => {
+                    const raw = e.target.value;
+                    setDraft(raw);
+                    if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return;
+                    const parsed = Number(raw);
+                    if (Number.isFinite(parsed) && parsed >= min && parsed <= max) onChange(parsed);
+                }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                    if (e.key === 'Escape') {
+                        setDraft(format(value));
+                        e.currentTarget.blur();
+                    }
+                }}
+                disabled={disabled}
+                aria-label={label}
+                className="w-full min-w-0 bg-transparent text-[10px] font-mono text-[#3A3A3C] text-right outline-none pl-1 disabled:cursor-not-allowed"
+            />
+            {unit && <span className="text-[9px] text-[#8E8E93] pr-1.5 select-none">{unit}</span>}
+        </div>
+    );
+};
+
+// ── Labeled Slider Control ──────────────────────────────────────────────────
+const SliderControl = ({ icon, customIcon, label, value, onChange, onDragStart, min, max, step = 1, unit = "", decimals, disabled = false }: {
     icon?: string;
     customIcon?: React.ReactNode;
-    tooltip: string;
+    label: string;
     value: number;
     onChange: (val: number) => void;
     onDragStart?: () => void;
@@ -135,17 +210,18 @@ const SliderControl = ({ icon, customIcon, tooltip, value, onChange, onDragStart
     step?: number;
     unit?: string;
     decimals?: number;
-}) => (
-    <div className="flex items-center gap-2 py-1 px-1 rounded-lg w-full">
-        {/* 左側 Icon */}
-        <Tooltip text={tooltip}>
+    disabled?: boolean;
+}) => {
+    const precision = decimals ?? (step < 1 ? 1 : 0);
+    return (
+    <div className={`flex items-center gap-2 min-h-7 px-1 rounded-lg w-full ${disabled ? 'opacity-40' : ''}`}>
+        <Tooltip text={label}>
             <div className="w-6 h-6 rounded-md flex items-center justify-center text-yohaku-text-muted flex-shrink-0">
-                {customIcon ? customIcon : <Icon name={icon || ''} size={14} />}
+                {customIcon ? customIcon : <Icon name={icon || ''} size={13} />}
             </div>
         </Tooltip>
-        
-        {/* Slider 軌道與圓點 */}
-        <div className="flex-1 flex items-center h-4">
+
+        <div className="flex-1 flex items-center h-4 min-w-0">
             <input
                 type="range"
                 min={min}
@@ -155,16 +231,28 @@ const SliderControl = ({ icon, customIcon, tooltip, value, onChange, onDragStart
                 onMouseDown={() => onDragStart?.()}
                 onTouchStart={() => onDragStart?.()}
                 onChange={(e) => onChange(Number(e.target.value))}
-                className="slider-thumb-sm w-full cursor-pointer"
+                disabled={disabled}
+                aria-label={label}
+                className="slider-thumb-sm w-full cursor-pointer disabled:cursor-not-allowed"
             />
         </div>
 
-        {/* Value */}
-        <span className="text-[10px] font-mono text-yohaku-text-muted w-7 text-right flex-shrink-0">
-            {value.toFixed(decimals ?? (step < 1 ? 1 : 0))}{unit}
-        </span>
+        <NumericInput
+            label={`${label}數值`}
+            value={value}
+            min={min}
+            max={max}
+            step={step}
+            decimals={precision}
+            unit={unit}
+            disabled={disabled}
+            onFocus={onDragStart}
+            onChange={onChange}
+            className="w-[60px] h-6 bg-transparent hover:bg-[#F5F5F7]"
+        />
     </div>
-);
+    );
+};
 
 // ── Color Picker Button (Icon 直接反映顏色，無額外橫條) ──────────────────────────
 const ColorPickerButton = ({ color, onChange, iconName, tooltip, isBackground = false }: {
@@ -263,6 +351,7 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
     }, [value]);
 
     const toggleEffect = () => {
+        onDragStart?.();
         if (isActive) {
             onValueChange(0);
         } else {
@@ -273,7 +362,7 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
     const displayColor = color || '#007AFF';
 
     return (
-        <div className={`flex items-center gap-2 py-1 px-1 rounded-lg transition-colors ${isActive ? 'bg-yohaku-bg-main/70' : ''}`}>
+        <div className={`flex items-center gap-1.5 min-h-8 px-1 rounded-lg transition-colors ${isActive ? 'bg-yohaku-bg-main/70' : ''}`}>
             {/* 色票與 Icon 直接結合 */}
             <div className="relative flex-shrink-0">
                 <Tooltip text={`${tooltip}顏色`}>
@@ -328,8 +417,10 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
                 )}
             </div>
 
+            <span className="w-[30px] text-[11px] font-medium text-[#3A3A3C] flex-shrink-0">{tooltip}</span>
+
             {/* Slider 軌道與圓點 */}
-            <div className="flex-1 flex items-center h-4">
+            <div className="flex-1 flex items-center h-4 min-w-0">
                 <input
                     type="range"
                     min={min}
@@ -339,14 +430,22 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
                     onMouseDown={() => onDragStart?.()}
                     onTouchStart={() => onDragStart?.()}
                     onChange={(e) => onValueChange(Number(e.target.value))}
+                    aria-label={`${tooltip}強度`}
                     className={`slider-thumb-sm w-full cursor-pointer ${!isActive ? 'opacity-40' : ''}`}
                 />
             </div>
 
-            {/* Value */}
-            <span className="text-[10px] font-mono text-yohaku-text-muted w-7 text-right flex-shrink-0">
-                {Math.round(value)}
-            </span>
+            <NumericInput
+                label={`${tooltip}強度數值`}
+                value={value}
+                min={min}
+                max={max}
+                step={step}
+                decimals={0}
+                onFocus={onDragStart}
+                onChange={onValueChange}
+                className="w-10 bg-white/80 ring-black/[0.04]"
+            />
 
             {/* Eye toggle */}
             <Tooltip text={isActive ? '關閉效果' : '開啟效果'}>
@@ -366,16 +465,43 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
 export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, onUpdate, onSnapshot, onClose }) => {
     const initialElementState = useRef<TextElement>(element);
     const [showMore, setShowMore] = useState(false);
+    const [advancedTab, setAdvancedTab] = useState<'typography' | 'appearance'>('typography');
+    const panelRef = useRef<HTMLDivElement>(null);
     
     // Draggable State
-    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 165, y: window.innerHeight - 300 });
+    const [position, setPosition] = useState({
+        x: Math.max(12, window.innerWidth / 2 - 165),
+        y: Math.max(12, window.innerHeight - 300),
+    });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef({ x: 0, y: 0 });
 
     useEffect(() => {
         initialElementState.current = element;
         setShowMore(false);
+        setAdvancedTab('typography');
     }, [element.id]);
+
+    const clampPanelPosition = useCallback((next: { x: number; y: number }) => {
+        const margin = 12;
+        const width = panelRef.current?.offsetWidth || 330;
+        const height = panelRef.current?.offsetHeight || 180;
+        return {
+            x: Math.min(Math.max(margin, next.x), Math.max(margin, window.innerWidth - width - margin)),
+            y: Math.min(Math.max(margin, next.y), Math.max(margin, window.innerHeight - height - margin)),
+        };
+    }, []);
+
+    // 展開、切頁或視窗縮放後，確保整個浮動面板仍留在可視範圍內。
+    useEffect(() => {
+        const clamp = () => setPosition(prev => clampPanelPosition(prev));
+        const frame = requestAnimationFrame(clamp);
+        window.addEventListener('resize', clamp);
+        return () => {
+            cancelAnimationFrame(frame);
+            window.removeEventListener('resize', clamp);
+        };
+    }, [showMore, advancedTab, element.id, clampPanelPosition]);
 
     // --- Toggle Writing Mode with Auto-Resize ---
     const handleWritingModeChange = (mode: 'horizontal' | 'vertical') => {
@@ -407,10 +533,10 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
         const handleMouseMove = (e: MouseEvent) => {
             if (!isDragging) return;
             e.preventDefault();
-            setPosition({
+            setPosition(clampPanelPosition({
                 x: e.clientX - dragStartRef.current.x,
                 y: e.clientY - dragStartRef.current.y
-            });
+            }));
         };
         const handleMouseUp = () => setIsDragging(false);
 
@@ -422,15 +548,18 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDragging]);
+    }, [isDragging, clampPanelPosition]);
 
     return (
         <div
+            ref={panelRef}
             className="fixed z-[1000] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.12)] border border-black/[0.06] p-2 flex flex-col gap-2 animate-fade-in-up transition-shadow duration-200"
             style={{
                 left: position.x,
                 top: position.y,
                 width: 330,
+                maxHeight: 'calc(100vh - 24px)',
+                overflowY: 'auto',
                 cursor: isDragging ? 'grabbing' : 'default',
                 boxShadow: isDragging ? '0 20px 60px rgba(0,0,0,0.18)' : '0 10px 40px rgba(0,0,0,0.12)'
             }}
@@ -567,52 +696,108 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
 
             </div>
 
-            {/* ── 展開折疊區：純拉桿微調（間距拉桿與效果拉桿列表） ── */}
+            {/* ── 展開折疊區：排版與外觀分頁 ── */}
             {showMore && (
-                <div className="flex flex-col gap-0 px-0.5 pb-1 pt-1" onMouseDown={(e) => e.stopPropagation()}>
-                    <div className="h-px bg-gray-100 w-full mb-2" />
-
-                    {/* 間距拉桿 (行距 · 字距 · 彎曲) */}
-                    <div className="flex flex-col gap-1.5 pb-2">
-                        <SliderControl icon="format_line_spacing" tooltip="行距" value={element.lineHeight} onDragStart={onSnapshot} onChange={(val) => onUpdate({ lineHeight: val }, { addToHistory: false })} min={0.8} max={3.0} step={0.1} unit="×" decimals={1} />
-                        <SliderControl icon="format_letter_spacing" tooltip="字距" value={element.letterSpacing || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ letterSpacing: val }, { addToHistory: false })} min={-20} max={100} step={1} unit="" decimals={0} />
-                        <SliderControl customIcon={<Icons.CurveText />} tooltip="彎曲" value={(element as any).curveStrength || 0} onDragStart={onSnapshot} onChange={(val) => onUpdate({ curveStrength: val } as any, { addToHistory: false })} min={-100} max={100} step={1} unit="" decimals={0} />
-                    </div>
-
-                    {/* 效果拉桿 (邊框 · 陰影 · 光暈) */}
+                <div className="flex flex-col px-0.5 pb-1 pt-0.5" onMouseDown={(e) => e.stopPropagation()}>
                     <div className="h-px bg-gray-100 w-full mb-1.5" />
-                    <div className="flex flex-col gap-0.5">
-                        <EffectRow
-                            iconName="border_color"
-                            tooltip="邊框"
-                            color={element.strokeColor ?? '#FF3B30'}
-                            onColorChange={(c) => onUpdate({ strokeColor: c })}
-                            value={element.strokeWidth || 0}
-                            onValueChange={(val) => onUpdate({ strokeWidth: val }, { addToHistory: false })}
-                            onDragStart={onSnapshot}
-                            min={0} max={20}
-                        />
-                        <EffectRow
-                            iconName="shadow"
-                            tooltip="陰影"
-                            color={element.shadowColor}
-                            onColorChange={(c) => onUpdate({ shadowColor: c })}
-                            value={element.shadowBlur || 0}
-                            onValueChange={(val) => onUpdate({ shadowBlur: val }, { addToHistory: false })}
-                            onDragStart={onSnapshot}
-                            min={0} max={50}
-                        />
-                        <EffectRow
-                            iconName="flare"
-                            tooltip="光暈"
-                            color={element.glowColor}
-                            onColorChange={(c) => onUpdate({ glowColor: c })}
-                            value={element.glowBlur || 0}
-                            onValueChange={(val) => onUpdate({ glowBlur: val }, { addToHistory: false })}
-                            onDragStart={onSnapshot}
-                            min={0} max={50}
-                        />
+
+                    <div className="grid grid-cols-2 gap-0.5 p-0.5 bg-[#F5F5F7] rounded-lg mb-1.5">
+                        {([
+                            ['typography', '排版'],
+                            ['appearance', '外觀'],
+                        ] as const).map(([tab, label]) => (
+                            <button
+                                key={tab}
+                                type="button"
+                                aria-pressed={advancedTab === tab}
+                                onClick={() => setAdvancedTab(tab)}
+                                className={`h-5.5 rounded text-[10px] font-medium transition-all ${
+                                    advancedTab === tab
+                                        ? 'bg-white text-[#1D1D1F] shadow-2xs font-semibold'
+                                        : 'text-[#8E8E93] hover:text-[#3A3A3C]'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
                     </div>
+
+                    {advancedTab === 'typography' ? (
+                        <div className="flex flex-col gap-0.5">
+                            <SliderControl
+                                icon="format_letter_spacing"
+                                label="字距"
+                                value={element.letterSpacing || 0}
+                                onDragStart={onSnapshot}
+                                onChange={(val) => onUpdate({ letterSpacing: val }, { addToHistory: false })}
+                                min={-20}
+                                max={100}
+                                step={1}
+                                unit="px"
+                                decimals={0}
+                            />
+                            <SliderControl
+                                icon="format_line_spacing"
+                                label="行距"
+                                value={element.lineHeight}
+                                onDragStart={onSnapshot}
+                                onChange={(val) => onUpdate({ lineHeight: val }, { addToHistory: false })}
+                                min={0.8}
+                                max={3.0}
+                                step={0.1}
+                                unit="×"
+                                decimals={1}
+                            />
+                            <SliderControl
+                                customIcon={<Icons.CurveText />}
+                                label="彎曲"
+                                value={(element as any).curveStrength || 0}
+                                onDragStart={onSnapshot}
+                                onChange={(val) => onUpdate({ curveStrength: val } as any, { addToHistory: false })}
+                                min={-100}
+                                max={100}
+                                step={1}
+                                unit=""
+                                decimals={0}
+                            />
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-0.5">
+                            <EffectRow
+                                iconName="border_color"
+                                tooltip="邊框"
+                                color={element.strokeColor ?? '#FF3B30'}
+                                onColorChange={(c) => onUpdate({ strokeColor: c })}
+                                value={element.strokeWidth || 0}
+                                onValueChange={(val) => onUpdate({ strokeWidth: val }, { addToHistory: false })}
+                                onDragStart={onSnapshot}
+                                min={0}
+                                max={20}
+                            />
+                            <EffectRow
+                                iconName="shadow"
+                                tooltip="陰影"
+                                color={element.shadowColor}
+                                onColorChange={(c) => onUpdate({ shadowColor: c })}
+                                value={element.shadowBlur || 0}
+                                onValueChange={(val) => onUpdate({ shadowBlur: val }, { addToHistory: false })}
+                                onDragStart={onSnapshot}
+                                min={0}
+                                max={50}
+                            />
+                            <EffectRow
+                                iconName="flare"
+                                tooltip="光暈"
+                                color={element.glowColor}
+                                onColorChange={(c) => onUpdate({ glowColor: c })}
+                                value={element.glowBlur || 0}
+                                onValueChange={(val) => onUpdate({ glowBlur: val }, { addToHistory: false })}
+                                onDragStart={onSnapshot}
+                                min={0}
+                                max={50}
+                            />
+                        </div>
+                    )}
                 </div>
             )}
         </div>
