@@ -16,8 +16,8 @@ import type {
 } from '../types';
 import { useHistoryState } from './useHistoryState';
 import { trimCanvas, wrapTextCanvas, loadImage, createShapeDataUrl, createArrowDataUrl, COLORS, getRandomPosition, measureTextVisualBounds, requestTextAutoEdit } from '../utils/helpers';
-import { drawTextOnCanvas } from '../utils/textCanvas'; // ✅ 修改
-import { captureTextElementAsImage } from '../utils/svgCapture';
+import { rasterizeTextElement } from '../utils/textRasterize';
+import { getTextEffectPadding } from '../utils/textEffects';
 import type { CanvasApi } from '../components/InfiniteCanvas';
 import { saveFileHandle, loadFileHandle, clearFileHandle, verifyHandlePermission } from '../utils/fileHandleStore';
 import { computeDragSnap } from '../utils/snapping';
@@ -820,7 +820,9 @@ export const useCanvas = (showToast: (msg: string) => void) => {
 
             // 建立離屏畫布以隔離效果 (解決淡出遮罩與混合模式衝突)
             const offCanvas = document.createElement('canvas');
-            const offPadding = 100; // 預留緩衝，避免陰影或粗線條被裁切
+            const offPadding = el.type === 'text'
+                ? Math.max(100, getTextEffectPadding(el as TextElement))
+                : 100;
             offCanvas.width = (el.width + offPadding * 2) * SCALE;
             offCanvas.height = (el.height + offPadding * 2) * SCALE;
             const offCtx = offCanvas.getContext('2d');
@@ -1014,29 +1016,15 @@ export const useCanvas = (showToast: (msg: string) => void) => {
                     offCtx.save();
                     // 注意：外層 ctx 合成 offCanvas 時已套用 el.rotation（translate+rotate），
                     // 這裡不得再 rotate 一次，否則旋轉過的文字會被雙重旋轉而跑位。
-                    const isCurved = Math.abs((textEl as any).curveStrength || 0) > 0.1;
-                    if (isCurved) {
-                        // 彎曲文字：與「轉換成圖片」同一套 DOM 截取，確保與畫面一致
-                        // （canvas 重繪會因字符寬度測量誤差導致弧心偏移）
-                        const fxPad = Math.max(
-                            textEl.shadowBlur ? Math.ceil(textEl.shadowBlur + 4) : 0,
-                            textEl.glowBlur ? Math.ceil(textEl.glowBlur) : 0,
-                            Math.ceil((textEl.strokeWidth || 0) / 2),
-                        );
-                        const dataUrl = await captureTextElementAsImage(
-                            textEl.id, textEl.width, textEl.height, fxPad, SCALE,
-                            (textEl.backgroundColor && textEl.backgroundColor !== 'transparent')
-                                ? textEl.backgroundColor : undefined,
-                            textEl.fontFamily, textEl.text,
-                        );
-                        const img = await loadImage(dataUrl);
-                        const drawW = textEl.width + fxPad * 2;
-                        const drawH = textEl.height + fxPad * 2;
-                        offCtx.drawImage(img, -(drawW / 2), -(drawH / 2), drawW, drawH);
-                    } else {
-                        await document.fonts.ready;
-                        drawTextOnCanvas(offCtx, textEl, -textEl.width / 2, -textEl.height / 2);
-                    }
+                    const rasterized = await rasterizeTextElement(textEl, SCALE);
+                    const image = await loadImage(rasterized.dataUrl);
+                    offCtx.drawImage(
+                        image,
+                        -rasterized.width / 2,
+                        -rasterized.height / 2,
+                        rasterized.width,
+                        rasterized.height,
+                    );
                     offCtx.restore();
 
                 } else if (el.type === 'note') {

@@ -1,5 +1,6 @@
 import { TextElement } from '../types';
 import { wrapTextCanvas, isCJK, getTextBoxPadding } from './helpers';
+import { colorWithOpacity, getTextShadowOffset } from './textEffects';
 
 export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement, x: number, y: number): void => {
     const textPadding = getTextBoxPadding(el);
@@ -87,16 +88,17 @@ export const drawTextOnCanvas = (ctx: CanvasRenderingContext2D, el: TextElement,
         // Pass 1: Shadow (if present)
         // Canvas shadowBlur σ = blur/2; CSS drop-shadow blur = σ directly → multiply by 2 to match
         if (hasShadow) {
-            ctx.shadowColor = el.shadowColor!;
+            const shadowOffset = getTextShadowOffset(el);
+            ctx.shadowColor = colorWithOpacity(el.shadowColor!, el.shadowOpacity);
             ctx.shadowBlur = el.shadowBlur! * currentTransform.a * 2;
-            ctx.shadowOffsetX = 4 * currentTransform.a;
-            ctx.shadowOffsetY = 4 * currentTransform.d;
+            ctx.shadowOffsetX = shadowOffset.x * currentTransform.a;
+            ctx.shadowOffsetY = shadowOffset.y * currentTransform.d;
             ctx.drawImage(offCanvas, 0, 0);
         }
 
         // Pass 2: Glow (if present)
         if (hasGlow) {
-            ctx.shadowColor = el.glowColor!;
+            ctx.shadowColor = colorWithOpacity(el.glowColor!, el.glowOpacity);
             ctx.shadowBlur = el.glowBlur! * currentTransform.a * 2;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;

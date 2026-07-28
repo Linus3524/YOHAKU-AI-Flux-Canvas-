@@ -10,6 +10,7 @@ import { generateSimpleMaskCSS } from '../utils/maskHelpers';
 import { isImageSrc } from './NodeWorkflow/mediaSrc';
 import { isGradient, parseLinearGradient, gradientAngleToSVG } from '../utils/gradientUtils'; // ✅ 修改 A (import)
 import { measureAutoNoteHeight, positionForTopAnchoredHeight, resizeNoteToContent } from '../utils/noteSizing';
+import { colorWithOpacity, getTextShadowOffset } from '../utils/textEffects';
 
 interface TransformableElementProps {
   element: CanvasElement;
@@ -1394,10 +1395,11 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
 
                             const shadowFilters = [];
                             if (el.shadowColor && el.shadowBlur !== undefined && el.shadowBlur > 0) {
-                                shadowFilters.push(`drop-shadow(4px 4px ${el.shadowBlur}px ${el.shadowColor})`);
+                                const shadowOffset = getTextShadowOffset(el);
+                                shadowFilters.push(`drop-shadow(${shadowOffset.x}px ${shadowOffset.y}px ${el.shadowBlur}px ${colorWithOpacity(el.shadowColor, el.shadowOpacity)})`);
                             }
                             if (el.glowColor && el.glowBlur !== undefined && el.glowBlur > 0) {
-                                shadowFilters.push(`drop-shadow(0 0 ${el.glowBlur}px ${el.glowColor})`);
+                                shadowFilters.push(`drop-shadow(0 0 ${el.glowBlur}px ${colorWithOpacity(el.glowColor, el.glowOpacity)})`);
                             }
                             const filterString = shadowFilters.join(' ');
 

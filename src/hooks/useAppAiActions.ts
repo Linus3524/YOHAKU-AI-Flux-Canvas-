@@ -7,8 +7,7 @@ import { gptLayerSegment, type MagicLayerOptions } from '../utils/gptLayerSplit'
 import type { LayerResult } from '../utils/falImage';
 import { detectTextBlocks } from '../utils/ocrService';
 import { splitStickerCollectionDetailed } from '../utils/imageProcessing';
-import { drawTextOnCanvas } from '../utils/textCanvas';
-import { captureTextElementAsImage } from '../utils/svgCapture';
+import { rasterizeTextElement } from '../utils/textRasterize';
 import type { CanvasElement, ImageElement, NoteElement, TextElement } from '../types';
 
 type ElementSetter = (
@@ -485,58 +484,18 @@ export const useAppAiActions = ({
 
       try {
           const scale = 3;
-          const isCurved = Math.abs((element as any).curveStrength || 0) > 0.1;
-
-          const shadowOverflow = element.shadowBlur
-              ? Math.ceil(element.shadowBlur + 4)
-              : 0;
-          const glowOverflow = element.glowBlur
-              ? Math.ceil(element.glowBlur)
-              : 0;
-          const strokeOverflow = Math.ceil((element.strokeWidth || 0) / 2);
-          const effectPadding = Math.max(shadowOverflow, glowOverflow, strokeOverflow, 0);
-
-          const canvasWidth  = element.width  + effectPadding * 2;
-          const canvasHeight = element.height + effectPadding * 2;
-
-          let newSrc: string;
-
-          if (isCurved) {
-              // 彎曲文字：直接捕捉 DOM 中的 SVG，確保像素完全吻合螢幕顯示
-              // （canvas 重繪可能因字符寬度測量誤差導致弧心偏移）
-              newSrc = await captureTextElementAsImage(
-                  element.id,
-                  element.width,
-                  element.height,
-                  effectPadding,
-                  scale,
-                  (element.backgroundColor && element.backgroundColor !== 'transparent')
-                      ? element.backgroundColor
-                      : undefined,
-                  element.fontFamily,
-                  element.text
-              );
-          } else {
-              const offCanvas = document.createElement('canvas');
-              offCanvas.width  = canvasWidth  * scale;
-              offCanvas.height = canvasHeight * scale;
-              const offCtx = offCanvas.getContext('2d')!;
-              offCtx.scale(scale, scale);
-              await document.fonts.ready;
-              drawTextOnCanvas(offCtx, element, effectPadding, effectPadding);
-              newSrc = offCanvas.toDataURL('image/png');
-          }
+          const rasterized = await rasterizeTextElement(element, scale);
 
           const newImage: ImageElement = {
               id: element.id,
               type: 'image',
-              src: newSrc,
+              src: rasterized.dataUrl,
               position: {
                   x: element.position.x,
                   y: element.position.y,
               },
-              width:    canvasWidth,
-              height:   canvasHeight,
+              width:    rasterized.width,
+              height:   rasterized.height,
               rotation: element.rotation,
               zIndex:   element.zIndex,
               isVisible: element.isVisible,

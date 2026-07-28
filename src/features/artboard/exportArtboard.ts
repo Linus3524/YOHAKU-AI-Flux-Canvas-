@@ -1,6 +1,7 @@
 import type { CanvasElement, ArtboardElement, ImageElement, TextElement, ShapeElement } from '../../types';
 import { loadImage, createShapeDataUrl, getTextBoxPadding } from '../../utils/helpers';
-import { drawTextOnCanvas } from '../../utils/textCanvas';
+import { getTextEffectPadding } from '../../utils/textEffects';
+import { rasterizeTextElement } from '../../utils/textRasterize';
 import { jsPDF } from 'jspdf';
 
 // 判斷元素是否與工作區域有交集 (Bounding Box Intersection)
@@ -69,12 +70,18 @@ export const exportArtboardAsImage = async (
 
         // 建立離屏畫布以隔離效果 (解決淡出遮罩與混合模式衝突)
         const offCanvas = document.createElement('canvas');
-        const padding = 100; // 預留緩衝，避免陰影或粗線條被裁切
-        offCanvas.width = el.width + padding * 2;
-        offCanvas.height = el.height + padding * 2;
+        const padding = el.type === 'text'
+            ? Math.max(100, getTextEffectPadding(el as TextElement))
+            : 100;
+        const offScale = el.type === 'text' ? Math.max(1, scale) : 1;
+        const offWidth = el.width + padding * 2;
+        const offHeight = el.height + padding * 2;
+        offCanvas.width = Math.ceil(offWidth * offScale);
+        offCanvas.height = Math.ceil(offHeight * offScale);
         const offCtx = offCanvas.getContext('2d');
         if (!offCtx) { ctx.restore(); continue; }
-        offCtx.translate(offCanvas.width / 2, offCanvas.height / 2);
+        offCtx.scale(offScale, offScale);
+        offCtx.translate(offWidth / 2, offHeight / 2);
 
         try {
             if (el.type === 'image' || el.type === 'drawing') {
@@ -254,13 +261,15 @@ export const exportArtboardAsImage = async (
 
             } else if (el.type === 'text') {
                 const textEl = el as TextElement;
-                const shadowOverflow = textEl.shadowBlur ? Math.ceil(textEl.shadowBlur + 8) : 0;
-                const glowOverflow   = textEl.glowBlur   ? Math.ceil(textEl.glowBlur * 1.5) : 0;
-                const strokeOverflow = Math.ceil((textEl.strokeWidth || 0) / 2);
-                const ep = Math.max(shadowOverflow, glowOverflow, strokeOverflow, 0);
-
-                await document.fonts.ready;
-                drawTextOnCanvas(offCtx, textEl, -textEl.width / 2, -textEl.height / 2);
+                const rasterized = await rasterizeTextElement(textEl, offScale);
+                const image = await loadImage(rasterized.dataUrl);
+                offCtx.drawImage(
+                    image,
+                    -rasterized.width / 2,
+                    -rasterized.height / 2,
+                    rasterized.width,
+                    rasterized.height,
+                );
 
             } else if (el.type === 'note') {
                 const noteEl = el as any;
@@ -286,7 +295,7 @@ export const exportArtboardAsImage = async (
             const blendMode = el.blendMode === 'normal' ? 'source-over' : (el.blendMode ?? 'source-over');
             ctx.globalCompositeOperation = blendMode as GlobalCompositeOperation;
             
-            ctx.drawImage(offCanvas, -offCanvas.width / 2, -offCanvas.height / 2);
+            ctx.drawImage(offCanvas, -offWidth / 2, -offHeight / 2, offWidth, offHeight);
 
         } catch(e) {
             console.error('Failed to draw element:', el.id, el.type, e);

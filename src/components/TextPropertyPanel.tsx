@@ -330,9 +330,21 @@ const ColorPickerButton = ({ color, onChange, iconName, tooltip, isBackground = 
 };
 
 // ── Effect Row (Icon 結合色票按鈕 + Slider + Eye Toggle) ────────────────────
-const EffectRow = ({ iconName, tooltip, color, defaultColor = '#007AFF', onColorChange, value, onValueChange, onDragStart, min, max, step = 1 }: {
+interface EffectAdvancedControl {
+    label: string;
+    value: number;
+    min: number;
+    max: number;
+    step?: number;
+    unit?: string;
+    decimals?: number;
+    onChange: (value: number) => void;
+}
+
+const EffectRow = ({ iconName, tooltip, valueLabel = '強度', color, defaultColor = '#007AFF', onColorChange, value, onValueChange, onDragStart, min, max, step = 1, advancedControls = [] }: {
     iconName: string;
     tooltip: string;
+    valueLabel?: string;
     color: string | undefined;
     defaultColor?: string;
     onColorChange: (c: string) => void;
@@ -342,6 +354,7 @@ const EffectRow = ({ iconName, tooltip, color, defaultColor = '#007AFF', onColor
     min: number;
     max: number;
     step?: number;
+    advancedControls?: EffectAdvancedControl[];
 }) => {
     const [colorPickerOpen, setColorPickerOpen] = useState(false);
     const isActive = value > 0;
@@ -374,7 +387,7 @@ const EffectRow = ({ iconName, tooltip, color, defaultColor = '#007AFF', onColor
         <div className={`flex items-center gap-1.5 min-h-8 px-1 rounded-lg transition-colors ${isActive ? 'bg-yohaku-bg-main/70' : ''}`}>
             {/* 色票與 Icon 直接結合 */}
             <div className="relative flex-shrink-0">
-                <Tooltip text={`${tooltip}顏色`}>
+                <Tooltip text={`${tooltip}設定`}>
                     <button
                         onClick={() => setColorPickerOpen(!colorPickerOpen)}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -397,11 +410,11 @@ const EffectRow = ({ iconName, tooltip, color, defaultColor = '#007AFF', onColor
 
                 {colorPickerOpen && (
                     <div
-                        className="absolute bottom-full left-0 mb-2 bg-white p-2.5 rounded-xl shadow-xl border border-gray-100 grid grid-cols-5 gap-1.5 w-44 cursor-default z-50 animate-fade-in-up"
+                        className={`absolute bottom-full left-0 mb-2 bg-white p-2.5 rounded-xl shadow-xl border border-gray-100 grid grid-cols-5 gap-1.5 ${advancedControls.length > 0 ? 'w-60' : 'w-44'} cursor-default z-50 animate-fade-in-up`}
                         onMouseDown={(e) => e.stopPropagation()}
                     >
                         <div className="col-span-5 flex justify-between items-center pb-1 mb-1 border-b border-gray-100">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{tooltip}顏色</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{tooltip}設定</span>
                             <button onClick={() => setColorPickerOpen(false)} className="text-yohaku-text-muted hover:text-black text-xs font-bold">&times;</button>
                         </div>
                         {PRESET_COLORS.filter(c => c !== 'transparent').map(c => (
@@ -422,6 +435,39 @@ const EffectRow = ({ iconName, tooltip, color, defaultColor = '#007AFF', onColor
                                 className="hidden"
                             />
                         </label>
+                        {advancedControls.length > 0 && (
+                            <div className="col-span-5 mt-1 pt-1.5 border-t border-gray-100 flex flex-col gap-1">
+                                {advancedControls.map(control => (
+                                    <div key={control.label} className="flex items-center gap-1.5 h-7">
+                                        <span className="w-8 flex-shrink-0 text-[10px] font-medium text-[#636366]">{control.label}</span>
+                                        <input
+                                            type="range"
+                                            min={control.min}
+                                            max={control.max}
+                                            step={control.step ?? 1}
+                                            value={control.value}
+                                            onMouseDown={() => onDragStart?.()}
+                                            onTouchStart={() => onDragStart?.()}
+                                            onChange={(event) => control.onChange(Number(event.target.value))}
+                                            aria-label={`${tooltip}${control.label}`}
+                                            className="slider-thumb-sm flex-1 min-w-0 cursor-pointer"
+                                        />
+                                        <NumericInput
+                                            label={`${tooltip}${control.label}數值`}
+                                            value={control.value}
+                                            min={control.min}
+                                            max={control.max}
+                                            step={control.step ?? 1}
+                                            decimals={control.decimals ?? 0}
+                                            unit={control.unit}
+                                            onFocus={onDragStart}
+                                            onChange={control.onChange}
+                                            className="w-[58px] h-6"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -437,13 +483,13 @@ const EffectRow = ({ iconName, tooltip, color, defaultColor = '#007AFF', onColor
                     onMouseDown={() => onDragStart?.()}
                     onTouchStart={() => onDragStart?.()}
                     onChange={(e) => onValueChange(Number(e.target.value))}
-                    aria-label={`${tooltip}強度`}
+                    aria-label={`${tooltip}${valueLabel}`}
                     className="slider-thumb-sm w-full cursor-pointer"
                 />
             </div>
 
             <NumericInput
-                label={`${tooltip}強度數值`}
+                label={`${tooltip}${valueLabel}數值`}
                 value={value}
                 min={min}
                 max={max}
@@ -777,6 +823,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                             <EffectRow
                                 iconName="border_color"
                                 tooltip="邊框"
+                                valueLabel="粗細"
                                 color={element.strokeColor}
                                 defaultColor="#FF3B30"
                                 onColorChange={(c) => onUpdate({ strokeColor: c })}
@@ -792,6 +839,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                             <EffectRow
                                 iconName="shadow"
                                 tooltip="陰影"
+                                valueLabel="模糊"
                                 color={element.shadowColor}
                                 defaultColor="#000000"
                                 onColorChange={(c) => onUpdate({ shadowColor: c })}
@@ -803,10 +851,37 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                                 onDragStart={onSnapshot}
                                 min={0}
                                 max={50}
+                                advancedControls={[
+                                    {
+                                        label: '距離',
+                                        value: element.shadowDistance ?? Math.round(Math.hypot(4, 4)),
+                                        min: 0,
+                                        max: 100,
+                                        unit: 'px',
+                                        onChange: (value) => onUpdate({ shadowDistance: value }, { addToHistory: false }),
+                                    },
+                                    {
+                                        label: '角度',
+                                        value: element.shadowAngle ?? 45,
+                                        min: -180,
+                                        max: 180,
+                                        unit: '°',
+                                        onChange: (value) => onUpdate({ shadowAngle: value }, { addToHistory: false }),
+                                    },
+                                    {
+                                        label: '濃度',
+                                        value: element.shadowOpacity ?? 100,
+                                        min: 0,
+                                        max: 100,
+                                        unit: '%',
+                                        onChange: (value) => onUpdate({ shadowOpacity: value }, { addToHistory: false }),
+                                    },
+                                ]}
                             />
                             <EffectRow
                                 iconName="flare"
                                 tooltip="光暈"
+                                valueLabel="範圍"
                                 color={element.glowColor}
                                 defaultColor="#007AFF"
                                 onColorChange={(c) => onUpdate({ glowColor: c })}
@@ -818,6 +893,16 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                                 onDragStart={onSnapshot}
                                 min={0}
                                 max={50}
+                                advancedControls={[
+                                    {
+                                        label: '濃度',
+                                        value: element.glowOpacity ?? 100,
+                                        min: 0,
+                                        max: 100,
+                                        unit: '%',
+                                        onChange: (value) => onUpdate({ glowOpacity: value }, { addToHistory: false }),
+                                    },
+                                ]}
                             />
                         </div>
                     )}

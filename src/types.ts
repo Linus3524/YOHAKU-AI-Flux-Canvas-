@@ -114,8 +114,12 @@ export interface TextElement extends BaseElement {
   backgroundColor?: string;
   shadowColor?: string;
   shadowBlur?: number;
+  shadowAngle?: number;
+  shadowDistance?: number;
+  shadowOpacity?: number;
   glowColor?: string;
   glowBlur?: number;
+  glowOpacity?: number;
   
   // Vertical Text Support
   writingMode?: 'horizontal' | 'vertical';
@@ -135,7 +139,8 @@ export const TEXT_STYLE_KEYS = [
   'fontFamily', 'fontSize', 'color', 'align', 'letterSpacing', 'lineHeight',
   'isBold', 'isItalic', 'isUnderline',
   'strokeColor', 'strokeWidth', 'backgroundColor',
-  'shadowColor', 'shadowBlur', 'glowColor', 'glowBlur',
+  'shadowColor', 'shadowBlur', 'shadowAngle', 'shadowDistance', 'shadowOpacity',
+  'glowColor', 'glowBlur', 'glowOpacity',
   'writingMode', 'curveStrength',
 ] as const satisfies readonly (keyof TextElement)[];
 
