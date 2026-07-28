@@ -330,10 +330,11 @@ const ColorPickerButton = ({ color, onChange, iconName, tooltip, isBackground = 
 };
 
 // ── Effect Row (Icon 結合色票按鈕 + Slider + Eye Toggle) ────────────────────
-const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChange, onDragStart, min, max, step = 1 }: {
+const EffectRow = ({ iconName, tooltip, color, defaultColor = '#007AFF', onColorChange, value, onValueChange, onDragStart, min, max, step = 1 }: {
     iconName: string;
     tooltip: string;
     color: string | undefined;
+    defaultColor?: string;
     onColorChange: (c: string) => void;
     value: number;
     onValueChange: (val: number) => void;
@@ -350,6 +351,14 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
         if (value > 0) lastValueRef.current = value;
     }, [value]);
 
+    const handleSelectColor = (c: string) => {
+        onColorChange(c);
+        if (value === 0) {
+            onValueChange(lastValueRef.current || Math.round((max - min) / 4 + min));
+        }
+        setColorPickerOpen(false);
+    };
+
     const toggleEffect = () => {
         onDragStart?.();
         if (isActive) {
@@ -359,7 +368,7 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
         }
     };
 
-    const displayColor = color || '#007AFF';
+    const displayColor = color || defaultColor;
 
     return (
         <div className={`flex items-center gap-1.5 min-h-8 px-1 rounded-lg transition-colors ${isActive ? 'bg-yohaku-bg-main/70' : ''}`}>
@@ -398,7 +407,7 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
                         {PRESET_COLORS.filter(c => c !== 'transparent').map(c => (
                             <button
                                 key={c}
-                                onClick={() => { onColorChange(c); setColorPickerOpen(false); }}
+                                onClick={() => handleSelectColor(c)}
                                 className={`w-5 h-5 rounded-full border hover:scale-110 transition-transform ${c === displayColor ? 'border-yohaku-accent border-2 scale-110' : 'border-black/10'}`}
                             >
                                 <div className="w-full h-full rounded-full" style={{ backgroundColor: c }} />
@@ -408,8 +417,8 @@ const EffectRow = ({ iconName, tooltip, color, onColorChange, value, onValueChan
                             +
                             <input
                                 type="color"
-                                value={color || '#007AFF'}
-                                onChange={(e) => onColorChange(e.target.value)}
+                                value={displayColor}
+                                onChange={(e) => handleSelectColor(e.target.value)}
                                 className="hidden"
                             />
                         </label>
@@ -768,10 +777,14 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                             <EffectRow
                                 iconName="border_color"
                                 tooltip="邊框"
-                                color={element.strokeColor ?? '#FF3B30'}
+                                color={element.strokeColor}
+                                defaultColor="#FF3B30"
                                 onColorChange={(c) => onUpdate({ strokeColor: c })}
                                 value={element.strokeWidth || 0}
-                                onValueChange={(val) => onUpdate({ strokeWidth: val }, { addToHistory: false })}
+                                onValueChange={(val) => onUpdate({ 
+                                    strokeWidth: val,
+                                    ...(val > 0 && !element.strokeColor ? { strokeColor: '#FF3B30' } : {})
+                                }, { addToHistory: false })}
                                 onDragStart={onSnapshot}
                                 min={0}
                                 max={20}
@@ -780,9 +793,13 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                                 iconName="shadow"
                                 tooltip="陰影"
                                 color={element.shadowColor}
+                                defaultColor="#000000"
                                 onColorChange={(c) => onUpdate({ shadowColor: c })}
                                 value={element.shadowBlur || 0}
-                                onValueChange={(val) => onUpdate({ shadowBlur: val }, { addToHistory: false })}
+                                onValueChange={(val) => onUpdate({ 
+                                    shadowBlur: val,
+                                    ...(val > 0 && !element.shadowColor ? { shadowColor: '#000000' } : {})
+                                }, { addToHistory: false })}
                                 onDragStart={onSnapshot}
                                 min={0}
                                 max={50}
@@ -791,9 +808,13 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({ element, o
                                 iconName="flare"
                                 tooltip="光暈"
                                 color={element.glowColor}
+                                defaultColor="#007AFF"
                                 onColorChange={(c) => onUpdate({ glowColor: c })}
                                 value={element.glowBlur || 0}
-                                onValueChange={(val) => onUpdate({ glowBlur: val }, { addToHistory: false })}
+                                onValueChange={(val) => onUpdate({ 
+                                    glowBlur: val,
+                                    ...(val > 0 && !element.glowColor ? { glowColor: '#007AFF' } : {})
+                                }, { addToHistory: false })}
                                 onDragStart={onSnapshot}
                                 min={0}
                                 max={50}
