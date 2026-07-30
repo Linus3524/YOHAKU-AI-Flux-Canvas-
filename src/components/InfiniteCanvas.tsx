@@ -299,6 +299,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   // ✅ New state declaration
   const [showGen, setShowGen] = useState(true);
   const [showTools, setShowTools] = useState(true);
+  const [imageToolsTab, setImageToolsTab] = useState<'removeBg' | 'upscale'>('removeBg');
   const [showCamera, setShowCamera] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(true);
@@ -1661,157 +1662,214 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         <Icon name="expand_more" size={14} style={{ color: '#94a3b8', transform: showTools ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
                                     </div>
                                     {showTools && (
-                                        <div className="px-5 pb-4 flex flex-col gap-2.5">
-                                            <button
-                                                onClick={() => onRemoveBackground('enhanced')}
-                                                className="w-full py-2.5 bg-[#1e293b] text-white rounded-xl text-[13px] font-medium hover:bg-[#0f172a] transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                <Icon name="content_cut" size={17} />
-                                                智慧去背
-                                            </button>
-                                            {hasFalKey && onBiRefNetRemoveBackground && (() => {
-                                                const birefnetOptions = [
-                                                    { key: 'General Use (Light)',    label: '輕量',    desc: 'Logo / 標準字 / 純色背景' },
-                                                    { key: 'General Use (Heavy)',    label: '重量級',  desc: '產品 / 光滑物件 / 漸層背景' },
-                                                    { key: 'Portrait',               label: '人像',    desc: '人物 / 臉部 / 髮型優化' },
-                                                    { key: 'Matting',                label: '髮絲',    desc: '毛髮 / 婚紗 / 玻璃透明物' },
-                                                    { key: 'General Use (Light 2K)', label: '輕量 2K', desc: '高解析度大圖（輕量版）' },
-                                                    { key: 'General Use (Dynamic)',  label: '動態',    desc: '自動解析度 / 尺寸不固定' },
-                                                ] as { key: string; label: string; desc: string }[];
-                                                const currentOpt = birefnetOptions.find(o => o.key === birefnetModel) ?? birefnetOptions[0];
-                                                return (
-                                                    <div className="relative w-full">
-                                                        <div className="flex w-full rounded-xl overflow-hidden border border-gray-200 bg-[#f8fafc]">
-                                                            {/* 左：執行去背（白底 + 橘色 icon） */}
-                                                            <button
-                                                                onClick={() => onBiRefNetRemoveBackground(birefnetModel)}
-                                                                className="flex-1 flex items-center justify-center gap-2 bg-white text-gray-800 py-2.5 text-[13px] font-medium hover:bg-gray-50 transition-colors"
-                                                            >
-                                                                <Icon name="content_cut" size={17} style={{ color: '#f97316' }} />
-                                                                BiRefNet 快速去背
-                                                            </button>
-                                                            <div className="w-px bg-gray-200 my-0"/>
-                                                            {/* 右：模式選擇（灰底） */}
-                                                            <button
-                                                                onClick={() => setBirefnetOpen(v => !v)}
-                                                                className="flex items-center gap-1 px-3 bg-[#f8fafc] text-gray-600 hover:bg-gray-100 transition-colors"
-                                                                aria-label="選擇去背模式"
-                                                            >
-                                                                <span className="text-[12px] font-medium whitespace-nowrap">{currentOpt.label}</span>
-                                                                <Icon name="expand_more" size={10} />
-                                                            </button>
-                                                        </div>
-                                                        {birefnetOpen && (
-                                                            <>
-                                                                <div className="fixed inset-0 z-40" onClick={() => setBirefnetOpen(false)}/>
-                                                                <div className="absolute top-full mt-2 right-0 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-gray-100 overflow-hidden z-50 min-w-[160px]">
-                                                                    {birefnetOptions.map(opt => (
-                                                                        <button
-                                                                            key={opt.key}
-                                                                            onClick={() => { setBirefnetModel(opt.key); setBirefnetOpen(false); }}
-                                                                            className={`w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-orange-50 transition-colors ${birefnetModel === opt.key ? 'bg-orange-50' : ''}`}
-                                                                        >
-                                                                            <div>
-                                                                                <div className="text-xs font-semibold text-[#1D1D1F]">{opt.label}</div>
-                                                                                <div className="text-[10px] text-[#86868B]">{opt.desc}</div>
-                                                                            </div>
-                                                                            {birefnetModel === opt.key && (
-                                                                                <Icon name="check" size={12} style={{ color: '#F97316' }} />
-                                                                            )}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
-
-                                            {onLocalRemoveBackground && (
+                                        <div className="px-5 pb-4 flex flex-col gap-3">
+                                            {/* 頁籤切換：去背 vs. 畫質放大 */}
+                                            <div className="grid grid-cols-2 gap-1 p-1 bg-[#f1f5f9] rounded-xl">
                                                 <button
-                                                    onClick={onLocalRemoveBackground}
-                                                    className="w-full py-2.5 bg-white border border-gray-200 text-gray-800 rounded-xl text-[13px] font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 active:scale-95"
+                                                    onClick={() => setImageToolsTab('removeBg')}
+                                                    className={`py-1.5 text-[12px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                                                        imageToolsTab === 'removeBg'
+                                                            ? 'bg-white shadow-sm text-gray-900'
+                                                            : 'text-gray-500 hover:text-gray-800'
+                                                    }`}
                                                 >
-                                                    <Icon name="content_cut" size={17} style={{ color: '#8b5cf6' }} />
-                                                    本機 AI 去背 (ISNet)
+                                                    <Icon name="content_cut" size={14} />
+                                                    去背
                                                 </button>
-                                            )}
-
-                                            <div className="flex gap-2">
-                                                <div className="flex bg-[#f1f5f9] p-1 rounded-xl w-[88px]">
-                                                    <button
-                                                        onClick={() => setUpscaleFactor(2)}
-                                                        className={`flex-1 py-1.5 text-[12px] font-medium rounded-lg transition-all ${upscaleFactor === 2 ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
-                                                    >2x</button>
-                                                    <button
-                                                        onClick={() => setUpscaleFactor(4)}
-                                                        className={`flex-1 py-1.5 text-[12px] font-medium rounded-lg transition-all ${upscaleFactor === 4 ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
-                                                    >4x</button>
-                                                </div>
                                                 <button
-                                                    onClick={() => onUpscale(upscaleFactor)}
-                                                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-800 text-[13px] font-medium rounded-xl transition-colors active:scale-95 flex items-center justify-center gap-1.5"
+                                                    onClick={() => setImageToolsTab('upscale')}
+                                                    className={`py-1.5 text-[12px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                                                        imageToolsTab === 'upscale'
+                                                            ? 'bg-white shadow-sm text-gray-900'
+                                                            : 'text-gray-500 hover:text-gray-800'
+                                                    }`}
                                                 >
-                                                    <Icon name="open_in_full" size={17} style={{ color: '#3b82f6' }} />
-                                                    智能放大
+                                                    <Icon name="open_in_full" size={14} />
+                                                    畫質放大
                                                 </button>
                                             </div>
 
-                                            {/* 本機高清放大（ONNX，4x，純像素超解析・免額度・結構不變） */}
-                                            {onLocalUpscale && (() => {
-                                                const upscaleOptions = [
-                                                    { key: 'upscale_photo', label: '相片/插畫', desc: '真實照片 / 人像 / 插畫 / 平面風' },
-                                                    { key: 'upscale_anime', label: '動漫',     desc: '動漫 / 賽璐璐 / 線稿' },
-                                                ] as { key: 'upscale_photo' | 'upscale_anime' | 'upscale_art'; label: string; desc: string }[];
-                                                const currentUp = upscaleOptions.find(o => o.key === upscaleModel) ?? upscaleOptions[0];
-                                                return (
-                                                    <div className="relative w-full">
-                                                        <div className="flex w-full rounded-xl overflow-hidden border border-gray-200 bg-[#f8fafc]">
-                                                            <button
-                                                                onClick={() => onLocalUpscale(upscaleModel, upscaleFactor)}
-                                                                className="flex-1 flex items-center justify-center gap-2 bg-white text-gray-800 py-2.5 text-[13px] font-medium hover:bg-gray-50 transition-colors"
-                                                            >
-                                                                <Icon name="open_in_full" size={17} style={{ color: '#3b82f6' }} />
-                                                                本機高清放大 {upscaleFactor}x
-                                                            </button>
-                                                            <div className="w-px bg-gray-200 my-0"/>
-                                                            <button
-                                                                onClick={() => setUpscaleOpen(v => !v)}
-                                                                className="flex items-center gap-1 px-3 bg-[#f8fafc] text-gray-600 hover:bg-gray-100 transition-colors"
-                                                                aria-label="選擇放大模型"
-                                                            >
-                                                                <span className="text-[12px] font-medium whitespace-nowrap">{currentUp.label}</span>
-                                                                <Icon name="expand_more" size={10} />
-                                                            </button>
+                                            {/* ── 分頁 1：去背功能 ── */}
+                                            {imageToolsTab === 'removeBg' && (
+                                                <div className="flex flex-col gap-2.5 animate-fade-in">
+                                                    {/* 智慧去背（Gemini AI） */}
+                                                    <button
+                                                        onClick={() => onRemoveBackground('enhanced')}
+                                                        className="w-full py-2.5 bg-[#1e293b] text-white rounded-xl text-[13px] font-medium hover:bg-[#0f172a] transition-all flex items-center justify-between px-3.5 shadow-sm active:scale-98"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <Icon name="content_cut" size={17} />
+                                                            <span>智慧去背</span>
                                                         </div>
-                                                        {upscaleOpen && (
-                                                            <>
-                                                                <div className="fixed inset-0 z-40" onClick={() => setUpscaleOpen(false)}/>
-                                                                <div className="absolute top-full mt-2 right-0 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-gray-100 overflow-hidden z-50 min-w-[160px]">
-                                                                    {upscaleOptions.map(opt => (
-                                                                        <button
-                                                                            key={opt.key}
-                                                                            onClick={() => { setUpscaleModel(opt.key); setUpscaleOpen(false); }}
-                                                                            className={`w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-indigo-50 transition-colors ${upscaleModel === opt.key ? 'bg-indigo-50' : ''}`}
-                                                                        >
-                                                                            <div>
-                                                                                <div className="text-xs font-semibold text-[#1D1D1F]">{opt.label}</div>
-                                                                                <div className="text-[10px] text-[#86868B]">{opt.desc}</div>
-                                                                            </div>
-                                                                            {upscaleModel === opt.key && (
-                                                                                <Icon name="check" size={12} style={{ color: '#6366f1' }} />
-                                                                            )}
-                                                                        </button>
-                                                                    ))}
+                                                        <span className="text-[10px] bg-indigo-500/25 text-indigo-200 px-2 py-0.5 rounded-md font-normal">
+                                                            Gemini AI
+                                                        </span>
+                                                    </button>
+
+                                                    {/* BiRefNet 快速去背 (Fal.ai / SOTA) */}
+                                                    {hasFalKey && onBiRefNetRemoveBackground && (() => {
+                                                        const birefnetOptions = [
+                                                            { key: 'General Use (Light)',    label: '輕量',    desc: 'Logo / 標準字 / 純色背景' },
+                                                            { key: 'General Use (Heavy)',    label: '重量級',  desc: '產品 / 光滑物件 / 漸層背景' },
+                                                            { key: 'Portrait',               label: '人像',    desc: '人物 / 臉部 / 髮型優化' },
+                                                            { key: 'Matting',                label: '髮絲',    desc: '毛髮 / 婚紗 / 玻璃透明物' },
+                                                            { key: 'General Use (Light 2K)', label: '輕量 2K', desc: '高解析度大圖（輕量版）' },
+                                                            { key: 'General Use (Dynamic)',  label: '動態',    desc: '自動解析度 / 尺寸不固定' },
+                                                        ] as { key: string; label: string; desc: string }[];
+                                                        const currentOpt = birefnetOptions.find(o => o.key === birefnetModel) ?? birefnetOptions[0];
+                                                        return (
+                                                            <div className="relative w-full">
+                                                                <div className="flex w-full rounded-xl overflow-hidden border border-gray-200 bg-[#f8fafc]">
+                                                                    <button
+                                                                        onClick={() => onBiRefNetRemoveBackground(birefnetModel)}
+                                                                        className="flex-1 flex items-center justify-start px-3.5 gap-2 bg-white text-gray-800 py-2.5 text-[13px] font-medium hover:bg-gray-50 transition-colors"
+                                                                    >
+                                                                        <Icon name="content_cut" size={17} style={{ color: '#f97316' }} />
+                                                                        <span>BiRefNet 快速去背</span>
+                                                                    </button>
+                                                                    <div className="w-px bg-gray-200 my-0"/>
+                                                                    <button
+                                                                        onClick={() => setBirefnetOpen(v => !v)}
+                                                                        className="flex items-center gap-1 px-3 bg-[#f8fafc] text-gray-600 hover:bg-gray-100 transition-colors"
+                                                                        aria-label="選擇去背模式"
+                                                                    >
+                                                                        <span className="text-[12px] font-medium whitespace-nowrap">{currentOpt.label}</span>
+                                                                        <Icon name="expand_more" size={10} />
+                                                                    </button>
                                                                 </div>
-                                                            </>
-                                                        )}
-                                                        <p className="mt-1.5 text-[10px] text-gray-400 leading-snug px-0.5">
-                                                            純像素放大・結構不變・免 API 額度。首次需於功能助手下載模型。
-                                                        </p>
+                                                                {birefnetOpen && (
+                                                                    <>
+                                                                        <div className="fixed inset-0 z-40" onClick={() => setBirefnetOpen(false)}/>
+                                                                        <div className="absolute top-full mt-2 right-0 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-gray-100 overflow-hidden z-50 min-w-[160px]">
+                                                                            {birefnetOptions.map(opt => (
+                                                                                <button
+                                                                                    key={opt.key}
+                                                                                    onClick={() => { setBirefnetModel(opt.key); setBirefnetOpen(false); }}
+                                                                                    className={`w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-orange-50 transition-colors ${birefnetModel === opt.key ? 'bg-orange-50' : ''}`}
+                                                                                >
+                                                                                    <div>
+                                                                                        <div className="text-xs font-semibold text-[#1D1D1F]">{opt.label}</div>
+                                                                                        <div className="text-[10px] text-[#86868B]">{opt.desc}</div>
+                                                                                    </div>
+                                                                                    {birefnetModel === opt.key && (
+                                                                                        <Icon name="check" size={12} style={{ color: '#F97316' }} />
+                                                                                    )}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
+
+                                                    {/* 本機 AI 去背 (ISNet ONNX) */}
+                                                    {onLocalRemoveBackground && (
+                                                        <button
+                                                            onClick={onLocalRemoveBackground}
+                                                            className="w-full py-2.5 bg-white border border-gray-200 text-gray-800 rounded-xl text-[13px] font-medium hover:bg-gray-50 transition-all flex items-center justify-between px-3.5 shadow-2xs active:scale-98"
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <Icon name="content_cut" size={17} style={{ color: '#8b5cf6' }} />
+                                                                <span>本機 AI 去背 (ISNet)</span>
+                                                            </div>
+                                                            <span className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded-md border border-purple-100 font-normal">
+                                                                ⚡ 免額度
+                                                            </span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* ── 分頁 2：畫質放大功能 ── */}
+                                            {imageToolsTab === 'upscale' && (
+                                                <div className="flex flex-col gap-2.5 animate-fade-in">
+                                                    {/* 統一倍率選擇列 */}
+                                                    <div className="flex items-center justify-between bg-gray-50/80 border border-gray-200/80 rounded-xl px-3 py-1.5">
+                                                        <span className="text-[12px] font-semibold text-gray-700">放大倍率</span>
+                                                        <div className="flex bg-white p-0.5 rounded-lg border border-gray-200/80 shadow-2xs w-24">
+                                                            <button
+                                                                onClick={() => setUpscaleFactor(2)}
+                                                                className={`flex-1 py-1 text-[11px] font-bold rounded-md transition-all ${upscaleFactor === 2 ? 'bg-[#1e293b] text-white shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
+                                                            >2x</button>
+                                                            <button
+                                                                onClick={() => setUpscaleFactor(4)}
+                                                                className={`flex-1 py-1 text-[11px] font-bold rounded-md transition-all ${upscaleFactor === 4 ? 'bg-[#1e293b] text-white shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
+                                                            >4x</button>
+                                                        </div>
                                                     </div>
-                                                );
-                                            })()}
+
+                                                    {/* 雲端 AI 智能放大 */}
+                                                    <button
+                                                        onClick={() => onUpscale(upscaleFactor)}
+                                                        className="w-full py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-800 text-[13px] font-medium rounded-xl transition-all flex items-center justify-between px-3.5 shadow-2xs active:scale-98"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <Icon name="open_in_full" size={17} style={{ color: '#3b82f6' }} />
+                                                            <span>雲端智能放大 ({upscaleFactor}x)</span>
+                                                        </div>
+                                                        <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md font-normal">
+                                                            AI 重繪增強
+                                                        </span>
+                                                    </button>
+
+                                                    {/* 本機高清放大（ONNX Real-ESRGAN） */}
+                                                    {onLocalUpscale && (() => {
+                                                        const upscaleOptions = [
+                                                            { key: 'upscale_photo', label: '相片/插畫', desc: '真實照片 / 人像 / 插畫 / 平面風' },
+                                                            { key: 'upscale_anime', label: '動漫',     desc: '動漫 / 賽璐璐 / 線稿' },
+                                                        ] as { key: 'upscale_photo' | 'upscale_anime' | 'upscale_art'; label: string; desc: string }[];
+                                                        const currentUp = upscaleOptions.find(o => o.key === upscaleModel) ?? upscaleOptions[0];
+                                                        return (
+                                                            <div className="relative w-full flex flex-col gap-1">
+                                                                <div className="flex w-full rounded-xl overflow-hidden border border-gray-200 bg-[#f8fafc]">
+                                                                    <button
+                                                                        onClick={() => onLocalUpscale(upscaleModel, upscaleFactor)}
+                                                                        className="flex-1 flex items-center justify-start px-3.5 gap-2 bg-white text-gray-800 py-2.5 text-[13px] font-medium hover:bg-gray-50 transition-colors"
+                                                                    >
+                                                                        <Icon name="open_in_full" size={17} style={{ color: '#8b5cf6' }} />
+                                                                        <span>本機高清放大 ({upscaleFactor}x)</span>
+                                                                    </button>
+                                                                    <div className="w-px bg-gray-200 my-0"/>
+                                                                    <button
+                                                                        onClick={() => setUpscaleOpen(v => !v)}
+                                                                        className="flex items-center gap-1 px-3 bg-[#f8fafc] text-gray-600 hover:bg-gray-100 transition-colors"
+                                                                        aria-label="選擇放大模型"
+                                                                    >
+                                                                        <span className="text-[12px] font-medium whitespace-nowrap">{currentUp.label}</span>
+                                                                        <Icon name="expand_more" size={10} />
+                                                                    </button>
+                                                                </div>
+                                                                {upscaleOpen && (
+                                                                    <>
+                                                                        <div className="fixed inset-0 z-40" onClick={() => setUpscaleOpen(false)}/>
+                                                                        <div className="absolute top-full mt-2 right-0 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-gray-100 overflow-hidden z-50 min-w-[160px]">
+                                                                            {upscaleOptions.map(opt => (
+                                                                                <button
+                                                                                    key={opt.key}
+                                                                                    onClick={() => { setUpscaleModel(opt.key); setUpscaleOpen(false); }}
+                                                                                    className={`w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-indigo-50 transition-colors ${upscaleModel === opt.key ? 'bg-indigo-50' : ''}`}
+                                                                                >
+                                                                                    <div>
+                                                                                        <div className="text-xs font-semibold text-[#1D1D1F]">{opt.label}</div>
+                                                                                        <div className="text-[10px] text-[#86868B]">{opt.desc}</div>
+                                                                                    </div>
+                                                                                    {upscaleModel === opt.key && (
+                                                                                        <Icon name="check" size={12} style={{ color: '#6366f1' }} />
+                                                                                    )}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                                <p className="mt-1 text-[10px] text-gray-400 leading-snug px-0.5">
+                                                                    純像素放大・結構不變・免 API 額度。首次需於功能助手下載模型。
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
