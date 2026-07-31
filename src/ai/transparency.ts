@@ -9,6 +9,7 @@
 import { hasTransparency, processChromaKey } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
 import { isCleanWhitePlate } from '../utils/triangulationMatting';
+import { checkLocalModelReady, runLocalRmbgPipeline } from './pipelines/localModels';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
 import { repairStickerTransparency } from '../utils/imageProcessing';
 
@@ -108,7 +109,8 @@ export interface RestoreTransparencyKeys {
 
 /**
  * 生成後還原透明背景。
- * 優先順序：1) BiRefNet（fal key）→ 2) Gemini AI 去背（executeDynamicRemoval）→ 3) Chroma Key（基本備用）
+ * 優先順序：1) BiRefNet（fal key）→ 2) Gemini AI 去背（executeDynamicRemoval）
+ *          → 3) 本機 ISNet（已下載時）→ 4) Flood-fill / Chroma Key
  *
  * 貼圖是硬邊+實心+白模切框，用 General Use (Heavy)：最高精度的一般分割，
  * 邊緣乾淨有把握；Matting 偏軟 alpha 是給毛髮/半透明用的，反而會羽化白框、挖淺色洞。
@@ -148,7 +150,19 @@ export async function restoreTransparency(
             console.warn('[restoreTransparency] Gemini removal failed, fallback chroma key', e);
         }
     }
-    // 3. Chroma Key / Flood-fill 去背（本機最後備用，品質比一般 chroma key 更好）
+    // 3. 本機 ISNet 去背（零 API、零額度）。
+    // 比下面的泛洪/chroma 高一個級距——那兩者是從畫面邊緣「猜」背景邊界，
+    // 這裡是真正的分割模型。僅在模型已下載時才用，不會為了備援偷偷拉一包權重。
+    try {
+        if (await checkLocalModelReady('bria_rmbg') === null) {
+            console.log('[restoreTransparency] 改用本機 ISNet 去背');
+            return await runLocalRmbgPipeline(resultSrc);
+        }
+    } catch (e) {
+        console.warn('[restoreTransparency] 本機 ISNet 去背失敗，fallback flood-fill', e);
+    }
+
+    // 4. Chroma Key / Flood-fill 去背（本機最後備用，品質比一般 chroma key 更好）
     try {
         return await repairStickerTransparency(resultSrc, { backgroundColor: bgColor });
     } catch (e) {
