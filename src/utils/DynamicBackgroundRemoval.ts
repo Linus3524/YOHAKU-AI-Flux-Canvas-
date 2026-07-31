@@ -310,8 +310,7 @@ export const executeTriangulationRemoval = async (
     if (!blackPlate) throw new Error('黑底版沒有回傳圖片');
 
     if (onProgress) onProgress('智慧去背: 解算透明度...');
-    // 傳入原圖：對齊得上就用原圖的顏色，避免兩次生成造成的色調偏移
-    const { src, stats } = await triangulationMatte(whitePlate, blackPlate, { originalSrc: imageSrc });
+    const { src, stats } = await triangulationMatte(whitePlate, blackPlate);
 
     const trust = isMatteTrustworthy(stats);
     console.log('[Triangulation] stats:', stats, 'trust:', trust);
