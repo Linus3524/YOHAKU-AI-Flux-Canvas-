@@ -83,10 +83,16 @@ export async function generateOneImage(
         const mime = header.match(/data:(.*);base64/)?.[1] || 'image/png';
         parts.push({ inlineData: { data, mimeType: mime } });
     }
-    parts.push({ text: `${prompt}\nOutput aspect ratio: ${aspectRatio}.` });
-
     const geminiSupportedRatios = new Set(['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9']);
-    const geminiAspectRatio = geminiSupportedRatios.has(aspectRatio) ? aspectRatio : '16:9';
+    const ratioSupported = geminiSupportedRatios.has(aspectRatio);
+    const geminiAspectRatio = ratioSupported ? aspectRatio : '16:9';
+
+    // 比例後綴只在「參數層表達不了」時才加。
+    // imageConfig.aspectRatio 只吃上面九種，遇到 21:9 / 2.6:1 / 3:1 這類會被夾成
+    // 16:9，這時唯一能傳達真實比例的管道就是文字 —— 那也是這段後綴當初被加進來的原因
+    // （跨平台適配）。但支援的比例本來就由參數精準表達，再接一句英文只會污染
+    // 使用者/設計大師寫的 prompt（被當成畫面文字、稀釋前文權重），故不再無條件附加。
+    parts.push({ text: ratioSupported ? prompt : `${prompt}\nOutput aspect ratio: ${aspectRatio}.` });
     const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
         model: engine.geminiImageModel,
         contents: { parts },
