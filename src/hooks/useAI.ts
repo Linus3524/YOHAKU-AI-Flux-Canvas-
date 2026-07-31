@@ -138,10 +138,11 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
         }
     }, [showToast]);
 
-    /** 生成前準備（薄包裝 → src/ai/transparency.ts 純函式；只綁 preserveTransparency 開關） */
+    /** 生成前準備（薄包裝 → src/ai/transparency.ts 純函式；只綁 preserveTransparency 開關）
+     *  無 fal key 時壓平成純白，讓生成輸出有機會直接當白底版、省掉三角測量的第一次生成。 */
     const prepareForGeneration = useCallback(
-        (src: string) => prepareImageForGeneration(src, preserveTransparency),
-        [preserveTransparency],
+        (src: string) => prepareImageForGeneration(src, preserveTransparency, { preferWhitePlate: !falApiKey }),
+        [preserveTransparency, falApiKey],
     );
 
     /** 生成後還原透明背景（薄包裝 → src/ai/transparency.ts；keys 由 hook 狀態注入） */

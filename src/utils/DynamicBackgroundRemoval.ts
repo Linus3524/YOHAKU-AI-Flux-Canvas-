@@ -289,15 +289,26 @@ export const executeTriangulationRemoval = async (
     imageSrc: string,
     engine: DynamicRemovalEngine,
     onProgress?: (msg: string) => void,
+    /**
+     * 來源本身已是合格白底版時傳 true，直接跳過第一次生成（2 次變 1 次）。
+     * 呼叫端必須先用 isCleanWhitePlate() 驗證過才可以開。
+     */
+    srcIsWhitePlate = false,
 ): Promise<string> => {
     const aspectRatio = await detectAspectRatio(imageSrc);
 
-    if (onProgress) onProgress('智慧去背: 生成白底版...');
-    const whitePlate = await generateOneImage(
-        { prompt: WHITE_PLATE_PROMPT, aspectRatio, refImage: imageSrc },
-        engine,
-    );
-    if (!whitePlate) throw new Error('白底版沒有回傳圖片');
+    let whitePlate: string;
+    if (srcIsWhitePlate) {
+        whitePlate = imageSrc;
+        if (onProgress) onProgress('智慧去背: 沿用現有白底版...');
+    } else {
+        if (onProgress) onProgress('智慧去背: 生成白底版...');
+        whitePlate = await generateOneImage(
+            { prompt: WHITE_PLATE_PROMPT, aspectRatio, refImage: imageSrc },
+            engine,
+        );
+        if (!whitePlate) throw new Error('白底版沒有回傳圖片');
+    }
 
     // 關鍵：黑底版是「編輯白底版」而非重新生成原圖，
     // 前景才會 pixel-aligned，三角測量的數學才成立。
@@ -331,10 +342,12 @@ export const executeDynamicRemoval = async (
     engine: DynamicRemovalEngine,
     onProgress?: (msg: string) => void,
     mode: RemovalMode = 'triangulation',
+    /** 來源已是驗證過的白底版時傳 true，三角測量可省掉第一次生成 */
+    srcIsWhitePlate = false,
 ): Promise<string> => {
     if (mode === 'triangulation') {
         try {
-            return await executeTriangulationRemoval(imageSrc, engine, onProgress);
+            return await executeTriangulationRemoval(imageSrc, engine, onProgress, srcIsWhitePlate);
         } catch (e) {
             console.warn('[智慧去背] Triangulation 失敗，退回對比底色管線', e);
             if (onProgress) onProgress('智慧去背: 改用備用方案...');

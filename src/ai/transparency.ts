@@ -8,6 +8,7 @@
  */
 import { hasTransparency, processChromaKey } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
+import { isCleanWhitePlate } from '../utils/triangulationMatting';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
 import { repairStickerTransparency } from '../utils/imageProcessing';
 
@@ -77,11 +78,24 @@ export interface PreparedImage {
 export async function prepareImageForGeneration(
     src: string,
     preserveTransparency: boolean,
+    opts: {
+        /**
+         * 壓平成純白而非 chroma 色。
+         *
+         * 用在「生成後只能靠三角測量去背」（無 fal key）的情境：壓白之後，
+         * 創作生成的輸出本身就可能是合格的白底版，三角測量可省掉第一次生成
+         * （3 次 → 2 次）。生成後仍會用 isCleanWhitePlate() 驗證，不合格就走原路。
+         *
+         * 有 fal key 時不要開 —— 那條走 BiRefNet 不需要白底版，而 chroma 色是
+         * 特意挑「離主體最遠」的，留著能讓最後一層 chroma key 備援保持可用。
+         */
+        preferWhitePlate?: boolean;
+    } = {},
 ): Promise<PreparedImage> {
     if (!preserveTransparency) return { src, hadTransparency: false, bgColor: '#FFFFFF' };
     const transparent = await hasTransparency(src);
     if (!transparent) return { src, hadTransparency: false, bgColor: '#FFFFFF' };
-    const bgColor = await findBestChromaColor(src);
+    const bgColor = opts.preferWhitePlate ? '#FFFFFF' : await findBestChromaColor(src);
     const flatSrc = await flattenTransparentImage(src, bgColor);
     return { src: flatSrc, hadTransparency: true, bgColor };
 }
@@ -115,12 +129,21 @@ export async function restoreTransparency(
     // 2. Gemini AI 去背（無 fal key 時）
     if (keys.geminiApiKey) {
         try {
+            // 生成前若壓平成純白（preferWhitePlate），這張輸出可能本身就是合格的
+            // 白底版 → 驗證通過就讓三角測量跳過第一次生成。模型不保證會保住白底
+            // （創作 prompt 裡沒有這條指示），故一定要先驗；不合格就照常跑完整流程。
+            let srcIsWhitePlate = false;
+            if (bgColor.toUpperCase() === '#FFFFFF') {
+                const check = await isCleanWhitePlate(resultSrc);
+                srcIsWhitePlate = check.ok;
+                console.log('[restoreTransparency] 白底版檢查:', check);
+            }
             return await executeDynamicRemoval(resultSrc, {
                 model: 'gemini',
                 geminiApiKey: keys.geminiApiKey,
                 geminiImageModel: keys.imageModel,
                 falApiKey: keys.falApiKey,
-            });
+            }, undefined, 'triangulation', srcIsWhitePlate);
         } catch (e) {
             console.warn('[restoreTransparency] Gemini removal failed, fallback chroma key', e);
         }

@@ -37,6 +37,55 @@ const rasterize = (img: HTMLImageElement, w: number, h: number): ImageData => {
     return ctx.getImageData(0, 0, w, h);
 };
 
+/**
+ * 檢查一張圖能不能直接當「白底版」使用。
+ *
+ * 用途：生成前若已把來源壓平成純白，創作生成的輸出本身就可能是合格的白底版，
+ * 那就能省掉三角測量的第一次生成。但模型不保證會保住白底（prompt 裡沒有這條
+ * 指示），所以必須先驗證 —— 過不了就退回完整流程，下限等於不做這個優化。
+ *
+ * 只量邊框一圈：主體通常不會貼滿整個邊界，而背景被換掉（畫出場景/漸層）時
+ * 邊框最先反映出來。
+ */
+export const isCleanWhitePlate = async (
+    src: string,
+    opts: { minWhiteRatio?: number; channelMin?: number } = {},
+): Promise<{ ok: boolean; whiteRatio: number; reason?: string }> => {
+    const minWhiteRatio = opts.minWhiteRatio ?? 0.97;
+    const channelMin = opts.channelMin ?? 246;
+
+    const img = await loadImage(src);
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (w < 8 || h < 8) return { ok: false, whiteRatio: 0, reason: '圖片過小' };
+
+    const D = rasterize(img, w, h).data;
+    const inset = 2;                 // 避開最外圈的壓縮雜訊
+    const band = Math.max(1, Math.round(Math.min(w, h) * 0.02)); // 邊框帶厚度
+
+    let white = 0;
+    let total = 0;
+    const test = (x: number, y: number) => {
+        const i = (y * w + x) * 4;
+        total++;
+        if (D[i] >= channelMin && D[i + 1] >= channelMin && D[i + 2] >= channelMin) white++;
+    };
+
+    for (let d = 0; d < band; d++) {
+        const top = inset + d, bottom = h - 1 - inset - d;
+        const left = inset + d, right = w - 1 - inset - d;
+        if (top >= bottom || left >= right) break;
+        for (let x = left; x <= right; x++) { test(x, top); test(x, bottom); }
+        for (let y = top + 1; y < bottom; y++) { test(left, y); test(right, y); }
+    }
+
+    if (total === 0) return { ok: false, whiteRatio: 0, reason: '無可取樣邊框' };
+    const whiteRatio = white / total;
+    return whiteRatio >= minWhiteRatio
+        ? { ok: true, whiteRatio }
+        : { ok: false, whiteRatio, reason: `邊框僅 ${(whiteRatio * 100).toFixed(1)}% 為純白` };
+};
+
 export interface MatteOptions {
     /** α 低於此值視為全透明（濾掉背景殘留的淡霧）。預設 0.02 */
     noiseFloor?: number;
