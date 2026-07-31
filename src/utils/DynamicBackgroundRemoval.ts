@@ -249,18 +249,17 @@ const processChromaKey = (imageSrc: string, targetHex: string): Promise<string> 
 
 // --- 3. Triangulation Matting（三角測量摳像）---
 
-// 刻意框成「換底色」而非「抽出主體」——後者等於給模型重新構圖的許可，
-// 是主體飄移/被重畫的主因。第二步之所以穩定，正是因為指令範圍小、破壞性低，
-// 這裡讓第一步採用同樣的框架。
+// 框成「抽出主體」：生圖模型對 "main subject" 的訓練訊號很強，
+// 語意上比「背景」明確（有景深的照片裡「背景」到哪為止其實很模糊）。
+// 曾試過改框成「只換背景」，實測後保留此版本。
 const WHITE_PLATE_PROMPT = `
-Replace ONLY the background of the supplied image with PURE WHITE (#FFFFFF, RGB 255,255,255).
+Place the main subject from the supplied image on a PURE WHITE background (#FFFFFF, RGB 255,255,255).
 Absolute requirements:
-1. Do NOT move, resize, re-pose, re-light, re-crop, or redraw the foreground in ANY way. Every foreground pixel must stay where it already is, with the same colors, brightness and detail.
-2. This is NOT a cut-out or re-composition task. Do not re-centre or re-frame anything. Only the background pixels may change.
-3. The new background must be 100% pure white, perfectly flat: no gradient, no vignette, no texture, no scenery.
-4. NO shadow, reflection, or glow cast onto the background.
-5. Preserve every fine edge exactly: individual hair strands, fur, fabric fibres, translucent glass, smoke, motion blur.
-6. Keep the exact same image dimensions, framing and scale.
+1. Keep the subject EXACTLY as it is — do NOT restyle, re-light, re-pose, resize, or redraw it. Same identity, proportions, color, texture.
+2. The background must be 100% pure white, perfectly flat: no gradient, no vignette, no texture, no scenery.
+3. NO shadow, reflection, or glow cast onto the background.
+4. Preserve every fine edge: individual hair strands, fur, fabric fibres, translucent glass, smoke, motion blur.
+5. Keep the original framing, scale, position and aspect ratio.
 This is a matting plate for software compositing, not a creative edit.
 `;
 
