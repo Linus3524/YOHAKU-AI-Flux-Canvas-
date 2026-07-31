@@ -3,6 +3,7 @@ import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
 import { birefnetRemoveBg } from './geminiLayer';
 import { getClosestAspectRatio } from './helpers';
 import { createGeminiClient } from '../ai/geminiClient';
+import { triangulationMatte, isMatteTrustworthy } from './triangulationMatting';
 
 // Helper to load image
 const loadImage = (src: string): Promise<HTMLImageElement> => {
@@ -246,8 +247,106 @@ const processChromaKey = (imageSrc: string, targetHex: string): Promise<string> 
     });
 };
 
-// --- 3. Main Handler Logic ---
-export const executeDynamicRemoval = async (imageSrc: string, engine: DynamicRemovalEngine, onProgress?: (msg: string) => void): Promise<string> => {
+// --- 3. Triangulation Matting（三角測量摳像）---
+
+// 刻意框成「換底色」而非「抽出主體」——後者等於給模型重新構圖的許可，
+// 是主體飄移/被重畫的主因。第二步之所以穩定，正是因為指令範圍小、破壞性低，
+// 這裡讓第一步採用同樣的框架。
+const WHITE_PLATE_PROMPT = `
+Replace ONLY the background of the supplied image with PURE WHITE (#FFFFFF, RGB 255,255,255).
+Absolute requirements:
+1. Do NOT move, resize, re-pose, re-light, re-crop, or redraw the foreground in ANY way. Every foreground pixel must stay where it already is, with the same colors, brightness and detail.
+2. This is NOT a cut-out or re-composition task. Do not re-centre or re-frame anything. Only the background pixels may change.
+3. The new background must be 100% pure white, perfectly flat: no gradient, no vignette, no texture, no scenery.
+4. NO shadow, reflection, or glow cast onto the background.
+5. Preserve every fine edge exactly: individual hair strands, fur, fabric fibres, translucent glass, smoke, motion blur.
+6. Keep the exact same image dimensions, framing and scale.
+This is a matting plate for software compositing, not a creative edit.
+`;
+
+const BLACK_PLATE_PROMPT = `
+Change ONLY the background color from white to PURE BLACK (#000000, RGB 0,0,0).
+Absolute requirements:
+1. Do NOT move, resize, re-pose, re-light, or redraw the subject in ANY way.
+2. Every foreground pixel must stay identical to the input — same position, same colors, same brightness, same detail.
+3. The background must be 100% pure black, perfectly flat: no gradient, no vignette, no glow.
+4. Do NOT add any shadow or reflection cast onto the background.
+5. Keep the exact same image dimensions, framing and scale.
+This is a background-plate swap for a matting pipeline, not a creative edit.
+`;
+
+/**
+ * Triangulation Matting 去背。
+ *
+ * 白底版 + 黑底版兩張圖，用合成方程式反解出「連續」alpha：
+ *   W = α·F + 255(1-α)，K = α·F  ⇒  α = 1 - (W-K)/255，F = K/α
+ *
+ * 相對 chroma key 的優勢：髮絲/玻璃/煙霧有真正的中間調而非 0/255 硬切，
+ * 且白黑皆為無彩色 → 完全不需要 despill，不會誤殺綠色/藍色主體。
+ *
+ * 代價：生圖要打兩次（2× 成本）。失敗時丟出例外，由呼叫端退回既有管線。
+ */
+export const executeTriangulationRemoval = async (
+    imageSrc: string,
+    engine: DynamicRemovalEngine,
+    onProgress?: (msg: string) => void,
+): Promise<string> => {
+    const aspectRatio = await detectAspectRatio(imageSrc);
+
+    if (onProgress) onProgress('智慧去背: 生成白底版...');
+    const whitePlate = await generateOneImage(
+        { prompt: WHITE_PLATE_PROMPT, aspectRatio, refImage: imageSrc },
+        engine,
+    );
+    if (!whitePlate) throw new Error('白底版沒有回傳圖片');
+
+    // 關鍵：黑底版是「編輯白底版」而非重新生成原圖，
+    // 前景才會 pixel-aligned，三角測量的數學才成立。
+    if (onProgress) onProgress('智慧去背: 生成黑底版...');
+    const blackPlate = await generateOneImage(
+        { prompt: BLACK_PLATE_PROMPT, aspectRatio, refImage: whitePlate },
+        engine,
+    );
+    if (!blackPlate) throw new Error('黑底版沒有回傳圖片');
+
+    if (onProgress) onProgress('智慧去背: 解算透明度...');
+    // 傳入原圖：對齊得上就用原圖的顏色，避免兩次生成造成的色調偏移
+    const { src, stats } = await triangulationMatte(whitePlate, blackPlate, { originalSrc: imageSrc });
+
+    const trust = isMatteTrustworthy(stats);
+    console.log('[Triangulation] stats:', stats, 'trust:', trust);
+    if (!trust.ok) throw new Error(`Triangulation matte 不可信：${trust.reason}`);
+
+    if (onProgress) onProgress(`智慧去背: 完成（軟邊 ${(stats.softRatio * 100).toFixed(1)}%）`);
+    return src;
+};
+
+// --- 4. Main Handler Logic ---
+export type RemovalMode = 'triangulation' | 'isolation';
+
+/**
+ * 智慧去背入口。
+ * 預設走 triangulation matting；失敗時自動退回既有的「對比底色 + BiRefNet」管線。
+ */
+export const executeDynamicRemoval = async (
+    imageSrc: string,
+    engine: DynamicRemovalEngine,
+    onProgress?: (msg: string) => void,
+    mode: RemovalMode = 'triangulation',
+): Promise<string> => {
+    if (mode === 'triangulation') {
+        try {
+            return await executeTriangulationRemoval(imageSrc, engine, onProgress);
+        } catch (e) {
+            console.warn('[智慧去背] Triangulation 失敗，退回對比底色管線', e);
+            if (onProgress) onProgress('智慧去背: 改用備用方案...');
+        }
+    }
+    return executeIsolationRemoval(imageSrc, engine, onProgress);
+};
+
+/** 既有管線：語意選對比底色 → 生圖隔離 → BiRefNet Matting（無 fal key 則 chroma key）。 */
+export const executeIsolationRemoval = async (imageSrc: string, engine: DynamicRemovalEngine, onProgress?: (msg: string) => void): Promise<string> => {
     if (engine.model !== 'gemini' && !engine.atlasApiKey) {
         throw new Error('請先設定 Atlas Cloud Key 才能使用目前選擇的模型進行智慧去背');
     }

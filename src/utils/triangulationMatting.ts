@@ -1,0 +1,272 @@
+/**
+ * Triangulation Matting（三角測量摳像）
+ *
+ * 數學原理 —— 合成方程式：observed = α·F + (1-α)·B
+ *   白底版 (B=255)：W = α·F + 255·(1-α)
+ *   黑底版 (B=0)  ：K = α·F
+ *
+ *   相減 ⇒ W - K = 255·(1-α)  ⇒  α = 1 - (W-K)/255
+ *   代回 ⇒ F = K / α
+ *
+ * 三個通道理論上會解出同一個 α，實務上因模型雜訊會有差異 → 取平均降噪。
+ *
+ * 相對 chroma key 的兩個決定性優勢：
+ *   1. α 是連續值（0–255），髮絲、玻璃、煙霧、動態模糊都有中間調，不是鋸齒。
+ *   2. 白/黑都是無彩色 → 完全不需要 despill，也不會誤殺真正的綠色/藍色物體。
+ */
+
+/** 載入圖片為 HTMLImageElement */
+const loadImage = (src: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+    });
+
+/** 把圖片畫到指定尺寸的 canvas 並取出像素 */
+const rasterize = (img: HTMLImageElement, w: number, h: number): ImageData => {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true })!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, w, h);
+    return ctx.getImageData(0, 0, w, h);
+};
+
+export interface MatteOptions {
+    /** α 低於此值視為全透明（濾掉背景殘留的淡霧）。預設 0.02 */
+    noiseFloor?: number;
+    /** α 高於此值視為全不透明（避免實心區域變半透明）。預設 0.97 */
+    noiseCeiling?: number;
+    /**
+     * 原圖。提供且與白底版對得上時，前景色直接取自原圖 —— 色調零漂移。
+     *
+     * 為什麼需要：F = K/α 在不透明區等於 K，也就是「黑底版」的像素，
+     * 而黑底版是原圖經過兩次生成的產物，色調必然偏移；且黑背景會讓模型
+     * 傾向把主體渲染得更暗，是有方向性的偏差。alpha 才是三角測量的價值，
+     * 顏色沒有理由從生成圖拿。
+     */
+    originalSrc?: string;
+    /**
+     * 判定原圖與白底版「幾何對齊」的最低梯度相關性（0–1）。預設 0.75。
+     *
+     * 不能用色差判斷：實測「對齊但色偏 25%」與「位移 3px」的平均色差都是 26，
+     * 完全重疊 —— 色調偏移本身就是色差，門檻調到哪都會誤判。
+     * 改用梯度的正規化互相關：色調偏移會等比縮放梯度、NCC 不變；
+     * 幾何位移讓邊緣對不上、相關性直接掉。
+     */
+    alignmentMinScore?: number;
+}
+
+export interface MatteResult {
+    /** RGBA PNG data URL */
+    src: string;
+    /** 品質診斷，用來決定要不要退回備用方案 */
+    stats: {
+        width: number;
+        height: number;
+        /** 完全透明像素比例 */
+        transparentRatio: number;
+        /** 完全不透明像素比例 */
+        opaqueRatio: number;
+        /** 半透明（軟邊）像素比例 —— 髮絲/玻璃多的圖這個值會偏高 */
+        softRatio: number;
+        /** 黑底版四角的平均亮度，用來確認底色真的換成黑了 */
+        blackPlateCornerLuma: number;
+        /** 前景色的來源：原圖（無色偏）或黑底版（有兩次生成的色偏） */
+        colorSource: 'original' | 'blackPlate';
+        /** 原圖與白底版的梯度相關性（0–1，越高越對齊）；未提供原圖時為 null */
+        alignmentScore: number | null;
+    };
+}
+
+/**
+ * 用白底版 + 黑底版解出真正的 alpha channel。
+ * 兩張圖必須是同一個前景（pixel-aligned）；尺寸不同時會把黑底版縮放對齊白底版。
+ */
+export const triangulationMatte = async (
+    whiteSrc: string,
+    blackSrc: string,
+    opts: MatteOptions = {},
+): Promise<MatteResult> => {
+    const noiseFloor = opts.noiseFloor ?? 0.02;
+    const noiseCeiling = opts.noiseCeiling ?? 0.97;
+    // 0.70：實測對齊(含 35% 色偏)落在 0.77–0.92，位移 2–5px 落在 -0.20–0.63，
+    // 取中間值讓兩側各留約 0.07 餘裕。
+    const alignmentMinScore = opts.alignmentMinScore ?? 0.70;
+
+    const [whiteImg, blackImg, origImg] = await Promise.all([
+        loadImage(whiteSrc),
+        loadImage(blackSrc),
+        opts.originalSrc ? loadImage(opts.originalSrc) : Promise.resolve(null),
+    ]);
+
+    // 以白底版的尺寸為準（它是第一手輸出，通常較忠實）
+    const w = whiteImg.naturalWidth;
+    const h = whiteImg.naturalHeight;
+
+    const W = rasterize(whiteImg, w, h).data;
+    const K = rasterize(blackImg, w, h).data;
+    const ORIG = origImg ? rasterize(origImg, w, h).data : null;
+
+    const out = new ImageData(w, h);
+    const O = out.data;
+
+    let transparent = 0;
+    let opaque = 0;
+    let soft = 0;
+
+    // --- Pass 1：解 alpha ---
+    const alpha = new Float32Array(w * h);
+    for (let i = 0, p = 0; i < W.length; i += 4, p++) {
+        // α = 1 - (W-K)/255，三通道取平均降噪
+        const d = (W[i] - K[i] + (W[i + 1] - K[i + 1]) + (W[i + 2] - K[i + 2])) / 3;
+        let a = 1 - d / 255;
+
+        // 前景被模型改亮/改暗時 d 可能為負 → a > 1，夾回範圍
+        if (a < 0) a = 0;
+        else if (a > 1) a = 1;
+
+        // noise floor / ceiling：抑制 matte 雜訊
+        if (a <= noiseFloor) a = 0;
+        else if (a >= noiseCeiling) a = 1;
+
+        alpha[p] = a;
+        if (a === 0) transparent++;
+        else if (a === 1) opaque++;
+        else soft++;
+    }
+
+    // --- 對齊檢查：原圖與白底版在不透明區是否是同一個東西 ---
+    // 只在幾何對得上時才敢用原圖的顏色。
+    // 梯度正規化互相關：對色調偏移免疫（等比縮放不影響相關性），
+    // 對幾何位移敏感（邊緣對不上，相關性掉）。
+    let alignmentScore: number | null = null;
+    if (ORIG) {
+        const lum = (D: Uint8ClampedArray, p: number) => {
+            const i = p * 4;
+            return 0.299 * D[i] + 0.587 * D[i + 1] + 0.114 * D[i + 2];
+        };
+        // 梯度強度（水平+垂直一階差分）
+        const grad = (D: Uint8ClampedArray, x: number, y: number) => {
+            const p = y * w + x;
+            return Math.abs(lum(D, p + 1) - lum(D, p)) + Math.abs(lum(D, p + w) - lum(D, p));
+        };
+
+        const ga: number[] = [], gb: number[] = [];
+        for (let y = 0; y < h - 1; y++) {
+            for (let x = 0; x < w - 1; x++) {
+                if (alpha[y * w + x] !== 1) continue;  // 只比對主體不透明區
+                ga.push(grad(ORIG, x, y));
+                gb.push(grad(W, x, y));
+            }
+        }
+
+        if (ga.length < 50) {
+            alignmentScore = 0; // 樣本太少，不敢用原圖
+        } else {
+            const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
+            const ma = mean(ga), mb = mean(gb);
+            let num = 0, da = 0, db = 0;
+            for (let i = 0; i < ga.length; i++) {
+                const x = ga[i] - ma, y = gb[i] - mb;
+                num += x * y; da += x * x; db += y * y;
+            }
+            const denom = Math.sqrt(da * db);
+            alignmentScore = denom > 0 ? num / denom : 0;
+        }
+    }
+
+    const useOriginalColor = alignmentScore !== null && alignmentScore >= alignmentMinScore;
+
+    // --- Pass 2：填色 ---
+    for (let p = 0; p < alpha.length; p++) {
+        const i = p * 4;
+        const a = alpha[p];
+
+        if (a === 0) {
+            O[i] = O[i + 1] = O[i + 2] = O[i + 3] = 0;
+            continue;
+        }
+
+        if (useOriginalColor) {
+            // 原圖像素，完全沒經過生成模型 → 色調零漂移
+            O[i] = ORIG![i];
+            O[i + 1] = ORIG![i + 1];
+            O[i + 2] = ORIG![i + 2];
+        } else {
+            // F = K / α（黑底版就是 α·F，除回去得純前景色）
+            const inv = 1 / a;
+            const r = K[i] * inv, g = K[i + 1] * inv, b = K[i + 2] * inv;
+            O[i] = r > 255 ? 255 : r;
+            O[i + 1] = g > 255 ? 255 : g;
+            O[i + 2] = b > 255 ? 255 : b;
+        }
+        O[i + 3] = Math.round(a * 255);
+    }
+
+    // 檢查黑底版四角亮度 —— 若編輯失敗（底色沒變黑）這裡會偏高
+    const cornerLuma = (() => {
+        const pick = (x: number, y: number) => {
+            const i = (y * w + x) * 4;
+            return 0.299 * K[i] + 0.587 * K[i + 1] + 0.114 * K[i + 2];
+        };
+        const pad = 4;
+        const samples = [
+            pick(pad, pad),
+            pick(w - 1 - pad, pad),
+            pick(pad, h - 1 - pad),
+            pick(w - 1 - pad, h - 1 - pad),
+        ];
+        return samples.reduce((s, v) => s + v, 0) / samples.length;
+    })();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext('2d')!.putImageData(out, 0, 0);
+
+    const total = w * h;
+    return {
+        src: canvas.toDataURL('image/png'),
+        stats: {
+            width: w,
+            height: h,
+            transparentRatio: transparent / total,
+            opaqueRatio: opaque / total,
+            softRatio: soft / total,
+            blackPlateCornerLuma: cornerLuma,
+            colorSource: useOriginalColor ? 'original' : 'blackPlate',
+            alignmentScore,
+        },
+    };
+};
+
+/**
+ * 判斷 matte 結果是否可信。不可信時呼叫端應退回備用方案。
+ */
+export const isMatteTrustworthy = (stats: MatteResult['stats']): { ok: boolean; reason?: string } => {
+    // 註：不用「四角是否夠黑」判斷 —— 主體只要碰到畫面角落就會誤判。
+    // 黑底版沒換底的情況（W≈K）會讓 α 全為 1，由下面的 transparentRatio 攔下。
+
+    // 幾乎沒有透明像素 → 兩版背景相同，第二步編輯根本沒生效
+    if (stats.transparentRatio < 0.02) {
+        return { ok: false, reason: `透明像素僅 ${(stats.transparentRatio * 100).toFixed(1)}%，疑似兩版背景相同` };
+    }
+    // 幾乎全透明 → 主體被誤刪
+    const subject = stats.opaqueRatio + stats.softRatio;
+    if (subject < 0.02) {
+        return { ok: false, reason: '主體幾乎全被判為透明' };
+    }
+    // 前景過半是半透明 → 這是「模型在第二步偷改前景」的典型症狀：
+    // 主體內部本該 α=1，飄移會讓整片變成中間調而不是只有邊緣一圈軟邊。
+    const softShare = stats.softRatio / subject;
+    if (softShare > 0.6) {
+        return { ok: false, reason: `主體 ${(softShare * 100).toFixed(0)}% 為半透明，疑似黑底版前景飄移` };
+    }
+    return { ok: true };
+};
