@@ -21,7 +21,7 @@ import { trimTransparentPixels, LayerResult } from './falImage';
 import { detectBackgroundColor } from './imageProcessing';
 
 export type MagicLayerModel = 'gemini' | 'gpt-image-2' | 'seedream-v5-pro';
-export type MagicLayerGroupingStrategy = 'smart' | 'separate' | 'custom';
+export type MagicLayerGroupingStrategy = 'smart' | 'separate' | 'category' | 'custom';
 
 export interface MagicLayerPlanItem {
     id: string;
@@ -314,6 +314,35 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     }
     objects = deduplicated;
 
+    // ── 包含關係吸收：治「同一個主體被拆成兩層」──────────────────────────────
+    // 上面的 IoU 去重只擋得掉「幾乎同一個框」。但偵測階段刻意允許包含關係
+    // （見 prompt：objects may contain one another），而第二階段規劃只用物件 ID
+    // 去重 —— ID 唯一不代表像素不重疊。「人物」與「她的上衣」是兩個 ID，分到
+    // 不同層時上衣的像素會在兩層各出現一次，就是實測看到的重複。
+    // 這裡把「幾乎整個被另一個框包住」的小物件吸收進大物件，成為同一層的成員。
+    // 只看包含比例、不看 IoU：手握杯子那種接觸但露出大半的關係包含比低，不受影響。
+    const containedRatio = (inner: BBox, outer: BBox): number => {
+        const innerArea = inner.w * inner.h;
+        return innerArea > 0 ? intersectArea(inner, outer) / innerArea : 0;
+    };
+    const CONTAINMENT_THRESHOLD = 0.85;
+    const area = (b: BBox) => b.w * b.h;
+    const absorbed = new Set<string>();
+    for (const inner of objects) {
+        if (absorbed.has(inner.id)) continue;
+        for (const outer of objects) {
+            if (inner.id === outer.id || absorbed.has(outer.id)) continue;
+            // 只被更大的框吸收，避免互相吸收
+            if (area(outer.bbox) <= area(inner.bbox)) continue;
+            if (containedRatio(inner.bbox, outer.bbox) >= CONTAINMENT_THRESHOLD) {
+                absorbed.add(inner.id);
+                console.info(`[magicLayer] 「${inner.label}」幾乎被「${outer.label}」包住 → 併入同層，避免像素重複`);
+                break;
+            }
+        }
+    }
+    if (absorbed.size > 0) objects = objects.filter(o => !absorbed.has(o.id));
+
     // 安全夾值：bbox + edgeComplexity 預設值
     return objects.map(o => ({
         ...o,
@@ -365,6 +394,41 @@ async function planObjectLayers(
     apiKey: string,
     options: Partial<MagicLayerOptions>,
 ): Promise<MagicLayerPlan> {
+    // ── 依類別：純程式規則，不經過 LLM ─────────────────────────────────────
+    // 「智慧分組」把層數交給 LLM 決定成員，實測它不照使用者的意圖走（文字、Logo、
+    // 手機、剪影全擠一層）。設計師心裡的分層通常就是類別：主體一層、產品一層、
+    // 所有文字/Logo 一層。category 在盤點階段已經算好，直接照它分組即可，
+    // 沒有模型發揮的空間，層數與成員都可預測。
+    if (options.groupingStrategy === 'category') {
+        const CATEGORY_LABEL: Record<string, string> = {
+            SUBJECT: '主體／人物',
+            PRODUCT: '商品／產品',
+            OBJECTS: '道具／小物',
+            DECOR:   '裝飾／圖形',
+            TEXT:    '文字／Logo',
+        };
+        const order = ['SUBJECT', 'PRODUCT', 'OBJECTS', 'DECOR', 'TEXT'];
+        const byCategory = new Map<string, DetectedObject[]>();
+        for (const object of objects) {
+            const key = object.category ?? 'OBJECTS';
+            if (!byCategory.has(key)) byCategory.set(key, []);
+            byCategory.get(key)!.push(object);
+        }
+        const groups = order
+            .filter(key => byCategory.has(key))
+            .map(key => ({ key, members: byCategory.get(key)! }));
+        // 不在預設順序內的類別接在後面，確保沒有物件被丟掉
+        for (const [key, members] of byCategory) {
+            if (!order.includes(key)) groups.push({ key, members });
+        }
+        return {
+            detectedObjectCount: objects.length,
+            targetForegroundCount: groups.length,
+            layers: groups.map((group, index) =>
+                buildPlanItem(group.members, index, CATEGORY_LABEL[group.key] ?? group.key, '依類別分組')),
+        };
+    }
+
     if (options.groupingStrategy === 'custom') {
         const instruction = options.customInstruction?.trim();
         if (!instruction) throw new Error('使用「依照指令」時，請先填寫要拆出的物件');
@@ -770,7 +834,7 @@ async function geminiIsolateOnSolidBg(
         `The background must be a perfectly uniform solid color with NO gradients, NO shadows, NO variations. ` +
         `Do NOT blend or feather the object edges into the background. Hard, clean boundary required.` +
         translucentHint +
-        perspectiveHint;
+        perspectiveHint + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox);
     const response = await ai.models.generateContent({
         model,
         contents: { parts: [{ inlineData: { data: cleanBase64, mimeType } }, { text: prompt }] },
@@ -778,6 +842,27 @@ async function geminiIsolateOnSolidBg(
     const part = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
     if (!part?.inlineData?.data) throw new Error('Gemini isolation 未回傳圖片');
     return `data:image/png;base64,${part.inlineData.data}`;
+}
+
+// ── 隔離共用指示：遮擋補完 + 位置消歧 ───────────────────────────────────────
+
+// 被遮擋處要「補完整」而非填底色。分層的價值就是各層能獨立移動——人物被手機
+// 擋住的部分若只填成底色，移開手機那層就會看到一個洞（實測就是那塊白色實心補丁）。
+// 同時明確禁止把移除的元素留成白補丁／黑剪影／幽靈輪廓（實測的另一個症狀）。
+const OCCLUSION_COMPLETION_HINT =
+    ` If the target object is partially hidden behind other elements that you are removing, ` +
+    `RECONSTRUCT those hidden parts naturally and seamlessly so the object comes out whole and complete — ` +
+    `continue its own shape, contours, colors, material, texture, pattern and lighting as they would plausibly be. ` +
+    `CRITICAL: never leave a white patch, black silhouette, gray plate, hole, cut-out gap, or ghost outline ` +
+    `where a removed element used to be. Every pixel that is not the target object must be the exact solid background color, ` +
+    `and every pixel of the target object must be fully painted — no gaps.`;
+
+/** 位置消歧：畫面有多個相似物件時，只靠名字模型無從分辨要哪一個 */
+function buildPositionHint(bbox: { x: number; y: number; w: number; h: number }): string {
+    const pct = (v: number) => Math.round(v * 100);
+    return ` The target occupies approximately x ${pct(bbox.x)}%–${pct(bbox.x + bbox.w)}% and ` +
+        `y ${pct(bbox.y)}%–${pct(bbox.y + bbox.h)}% of the image (origin at top-left). ` +
+        `If several similar objects appear in the image, keep ONLY the one at that location and remove the others.`;
 }
 
 // ── 三角測量：把「物件在白底上」那張改成純黑底 ─────────────────────────────
@@ -902,7 +987,7 @@ async function extractOneLayer(
                       `Preserve the source object's original opacity: solid objects such as paper, sticky notes, labels, products, logos and text panels must remain solid and must not become translucent, faded, ghosted or see-through. ` +
                       `Only preserve translucency when it is clearly present in the source, such as glass, smoke, liquid, sheer fabric or glow. Preserve shadows and highlights without reducing the opacity of the object's main body.` +
                       (isTintedGray ? ` CRITICAL for this translucent/glass/sheer object: keep the object's own coloration and internal transparency VIVID and INTACT. The colored transparency must remain as saturated and vibrant as in the original image. Do NOT desaturate, gray-out, or neutralize the colored transparent areas. The background color (${bgColor.hex}) is intentionally tinted to match the object — let it show through the transparent parts naturally.` : '') +
-                      perspectiveHint + refHint
+                      perspectiveHint + refHint + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox)
                     : `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
                       `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
                       `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
@@ -911,7 +996,7 @@ async function extractOneLayer(
                       `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
                       `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.` +
                       (isTintedGray ? ` CRITICAL for this translucent/glass/sheer object: keep the object's own coloration and internal transparency VIVID and INTACT. The colored transparency must remain as saturated and vibrant as in the original image. Do NOT desaturate, gray-out, or neutralize the colored transparent areas. The background color (${bgColor.hex}) is intentionally tinted to match the object — let it show through the transparent parts naturally.` : '') +
-                      perspectiveHint + refHint,
+                      perspectiveHint + refHint + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox),
                 atlasModel,
                 atlasKey,
                 compressedImage,

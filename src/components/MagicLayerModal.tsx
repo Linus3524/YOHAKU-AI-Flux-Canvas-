@@ -108,20 +108,25 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, o
               <label className="mb-2 block text-xs font-semibold text-neutral-700">希望拆出幾層</label>
               <div className="grid grid-cols-4 gap-1.5">
                 {COUNTS.map(count => (
-                  <button key={String(count)} type="button" disabled={options.groupingStrategy === 'custom'} onClick={() => set('layerCount', count)} className={`h-8 border text-xs font-medium disabled:cursor-not-allowed disabled:opacity-35 ${options.layerCount === count ? 'border-violet-500 bg-violet-600 text-white' : 'border-neutral-200 text-neutral-600 hover:border-neutral-400'}`}>
+                  <button key={String(count)} type="button" disabled={options.groupingStrategy === 'custom' || options.groupingStrategy === 'category'} onClick={() => set('layerCount', count)} className={`h-8 border text-xs font-medium disabled:cursor-not-allowed disabled:opacity-35 ${options.layerCount === count ? 'border-violet-500 bg-violet-600 text-white' : 'border-neutral-200 text-neutral-600 hover:border-neutral-400'}`}>
                     {count === 'auto' ? '自動' : `${count} 層`}
                   </button>
                 ))}
               </div>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-500">{options.groupingStrategy === 'custom' ? '依照指令模式會以列出的物件決定層數。' : '模型會依內容調整；背景層會計入目標層數。'}</p>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-500">{options.groupingStrategy === 'custom'
+                ? '依照指令模式會以列出的物件決定層數。'
+                : options.groupingStrategy === 'category'
+                ? '依類別模式由偵測到的類別決定層數：主體、產品、小物、裝飾、文字各一層。'
+                : '模型會依內容調整；背景層會計入目標層數。'}</p>
             </div>
 
             <div>
               <label className="mb-2 block text-xs font-semibold text-neutral-700">拆分策略</label>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 {([
                   ['smart', '智慧分組'],
                   ['separate', '盡量分開'],
+                  ['category', '依類別'],
                   ['custom', '依照指令'],
                 ] as const).map(([value, label]) => (
                   <button key={value} type="button" onClick={() => set('groupingStrategy', value)} className={`h-8 border text-[11px] font-medium ${options.groupingStrategy === value ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-neutral-200 text-neutral-600'}`}>
