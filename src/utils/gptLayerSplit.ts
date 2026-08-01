@@ -845,7 +845,7 @@ async function geminiIsolateOnSolidBg(
         `The background must be a perfectly uniform solid color with NO gradients, NO shadows, NO variations. ` +
         `Do NOT blend or feather the object edges into the background. Hard, clean boundary required.` +
         translucentHint +
-        perspectiveHint + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox);
+        perspectiveHint + EXCLUSIVITY_HINT + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox);
     const response = await ai.models.generateContent({
         model,
         contents: { parts: [{ inlineData: { data: cleanBase64, mimeType } }, { text: prompt }] },
@@ -860,6 +860,14 @@ async function geminiIsolateOnSolidBg(
 // 被遮擋處要「補完整」而非填底色。分層的價值就是各層能獨立移動——人物被手機
 // 擋住的部分若只填成底色，移開手機那層就會看到一個洞（實測就是那塊白色實心補丁）。
 // 同時明確禁止把移除的元素留成白補丁／黑剪影／幽靈輪廓（實測的另一個症狀）。
+// 重疊物件也必須移除。實測人物層把她手邊的手機一起留下來了 —— prompt 只說
+// 「保留 X」，模型會把緊貼、交疊、被握住的東西當成 X 的一部分。分層要的是
+// 每個物件各自獨立，所以得明講：即使重疊、接觸、被握住，也一律移除。
+const EXCLUSIVITY_HINT =
+    ` Remove EVERY other object, even if it overlaps, touches, is held by, rests on, or is worn over the target. ` +
+    `A product, device, prop or piece of text that merely sits in front of or against the target is NOT part of the target — ` +
+    `delete it and rebuild whatever it was covering. Keep only what genuinely belongs to the target object itself.`;
+
 const OCCLUSION_COMPLETION_HINT =
     ` If the target object is partially hidden behind other elements that you are removing, ` +
     `RECONSTRUCT those hidden parts naturally and seamlessly so the object comes out whole and complete — ` +
@@ -998,7 +1006,7 @@ async function extractOneLayer(
                       `Preserve the source object's original opacity: solid objects such as paper, sticky notes, labels, products, logos and text panels must remain solid and must not become translucent, faded, ghosted or see-through. ` +
                       `Only preserve translucency when it is clearly present in the source, such as glass, smoke, liquid, sheer fabric or glow. Preserve shadows and highlights without reducing the opacity of the object's main body.` +
                       (isTintedGray ? ` CRITICAL for this translucent/glass/sheer object: keep the object's own coloration and internal transparency VIVID and INTACT. The colored transparency must remain as saturated and vibrant as in the original image. Do NOT desaturate, gray-out, or neutralize the colored transparent areas. The background color (${bgColor.hex}) is intentionally tinted to match the object — let it show through the transparent parts naturally.` : '') +
-                      perspectiveHint + refHint + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox)
+                      perspectiveHint + refHint + EXCLUSIVITY_HINT + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox)
                     : `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
                       `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
                       `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
@@ -1007,7 +1015,7 @@ async function extractOneLayer(
                       `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
                       `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.` +
                       (isTintedGray ? ` CRITICAL for this translucent/glass/sheer object: keep the object's own coloration and internal transparency VIVID and INTACT. The colored transparency must remain as saturated and vibrant as in the original image. Do NOT desaturate, gray-out, or neutralize the colored transparent areas. The background color (${bgColor.hex}) is intentionally tinted to match the object — let it show through the transparent parts naturally.` : '') +
-                      perspectiveHint + refHint + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox),
+                      perspectiveHint + refHint + EXCLUSIVITY_HINT + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox),
                 atlasModel,
                 atlasKey,
                 compressedImage,

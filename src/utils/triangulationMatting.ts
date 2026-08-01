@@ -161,15 +161,26 @@ export const triangulationMatte = async (
         if (a === 1) opaque++;
         else soft++;
 
-        // F = K / α（黑底版直接就是 α·F，除回去就是純前景色）
+        // 前景色有兩種等價解法：
+        //   從黑底版：F = K / α          （K 就是 α·F）
+        //   從白底版：F = (W - 255(1-α)) / α
+        // 理論上相同，實務上差在「信哪一版的渲染」。黑底版是原圖經過兩次生成
+        // 的產物，而且黑背景會讓模型把主體畫暗（實測：藍色文字條變成黑色）。
+        // 白底版只隔一次生成，且 α=1 時 F = W —— 不必除法、零漂移。
+        // 因此高 α 取白底版、低 α 取黑底版（低 α 時白底版要減去一個大數，
+        // 數值不穩），中間平滑過渡避免接縫。
         const inv = 1 / a;
-        let r = K[i] * inv;
-        let g = K[i + 1] * inv;
-        let b = K[i + 2] * inv;
+        const fBlack = [K[i] * inv, K[i + 1] * inv, K[i + 2] * inv];
+        const bgTerm = 255 * (1 - a);
+        const fWhite = [(W[i] - bgTerm) * inv, (W[i + 1] - bgTerm) * inv, (W[i + 2] - bgTerm) * inv];
 
-        O[i] = r > 255 ? 255 : r;
-        O[i + 1] = g > 255 ? 255 : g;
-        O[i + 2] = b > 255 ? 255 : b;
+        // a≤0.6 全用黑底版，a≥0.9 全用白底版，中間線性過渡
+        const wWhite = a <= 0.6 ? 0 : a >= 0.9 ? 1 : (a - 0.6) / 0.3;
+
+        for (let c = 0; c < 3; c++) {
+            const v = fWhite[c] * wWhite + fBlack[c] * (1 - wWhite);
+            O[i + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+        }
         O[i + 3] = Math.round(a * 255);
     }
 
