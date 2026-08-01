@@ -16,6 +16,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { callAtlasImg2Img, compressForAtlas, detectClosestRatio, type AtlasGenerationModel } from './atlasImage';
 import { birefnetRemoveBg, selectBiRefNetModel } from './geminiLayer';
+import { triangulationMatte, isMatteTrustworthy } from './triangulationMatting';
 import { trimTransparentPixels, LayerResult } from './falImage';
 import { detectBackgroundColor } from './imageProcessing';
 
@@ -50,6 +51,12 @@ export interface MagicLayerOptions {
     preservePosition: boolean;
     autoArrange: boolean;
     groupingStrategy: MagicLayerGroupingStrategy;
+    /**
+     * 高精度邊緣：隔離到純白底後，再生一張純黑底版，用三角測量反解連續 alpha
+     * （α = 1 - (W-K)/255）。髮絲、玻璃、煙霧會有真正的中間調而非硬邊。
+     * 代價：每個物件多一次生成。失敗自動退回 BiRefNet。
+     */
+    highPrecisionEdge: boolean;
     /** 執行前確認過的 runtime plan，不進畫布存檔。 */
     plan?: MagicLayerPlan;
 }
@@ -68,6 +75,7 @@ export const DEFAULT_MAGIC_LAYER_OPTIONS: MagicLayerOptions = {
     preservePosition: true,
     autoArrange: true,
     groupingStrategy: 'smart',
+    highPrecisionEdge: false,
 };
 
 // ── 隔離背景方案 ────────────────────────────────────────────────────────────
@@ -772,6 +780,48 @@ async function geminiIsolateOnSolidBg(
     return `data:image/png;base64,${part.inlineData.data}`;
 }
 
+// ── 三角測量：把「物件在白底上」那張改成純黑底 ─────────────────────────────
+// 關鍵是「編輯白底版」而非重新生成原物件 —— 前景才會 pixel-aligned，
+// α = 1 - (W-K)/255 的數學才成立。任一步失敗回傳空字串，呼叫端落回一般去背。
+const BLACK_PLATE_LAYER_PROMPT =
+    `Change ONLY the background color of this image from white to PURE BLACK (#000000, RGB 0,0,0). ` +
+    `Absolute requirements: ` +
+    `1. Do NOT move, resize, re-pose, re-light, re-crop, or redraw the foreground object in ANY way. ` +
+    `2. Every foreground pixel must stay identical to the input — same position, same scale, same colors, same brightness, same detail. ` +
+    `3. The background must be 100% pure black, perfectly flat: no gradient, no vignette, no glow, no scenery. ` +
+    `4. Do NOT add any shadow or reflection cast onto the background. ` +
+    `5. Keep the exact same image dimensions and framing. ` +
+    `This is a background-plate swap for a matting pipeline, not a creative edit.`;
+
+async function generateBlackPlateForLayer(
+    whitePlate: string,
+    obj: DetectedObject,
+    detectedRatio: string,
+    atlasKey: string | undefined,
+    atlasModel: AtlasGenerationModel,
+    geminiApiKey: string,
+    geminiImageModel: string,
+): Promise<string> {
+    const prompt = BLACK_PLATE_LAYER_PROMPT +
+        ` The foreground object is the "${obj.labelEn}" (${obj.label}).`;
+    if (atlasKey) {
+        const out = await callAtlasImg2Img(
+            prompt, atlasModel, atlasKey, whitePlate, 1,
+            atlasModel === 'seedream-v5-pro' ? { ratio: detectedRatio, quality: '2K' } : { ratio: detectedRatio },
+        );
+        return out[0] ?? '';
+    }
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const cleanBase64 = whitePlate.split(',')[1] || whitePlate;
+    const mimeType = whitePlate.match(/data:(.*);base64/)?.[1] ?? 'image/png';
+    const response = await ai.models.generateContent({
+        model: geminiImageModel,
+        contents: { parts: [{ inlineData: { data: cleanBase64, mimeType } }, { text: prompt }] },
+    });
+    const part = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+    return part?.inlineData?.data ? `data:image/png;base64,${part.inlineData.data}` : '';
+}
+
 // ── 參考圖裁切：從原解析度原圖按 bbox + padding 裁出物件特寫 ─────────────────
 // PRODUCT/TEXT 類隔離時附上，作為視角與字形的像素級錨點（防止模型把斜的轉正、字寫錯）
 function cropBBoxWithPad(
@@ -809,6 +859,7 @@ async function extractOneLayer(
     geminiImageModel: string,      // Gemini 隔離 model
     onProgress?: (msg: string) => void,
     referenceCrop?: string,        // PRODUCT/TEXT：原圖 bbox 特寫，視角與字形錨點
+    highPrecisionEdge = false,     // 三角測量：隔離到純白 → 再生純黑版 → 反解連續 alpha
 ): Promise<LayerResult | null> {
     // TEXT / DECOR 類別：硬邊幾何形狀，BiRefNet 反而會誤判字母負空間
     // → 強制走 Chroma Key（純色背景下效果更準確）
@@ -816,10 +867,16 @@ async function extractOneLayer(
     const useBiRefNet = !!falKey && !isTextLayer;
     // fallback：文字/Logo 用白底（灰階最安全）；一般物件用中綠（含白色部位也吃得掉）
     // 有色半透明物件 → 用帶色調的淡灰底色（保留透明色調）
-    const isTintedGray = obj.bgColor === ('TINTED_GRAY' as BgColorKey) && typeof obj.subjectHue === 'number';
-    const bgColor: BgColorEntry = isTintedGray
-        ? buildTintedGrayForLayer(obj.subjectHue!, !!obj.darkTranslucent)
-        : (BG_COLOR_MAP[obj.bgColor] ?? (obj.category === 'TEXT' ? BG_COLOR_MAP.WHITE : BG_COLOR_MAP.GREEN));
+    const isTintedGray = !highPrecisionEdge
+        && obj.bgColor === ('TINTED_GRAY' as BgColorKey) && typeof obj.subjectHue === 'number';
+    // 高精度邊緣一律隔離到純白：三角測量要的是白/黑兩版。
+    // 這也讓 TINTED_GRAY 那套補償失去必要性 —— 有色半透明本來就是靠帶色底色避免被
+    // 洗成灰，而三角測量是直接把透明度算出來，不需要用底色去「補」顏色。
+    const bgColor: BgColorEntry = highPrecisionEdge
+        ? BG_COLOR_MAP.WHITE
+        : isTintedGray
+            ? buildTintedGrayForLayer(obj.subjectHue!, !!obj.darkTranslucent)
+            : (BG_COLOR_MAP[obj.bgColor] ?? (obj.category === 'TEXT' ? BG_COLOR_MAP.WHITE : BG_COLOR_MAP.GREEN));
 
     try {
         // ── 2a：隔離生成（GPT Image 2 優先；無 Atlas Key 降級 Gemini Flash Image）──
@@ -871,7 +928,36 @@ async function extractOneLayer(
         }
 
         let transparent = isolatedSrc;
-        {
+
+        // ── 2b'：高精度邊緣（三角測量）──────────────────────────────────────
+        // isolatedSrc 已經是「物件在純白底上」，等於白底版；只要再生一張黑底版，
+        // 就能反解連續 alpha。髮絲/玻璃/煙霧會有真正的中間調而非硬邊，
+        // 也不需要 uniformizeBackground 去「洗」底色（三角測量不在乎底色純不純）。
+        // 代價：每個物件多一次生成。任何一步失敗就落回下方 BiRefNet/Chroma 主路。
+        let triangulated = false;
+        if (highPrecisionEdge) {
+            try {
+                onProgress?.(`✂️ 高精度邊緣：${obj.label}（生成黑底版）`);
+                const blackPlate = await generateBlackPlateForLayer(
+                    isolatedSrc, obj, detectedRatio, atlasKey, atlasModel, geminiApiKey, geminiImageModel,
+                );
+                if (blackPlate) {
+                    const { src: matted, stats } = await triangulationMatte(isolatedSrc, blackPlate);
+                    const trust = isMatteTrustworthy(stats);
+                    console.log(`[魔法分層/三角測量] ${obj.label}`, stats, trust);
+                    if (trust.ok) {
+                        transparent = matted;
+                        triangulated = true;
+                    } else {
+                        onProgress?.(`↩️ ${obj.label}：三角測量不可信（${trust.reason}），改用一般去背`);
+                    }
+                }
+            } catch (e) {
+                console.warn(`[魔法分層/三角測量] ${obj.label} 失敗，退回一般去背`, e);
+            }
+        }
+
+        if (!triangulated) {
             // 所有生成模型都先產生實色背景，再由軟體去背建立 Alpha。
             const fallbackBgColor = atlasModel === 'seedream-v5-pro'
                 ? await detectBackgroundColor(isolatedSrc)
@@ -1150,6 +1236,7 @@ export async function gptLayerSegment(
             let result = await runWithRetry(() => extractOneLayer(
                 obj, compressedImage, detectedRatio, atlasKey, atlasModel, falKey,
                 geminiApiKey, geminiImageModel, onProgress, referenceCrop,
+                options.highPrecisionEdge,
             ), obj.label);
             const usable = result &&
                 result.base64.startsWith('data:image') &&
@@ -1161,6 +1248,7 @@ export async function gptLayerSegment(
                 result = await withTimeout(extractOneLayer(
                     obj, compressedImage, detectedRatio, atlasKey, atlasModel,
                     falKey, geminiApiKey, geminiImageModel, onProgress, referenceCrop,
+                    options.highPrecisionEdge,
                 ), obj.label);
             }
             if (result) callbacks.onLayerComplete?.(obj.id, result);

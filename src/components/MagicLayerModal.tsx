@@ -161,6 +161,22 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, o
                   {label}
                 </label>
               ))}
+
+              <label className="flex cursor-pointer items-start gap-2 border-t border-neutral-100 pt-2">
+                <input
+                  type="checkbox"
+                  checked={options.highPrecisionEdge}
+                  onChange={event => set('highPrecisionEdge', event.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 accent-violet-600"
+                />
+                <span>
+                  高精度邊緣（三角測量）
+                  <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">每層多一次生成</span>
+                  <span className="mt-0.5 block text-[11px] leading-relaxed text-neutral-500">
+                    髮絲、玻璃、煙霧會有真正的半透明過渡而非硬邊。失敗自動退回一般去背。
+                  </span>
+                </span>
+              </label>
             </div>
           </div>
 
