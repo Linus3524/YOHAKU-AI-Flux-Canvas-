@@ -855,6 +855,39 @@ async function geminiIsolateOnSolidBg(
     return `data:image/png;base64,${part.inlineData.data}`;
 }
 
+// ── 隔離輸出還原原圖比例 ────────────────────────────────────────────────────
+// 生成模型只能輸出自家支援的比例（見 SEEDREAM_PRO_SIZES 等），且部分比例是別的
+// 比例的別名——例如 4:5 實際送出 1728*2304，那是 3:4。img2img 會把輸入圖擠進目標
+// 比例再生成，於是整個畫面被壓扁，物件跟著變形（實測 Seedream 5 Pro 的分層有拉伸）。
+//
+// 背景層早有 coverCropToAspect 校正，前景層沒有：trimTransparentPixels 量到的
+// pixelWidth/Height 是「被壓扁後」的物件，回貼畫布時照著它保比例，等於把變形保留下來。
+// 這裡用非等比縮放把整張還原回原圖比例，抵銷生成時的擠壓。不用 cover-crop 是因為
+// 前景物件可能延伸到邊緣，裁切會切掉內容。
+function restoreOriginalAspect(base64: string, targetAR: number): Promise<string> {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const w = img.naturalWidth, h = img.naturalHeight;
+            const srcAR = w / h;
+            if (!isFinite(srcAR) || srcAR <= 0 || Math.abs(srcAR - targetAR) < 0.01) { resolve(base64); return; }
+            // 維持像素總量，只把長寬比拉回目標
+            const outW = srcAR > targetAR ? Math.round(h * targetAR) : w;
+            const outH = srcAR > targetAR ? h : Math.round(w / targetAR);
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, outW);
+            canvas.height = Math.max(1, outH);
+            const ctx = canvas.getContext('2d')!;
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, w, h, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(base64);
+        img.src = base64;
+    });
+}
+
 // ── 隔離共用指示：遮擋補完 + 位置消歧 ───────────────────────────────────────
 
 // 被遮擋處要「補完整」而非填底色。分層的價值就是各層能獨立移動——人物被手機
@@ -964,6 +997,7 @@ async function extractOneLayer(
     onProgress?: (msg: string) => void,
     referenceCrop?: string,        // PRODUCT/TEXT：原圖 bbox 特寫，視角與字形錨點
     highPrecisionEdge = false,     // 三角測量：隔離到純白 → 再生純黑版 → 反解連續 alpha
+    originalAR?: number,           // 原圖長寬比：用於抵銷生成模型的比例擠壓
 ): Promise<LayerResult | null> {
     // TEXT / DECOR 類別：硬邊幾何形狀，BiRefNet 反而會誤判字母負空間
     // → 強制走 Chroma Key（純色背景下效果更準確）
@@ -1029,6 +1063,12 @@ async function extractOneLayer(
             isolatedSrc = isolated[0];
         } else {
             isolatedSrc = await geminiIsolateOnSolidBg(obj, compressedImage, geminiApiKey, geminiImageModel, bgColor, perspectiveHint);
+        }
+
+        // 抵銷生成時的比例擠壓，必須在 trim 之前 —— trim 量到的 pixelWidth/Height
+        // 決定回貼畫布的長寬比，先還原才不會把變形一路帶到畫布上。
+        if (originalAR && originalAR > 0) {
+            isolatedSrc = await restoreOriginalAspect(isolatedSrc, originalAR);
         }
 
         let transparent = isolatedSrc;
@@ -1229,9 +1269,14 @@ export async function gptLayerSegment(
     onProgress?.('⚡ 預壓縮圖片、偵測比例、分析背景環境...');
     const [compressedImage, detectedRatio, bgDescription] = await Promise.all([
         compressForAtlas(imageBase64),
-        detectClosestRatio(imageBase64),
+        // 必須帶 model：各模型支援的比例表不同（SEEDREAM_PRO_SIZES vs ATLAS_SIZES），
+        // 不帶會用通用表算出該模型不支援的比例，API 只好自行改寫輸出尺寸。
+        detectClosestRatio(imageBase64, atlasModel),
         analyzeBackground(imageBase64, geminiApiKey),
     ]);
+    // 原圖長寬比：隔離輸出會被生成模型擠進它支援的比例，靠這個還原回來
+    const origDimsForAR = await getDims(imageBase64);
+    const originalAR = origDimsForAR ? origDimsForAR.w / origDimsForAR.h : undefined;
 
     // 背景補全：GPT Inpaint 優先（品質佳）；無 Atlas Key 或失敗才降級 Gemini
     onProgress?.('🗺️ 背景分析，準備補全...');
@@ -1350,6 +1395,8 @@ export async function gptLayerSegment(
                 obj, compressedImage, detectedRatio, atlasKey, atlasModel, falKey,
                 geminiApiKey, geminiImageModel, onProgress, referenceCrop,
                 options.highPrecisionEdge,
+
+                originalAR,
             ), obj.label);
             const usable = result &&
                 result.base64.startsWith('data:image') &&
@@ -1362,6 +1409,8 @@ export async function gptLayerSegment(
                     obj, compressedImage, detectedRatio, atlasKey, atlasModel,
                     falKey, geminiApiKey, geminiImageModel, onProgress, referenceCrop,
                     options.highPrecisionEdge,
+
+                    originalAR,
                 ), obj.label);
             }
             if (result) callbacks.onLayerComplete?.(obj.id, result);
