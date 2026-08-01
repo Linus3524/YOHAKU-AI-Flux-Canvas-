@@ -8,7 +8,6 @@
  */
 import { hasTransparency, processChromaKey } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
-import { isCleanWhitePlate } from '../utils/triangulationMatting';
 import { checkLocalModelReady, runLocalRmbgPipeline } from './pipelines/localModels';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
 import { repairStickerTransparency } from '../utils/imageProcessing';
@@ -132,20 +131,14 @@ export async function restoreTransparency(
     if (keys.geminiApiKey) {
         try {
             // 生成前若壓平成純白（preferWhitePlate），這張輸出可能本身就是合格的
-            // 白底版 → 驗證通過就讓三角測量跳過第一次生成。模型不保證會保住白底
-            // （創作 prompt 裡沒有這條指示），故一定要先驗；不合格就照常跑完整流程。
-            let srcIsWhitePlate = false;
-            if (bgColor.toUpperCase() === '#FFFFFF') {
-                const check = await isCleanWhitePlate(resultSrc);
-                srcIsWhitePlate = check.ok;
-                console.log('[restoreTransparency] 白底版檢查:', check);
-            }
+            // 白底版，三角測量會自動偵測並跳過第一次生成（檢查在
+            // executeTriangulationRemoval 內部，所有進入點共用，這裡不必先驗）。
             return await executeDynamicRemoval(resultSrc, {
                 model: 'gemini',
                 geminiApiKey: keys.geminiApiKey,
                 geminiImageModel: keys.imageModel,
                 falApiKey: keys.falApiKey,
-            }, undefined, 'triangulation', srcIsWhitePlate);
+            });
         } catch (e) {
             console.warn('[restoreTransparency] Gemini removal failed, fallback chroma key', e);
         }

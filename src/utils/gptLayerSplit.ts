@@ -16,7 +16,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { callAtlasImg2Img, compressForAtlas, detectClosestRatio, type AtlasGenerationModel } from './atlasImage';
 import { birefnetRemoveBg, selectBiRefNetModel } from './geminiLayer';
-import { triangulationMatte, isMatteTrustworthy } from './triangulationMatting';
+import { triangulationMatte, isMatteTrustworthy, isCleanWhitePlate } from './triangulationMatting';
 import { trimTransparentPixels, LayerResult } from './falImage';
 import { detectBackgroundColor } from './imageProcessing';
 
@@ -937,6 +937,15 @@ async function extractOneLayer(
         let triangulated = false;
         if (highPrecisionEdge) {
             try {
+                // 防呆：隔離結果不見得真的是乾淨白底（模型可能加了陰影、漸層、
+                // 或根本沒照做）。白底版不合格的話 α = 1-(W-K)/255 會整片算錯，
+                // 先驗過再花那次黑底版生成，不合格就直接落回 BiRefNet。
+                const plateCheck = await isCleanWhitePlate(isolatedSrc);
+                if (!plateCheck.ok) {
+                    console.warn(`[魔法分層/三角測量] ${obj.label} 隔離結果非乾淨白底，跳過`, plateCheck);
+                    onProgress?.(`↩️ ${obj.label}：隔離底色不夠純（${plateCheck.reason}），改用一般去背`);
+                    throw new Error('white-plate-check-failed');
+                }
                 onProgress?.(`✂️ 高精度邊緣：${obj.label}（生成黑底版）`);
                 const blackPlate = await generateBlackPlateForLayer(
                     isolatedSrc, obj, detectedRatio, atlasKey, atlasModel, geminiApiKey, geminiImageModel,

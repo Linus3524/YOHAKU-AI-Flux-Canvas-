@@ -3,7 +3,7 @@ import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
 import { birefnetRemoveBg } from './geminiLayer';
 import { getClosestAspectRatio } from './helpers';
 import { createGeminiClient } from '../ai/geminiClient';
-import { triangulationMatte, isMatteTrustworthy } from './triangulationMatting';
+import { triangulationMatte, isMatteTrustworthy, isCleanWhitePlate } from './triangulationMatting';
 
 // Helper to load image
 const loadImage = (src: string): Promise<HTMLImageElement> => {
@@ -289,18 +289,20 @@ export const executeTriangulationRemoval = async (
     imageSrc: string,
     engine: DynamicRemovalEngine,
     onProgress?: (msg: string) => void,
-    /**
-     * 來源本身已是合格白底版時傳 true，直接跳過第一次生成（2 次變 1 次）。
-     * 呼叫端必須先用 isCleanWhitePlate() 驗證過才可以開。
-     */
-    srcIsWhitePlate = false,
 ): Promise<string> => {
     const aspectRatio = await detectAspectRatio(imageSrc);
 
+    // 來源本身就是乾淨白底時（商品圖、已去過背的素材、白底人像），它已經是合格的
+    // 白底版 —— 直接沿用，2 次生成變 1 次。檢查是純本機像素運算，約 1ms、零 API，
+    // 所以無條件跑；過不了就照常生成，沒有風險。放在這裡而非各呼叫端，
+    // 是為了讓所有進入點（智慧去背按鈕、還原透明、節點工作流）都自動受惠。
+    const plateCheck = await isCleanWhitePlate(imageSrc);
+    console.log('[Triangulation] 來源白底版檢查:', plateCheck);
+
     let whitePlate: string;
-    if (srcIsWhitePlate) {
+    if (plateCheck.ok) {
         whitePlate = imageSrc;
-        if (onProgress) onProgress('智慧去背: 沿用現有白底版...');
+        if (onProgress) onProgress('智慧去背: 來源已是白底，省略白底版生成...');
     } else {
         if (onProgress) onProgress('智慧去背: 生成白底版...');
         whitePlate = await generateOneImage(
@@ -342,12 +344,10 @@ export const executeDynamicRemoval = async (
     engine: DynamicRemovalEngine,
     onProgress?: (msg: string) => void,
     mode: RemovalMode = 'triangulation',
-    /** 來源已是驗證過的白底版時傳 true，三角測量可省掉第一次生成 */
-    srcIsWhitePlate = false,
 ): Promise<string> => {
     if (mode === 'triangulation') {
         try {
-            return await executeTriangulationRemoval(imageSrc, engine, onProgress, srcIsWhitePlate);
+            return await executeTriangulationRemoval(imageSrc, engine, onProgress);
         } catch (e) {
             console.warn('[智慧去背] Triangulation 失敗，退回對比底色管線', e);
             if (onProgress) onProgress('智慧去背: 改用備用方案...');
