@@ -326,17 +326,28 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         return innerArea > 0 ? intersectArea(inner, outer) / innerArea : 0;
     };
     const CONTAINMENT_THRESHOLD = 0.85;
+    // 被吸收者必須明顯小於吸收者才算「部件」。沒有這條的話，兩個面積相近、
+    // 只是剛好重疊的同類物件會互相吞噬。
+    const PART_MAX_AREA_RATIO = 0.6;
+    // 滿版物件不得當吸收者。實測 Gemini 會回報一個涵蓋整張圖的「背景」物件，
+    // 它幾乎包住畫面上每一樣東西 —— 若允許它吸收，人物、手機、文字會一次全部
+    // 消失，盤點只剩它自己（實測就是「偵測 1 個物件」）。
+    const FRAME_COVER_LIMIT = 0.8;
     const area = (b: BBox) => b.w * b.h;
     const absorbed = new Set<string>();
     for (const inner of objects) {
         if (absorbed.has(inner.id)) continue;
         for (const outer of objects) {
             if (inner.id === outer.id || absorbed.has(outer.id)) continue;
-            // 只被更大的框吸收，避免互相吸收
+            if (area(outer.bbox) >= FRAME_COVER_LIMIT) continue;
+            // 只在同類別之間吸收。跨類別絕不吸收 —— 否則一個跨滿版面的直排
+            // 文字框或大型裝飾框會把整個人物「包住」而讓主體整個消失。
+            if (inner.category !== outer.category) continue;
             if (area(outer.bbox) <= area(inner.bbox)) continue;
+            if (area(inner.bbox) > area(outer.bbox) * PART_MAX_AREA_RATIO) continue;
             if (containedRatio(inner.bbox, outer.bbox) >= CONTAINMENT_THRESHOLD) {
                 absorbed.add(inner.id);
-                console.info(`[magicLayer] 「${inner.label}」幾乎被「${outer.label}」包住 → 併入同層，避免像素重複`);
+                console.info(`[magicLayer] 「${inner.label}」是「${outer.label}」的部件（同類別、面積 ${(area(inner.bbox) / area(outer.bbox) * 100).toFixed(0)}%、包含 ${(containedRatio(inner.bbox, outer.bbox) * 100).toFixed(0)}%）→ 併入後者，避免像素重複`);
                 break;
             }
         }
