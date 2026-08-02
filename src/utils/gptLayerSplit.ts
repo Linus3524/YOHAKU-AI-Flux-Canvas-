@@ -304,11 +304,19 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     };
     const deduplicated: DetectedObject[] = [];
     for (const obj of objects) {
-        const duplicate = deduplicated.some(kept =>
-            kept.category === obj.category &&
-            kept.labelEn?.toLowerCase() === obj.labelEn?.toLowerCase() &&
-            iou(kept.bbox, obj.bbox) > 0.88
-        );
+        const duplicate = deduplicated.some(kept => {
+            const overlap = iou(kept.bbox, obj.bbox);
+            // 幾何上就是同一塊 → 不管標籤與類別叫什麼都是重複。
+            // 舊版要求 labelEn 完全相同，但 Gemini 會把同一個人回報成
+            // "woman" 與 "person"（或 SUBJECT 與 OBJECTS），標籤一不同就漏掉，
+            // 兩個框都存活 → 人物被拆成兩層。物件已按 CATEGORY_PRIORITY 排序，
+            // 先進 deduplicated 的是較重要的類別，保留它即可。
+            if (overlap > 0.85) return true;
+            // 標籤與類別都相同時放寬一點，容忍框稍微歪掉
+            return kept.category === obj.category &&
+                kept.labelEn?.toLowerCase() === obj.labelEn?.toLowerCase() &&
+                overlap > 0.7;
+        });
         if (duplicate) continue;
         deduplicated.push(obj);
     }
@@ -340,9 +348,13 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         for (const outer of objects) {
             if (inner.id === outer.id || absorbed.has(outer.id)) continue;
             if (area(outer.bbox) >= FRAME_COVER_LIMIT) continue;
-            // 只在同類別之間吸收。跨類別絕不吸收 —— 否則一個跨滿版面的直排
-            // 文字框或大型裝飾框會把整個人物「包住」而讓主體整個消失。
-            if (inner.category !== outer.category) continue;
+            // 吸收者的類別重要性必須「不低於」被吸收者（數字小 = 重要）。
+            // 「同類別才吸收」太嚴，人物(SUBJECT) 吸不掉它的上衣(OBJECTS)，
+            // 兩個框都活著就會把人物拆成兩層；反過來也必須擋住 ——
+            // 背景(DECOR) 絕不能吸收人物(SUBJECT)，否則主體整個消失。
+            const innerPri = CATEGORY_PRIORITY[inner.category] ?? 5;
+            const outerPri = CATEGORY_PRIORITY[outer.category] ?? 5;
+            if (outerPri > innerPri) continue;
             if (area(outer.bbox) <= area(inner.bbox)) continue;
             if (area(inner.bbox) > area(outer.bbox) * PART_MAX_AREA_RATIO) continue;
             if (containedRatio(inner.bbox, outer.bbox) >= CONTAINMENT_THRESHOLD) {
