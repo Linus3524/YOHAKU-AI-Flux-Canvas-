@@ -189,7 +189,26 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, o
             <div className="md:col-span-2 border-t border-neutral-200 pt-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-semibold text-neutral-700">預計圖層</span>
-                {plan && <span className="text-[11px] text-neutral-500">偵測 {plan.detectedObjectCount} 個物件，規劃 {plan.layers.length} 個前景層</span>}
+                {plan && (() => {
+                  // 直接把「實際會產出幾層」講出來。層數選項只是上限，依類別／依照指令
+                  // 模式更是完全由內容決定，不講清楚使用者會以為選 4 就一定拿到 4。
+                  const total = plan.layers.length + (options.includeBackground ? 1 : 0);
+                  const requested = typeof options.layerCount === 'number' ? options.layerCount : null;
+                  const mismatch = requested !== null
+                    && options.groupingStrategy !== 'category'
+                    && options.groupingStrategy !== 'custom'
+                    && total !== requested;
+                  return (
+                    <span className="text-[11px] text-neutral-500">
+                      偵測 {plan.detectedObjectCount} 個物件 ·{' '}
+                      <span className="font-semibold text-neutral-800">實際產出 {total} 層</span>
+                      {options.includeBackground ? `（${plan.layers.length} 前景 + 背景）` : ''}
+                      {mismatch && (
+                        <span className="ml-1 text-amber-600">· 少於指定的 {requested} 層，可偵測物件不足</span>
+                      )}
+                    </span>
+                  );
+                })()}
               </div>
               {isAnalyzing && <div className="border border-neutral-200 p-3 text-xs text-neutral-500">正在盤點物件並規劃圖層...</div>}
               {analyzeError && <div className="border border-red-200 bg-red-50 p-3 text-xs text-red-600">{analyzeError}</div>}

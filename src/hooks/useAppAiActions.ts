@@ -140,6 +140,7 @@ export const useAppAiActions = ({
 
       let completed = 0;
       let failed = 0;
+      const failedLabels: string[] = [];
       const createLayerElement = (taskId: string, layer: LayerResult): ImageElement => {
           const index = taskIndex.get(taskId) ?? 0;
           const isBackground = !!layer.isBackground;
@@ -189,6 +190,11 @@ export const useAppAiActions = ({
                   },
                   onLayerFailed: (taskId) => {
                       failed += 1;
+                      failedLabels.push(
+                          taskId === 'background'
+                              ? '背景'
+                              : plan.layers.find(layer => layer.id === taskId)?.label || '未命名圖層',
+                      );
                       const placeholderId = placeholderIds.get(taskId);
                       if (placeholderId) setElements(prev => prev.filter(item => item.id !== placeholderId), { addToHistory: false });
                   },
@@ -197,7 +203,11 @@ export const useAppAiActions = ({
           if (layers.length === 0) throw new Error('未收到任何圖層');
           const objectCount = layers.filter(l => !l.isBackground).length;
           const hasBg = layers.some(l => l.isBackground);
-          showToast(`✅ 魔法分層完成！${objectCount} 個物件圖層${hasBg ? ' + 補全背景' : ''}${failed ? `，${failed} 層失敗` : ''}`);
+          // 失敗要指名道姓 —— 只報數字的話，「少一層」和「本來就只有那麼多」分不出來
+          const failedNote = failed
+              ? `；${failed} 層失敗（${failedLabels.slice(0, 3).join('、')}${failedLabels.length > 3 ? ` 等 ${failedLabels.length} 項` : ''}）`
+              : '';
+          showToast(`✅ 魔法分層完成！共 ${layers.length} 層：${objectCount} 個物件${hasBg ? ' + 補全背景' : ''}${failedNote}`);
       } catch (e: any) {
           setElements(prev => prev.filter(item => ![...placeholderIds.values()].includes(item.id) || item.type !== 'image' || item.src !== transparentPixel), { addToHistory: false });
           showToast(`❌ 魔法分層失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);

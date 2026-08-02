@@ -1410,12 +1410,14 @@ export async function gptLayerSegment(
 
                 originalAR,
             ), obj.label);
-            const usable = result &&
-                result.base64.startsWith('data:image') &&
-                result.cropRatioW * result.cropRatioH >= 0.0004 &&
-                (result.pixelWidth ?? 16) >= 12 &&
-                (result.pixelHeight ?? 16) >= 12;
-            if (!usable) {
+            const isUsable = (r: LayerResult | null): r is LayerResult =>
+                !!r &&
+                r.base64.startsWith('data:image') &&
+                r.cropRatioW * r.cropRatioH >= 0.0004 &&
+                (r.pixelWidth ?? 16) >= 12 &&
+                (r.pixelHeight ?? 16) >= 12;
+
+            if (!isUsable(result)) {
                 onProgress?.(`↻「${obj.label}」品質檢查未通過，單層重試中...`);
                 result = await withTimeout(extractOneLayer(
                     obj, compressedImage, detectedRatio, atlasKey, atlasModel,
@@ -1425,7 +1427,14 @@ export async function gptLayerSegment(
                     originalAR,
                 ), obj.label);
             }
-            if (result) callbacks.onLayerComplete?.(obj.id, result);
+            // 重試後仍不可用 → 必須明確回報失敗。舊版直接 return null，不丟例外也不
+            // 呼叫 onLayerFailed，於是：畫布上那個「XXX處理中」的透明佔位元素永遠
+            // 不會被移除（看起來就是憑空多一層），完成 toast 的失敗數也是 0。
+            if (!isUsable(result)) {
+                callbacks.onLayerFailed?.(obj.id, `「${obj.label}」重試後仍未通過品質檢查`);
+                return null;
+            }
+            callbacks.onLayerComplete?.(obj.id, result);
             return result;
         } catch (error) {
             const message = error instanceof Error ? error.message : '圖層提取失敗';
