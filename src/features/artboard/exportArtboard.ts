@@ -4,6 +4,7 @@ import { getTextEffectPadding } from '../../utils/textEffects';
 import { rasterizeTextElement } from '../../utils/textRasterize';
 import { addEditableTextElementToPdf, type PdfTextMode } from '../../utils/pdfText';
 import { removeEmbeddedFontPrograms } from '../../utils/pdfPostprocess';
+import { isGradient } from '../../utils/gradientUtils';
 import { jsPDF } from 'jspdf';
 
 // 判斷元素是否與工作區域有交集 (Bounding Box Intersection)
@@ -563,17 +564,27 @@ export const exportArtboardAsSVG = async (
             const hh = el.height / 2;
             let shapeTag = '';
 
+            // 漸層（SVG 屬性吃不下 CSS linear-gradient）或非基本形狀 → 點陣化成 PNG 內嵌
+            const isVectorizable = se.shapeType === 'rectangle' || se.shapeType === 'rounded_rect' || se.shapeType === 'circle';
+            if (isGradient(se.fillColor) || isGradient(se.strokeColor) || !isVectorizable) {
+                const dataUrl = await createShapeDataUrl(se);
+                if (dataUrl) {
+                    // createShapeDataUrl 會外擴 strokeWidth/2 + 1 的邊距，擺放時要補回去
+                    const pad = (se.strokeWidth || 0) / 2 + 1;
+                    parts.push(
+                        `<image ${tr} ${op} x="${(x - pad).toFixed(2)}" y="${(y - pad).toFixed(2)}" ` +
+                        `width="${el.width + pad * 2}" height="${el.height + pad * 2}" ` +
+                        `xlink:href="${dataUrl}" href="${dataUrl}" preserveAspectRatio="none"/>`
+                    );
+                }
+                continue;
+            }
+
             if (se.shapeType === 'rectangle' || se.shapeType === 'rounded_rect') {
                 const rx = se.shapeType === 'rounded_rect' ? Math.min(hw, hh) * 0.2 : 0;
                 shapeTag = `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${el.width}" height="${el.height}" rx="${rx}" ry="${rx}"`;
-            } else if (se.shapeType === 'circle') {
-                shapeTag = `<ellipse cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" rx="${hw}" ry="${hh}"`;
             } else {
-                // 其他形狀 fallback：render to PNG 然後 <image>
-                parts.push(
-                    `<!-- ${se.shapeType} shape rendered as image -->`
-                );
-                continue;
+                shapeTag = `<ellipse cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" rx="${hw}" ry="${hh}"`;
             }
 
             const fillAttr   = `fill="${se.fillColor || 'transparent'}"`;

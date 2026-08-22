@@ -1970,29 +1970,47 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             shapeDashArray = `0, ${el.strokeWidth * 2}`;
                         }
 
+                        // 填充 / 描邊皆支援漸層：SVG stroke 原生吃 paint server，故可直接 url(#…)
+                        const fillIsGrad = isGradient(el.fillColor);
+                        const strokeIsGrad = isGradient(el.strokeColor);
+                        const fillPaint = fillIsGrad ? `url(#grad-${el.id})` : el.fillColor;
+                        const strokePaint = strokeIsGrad ? `url(#stroke-grad-${el.id})` : el.strokeColor;
+                        const shapePaintProps = {
+                            fill: fillPaint,
+                            stroke: strokePaint,
+                            strokeWidth: el.strokeWidth,
+                            strokeDasharray: shapeDashArray,
+                            strokeLinecap: 'round' as const,
+                            strokeLinejoin: 'round' as const,
+                        };
+                        const renderGradDef = (id: string, css: string) => {
+                            const parsed = parseLinearGradient(css);
+                            if (!parsed) return null;
+                            const coords = gradientAngleToSVG(parsed.angle);
+                            return (
+                                <linearGradient id={id} x1={coords.x1} y1={coords.y1} x2={coords.x2} y2={coords.y2}>
+                                    <stop offset="0%" stopColor={parsed.color1} />
+                                    <stop offset="100%" stopColor={parsed.color2} />
+                                </linearGradient>
+                            );
+                        };
+
                         return (
                             <div style={style}>
                                 {/* viewBox 貼齊 element 尺寸（不加 strokeWidth 邊距），形狀才會填滿方框、選取框貼合；
                                     描邊超出的部分由 overflow:visible 自然外溢，不需要靠 viewBox 留邊。 */}
                                 <svg width="100%" height="100%" viewBox={`0 0 ${el.width} ${el.height}`} style={{ overflow: 'visible' }}>
-                                    {isGradient(el.fillColor) && (() => {
-                                        const parsed = parseLinearGradient(el.fillColor);
-                                        if (!parsed) return null;
-                                        const coords = gradientAngleToSVG(parsed.angle);
-                                        return (
-                                            <defs>
-                                                <linearGradient id={`grad-${el.id}`} x1={coords.x1} y1={coords.y1} x2={coords.x2} y2={coords.y2}>
-                                                    <stop offset="0%" stopColor={parsed.color1} />
-                                                    <stop offset="100%" stopColor={parsed.color2} />
-                                                </linearGradient>
-                                            </defs>
-                                        );
-                                    })()}
-                                    {el.shapeType === 'rectangle' && <rect x="0" y="0" width={el.width} height={el.height} fill={isGradient(el.fillColor) ? `url(#grad-${el.id})` : el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} strokeDasharray={shapeDashArray} strokeLinecap="round" strokeLinejoin="round" />}
-                                    {el.shapeType === 'rounded_rect' && <rect x="0" y="0" width={el.width} height={el.height} rx="20" ry="20" fill={isGradient(el.fillColor) ? `url(#grad-${el.id})` : el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} strokeDasharray={shapeDashArray} strokeLinecap="round" strokeLinejoin="round" />}
-                                    {el.shapeType === 'circle' && <ellipse cx={el.width/2} cy={el.height/2} rx={el.width/2} ry={el.height/2} fill={isGradient(el.fillColor) ? `url(#grad-${el.id})` : el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} strokeDasharray={shapeDashArray} strokeLinecap="round" strokeLinejoin="round" />}
+                                    {(fillIsGrad || strokeIsGrad) && (
+                                        <defs>
+                                            {fillIsGrad && renderGradDef(`grad-${el.id}`, el.fillColor)}
+                                            {strokeIsGrad && renderGradDef(`stroke-grad-${el.id}`, el.strokeColor)}
+                                        </defs>
+                                    )}
+                                    {el.shapeType === 'rectangle' && <rect x="0" y="0" width={el.width} height={el.height} {...shapePaintProps} />}
+                                    {el.shapeType === 'rounded_rect' && <rect x="0" y="0" width={el.width} height={el.height} rx="20" ry="20" {...shapePaintProps} />}
+                                    {el.shapeType === 'circle' && <ellipse cx={el.width/2} cy={el.height/2} rx={el.width/2} ry={el.height/2} {...shapePaintProps} />}
                                     {!['rectangle', 'rounded_rect', 'circle'].includes(el.shapeType) && (
-                                        <path d={getShapePath(el, el.width, el.height)} fill={isGradient(el.fillColor) ? `url(#grad-${el.id})` : el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} strokeDasharray={shapeDashArray} strokeLinecap="round" strokeLinejoin="round" />
+                                        <path d={getShapePath(el, el.width, el.height)} {...shapePaintProps} />
                                     )}
                                 </svg>
                             </div>

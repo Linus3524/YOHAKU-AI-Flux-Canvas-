@@ -1,5 +1,6 @@
 
 import type { ShapeElement, ArrowHeadType, TextElement, ArrowElement, SimpleFadeOptions } from '../types';
+import { isGradient, parseLinearGradient, gradientAngleToSVG } from './gradientUtils';
 
 // Updated Color Palette - Pastel Tones (Light Bg, Dark Text)
 export const COLORS = [
@@ -936,9 +937,23 @@ export const createShapeDataUrl = (element: ShapeElement): Promise<string> => {
         ctx.scale(scale, scale);
         ctx.translate(padding, padding); // 偏移讓 stroke 不被裁切
 
-        // 強化顏色解析邏輯
-        const parseColor = (colorStr: string) => {
+        // 強化顏色解析邏輯（漸層 → CanvasGradient，於此直接點陣化）
+        const parseColor = (colorStr: string): string | CanvasGradient => {
             if (!colorStr || colorStr === 'transparent') return 'rgba(0,0,0,0)';
+            if (isGradient(colorStr)) {
+                const parsed = parseLinearGradient(colorStr);
+                if (!parsed) return 'rgba(0,0,0,0)';
+                // 與 SVG 渲染共用同一組角度換算，確保畫布與匯出方向一致
+                const c = gradientAngleToSVG(parsed.angle);
+                const pct = (v: string) => parseFloat(v) / 100;
+                const grad = ctx.createLinearGradient(
+                    pct(c.x1) * element.width, pct(c.y1) * element.height,
+                    pct(c.x2) * element.width, pct(c.y2) * element.height,
+                );
+                grad.addColorStop(0, parsed.color1);
+                grad.addColorStop(1, parsed.color2);
+                return grad;
+            }
             if (colorStr.startsWith('#')) return colorStr;
             const hexMatch = colorStr.match(/\[(#?[a-fA-F0-9]{3,8})\]/);
             return hexMatch ? hexMatch[1] : colorStr;

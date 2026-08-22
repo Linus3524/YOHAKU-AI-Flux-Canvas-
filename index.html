@@ -111,6 +111,17 @@
       .animate-fade-in-down  { animation: fade-in-down  0.2s ease-out both; }
       .animate-fade-in       { animation: fade-in       0.2s ease-out both; }
       .animate-fade-in-right { animation: fade-in-right 0.2s ease-out both; }
+      /* ── 數字輸入框：隱藏瀏覽器原生上下鈕（改用自訂 stepper）────────── */
+      .num-no-spin::-webkit-outer-spin-button,
+      .num-no-spin::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .num-no-spin { -moz-appearance: textfield; appearance: textfield; }
+      /* 輸入框寬度貼合內容 → 標籤 / 數字 / 上下鈕之間的間距固定相等，不隨位數變動 */
+      @supports (field-sizing: content) {
+        .num-fit { field-sizing: content; }
+      }
       /* ── AI Generating Shimmer ───────────────────────────────────── */
       @keyframes shimmer {
         0%   { background-position: -200% 0; }
