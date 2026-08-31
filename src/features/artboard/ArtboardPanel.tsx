@@ -2,17 +2,31 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { ArtboardElement } from '../../types';
 import { ARTBOARD_PRESETS } from './presets';
 import { Icon } from '../../components/Icon';
+import type { ArtboardExportSettings, ArtboardImageFormat } from './exportArtboard';
+import { DEFAULT_EXPORT_SETTINGS } from './exportArtboard';
 
 interface ArtboardPanelProps {
     element: ArtboardElement;
     onUpdate: (updates: Partial<ArtboardElement>) => void;
-    onExport: () => void;
+    onExport: (settings: ArtboardExportSettings) => void;
     onExportPDF: (mode: 'editable-text' | 'outlines') => void;
     onExportSVG: () => void;
     onClose: () => void;
     selectedArtboardCount?: number;
-    onBatchExport?: () => void;
+    onBatchExport?: (settings: ArtboardExportSettings) => void;
+    /** 依目前設定算出實際檔案大小（bytes）；面板用來顯示預估值 */
+    onEstimateSize?: (settings: ArtboardExportSettings) => Promise<number>;
 }
+
+const SCALES = [1, 2, 3] as const;
+const FORMATS: { key: ArtboardImageFormat; label: string; hint: string }[] = [
+    { key: 'png',  label: 'PNG',  hint: '無損、支援透明背景；照片類內容檔案最大' },
+    { key: 'jpeg', label: 'JPG',  hint: '照片類內容檔案最小，不支援透明背景（自動鋪白底）' },
+    { key: 'webp', label: 'WebP', hint: '體積小且支援透明，但部分舊軟體不支援' },
+];
+
+const formatBytes = (b: number) =>
+    b >= 1024 * 1024 ? (b / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
 
 const ArtboardIcon = () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -20,7 +34,10 @@ const ArtboardIcon = () => (
     </svg>
 );
 
-export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate, onExport, onExportPDF, onExportSVG, onClose, selectedArtboardCount = 1, onBatchExport }) => {
+export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate, onExport, onExportPDF, onExportSVG, onClose, selectedArtboardCount = 1, onBatchExport, onEstimateSize }) => {
+    const [exportSettings, setExportSettings] = useState<ArtboardExportSettings>(DEFAULT_EXPORT_SETTINGS);
+    const [estBytes, setEstBytes] = useState<number | null>(null);
+    const [estimating, setEstimating] = useState(false);
     const [widthInput, setWidthInput]   = useState(String(Math.round(element.width)));
     const [heightInput, setHeightInput] = useState(String(Math.round(element.height)));
     
@@ -37,6 +54,21 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
         setWidthInput(String(Math.round(element.width)));
         setHeightInput(String(Math.round(element.height)));
     }, [element.width, element.height]);
+
+    // 檔案大小預估：實際跑一次匯出才準（內容差異極大），故 debounce 並在設定變更時作廢
+    useEffect(() => {
+        if (!onEstimateSize) return;
+        let cancelled = false;
+        setEstBytes(null);
+        setEstimating(true);
+        const timer = setTimeout(() => {
+            onEstimateSize(exportSettings)
+                .then(bytes => { if (!cancelled) setEstBytes(bytes); })
+                .catch(() => { if (!cancelled) setEstBytes(null); })
+                .finally(() => { if (!cancelled) setEstimating(false); });
+        }, 500);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [onEstimateSize, exportSettings, element.id, element.width, element.height, element.backgroundColor]);
 
     const handleWindowMouseMove = useCallback((e: MouseEvent) => {
         const dx = e.clientX - dragStartRef.current.x;
@@ -226,21 +258,68 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
 
                 {/* Export Buttons */}
                 <div className="pt-2.5 border-t border-gray-100 flex flex-col gap-1.5">
+                    {/* 匯出設定：尺寸 + 格式 */}
+                    <div className="flex flex-col gap-1.5 pb-0.5">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-bold text-[#86868B] uppercase tracking-wider w-7 shrink-0">尺寸</span>
+                            <div className="flex flex-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                                {SCALES.map(s => (
+                                    <button
+                                        key={s}
+                                        onClick={() => setExportSettings(p => ({ ...p, scale: s }))}
+                                        className={`flex-1 py-1 rounded-md text-[10px] font-bold transition-all ${exportSettings.scale === s ? 'bg-white shadow-sm text-[#1D1D1F]' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
+                                        title={`${Math.round(element.width * s)} × ${Math.round(element.height * s)} px`}
+                                    >
+                                        {s}x
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-bold text-[#86868B] uppercase tracking-wider w-7 shrink-0">格式</span>
+                            <div className="flex flex-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                                {FORMATS.map(f => (
+                                    <button
+                                        key={f.key}
+                                        onClick={() => setExportSettings(p => ({ ...p, format: f.key }))}
+                                        className={`flex-1 py-1 rounded-md text-[10px] font-bold transition-all ${exportSettings.format === f.key ? 'bg-white shadow-sm text-[#1D1D1F]' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
+                                        title={f.hint}
+                                    >
+                                        {f.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex items-baseline justify-between px-1">
+                            <span className="text-[10px] font-mono text-[#86868B]">
+                                {Math.round(element.width * exportSettings.scale)} × {Math.round(element.height * exportSettings.scale)} px
+                            </span>
+                            <span className="text-[10px] font-mono text-[#86868B]">
+                                {estimating ? '計算中…' : estBytes != null ? `約 ${formatBytes(estBytes)}` : ''}
+                            </span>
+                        </div>
+                        {exportSettings.format === 'jpeg' && element.backgroundColor === 'transparent' && (
+                            <div className="text-[9px] text-[#FF9500] leading-snug px-1">
+                                JPG 不支援透明背景，將自動鋪上白底
+                            </div>
+                        )}
+                    </div>
+
                     {selectedArtboardCount > 1 && onBatchExport ? (
                         <button
-                            onClick={onBatchExport}
+                            onClick={() => onBatchExport(exportSettings)}
                             className="w-full py-2 bg-[#007AFF] text-white rounded-xl text-xs font-bold hover:bg-[#0066CC] transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/><circle cx="9" cy="9" r="2"/></svg>
-                            批次匯出 PNG（{selectedArtboardCount}）
+                            批次匯出（{selectedArtboardCount}）
                         </button>
                     ) : (
                         <button
-                            onClick={onExport}
+                            onClick={() => onExport(exportSettings)}
                             className="w-full py-2 bg-[#007AFF] text-white rounded-xl text-xs font-bold hover:bg-[#0066CC] transition-colors shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/><circle cx="9" cy="9" r="2"/></svg>
-                            匯出工作區域（PNG）
+                            匯出工作區域（{FORMATS.find(f => f.key === exportSettings.format)!.label}）
                         </button>
                     )}
                     <div className="grid grid-cols-2 gap-1.5">

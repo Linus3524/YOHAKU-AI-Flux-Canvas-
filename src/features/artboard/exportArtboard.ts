@@ -11,20 +11,35 @@ export { isElementInArtboard };
 import { jsPDF } from 'jspdf';
 
 
-// 匯出單個工作區域為 PNG 圖片（回傳 base64 data URL）
+export type ArtboardImageFormat = 'png' | 'jpeg' | 'webp';
+
+export interface ArtboardImageOptions {
+    transparentBackground?: boolean;
+    includeElementIds?: ReadonlySet<string>;
+    drawBorder?: boolean;
+    /** 預設 png。png 無損（保留透明）；jpeg / webp 為有損，檔案小很多 */
+    format?: ArtboardImageFormat;
+    /** 有損格式的品質 0–1，預設 0.92 */
+    quality?: number;
+}
+
+const MIME: Record<ArtboardImageFormat, string> = {
+    png: 'image/png',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+};
+
+// 匯出單個工作區域為圖片（回傳 base64 data URL）
 export const exportArtboardAsImage = async (
     artboard: ArtboardElement,
     allElements: CanvasElement[],
     scale: number = 2,
-    options: {
-        transparentBackground?: boolean;
-        includeElementIds?: ReadonlySet<string>;
-        drawBorder?: boolean;
-    } = {},
+    options: ArtboardImageOptions = {},
 ): Promise<string> => {
     // Wait for fonts to load so measureText uses the same metrics as SVG display
     await document.fonts.ready;
 
+    const format = options.format ?? 'png';
     const canvas = document.createElement('canvas');
     canvas.width  = artboard.width  * scale;
     canvas.height = artboard.height * scale;
@@ -32,8 +47,13 @@ export const exportArtboardAsImage = async (
     ctx.scale(scale, scale);
 
     // 1. 背景（分層 PDF 可要求透明，只輸出指定的非文字區段）
+    //    JPEG 沒有 alpha 通道，透明區域會變成黑色 → 一律先鋪白底
     if (!options.transparentBackground) {
-        ctx.fillStyle = artboard.backgroundColor || '#ffffff';
+        const bg = artboard.backgroundColor || '#ffffff';
+        ctx.fillStyle = (format === 'jpeg' && (!bg || bg === 'transparent')) ? '#ffffff' : bg;
+        ctx.fillRect(0, 0, artboard.width, artboard.height);
+    } else if (format === 'jpeg') {
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, artboard.width, artboard.height);
     }
 
@@ -308,36 +328,65 @@ export const exportArtboardAsImage = async (
     }
 
     ctx.restore();
-    return canvas.toDataURL('image/png');
+    return format === 'png'
+        ? canvas.toDataURL(MIME.png)
+        : canvas.toDataURL(MIME[format], options.quality ?? 0.92);
 };
 
-// 下載工作區域為 PNG 檔案
-export const downloadArtboard = async (
-    artboard: ArtboardElement,
-    allElements: CanvasElement[]
-): Promise<void> => {
-    const dataUrl = await exportArtboardAsImage(artboard, allElements);
+/** 匯出設定：尺寸倍率 + 檔案格式 */
+export interface ArtboardExportSettings {
+    scale: number;
+    format: ArtboardImageFormat;
+    quality?: number;
+}
+
+const EXT: Record<ArtboardImageFormat, string> = { png: 'png', jpeg: 'jpg', webp: 'webp' };
+
+export const DEFAULT_EXPORT_SETTINGS: ArtboardExportSettings = { scale: 2, format: 'png', quality: 0.92 };
+
+/** 估算 data URL 的實際位元組數（base64 約為原始大小的 4/3） */
+export const dataUrlBytes = (dataUrl: string): number => {
+    const i = dataUrl.indexOf(',');
+    const b64 = i < 0 ? dataUrl : dataUrl.slice(i + 1);
+    const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+    return Math.floor((b64.length * 3) / 4) - padding;
+};
+
+const triggerDownload = (dataUrl: string, filename: string) => {
     const link = document.createElement('a');
     link.href = dataUrl;
-    link.download = `${artboard.artboardName || 'artboard'}-${Date.now()}.png`;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 };
 
+// 下載工作區域為圖片檔
+export const downloadArtboard = async (
+    artboard: ArtboardElement,
+    allElements: CanvasElement[],
+    settings: ArtboardExportSettings = DEFAULT_EXPORT_SETTINGS,
+): Promise<number> => {
+    const dataUrl = await exportArtboardAsImage(artboard, allElements, settings.scale, {
+        format: settings.format,
+        quality: settings.quality,
+    });
+    triggerDownload(dataUrl, `${artboard.artboardName || 'artboard'}-${Date.now()}.${EXT[settings.format]}`);
+    return dataUrlBytes(dataUrl);
+};
+
 export const downloadMultipleArtboards = async (
     artboards: ArtboardElement[],
-    allElements: CanvasElement[]
+    allElements: CanvasElement[],
+    settings: ArtboardExportSettings = DEFAULT_EXPORT_SETTINGS,
 ): Promise<void> => {
     for (let i = 0; i < artboards.length; i++) {
         const artboard = artboards[i];
-        const dataUrl = await exportArtboardAsImage(artboard, allElements);
-        const link = document.createElement('a');
-        link.href = dataUrl;
-        link.download = `${artboard.artboardName || 'artboard'}-${i + 1}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const dataUrl = await exportArtboardAsImage(artboard, allElements, settings.scale, {
+            format: settings.format,
+            quality: settings.quality,
+        });
+        triggerDownload(dataUrl, `${artboard.artboardName || 'artboard'}-${i + 1}.${EXT[settings.format]}`);
         if (i < artboards.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 400));
         }

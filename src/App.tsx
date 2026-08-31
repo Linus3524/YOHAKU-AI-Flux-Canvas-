@@ -33,7 +33,8 @@ import { TextPropertyPanel } from './components/TextPropertyPanel';
 import { ShapePropertyPanel } from './components/ShapePropertyPanel'; 
 import { ArrowPropertyPanel } from './components/ArrowPropertyPanel';
 import { FloatingAssistant } from './components/FloatingAssistant'; 
-import { ArtboardPanel, downloadArtboard, downloadMultipleArtboards, exportArtboardsAsPDF } from './features/artboard';
+import { ArtboardPanel, downloadArtboard, downloadMultipleArtboards, exportArtboardsAsPDF, exportArtboardAsImage, dataUrlBytes } from './features/artboard';
+import type { ArtboardExportSettings } from './features/artboard';
 import { useCanvas } from './hooks/useCanvas';
 import { useAI } from './hooks/useAI';
 import { useEditorTargets } from './hooks/useEditorTargets';
@@ -854,6 +855,16 @@ const App: React.FC = () => {
     ?? (elements.find(el => el.type === 'artboard' && el.id === lastSelectedArtboardId) as ArtboardElement | undefined)
     ?? (elements.find(el => el.type === 'artboard') as ArtboardElement | undefined)
     ?? null;
+
+  // 匯出檔案大小預估：實際跑一次匯出才準（內容差異極大）
+  const estimateArtboardExportSize = useCallback(async (settings: ArtboardExportSettings) => {
+      if (!artboardForPanel) return 0;
+      const dataUrl = await exportArtboardAsImage(artboardForPanel, elements, settings.scale, {
+          format: settings.format,
+          quality: settings.quality,
+      });
+      return dataUrlBytes(dataUrl);
+  }, [artboardForPanel, elements]);
 
   const handleUpdateTextElement = (updates: Partial<TextElement>, options?: { addToHistory?: boolean }) => {
       if (!selectedTextElement) return;
@@ -1785,7 +1796,8 @@ const App: React.FC = () => {
               onUpdate={(updates) => setElements(prev => prev.map(el =>
                   el.id === artboardForPanel.id ? { ...el, ...updates } : el
               ))}
-              onExport={() => downloadArtboard(artboardForPanel, elements)}
+              onExport={(settings) => downloadArtboard(artboardForPanel, elements, settings)}
+              onEstimateSize={estimateArtboardExportSize}
               onExportPDF={(textMode) => {
                   const selectedArtboards = selectedElements
                       .filter((el): el is ArtboardElement => el.type === 'artboard')
@@ -1808,11 +1820,11 @@ const App: React.FC = () => {
               onExportSVG={() => setShowSVGExportModal(true)}
               onClose={() => setSelectedElementIds([])}
               selectedArtboardCount={selectedElements.filter(el => el.type === 'artboard').length}
-              onBatchExport={() => {
+              onBatchExport={(settings) => {
                   const artboardsToExport = selectedElements
                       .filter((el): el is ArtboardElement => el.type === 'artboard')
                       .sort((a, b) => b.zIndex - a.zIndex);
-                  downloadMultipleArtboards(artboardsToExport, elements);
+                  downloadMultipleArtboards(artboardsToExport, elements, settings);
               }}
           />
       )}
