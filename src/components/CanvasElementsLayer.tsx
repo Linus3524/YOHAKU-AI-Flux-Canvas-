@@ -1,8 +1,9 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import type { CanvasElement, Point } from '../types';
+import type { CanvasElement, ArtboardElement, Point } from '../types';
 import type { OutpaintingState } from '../types';
 import { computeDragSnap, type SnapGuideline } from '../utils/snapping';
 import { TransformableElement } from './TransformableElement';
+import { isElementInArtboard } from '../features/artboard/artboardUtils';
 
 interface ElementsLayerProps {
   sortedElements: CanvasElement[];
@@ -79,9 +80,17 @@ const ElementsLayerInner: React.FC<ElementsLayerProps> = ({
       const overrides = new Map<string, CanvasElement>();
       overrides.set(leader.id, leader);
       const gid = leader.groupId;
+      // 工作區域：範圍內的物件一起移動（鎖定的除外，與 Illustrator 一致）。
+      // 以「手勢起點」的工作區域邊界判定，避免拖曳過程中成員一直變動。
+      const artboardChildIds = new Set<string>();
+      if (orig.type === 'artboard') {
+          for (const el of elements) {
+              if (isElementInArtboard(el, orig as ArtboardElement)) artboardChildIds.add(el.id);
+          }
+      }
       for (const el of elements) {
           if (el.id === leader.id) continue;
-          const follows = ((gid && el.groupId === gid && el.isVisible) || selectedSet.has(el.id)) && !el.isLocked;
+          const follows = ((gid && el.groupId === gid && el.isVisible) || selectedSet.has(el.id) || artboardChildIds.has(el.id)) && !el.isLocked;
           if (!follows) continue;
           if (el.type === 'arrow') {
               overrides.set(el.id, {

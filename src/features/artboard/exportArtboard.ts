@@ -5,29 +5,11 @@ import { rasterizeTextElement } from '../../utils/textRasterize';
 import { addEditableTextElementToPdf, type PdfTextMode } from '../../utils/pdfText';
 import { removeEmbeddedFontPrograms } from '../../utils/pdfPostprocess';
 import { isGradient } from '../../utils/gradientUtils';
+import { isElementInArtboard } from './artboardUtils';
+
+export { isElementInArtboard };
 import { jsPDF } from 'jspdf';
 
-// 判斷元素是否與工作區域有交集 (Bounding Box Intersection)
-export const isElementInArtboard = (el: CanvasElement, ab: ArtboardElement): boolean => {
-    if (el.type === 'artboard') return false;
-    
-    const abLeft = ab.position.x - ab.width / 2;
-    const abRight = ab.position.x + ab.width / 2;
-    const abTop = ab.position.y - ab.height / 2;
-    const abBottom = ab.position.y + ab.height / 2;
-
-    const elLeft = el.position.x - el.width / 2;
-    const elRight = el.position.x + el.width / 2;
-    const elTop = el.position.y - el.height / 2;
-    const elBottom = el.position.y + el.height / 2;
-
-    return (
-        elLeft < abRight &&
-        elRight > abLeft &&
-        elTop < abBottom &&
-        elBottom > abTop
-    );
-};
 
 // 匯出單個工作區域為 PNG 圖片（回傳 base64 data URL）
 export const exportArtboardAsImage = async (

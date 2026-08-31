@@ -920,31 +920,44 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
                         backgroundColor: element.backgroundColor || '#ffffff',
                         boxShadow: '0 2px 16px rgba(0,0,0,0.08)',
                         zIndex: element.zIndex,
+                        // 背景只作為右鍵選單的命中區；左鍵不攔截，讓框選 / 形狀工具能直接在
+                        // 工作區域上operate（移動改由左上角名稱標籤負責）
                         pointerEvents: interactionMode === 'select' ? 'auto' : 'none',
-                        cursor: element.isLocked ? 'default' : (interactionMode === 'select' ? 'move' : 'default'),
+                        cursor: 'default',
                         isolation: 'isolate',
                     }}
-                    onMouseDown={(e) => handleInteractionStart(e, 'drag')}
                     onDoubleClick={() => {/* 雙擊可重新命名 */}}
                     onContextMenu={handleArtboardContextMenu}
                 >
-                    {/* 左上角名稱標籤：反向縮放，螢幕上維持約 13px 可讀大小 */}
+                    {/* 左上角名稱標籤：反向縮放，螢幕上維持約 13px 可讀大小。
+                        同時是工作區域唯一的拖曳把手（Figma 風格）—— 內容區留給框選 / 繪圖。 */}
                     {(() => {
                         const fs = Math.round(10 / zoom);
+                        const padX = Math.round(3 / zoom);
+                        const padY = Math.round(2 / zoom);
+                        const draggable = interactionMode === 'select' && !element.isLocked;
                         return (
-                            <div style={{
-                                position: 'absolute',
-                                top: -(fs + Math.round(4 / zoom)),
-                                left: 0,
-                                fontSize: fs,
-                                lineHeight: 1,
-                                color: '#6E6E73',
-                                fontWeight: 500,
-                                whiteSpace: 'nowrap',
-                                pointerEvents: 'none',
-                                userSelect: 'none',
-                            }}>
-                                {element.artboardName}
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    top: -(fs + Math.round(6 / zoom) + padY * 2),
+                                    left: -padX,
+                                    padding: `${padY}px ${padX}px`,
+                                    borderRadius: Math.round(3 / zoom),
+                                    fontSize: fs,
+                                    lineHeight: 1,
+                                    color: isSelected ? '#007AFF' : '#6E6E73',
+                                    fontWeight: 500,
+                                    whiteSpace: 'nowrap',
+                                    pointerEvents: interactionMode === 'select' ? 'auto' : 'none',
+                                    cursor: draggable ? 'move' : 'default',
+                                    userSelect: 'none',
+                                }}
+                                onMouseDown={(e) => handleInteractionStart(e, 'drag')}
+                                onContextMenu={handleArtboardContextMenu}
+                                title={element.isLocked ? '工作區域已鎖定' : '拖曳以移動工作區域（內容一起移動）'}
+                            >
+                                {element.isLocked ? '🔒 ' : ''}{element.artboardName}
                             </div>
                         );
                     })()}
