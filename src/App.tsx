@@ -55,6 +55,11 @@ import type { NodeGraphData } from './components/NodeWorkflow/types';
 import { analyzeMagicLayerPlan, type MagicLayerModel, type MagicLayerOptions } from './utils/gptLayerSplit';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 
+// 畫布物件複製時寫入系統剪貼簿的標記：
+// 自訂型別供本站辨識，SENTINEL 是 text/plain 後備（部分瀏覽器不保留自訂型別）
+const CANVAS_CLIPBOARD_TYPE = 'application/x-yohaku-canvas';
+const CANVAS_CLIPBOARD_SENTINEL = '【YOHAKU 畫布物件】';
+
 const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   
@@ -1353,8 +1358,8 @@ const App: React.FC = () => {
       if (isCtrlOrCmd && !isEditingText) {
         if (e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
         else if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
-        else if (e.key.toLowerCase() === 'c') { e.preventDefault(); copySelection(); }
-        // 'v' 由 paste 事件統一處理（避免 preventDefault 阻止 paste 事件觸發）
+        // 'c' / 'v' 由 copy / paste 事件統一處理
+        // （在此 preventDefault 會讓原生 copy/paste 事件不觸發，系統剪貼簿就永遠搶不回來）
         else if (e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelection(); }
         else if (e.key.toLowerCase() === 'g') { e.preventDefault(); if (e.shiftKey) handleUngroup(); else handleGroup(); }
       }
@@ -1363,7 +1368,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [deleteElement, undo, redo, editingDrawing, editingImage, activeNodeGroupId, outpaintingState, copySelection, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, placingNote, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
+  }, [deleteElement, undo, redo, editingDrawing, editingImage, activeNodeGroupId, outpaintingState, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, placingNote, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
   
   useEffect(() => {
     const clearDragState = () => {
@@ -1420,13 +1425,34 @@ const App: React.FC = () => {
     return () => window.removeEventListener('mousemove', onMove);
   }, []);
 
-  // 剪貼簿貼上：外部圖片 / 外部文字 → 貼在游標位置
+  // 剪貼簿複製 / 貼上
+  //
+  // 系統剪貼簿是唯一的真相來源：複製畫布物件時一併把標記寫進系統剪貼簿，
+  // 才不會被先前反白複製的外部文字卡住（外部文字會永遠命中純文字分支）。
   useEffect(() => {
     // 游標所在的世界座標（無紀錄時退回畫面中心）
     const getPasteWorldPoint = (): Point =>
       (lastPointerScreenRef.current && canvasApiRef.current)
         ? canvasApiRef.current.screenToWorld(lastPointerScreenRef.current)
         : getCenterOfViewport();
+
+    const isEditingTarget = (target: HTMLElement | null) =>
+      !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+
+    const handleCopy = (e: ClipboardEvent) => {
+        if (activeNodeGroupId) return;
+        if (isEditingTarget(e.target as HTMLElement)) return;
+        // 畫面上有反白文字 → 使用者要的是那段文字，不攔截
+        if (!window.getSelection()?.isCollapsed) return;
+        if (selectedElementIds.length === 0) return;
+
+        e.preventDefault();
+        // 自訂型別供本站辨識；text/plain 同步寫入，避免貼到外部軟體時是空的
+        e.clipboardData?.setData(CANVAS_CLIPBOARD_TYPE, '1');
+        e.clipboardData?.setData('text/plain', CANVAS_CLIPBOARD_SENTINEL);
+        copySelection();
+    };
+
     const handlePaste = (e: ClipboardEvent) => {
         // 節點工作流開啟時由其自己處理剪貼簿，主畫布不參與。
         if (activeNodeGroupId) return;
@@ -1454,22 +1480,35 @@ const App: React.FC = () => {
             }
         }
 
-        // 其次：純文字 → 建立文字元素
-        const text = e.clipboardData?.getData('text/plain')?.trim();
+        const raw = e.clipboardData?.getData('text/plain') ?? '';
+
+        // 其次：本站複製的畫布物件（標記命中就走內部剪貼簿）
+        if (e.clipboardData?.getData(CANVAS_CLIPBOARD_TYPE) || raw === CANVAS_CLIPBOARD_SENTINEL) {
+            e.preventDefault();
+            pasteSelection();
+            return;
+        }
+
+        // 再次：外部純文字 → 建立文字元素
+        const text = raw.trim();
         if (text) {
             e.preventDefault();
             addText(getPasteWorldPoint(), text);
             return;
         }
 
-        // Fallback：貼上畫布內複製的元素（Ctrl+C 複製的圖層）
+        // Fallback：剪貼簿沒有可用內容時，仍嘗試貼上內部複製的物件
         e.preventDefault();
         pasteSelection();
     };
 
+    window.addEventListener('copy', handleCopy);
     window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-  }, [activeNodeGroupId, addImagesToCanvas, addText, getCenterOfViewport, pasteSelection]);
+    return () => {
+      window.removeEventListener('copy', handleCopy);
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [activeNodeGroupId, addImagesToCanvas, addText, getCenterOfViewport, pasteSelection, copySelection, selectedElementIds]);
 
   return (
     <>
