@@ -1404,6 +1404,9 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             // SVG RENDERER FOR TEXT (always shown; transparent textarea overlaid when editing)
                             const padding = getTextBoxPadding(el);
                             const isVertical = el.writingMode === 'vertical';
+                            // 與 wrappedTextData 的 isLocked 判斷一致：未鎖定時 SVG 的 maxWidth=100000（不換行）
+                            const isCurvedTextForWrap = Math.abs((el as any).curveStrength || 0) > 0.1;
+                            const taWraps = !isCurvedTextForWrap && !!(el.isWidthLocked || el.isHeightLocked);
                             const lineHeightPx = el.fontSize * el.lineHeight;
 
                             const shadowFilters = [];
@@ -1779,13 +1782,24 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                                                 border: 'none',
                                                 outline: 'none',
                                                 padding: `${getTextBoxPadding(el)}px`,
+                                                // CSS 的 letter-spacing 會加在「最後一個字之後」，但 SVG 與盒寬
+                                                // 都只算 (n-1) 個間距 → textarea 內容框剛好窄一個字距，
+                                                // 使最後一字被擠到看不見的下一行（反白因而短一截）。
+                                                // 換行模式下把這一個字距補回來，兩層的斷行點才會一致。
+                                                width: taWraps && (el.letterSpacing || 0) > 0
+                                                    ? `calc(100% + ${el.letterSpacing}px)`
+                                                    : undefined,
                                                 fontSize: `${el.fontSize}px`,
                                                 lineHeight: el.lineHeight,
                                                 letterSpacing: `${el.letterSpacing || 0}px`,
                                                 fontFamily: el.fontFamily,
                                                 fontWeight: el.isBold ? 'bold' : 'normal',
                                                 fontStyle: el.isItalic ? 'italic' : 'normal',
-                                                whiteSpace: 'pre-wrap',
+                                                // 對齊方式要跟 SVG 的 textAnchor 一致，否則游標與反白會整段偏移
+                                                textAlign: el.align,
+                                                // SVG 未鎖寬時完全不換行（maxWidth=100000）；textarea 必須比照，
+                                                // 否則兩層斷行點不同，反白會停在錯誤的位置
+                                                whiteSpace: taWraps ? 'pre-wrap' : 'pre',
                                                 writingMode: el.writingMode === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
                                                 overflow: 'hidden',
                                                 cursor: 'text',
