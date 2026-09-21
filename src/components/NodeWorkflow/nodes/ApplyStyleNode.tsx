@@ -6,7 +6,7 @@ import { NodeResultPreview } from './NodeResultPreview';
 import { NodeDeleteButton } from './NodeDeleteButton';
 import { useNodeWorkflowContext } from '../NodeWorkflowContext';
 
-const ATLAS_STYLE_MODELS = ['seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
+const ATLAS_STYLE_MODELS = ['seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'flux-2-pro', 'qwen-image-2'];
 
 export function ApplyStyleNode({ id, data, selected }: NodeProps) {
   const { updateNodeData } = useReactFlow();

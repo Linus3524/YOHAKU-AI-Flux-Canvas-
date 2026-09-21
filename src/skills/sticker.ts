@@ -13,6 +13,7 @@ export interface SkillOption {
 }
 
 export interface StickerSkillConfig {
+  nativeTransparency?: boolean;
   style: string;
   shape: string;
   theme: string;
@@ -273,6 +274,7 @@ Design as a digital LINE messaging sticker. Each individual sticker should fit a
 6. BACKGROUND TREATMENT
 ${(() => {
   if (config.background === 'transparent') {
+    if (config.nativeTransparency) return 'Background: Real transparent PNG alpha channel. Preserve all subject colors and white sticker borders. Never draw a checkerboard or solid backdrop.';
     if (config.useStickerBorder) {
       return "Background: Isolated on a solid black background. Pure flat solid black (#000000) background to protect the white sticker outline/border and maximize contrast. The background must be pure black: no scenery, gradients, patterns, texture, or shading. The subject (including its white outline) must be clearly distinct from the black background.";
     } else {

@@ -1482,14 +1482,18 @@ export async function pasteInpaintRegion(
     return compositeLayerOverOriginal(fullResBase64, feathered);
 }
 
+export type SemanticInpaintEngine = 'gpt' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'seedream-v5-pro' | 'gemini';
+type SemanticGptModel = 'gpt-image-2' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare';
+const gptModelLabel = (model: SemanticGptModel) => model === 'gpt-image-2' ? 'GPT Image 2' : model === 'gpt-image-2.5-sunburst' ? 'GPT Image 2.5 Sunburst' : 'GPT Image 2.5 Flare';
+
 export interface RegenerateLayerOptions {
     layer: SmartLayer;
     /** 當前完整畫面（作為 inpaint 的 base image） */
     originalBase64: string;
     newPrompt: string;
     /** 'gpt' = Atlas inpaint；'seedream-v5-pro' = Atlas edit + selection reference；'gemini' = crop → Gemini img2img */
-    engine?: 'gpt' | 'seedream-v5-pro' | 'gemini';
-    atlasApiKey?: string;   // engine === 'gpt' 時必要
+    engine?: SemanticInpaintEngine;
+    atlasApiKey?: string;   // Atlas 模型必要
     geminiApiKey?: string;  // engine === 'gemini' 時必要
     imageModel?: string;    // Gemini 使用的模型
     /**
@@ -1593,6 +1597,7 @@ function solidRectMask(fullW: number, fullH: number, bbox: { x: number; y: numbe
  *  （不需 LaMa：遮罩區本來就被模型重新生成，舊字會被自然蓋掉）
  */
 async function regenerateTextFullImageGpt({
+    model,
     layer,
     originalBase64,
     newPrompt,
@@ -1601,6 +1606,7 @@ async function regenerateTextFullImageGpt({
     signal,
     onProgress,
 }: {
+    model: SemanticGptModel;
     layer: SmartLayer;
     originalBase64: string;
     newPrompt: string;
@@ -1623,7 +1629,7 @@ async function regenerateTextFullImageGpt({
     // 3) 明確告知參考圖只是「樣式樣本」，不要照抄原字
     const refPrompt = `${newPrompt} IMPORTANT: The attached reference image is ONLY a visual sample of the ORIGINAL text's font, weight, color and styling — do NOT reproduce its words. Render the NEW text described above in that exact same visual style, sized and spaced to fit the area cleanly.`;
 
-    onProgress?.(`GPT Image 2 重繪文字「${layer.name}」...`);
+    onProgress?.(`${gptModelLabel(model)} 重繪文字「${layer.name}」...`);
     const [compOrig, compMask, compRef] = await Promise.all([
         compressForAtlas(originalBase64, 1536, 0.95, false),
         compressForAtlas(maskFull,       1536, 1.0,  true),
@@ -1632,7 +1638,7 @@ async function regenerateTextFullImageGpt({
     const refs = referenceImage ? [compRef, referenceImage] : [compRef];
 
     const inpainted = await callAtlasInpaint(
-        refPrompt, compOrig, compMask, atlasApiKey, refs, undefined, signal, gptSize,
+        refPrompt, compOrig, compMask, atlasApiKey, refs, undefined, signal, gptSize, model,
     );
 
     // 4) 只貼回放大框那塊 → 框外維持原圖像素，漂移侷限框內
@@ -1684,9 +1690,10 @@ export async function regenerateLayer({
                 originalBase64, newPrompt, geminiApiKey, imageModel,
                 referenceImage, layerName: layer.name, onProgress,
             });
-        } else if (engine === 'gpt') {
-            if (!atlasApiKey) throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
+        } else if (engine !== 'seedream-v5-pro') {
+            if (!atlasApiKey) throw new Error('GPT 重繪需要 Atlas API Key');
             newCompositeBase64 = await regenerateTextFullImageGpt({
+                model: engine === 'gpt' ? 'gpt-image-2' : engine,
                 layer, originalBase64, newPrompt, atlasApiKey, referenceImage, signal, onProgress,
             });
         }
@@ -1811,7 +1818,7 @@ export async function regenerateLayer({
         const newLayerBase64 = updatedLayer;
         return { newLayerBase64, newCropRatio: layer.cropRatio, newCompositeBase64 };
     }
-    if (!atlasApiKey) throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
+    if (!atlasApiKey) throw new Error('GPT 重繪需要 Atlas API Key');
     const { callAtlasInpaint, compressForAtlas, gptSizeForImage } = await import('../../utils/atlasImage');
     const dims = await getImageDims(originalBase64);
     // 指定輸出尺寸 = 原圖最接近的 GPT 比例，避免 gpt-image-2 預設方形導致比例不符、貼回錯位
@@ -1824,7 +1831,8 @@ export async function regenerateLayer({
     // dilate 已在 transparentPngToInpaintMask 裡做了 3px，這裡不再額外處理
 
     // ── Step 2：Atlas Inpaint（全圖，GPT 自己處理邊緣）────────────────────
-    onProgress?.(`GPT Image 2 重新生成「${layer.name}」...`);
+    const model: SemanticGptModel = engine === 'gpt' ? 'gpt-image-2' : engine;
+    onProgress?.(`${gptModelLabel(model)} 重新生成「${layer.name}」...`);
 
     const inpaintPrompt = [
         newPrompt,
@@ -1848,6 +1856,7 @@ export async function regenerateLayer({
         undefined,   // surroundingContext
         signal,      // AbortSignal → 取消後立即停止輪詢
         gptSize,     // 輸出尺寸 = 原圖比例，避免方形錯位
+        model,
     );
 
     // ── Step 3：SAM2 從 inpainted 結果重新切出物件（更新 SmartLayer）────────

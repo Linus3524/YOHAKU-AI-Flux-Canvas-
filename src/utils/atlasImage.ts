@@ -8,7 +8,17 @@ const ATLAS_BASE_URL = 'https://api.atlascloud.ai/api/v1';
 const POLL_INTERVAL_MS = 2500;
 const MAX_WAIT_MS = 600000; // 10 minutes（參考圖模式需要更長時間）
 
-export type AtlasGenerationModel = 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'seedream-v5-pro' | 'qwen-image-2' | 'flux-2-pro';
+export type AtlasGenerationModel = 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'seedream-v5-pro' | 'qwen-image-2' | 'flux-2-pro';
+
+export const GPT_IMAGE_QUALITIES = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type GptImageQuality = typeof GPT_IMAGE_QUALITIES[number];
+
+/** Atlas GPT 2.5 exposes a native output alpha channel via background=transparent. */
+export function atlasModelSupportsTransparency(model: string): boolean {
+    return model === 'gpt-image-2.5-sunburst' || model === 'gpt-image-2.5-flare';
+}
+
+const NATIVE_ALPHA_PROMPT = '\nOUTPUT BACKGROUND: Use a real transparent alpha channel. This overrides any solid white, black or chroma-key background instructions above. Do not paint a checkerboard or any background color. Preserve the subject, white outlines, interior whites and semi-transparent details.';
 
 /** Seedream v4.5 / v5 — 8 種比例 × 2K/4K（使用 * 分隔符） */
 export const ATLAS_SIZES: { ratio: string; label: string; w2k: string; w4k: string }[] = [
@@ -93,8 +103,24 @@ export const GPT_SIZES: { ratio: string; label: string; w2k: string; w4k: string
     { ratio: '3:1', label: '3:1', w2k: '2304x768', w4k: '2304x768' },
 ];
 
+/** GPT 2.5: dimensions are independent of rendering quality; max 8,294,400 pixels. */
+export const GPT_25_SIZES = [
+    { ratio: '1:1', label: '1:1', w2k: '2048x2048', w4k: '2880x2880' },
+    { ratio: '4:3', label: '4:3', w2k: '2048x1536', w4k: '3264x2448' },
+    { ratio: '3:4', label: '3:4', w2k: '1536x2048', w4k: '2448x3264' },
+    { ratio: '4:5', label: '4:5', w2k: '1600x2000', w4k: '2560x3200' },
+    { ratio: '16:9', label: '16:9', w2k: '2048x1152', w4k: '3840x2160' },
+    { ratio: '9:16', label: '9:16', w2k: '1152x2048', w4k: '2160x3840' },
+    { ratio: '3:2', label: '3:2', w2k: '2016x1344', w4k: '3456x2304' },
+    { ratio: '2:3', label: '2:3', w2k: '1344x2016', w4k: '2304x3456' },
+    { ratio: '21:9', label: '21:9', w2k: '2016x864', w4k: '3696x1584' },
+    { ratio: '2.6:1', label: '2.6:1', w2k: '2080x800', w4k: '3744x1440' },
+    { ratio: '3:1', label: '3:1', w2k: '2016x672', w4k: '3840x1280' },
+];
+
 /** 依模型取對應的尺寸表（供 UI 使用） */
 export function getModelSizes(model: AtlasGenerationModel) {
+    if (atlasModelSupportsTransparency(model)) return GPT_25_SIZES;
     if (model === 'gpt-image-2') return GPT_SIZES;
     if (model === 'qwen-image-2' || model === 'flux-2-pro') return QWEN_SIZES;
     if (model === 'seedream-v5-pro') return SEEDREAM_PRO_SIZES;
@@ -106,16 +132,20 @@ interface ModelConfig {
     // 文生圖
     id: string;
     useInputWrapper: boolean;
+    predictionPath?: 'prediction' | 'result';
     sizeParam?: string;           // API 尺寸欄位名稱（e.g. 'size', 'image_size'）
+    useGpt25Sizes?: boolean;
     useGptSizes?: boolean;        // true = 使用 GPT_SIZES（x 分隔）；false/undefined = ATLAS_SIZES（* 分隔）
     useQwenSizes?: boolean;       // true = 使用 QWEN_SIZES（* 分隔，max 2048px）
     useSeedreamLiteSizes?: boolean; // true = 使用 Seedream v5 Lite 的 2K／3K 尺寸表
     useSeedreamProSizes?: boolean; // true = 使用 SEEDREAM_PRO_SIZES（* 分隔，總畫素 ≤2K）
     supportsBase64Output?: boolean; // 支援 enable_base64_output
+    supportsTransparentBackground?: boolean;
     supportsQualityParam?: boolean; // 支援 quality: low/medium/high（GPT Image 2）
     supportsSeed?: boolean;         // 支援 seed 種子碼（OpenAI gpt-image 系列不支援）
     extraParams?: Record<string, unknown>; // 固定附加參數
     // 圖生圖
+    maxReferenceImages?: number;
     img2imgId?: string;
     img2imgUseInputWrapper?: boolean;
     img2imgImageParam?: string;
@@ -123,6 +153,39 @@ interface ModelConfig {
 }
 
 const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
+    'gpt-image-2.5-sunburst': {
+        id: 'openai/gpt-image-2.5-sunburst/text-to-image',
+        predictionPath: 'prediction',
+        supportsTransparentBackground: true,
+        useGpt25Sizes: true,
+        useInputWrapper: false,
+        sizeParam: 'size',
+        useGptSizes: true,
+        supportsQualityParam: true,
+        extraParams: { output_format: 'png', n: 1 },
+        img2imgId: 'openai/gpt-image-2.5-sunburst/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
+        maxReferenceImages: 16,
+    },
+    'gpt-image-2.5-flare': {
+        id: 'openai/gpt-image-2.5-flare/text-to-image',
+        predictionPath: 'prediction',
+        supportsTransparentBackground: true,
+        useGpt25Sizes: true,
+        useInputWrapper: false,
+        sizeParam: 'size',
+        useGptSizes: true,
+        supportsQualityParam: true,
+        extraParams: { output_format: 'png', n: 1 },
+        img2imgId: 'openai/gpt-image-2.5-flare/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
+        maxReferenceImages: 16,
+    },
+
     'gpt-image-2': {
         id: 'openai/gpt-image-2/text-to-image',
         useInputWrapper: false,
@@ -205,8 +268,9 @@ function resolveSize(
     useQwenSizes?: boolean,
     useSeedreamLiteSizes?: boolean,
     useSeedreamProSizes?: boolean,
+    useGpt25Sizes?: boolean,
 ): string | undefined {
-    const table = useGptSizes ? GPT_SIZES
+    const table = useGpt25Sizes ? GPT_25_SIZES : useGptSizes ? GPT_SIZES
         : useQwenSizes ? QWEN_SIZES
         : useSeedreamLiteSizes ? SEEDREAM_LITE_SIZES
         : useSeedreamProSizes ? SEEDREAM_PRO_SIZES
@@ -236,6 +300,15 @@ interface AtlasApiResponse {
 }
 
 async function blobToBase64(blob: Blob, fallback: string): Promise<string> {
+    if (!blob.type.startsWith('image/')) {
+        const bytes = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+        const mime = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+            ? 'image/png' : bytes[0] === 0xff && bytes[1] === 0xd8 ? 'image/jpeg'
+            : String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
+                ? 'image/webp' : null;
+        if (!mime) return fallback;
+        blob = new Blob([blob], { type: mime });
+    }
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve((reader.result as string) || fallback);
@@ -244,33 +317,34 @@ async function blobToBase64(blob: Blob, fallback: string): Promise<string> {
     });
 }
 
-export async function downloadImageAsBase64(url: string): Promise<string> {
+export async function downloadImageAsBase64(url: string, requireLocalData = false): Promise<string> {
     if (url.startsWith('data:')) return url;
 
     // 1️⃣ 直接 CORS fetch
     try {
         const res = await fetch(url, { mode: 'cors' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await blobToBase64(await res.blob(), url);
+        const blob = await res.blob();
+        const result = await blobToBase64(blob, url);
+        if (!result.startsWith('data:image/')) throw new Error('圖片資料轉換失敗');
+        return result;
     } catch { /* 繼續 */ }
 
-    // 2️⃣ 自架 Vercel proxy（生產）or corsproxy.io（本機）
-    const isLocal = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV === true;
-    const proxyUrls = isLocal
-        ? [`https://corsproxy.io/?url=${encodeURIComponent(url)}`]
-        : [
-            `/api/image-proxy?url=${encodeURIComponent(url)}`,
-            `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-          ];
+    // Same-origin proxy is available in Vite and Vercel; no external CORS service needed.
+    const proxyUrls = [`/api/image-proxy?url=${encodeURIComponent(url)}`];
 
     for (const proxyUrl of proxyUrls) {
         try {
             const res = await fetch(proxyUrl);
             if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-            return await blobToBase64(await res.blob(), url);
+            const blob = await res.blob();
+            const result = await blobToBase64(blob, url);
+            if (!result.startsWith('data:image/')) throw new Error('圖片資料轉換失敗');
+            return result;
         } catch { /* 繼續 */ }
     }
 
+    if (requireLocalData) throw new Error('圖片已生成，但下載至本機失敗；請稍後重試下載。');
     // 3️⃣ 最後手段：直接用 URL（重新整理後可能失效）
     return url;
 }
@@ -279,6 +353,7 @@ async function pollPrediction(
     predictionId: string,
     atlasKey: string,
     signal?: AbortSignal,
+    predictionPath: 'prediction' | 'result' = 'result',
 ): Promise<string[]> {
     const startTime = Date.now();
     const MAX_CONSECUTIVE_POLL_FAILURES = 5;
@@ -296,7 +371,7 @@ async function pollPrediction(
         // 雲端那邊多半仍在正常生成。累計連續失敗達上限才判定失敗。
         let res: Response;
         try {
-            res = await fetch(`${ATLAS_BASE_URL}/model/result/${predictionId}`, {
+            res = await fetch(`${ATLAS_BASE_URL}/model/${predictionPath}/${predictionId}`, {
                 headers: { Authorization: `Bearer ${atlasKey}` },
                 signal,   // fetch 本身也帶 signal，abort 後 fetch 立即拋錯
             });
@@ -362,7 +437,7 @@ async function pollPrediction(
             if (urls.length === 0) {
                 throw new Error(`completed 但找不到圖片 URL：${JSON.stringify(json).slice(0, 300)}`);
             }
-            return Promise.all(urls.map(downloadImageAsBase64));
+            return Promise.all(urls.map(url => downloadImageAsBase64(url, true)));
         }
 
         if (status === 'failed' || status === 'error') {
@@ -423,6 +498,8 @@ async function postGeneration(body: Record<string, unknown>, atlasKey: string): 
 interface AtlasCallOptions {
     ratio?: string;       // '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '3:2' | '2:3' | '21:9'
     quality?: '2K' | '4K';
+    gptQuality?: GptImageQuality;
+    transparentBackground?: boolean; // 原生透明輸出（僅支援的模型送出）
     keepAlpha?: boolean;     // 壓縮時使用 PNG 保留 alpha（預設 JPEG 會破壞透明）
     seed?: number;           // 鎖定隨機種子碼以利批次風格一致
     outputFormat?: 'jpeg' | 'png';
@@ -434,17 +511,23 @@ function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
 
 function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOptions) {
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
+    if (config.supportsTransparentBackground && options?.transparentBackground) {
+        extra.background = 'transparent';
+        prompt += NATIVE_ALPHA_PROMPT;
+    }
     if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
-        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes, config.useSeedreamLiteSizes, config.useSeedreamProSizes);
+        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes, config.useSeedreamLiteSizes, config.useSeedreamProSizes, config.useGpt25Sizes);
         if (size) extra[config.sizeParam] = size;
     }
     if (config.supportsQualityParam) {
-        extra['quality'] = qualityToGpt(options?.quality);
+        extra['quality'] = config.useGpt25Sizes ? (options?.gptQuality ?? 'medium') : qualityToGpt(options?.quality);
     }
     if (config.supportsBase64Output) {
         extra['enable_base64_output'] = true;
     }
-    if (options?.outputFormat) {
+    if (config.supportsTransparentBackground && options?.transparentBackground) {
+        extra['output_format'] = 'png';
+    } else if (options?.outputFormat) {
         extra['output_format'] = options.outputFormat;
     }
     // 僅支援 seed 的模型才送；OpenAI gpt-image 系列沒有此參數，送了是多餘欄位。
@@ -482,7 +565,7 @@ export async function callAtlasGenerate(
         if (rejected) throw rejected.reason;
         throw new Error('Atlas: 所有生成請求均失敗');
     }
-    const results = await Promise.allSettled(predIds.map(id => pollPrediction(id, atlasKey)));
+    const results = await Promise.allSettled(predIds.map(id => pollPrediction(id, atlasKey, undefined, config.predictionPath)));
     const images = results
         .filter((r): r is PromiseFulfilledResult<string[]> => r.status === 'fulfilled')
         .flatMap(r => r.value)
@@ -502,17 +585,23 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
     const isArray  = config.img2imgImageIsArray ?? true;
     const imgValue = isArray ? images : images[0];
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
+    if (config.supportsTransparentBackground && options?.transparentBackground) {
+        extra.background = 'transparent';
+        prompt += NATIVE_ALPHA_PROMPT;
+    }
     if (config.sizeParam && options?.ratio && options.ratio !== 'Original') {
-        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes, config.useSeedreamLiteSizes, config.useSeedreamProSizes);
+        const size = resolveSize(options.ratio, options.quality ?? '2K', config.useGptSizes, config.useQwenSizes, config.useSeedreamLiteSizes, config.useSeedreamProSizes, config.useGpt25Sizes);
         if (size) extra[config.sizeParam] = size;
     }
     if (config.supportsQualityParam) {
-        extra['quality'] = qualityToGpt(options?.quality);
+        extra['quality'] = config.useGpt25Sizes ? (options?.gptQuality ?? 'medium') : qualityToGpt(options?.quality);
     }
     if (config.supportsBase64Output) {
         extra['enable_base64_output'] = true;
     }
-    if (options?.outputFormat) {
+    if (config.supportsTransparentBackground && options?.transparentBackground) {
+        extra['output_format'] = 'png';
+    } else if (options?.outputFormat) {
         extra['output_format'] = options.outputFormat;
     }
     // 僅支援 seed 的模型才送；OpenAI gpt-image 系列沒有此參數，送了是多餘欄位。
@@ -629,8 +718,8 @@ export async function callAtlasImg2Img(
     }
 
     // 送出前壓縮所有參考圖（最長邊 1024px），keepAlpha 時改用 PNG 保留透明
-    const rawImages = [referenceImageBase64, ...(noteRefImages ?? [])].filter(Boolean).slice(0, 8);
-    const allImages = await Promise.all(rawImages.map(img => compressForAtlas(img, 1024, 0.85, options?.keepAlpha)));
+    const rawImages = [referenceImageBase64, ...(noteRefImages ?? [])].filter(Boolean).slice(0, config.maxReferenceImages ?? 8);
+    const allImages = await Promise.all(rawImages.map(img => compressForAtlas(img, 1024, 0.85, options?.keepAlpha || (config.supportsTransparentBackground && options?.transparentBackground))));
 
     const submitResults = await Promise.allSettled(
         Array.from({ length: count }, (_, idx) => {
@@ -649,7 +738,7 @@ export async function callAtlasImg2Img(
         if (rejected) throw rejected.reason;
         throw new Error('Atlas img2img: 所有生成請求均失敗');
     }
-    const results = await Promise.allSettled(predIds.map(id => pollPrediction(id, atlasKey)));
+    const results = await Promise.allSettled(predIds.map(id => pollPrediction(id, atlasKey, undefined, config.predictionPath)));
     const images = results
         .filter((r): r is PromiseFulfilledResult<string[]> => r.status === 'fulfilled')
         .flatMap(r => r.value)
@@ -748,8 +837,11 @@ export async function callAtlasInpaint(
     surroundingContext?: string,
     signal?: AbortSignal,    // ← 傳入後可中止輪詢
     size?: string,           // ← 指定輸出尺寸（外擴必填，e.g. '1024x1536'）；同尺寸 inpaint 可省略
+    model: 'gpt-image-2' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' = 'gpt-image-2',
 ): Promise<string> {
-    // 透明遮罩圖：讓 GPT Image 2 Edit 知道哪裡需要重新生成
+    const config = MODEL_CONFIGS[model];
+    const nativeMask = atlasModelSupportsTransparency(model);
+    // 透明遮罩圖：讓 GPT Edit 知道哪裡需要重新生成
     const transparentImage = await createTransparentMaskedImage(imageBase64, maskBase64);
     // GPT Image 2 Edit 官方輸入只支援 JPG / PNG。主圖保留 PNG 透明遮罩；
     // 額外參考圖統一轉 JPEG，並限制最長邊，避免多圖 JSON payload 過大。
@@ -792,19 +884,20 @@ export async function callAtlasInpaint(
                 return prepared;
             }))
         : [];
-    const images = [preparedMainImage, ...preparedReferences];
+    const originalImage = nativeMask ? await compressForAtlas(imageBase64, 1536, 1, true, true) : preparedMainImage;
+    const images = [originalImage, ...preparedReferences];
 
     const body: Record<string, unknown> = {
-        model: 'openai/gpt-image-2/edit',
+        model: config.img2imgId,
+        ...(nativeMask ? { mask: preparedMainImage } : { enable_base64_output: true }),
         prompt: editPrompt,
         images,
         quality: 'medium',
-        enable_base64_output: true,
         output_format: 'png',
         ...(size ? { size } : {}),
     };
     const predId = await postGeneration(body, atlasKey);
-    const results = await pollPrediction(predId, atlasKey, signal);
+    const results = await pollPrediction(predId, atlasKey, signal, config.predictionPath);
     if (!results[0]) throw new Error('Atlas GPT Image 2 Inpaint 未回傳圖片');
     return results[0];
 }

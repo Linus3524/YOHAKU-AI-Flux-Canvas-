@@ -11,7 +11,7 @@
 import { GenerateContentResponse } from '@google/genai';
 import { callGeminiWithRetry } from '../../utils/helpers';
 import { detectIfIllustration, STYLE_PRESETS } from '../../utils/helpers';
-import { callAtlasImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../../utils/atlasImage';
+import { atlasModelSupportsTransparency, callAtlasImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../../utils/atlasImage';
 import { createGeminiClient } from '../geminiClient';
 import { prepareImageForGeneration, restoreTransparency, type RestoreTransparencyKeys } from '../transparency';
 import { isAtlasEngine, type ImageEngineConfig } from '../generateImage';
@@ -122,8 +122,9 @@ export async function generateStyledImage(
     opts: StyleTransferOpts,
     engine: ImageEngineConfig,
 ): Promise<string | null> {
+    const nativeTransparency = isAtlasEngine(engine) && atlasModelSupportsTransparency(engine.model);
     const { src: flatSrc, hadTransparency, bgColor } =
-        await prepareImageForGeneration(opts.srcImage, opts.preserveTransparency);
+        await prepareImageForGeneration(opts.srcImage, opts.preserveTransparency, { nativeTransparency });
 
     const prompt = typeof opts.stylePrompt === 'function'
         ? await opts.stylePrompt(flatSrc)
@@ -137,7 +138,7 @@ export async function generateStyledImage(
         const wait = engine.atlasWait ?? (<T,>(fn: () => Promise<T>) => fn());
         const images = await wait(() => callAtlasImg2Img(
             prompt, engine.model as AtlasGenerationModel, engine.atlasApiKey!,
-            refImage, 1, { ratio: opts.atlasRatio ?? 'Original', quality },
+            refImage, 1, { gptQuality: engine.gptQuality, ratio: opts.atlasRatio ?? 'Original', quality, transparentBackground: nativeTransparency && hadTransparency, keepAlpha: nativeTransparency && hadTransparency },
         ));
         result = images[0] ?? '';
     } else {
@@ -167,7 +168,7 @@ export async function generateStyledImage(
         result = await matchReferenceAspect(result, flatSrc);
     }
 
-    if (hadTransparency) {
+    if (hadTransparency && !nativeTransparency) {
         try {
             result = await restoreTransparency(result, bgColor, opts.transparencyKeys);
         } catch (e) {

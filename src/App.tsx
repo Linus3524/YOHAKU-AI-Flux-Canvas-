@@ -41,7 +41,7 @@ import { useEditorTargets } from './hooks/useEditorTargets';
 import { useFilePersistence } from './hooks/useFilePersistence';
 import { useAppAiActions } from './hooks/useAppAiActions';
 import { STYLE_PRESETS, COLORS, isCJK, wrapTextCanvas, loadImage, createShapeDataUrl, restoreOriginalAlpha, getClosestAspectRatio, measureTextVisualBounds, renderImageElementToDataUrl } from './utils/helpers';
-import { downloadImageAsBase64, callAtlasImg2Img } from './utils/atlasImage';
+import { atlasModelSupportsTransparency, downloadImageAsBase64, callAtlasImg2Img } from './utils/atlasImage';
 import { cacheImage, getCachedImage, deleteCachedImage } from './utils/imageCache';
 import { SVGExportModal } from './components/SVGExportModal';
 import { SemanticEditorView } from './components/SemanticEditor';
@@ -309,6 +309,8 @@ const App: React.FC = () => {
       setImageAspectRatio,
       imageSize,
       setImageSize,
+      gptQuality,
+      setGptQuality,
       preserveTransparency,
       setPreserveTransparency,
       useCustomSeed,
@@ -900,6 +902,7 @@ const App: React.FC = () => {
     const wantWhite = prompt.includes('BACKGROUND: white');
     const wantBlack = prompt.includes('BACKGROUND: black');
     const wantTransparent = prompt.includes('BACKGROUND: transparent');
+    if (wantTransparent && atlasModelSupportsTransparency(generatedImagesMetadata?.[0]?.model || '')) return;
     if (!wantWhite && !wantBlack && !wantTransparent) return;
 
     const sourceImages = generatedImages;
@@ -956,7 +959,13 @@ const App: React.FC = () => {
     const meta = imgIndex > -1 ? generatedImagesMetadata?.[imgIndex] : undefined;
 
     // 確保存入畫布的一定是 base64（避免 Atlas CDN URL 過期後無法給 Gemini 使用）
-    const originalSrc = imageUrl.startsWith('data:') ? imageUrl : await downloadImageAsBase64(imageUrl);
+    let originalSrc: string;
+    try {
+      originalSrc = imageUrl.startsWith('data:') ? imageUrl : await downloadImageAsBase64(imageUrl, true);
+    } catch {
+      showToast('圖片下載失敗，尚未加入畫布；請稍後再試。');
+      return;
+    }
     const img = new Image();
     img.referrerPolicy = 'no-referrer';
     img.onload = () => {
@@ -1662,6 +1671,8 @@ const App: React.FC = () => {
         onSetImageAspectRatio={setImageAspectRatio}
         imageSize={imageSize}
         onSetImageSize={setImageSize}
+        gptQuality={gptQuality}
+        onSetGptQuality={setGptQuality}
         preserveTransparency={preserveTransparency}
         onSetPreserveTransparency={setPreserveTransparency}
         useCustomSeed={useCustomSeed}
@@ -1929,7 +1940,7 @@ const App: React.FC = () => {
 
       {magicLayerTargetId && (
         <MagicLayerModal
-          defaultModel={(generationModel === 'seedream-v5-pro' || generationModel === 'gpt-image-2')
+          defaultModel={(generationModel === 'seedream-v5-pro' || generationModel === 'gpt-image-2' || atlasModelSupportsTransparency(generationModel))
             ? generationModel as MagicLayerModel
             : atlasApiKey ? 'gpt-image-2' : 'gemini'}
           hasAtlasKey={!!atlasApiKey}

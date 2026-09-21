@@ -163,8 +163,8 @@ export const DraggableOutpaintingPanel: React.FC<{
     handleAutoPrompt: () => void;
     onGenerate: () => void;
     onCancel: () => void;
-    model: 'gemini' | 'gpt' | 'seedream-v5-pro';
-    setModel: (m: 'gemini' | 'gpt' | 'seedream-v5-pro') => void;
+    model: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare';
+    setModel: (m: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare') => void;
     hasAtlasKey: boolean;
     // Screen coordinates of the image's RIGHT edge and TOP edge, for initial placement
     frameScreenRight?: number;
@@ -281,34 +281,15 @@ export const DraggableOutpaintingPanel: React.FC<{
                     {/* Model toggle row */}
                     <div className="flex items-center gap-2 px-2.5 py-2 border-t border-gray-100">
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">模型</span>
-                        <div className="flex bg-gray-100 rounded-lg p-0.5" onMouseDown={(e) => e.stopPropagation()}>
-                            <button
-                                onClick={() => setModel('gpt')}
-                                disabled={!hasAtlasKey}
-                                title={hasAtlasKey ? 'GPT Image 2 遮罩外擴：原圖保真、邊緣無縫融合（推薦）' : '需 Atlas Cloud Key'}
-                                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${model === 'gpt' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                GPT
-                            </button>
-                            <button
-                                onClick={() => setModel('gemini')}
-                                title="Gemini 智慧外擴：無縫拼接、免 Atlas Key"
-                                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${model === 'gemini' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                Gemini
-                            </button>
-                            <button
-                                onClick={() => setModel('seedream-v5-pro')}
-                                disabled={!hasAtlasKey}
-                                title={hasAtlasKey ? '即夢 Seedream 5.0 Pro Edit 擴圖' : '需 Atlas Cloud Key'}
-                                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${model === 'seedream-v5-pro' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                即夢 Pro
-                            </button>
-                        </div>
-                        <span className="text-[10px] text-gray-400 leading-tight">
-                            {model === 'gpt' ? '原圖保真・無縫融合' : model === 'seedream-v5-pro' ? '即夢 Edit・場景延伸' : '無縫拼接・免 Key'}
-                        </span>
+                        <select value={model} onChange={e => setModel(e.target.value as typeof model)}
+                            onMouseDown={e => e.stopPropagation()}
+                            className="min-w-0 flex-1 rounded-lg bg-gray-100 px-2 py-1 text-[11px] font-bold text-purple-600">
+                            <option value="gpt" disabled={!hasAtlasKey}>GPT Image 2</option>
+                            <option value="gpt-image-2.5-sunburst" disabled={!hasAtlasKey}>GPT 2.5 Sunburst · 精細</option>
+                            <option value="gpt-image-2.5-flare" disabled={!hasAtlasKey}>GPT 2.5 Flare · 快速</option>
+                            <option value="gemini">Gemini</option>
+                            <option value="seedream-v5-pro" disabled={!hasAtlasKey}>即夢 Pro</option>
+                        </select>
                     </div>
 
                     {/* Action row */}

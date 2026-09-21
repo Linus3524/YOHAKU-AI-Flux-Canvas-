@@ -90,11 +90,13 @@ export async function prepareImageForGeneration(
          * 特意挑「離主體最遠」的，留著能讓最後一層 chroma key 備援保持可用。
          */
         preferWhitePlate?: boolean;
+        nativeTransparency?: boolean;
     } = {},
 ): Promise<PreparedImage> {
     if (!preserveTransparency) return { src, hadTransparency: false, bgColor: '#FFFFFF' };
     const transparent = await hasTransparency(src);
     if (!transparent) return { src, hadTransparency: false, bgColor: '#FFFFFF' };
+    if (opts.nativeTransparency) return { src, hadTransparency: true, bgColor: '#FFFFFF' };
     const bgColor = opts.preferWhitePlate ? '#FFFFFF' : await findBestChromaColor(src);
     const flatSrc = await flattenTransparentImage(src, bgColor);
     return { src: flatSrc, hadTransparency: true, bgColor };

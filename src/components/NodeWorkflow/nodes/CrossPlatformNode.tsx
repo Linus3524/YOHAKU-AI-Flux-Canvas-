@@ -9,6 +9,8 @@ const MODEL_OPTIONS = [
   { value: 'seedream-v5', label: 'Seedream v5' },
   { value: 'seedream-v5-pro', label: 'Seedream v5 Pro' },
   { value: 'gpt-image-2', label: 'GPT Image 2' },
+  { value: 'gpt-image-2.5-sunburst', label: 'GPT Image 2.5 Sunburst' },
+  { value: 'gpt-image-2.5-flare', label: 'GPT Image 2.5 Flare' },
 ];
 
 type NodeResolutionOption = { value: CrossPlatformParams['imageSize']; label: string };
@@ -18,7 +20,7 @@ function resolutionOptionsForModel(model: string): NodeResolutionOption[] {
   if (model === 'seedream-v5') return [{ value: '2K', label: '2K' }, { value: '4K', label: '3K' }];
   if (model === 'seedream-v4.5') return [{ value: '2K', label: '2K' }, { value: '4K', label: '4K' }];
   if (model === 'qwen-image-2' || model === 'flux-2-pro') return [{ value: '2K', label: '1.5K' }, { value: '4K', label: '2K max' }];
-  if (model === 'gpt-image-2') return [{ value: '2K', label: 'Medium' }, { value: '4K', label: 'High' }];
+  if (model === 'gpt-image-2' || model === 'gpt-image-2.5-sunburst' || model === 'gpt-image-2.5-flare') return [{ value: '2K', label: 'Medium' }, { value: '4K', label: 'High' }];
   return [{ value: '2K', label: '2K' }];
 }
 const DEFAULT_PLATFORMS = ['instagram-story', 'xiaohongshu', 'social-square', 'youtube'];

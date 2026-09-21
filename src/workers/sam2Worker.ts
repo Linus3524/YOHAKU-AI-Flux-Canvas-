@@ -51,13 +51,18 @@ async function loadSessions() {
 
 // ── 工具 ─────────────────────────────────────────────────────────────────────
 
-async function base64ToBitmap(base64: string): Promise<ImageBitmap> {
-    const [header, data] = base64.split(',');
-    const mime = header.match(/:(.*?);/)?.[1] ?? 'image/png';
-    const bin  = atob(data);
-    const arr  = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-    return createImageBitmap(new Blob([arr], { type: mime }));
+/** Images can be data URLs, blob URLs or Atlas CDN URLs. Fetch handles all three. */
+async function imageSourceToBitmap(source: string): Promise<ImageBitmap> {
+    let response: Response;
+    try {
+        response = await fetch(source);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (error) {
+        if (!source.startsWith('https://')) throw error;
+        response = await fetch(`/api/image-proxy?url=${encodeURIComponent(source)}`);
+    }
+    if (!response.ok) throw new Error(`SAM2 圖片讀取失敗 (${response.status})`);
+    return createImageBitmap(await response.blob());
 }
 
 async function bitmapToBase64(canvas: OffscreenCanvas): Promise<string> {
@@ -74,7 +79,7 @@ async function bitmapToBase64(canvas: OffscreenCanvas): Promise<string> {
 async function handleEncode(imageBase64: string) {
     await loadSessions();
 
-    const bmp = await base64ToBitmap(imageBase64);
+    const bmp = await imageSourceToBitmap(imageBase64);
     const origW = bmp.width, origH = bmp.height;
 
     const c = new OffscreenCanvas(SAM_SIZE, SAM_SIZE);
@@ -128,7 +133,7 @@ async function handleDecode(
         coords.push(0, 0); labels.push(-1);
     } else if (options.roughMask) {
         // roughMask → 3×3 網格正點 + 四角負點
-        const bmp = await base64ToBitmap(options.roughMask);
+        const bmp = await imageSourceToBitmap(options.roughMask);
         const mW = bmp.width, mH = bmp.height;
         const c = new OffscreenCanvas(mW, mH);
         c.getContext('2d')!.drawImage(bmp, 0, 0, mW, mH);
@@ -201,7 +206,7 @@ async function handleDecode(
     const offset   = bestIdx * pxCount;
 
     // 原圖 + mask → 透明 PNG
-    const origBmp = await base64ToBitmap(originalImageBase64);
+    const origBmp = await imageSourceToBitmap(originalImageBase64);
     const canvas  = new OffscreenCanvas(origW, origH);
     const ctx     = canvas.getContext('2d')!;
     ctx.drawImage(origBmp, 0, 0, origW, origH);

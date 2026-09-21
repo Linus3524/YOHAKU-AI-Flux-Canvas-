@@ -17,9 +17,11 @@ import {
     callAtlasImg2Img,
     atlasModelSupportsImg2Img,
     type AtlasGenerationModel,
+    type GptImageQuality,
 } from '../utils/atlasImage';
 
 export interface ImageEngineConfig {
+    gptQuality?: GptImageQuality;
     /** 'gemini' 或 Atlas 模型 id */
     model: string;
     geminiApiKey?: string | null;
@@ -50,6 +52,7 @@ export interface GenerateOneImageOpts {
      * Gemini：僅在為 base64 data URL 時附為 inline 參考圖。
      */
     refImage?: string;
+    transparentBackground?: boolean;
     seed?: number;
 }
 
@@ -67,7 +70,7 @@ export async function generateOneImage(
         const atlasModel = engine.model as AtlasGenerationModel;
         const quality: '2K' | '4K' = engine.imageSize === '4K' ? '4K' : '2K';
         const wait = engine.atlasWait ?? (<T,>(fn: () => Promise<T>) => fn());
-        const atlasOpts = { ratio: aspectRatio, quality, seed };
+        const atlasOpts = { gptQuality: engine.gptQuality, ratio: aspectRatio, quality, seed, transparentBackground: opts.transparentBackground, keepAlpha: opts.transparentBackground };
 
         const images = (refImage && atlasModelSupportsImg2Img(atlasModel))
             ? await wait(() => callAtlasImg2Img(prompt, atlasModel, engine.atlasApiKey!, refImage, 1, atlasOpts))

@@ -13,7 +13,7 @@
  */
 import { GoogleGenAI, GenerateContentResponse, type Part } from '@google/genai';
 import { callGeminiWithRetry } from '../../utils/helpers';
-import { callAtlasGenerate, callAtlasImg2Img, type AtlasGenerationModel } from '../../utils/atlasImage';
+import { callAtlasGenerate, callAtlasImg2Img, type GptImageQuality, type AtlasGenerationModel } from '../../utils/atlasImage';
 
 export interface AtlasBatchOpts {
     prompt: string;
@@ -22,6 +22,7 @@ export interface AtlasBatchOpts {
     ratio: string;
     /** 解析度（1K 就近取 2K） */
     imageSize?: '1K' | '2K' | '4K';
+    transparentBackground?: boolean;
     seed?: number;
     /** 主參考圖（有值走 img2img；呼叫端負責 img2img 支援度判斷） */
     refImage?: string;
@@ -30,6 +31,7 @@ export interface AtlasBatchOpts {
 }
 
 export interface AtlasEngine {
+    gptQuality?: GptImageQuality;
     model: AtlasGenerationModel;
     apiKey: string;
     /** 長任務等待包裝（hook 注入 withAtlasWaitToast）；未提供則直接執行 */
@@ -40,7 +42,7 @@ export interface AtlasEngine {
 export function atlasBatch(opts: AtlasBatchOpts, engine: AtlasEngine): Promise<string[]> {
     const quality: '2K' | '4K' = opts.imageSize === '4K' ? '4K' : '2K';
     const wait = engine.wait ?? (<T,>(fn: () => Promise<T>) => fn());
-    const atlasOpts = { ratio: opts.ratio, quality, seed: opts.seed };
+    const atlasOpts = { gptQuality: engine.gptQuality, ratio: opts.ratio, quality, seed: opts.seed, transparentBackground: opts.transparentBackground, keepAlpha: opts.transparentBackground };
 
     return opts.refImage
         ? wait(() => callAtlasImg2Img(opts.prompt, engine.model, engine.apiKey, opts.refImage!, opts.count, atlasOpts, opts.extraRefImages))

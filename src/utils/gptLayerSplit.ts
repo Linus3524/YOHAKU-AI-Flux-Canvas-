@@ -20,7 +20,7 @@ import { triangulationMatte, isMatteTrustworthy, isCleanWhitePlate } from './tri
 import { trimTransparentPixels, LayerResult } from './falImage';
 import { detectBackgroundColor } from './imageProcessing';
 
-export type MagicLayerModel = 'gemini' | 'gpt-image-2' | 'seedream-v5-pro';
+export type MagicLayerModel = 'gemini' | 'gpt-image-2' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare';
 export type MagicLayerGroupingStrategy = 'smart' | 'separate' | 'category' | 'custom';
 
 export interface MagicLayerPlanItem {

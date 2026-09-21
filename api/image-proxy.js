@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
     let targetUrl;
     try {
-        targetUrl = decodeURIComponent(url);
+        targetUrl = url; // req.query / URLSearchParams already decoded the outer query once.
         const parsed = new URL(targetUrl);
 
         // 只允許 HTTPS，拒絕 localhost / 內網

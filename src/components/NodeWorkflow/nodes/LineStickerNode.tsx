@@ -7,7 +7,7 @@ import { NodeResultPreview } from './NodeResultPreview';
 import { NodeDeleteButton } from './NodeDeleteButton';
 import { useNodeWorkflowContext } from '../NodeWorkflowContext';
 
-const ATLAS_MODELS = ['seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
+const ATLAS_MODELS = ['seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'flux-2-pro', 'qwen-image-2'];
 const COUNTS = [8, 12, 16, 20];
 const IMAGE_SIZES: LineStickerParams['imageSize'][] = ['1K', '2K', '4K'];
 

@@ -1,6 +1,7 @@
 import path from 'path';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import imageProxyHandler from './api/image-proxy.js';
 
 const PDF_FONT_FAMILIES = new Set([
   'Noto Sans TC', 'Chiron GoRound TC', 'Noto Serif TC', 'Shippori Mincho',
@@ -9,6 +10,23 @@ const PDF_FONT_FAMILIES = new Set([
   'Lato', 'Montserrat', 'Varela Round', 'Nunito', 'Playfair Display',
   'Merriweather', 'Cinzel', 'Great Vibes', 'Dancing Script',
 ]);
+
+// Match the production image proxy so local generation can persist CDN images too.
+const imageProxyDevPlugin = (): Plugin => ({
+  name: 'yohaku-image-proxy',
+  configureServer(server) {
+    server.middlewares.use('/api/image-proxy', async (req, res) => {
+      const query = Object.fromEntries(new URL(req.url || '', 'http://localhost').searchParams);
+      const response = {
+        status(code: number) { res.statusCode = code; return response; },
+        setHeader(name: string, value: string) { res.setHeader(name, value); },
+        json(value: unknown) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value)); },
+        send(value: Uint8Array) { res.end(value); },
+      };
+      await imageProxyHandler({ query }, response);
+    });
+  },
+});
 
 const pdfFontDevPlugin = (): Plugin => ({
   name: 'yohaku-pdf-font-dev-endpoint',
@@ -67,7 +85,7 @@ export default defineConfig(({ mode }) => {
       },
       // onnxruntime-web 讓 Vite 正常打包（不 exclude）
       // WASM 檔案放 public/，JS glue 由 Vite bundle
-      plugins: [react(), pdfFontDevPlugin()],
+      plugins: [react(), imageProxyDevPlugin(), pdfFontDevPlugin()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)

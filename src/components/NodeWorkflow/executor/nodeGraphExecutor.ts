@@ -29,7 +29,7 @@ import { nodeRequiresUpstream } from '../nodeRegistry';
 import { applyImageAdjustments } from '../../../utils/applyImageAdjustments';
 import { buildStickerPrompt, STICKER_DEFAULT_CONFIG } from '../../../skills/sticker';
 
-const ATLAS_MODELS = ['seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'flux-2-pro', 'qwen-image-2'];
+const ATLAS_MODELS = ['seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'flux-2-pro', 'qwen-image-2'];
 const STYLE_PRESET_BY_KEY: Record<string, string> = {
   pixel: 'Pixel Art 8-bit / 16-bit',
   watercolor: 'Watercolor Bleed',

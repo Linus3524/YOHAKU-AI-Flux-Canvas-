@@ -4,7 +4,7 @@ import type { Point, CanvasElement, ImageElement, ShapeType, ShapeElement } from
 import type { AlignMode } from '../hooks/useCanvas';
 import type { OutpaintingState } from '../types';
 import { AppearancePanel } from './AppearancePanel';
-import { getModelSizes } from '../utils/atlasImage';
+import { GPT_IMAGE_QUALITIES, type GptImageQuality, atlasModelSupportsTransparency, getModelSizes } from '../utils/atlasImage';
 import { Icon } from './Icon';
 import { OutpaintingFrame, DraggableOutpaintingPanel } from './OutpaintingFrame';
 import { CropManager } from './CropManager';
@@ -31,6 +31,8 @@ interface InfiniteCanvasProps {
   onSetImageStyle: (style: string) => void;
   imageAspectRatio: string;
   onSetImageAspectRatio: (ratio: string) => void;
+  gptQuality: GptImageQuality;
+  onSetGptQuality: (quality: GptImageQuality) => void;
   imageSize: '1K' | '2K' | '4K';
   onSetImageSize: (size: '1K' | '2K' | '4K') => void;
   preserveTransparency: boolean;
@@ -42,7 +44,7 @@ interface InfiniteCanvasProps {
   outpaintingState: OutpaintingState | null;
   onUpdateOutpaintingFrame: (newFrame: { position: Point; width: number; height: number; }) => void;
   onCancelOutpainting: () => void;
-  onOutpaintingGenerate: (prompt: string, model: 'gemini' | 'gpt' | 'seedream-v5-pro') => void;
+  onOutpaintingGenerate: (prompt: string, model: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare') => void;
   onAutoPromptGenerate: (state: OutpaintingState) => Promise<string>;
   stylePresets: { id: string, name: string, label: string }[];
   onCameraAngle: (prompt: string) => void;
@@ -236,6 +238,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onSetImageAspectRatio,
   imageSize,
   onSetImageSize,
+  gptQuality,
+  onSetGptQuality,
   preserveTransparency,
   onSetPreserveTransparency,
   outpaintingState,
@@ -291,7 +295,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
   const [outpaintingPrompt, setOutpaintingPrompt] = useState('');
   const [isAutoPrompting, setIsAutoPrompting] = useState(false);
-  const [outpaintModel, setOutpaintModel] = useState<'gemini' | 'gpt' | 'seedream-v5-pro'>(hasAtlasKey ? 'gpt' : 'gemini');
+  const [outpaintModel, setOutpaintModel] = useState<'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare'>(hasAtlasKey ? 'gpt' : 'gemini');
   
   const [menuOffset, setMenuOffset] = useState<Point>({ x: 20, y: 0 }); 
   const [isDraggingMenu, setIsDraggingMenu] = useState(false);
@@ -1252,7 +1256,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
           }}>
               {isMenuExpanded ? (
                 <div
-                    className="floating-menu flex flex-col min-w-[300px] animate-fade-in-up"
+                    className="floating-menu flex flex-col w-[300px] min-w-0 animate-fade-in-up"
                     style={{
                         cursor: isDraggingMenu ? 'grabbing' : 'grab',
                         background: 'rgba(255,255,255,0.97)',
@@ -1313,6 +1317,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         const MODEL_OPTIONS_DETAILS = [
                                             { id: 'gemini', label: 'Gemini 3 Flash / Pro', badge: 'Gemini Key', needsAtlas: false },
                                             { id: 'gpt-image-2', label: 'GPT Image 2', badge: 'Atlas Cloud', needsAtlas: true },
+                                            { id: 'gpt-image-2.5-sunburst', label: 'GPT Image 2.5 Sunburst', badge: 'Atlas Cloud', needsAtlas: true },
+                                            { id: 'gpt-image-2.5-flare', label: 'GPT Image 2.5 Flare', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'flux-2-pro', label: 'FLUX.2 Pro', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', badge: 'Atlas Cloud', needsAtlas: true },
@@ -1351,22 +1357,21 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                         key={opt.id}
                                                                         type="button"
                                                                         disabled={isDisabled}
+                                                                        aria-pressed={isSelected}
+                                                                        title={opt.label}
                                                                         onClick={() => {
                                                                             onSetGenerationModel?.(opt.id);
                                                                             setModelDropdownOpen(false);
                                                                         }}
-                                                                        className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors ${isSelected ? 'bg-[#F5F5F7]' : 'hover:bg-[#F5F5F7]'} ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} gap-3`}
+                                                                        className={`w-full flex items-center justify-between pl-3 pr-2 py-2 text-left text-sm transition-colors ${isSelected ? 'bg-[#F5F5F7]' : 'hover:bg-[#F5F5F7]'} ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} gap-1.5`}
                                                                     >
-                                                                        <span className={`text-[13px] truncate ${isSelected ? 'text-[#5B5BF6] font-medium' : 'text-[#1D1D1F]'}`}>
+                                                                        <span className={`min-w-0 flex-1 text-[13px] truncate ${isSelected ? 'text-[#5B5BF6] font-medium' : 'text-[#1D1D1F]'}`}>
                                                                             {opt.label}
                                                                         </span>
                                                                         <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                                                                             <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${opt.needsAtlas ? 'bg-indigo-50 text-indigo-600' : 'bg-purple-50 text-purple-600'}`}>
                                                                                 {opt.badge}
                                                                             </span>
-                                                                            <div className="w-4 h-4 flex items-center justify-center">
-                                                                                {isSelected && <Icon name="check" size={14} style={{ color: '#5B5BF6' }} />}
-                                                                            </div>
                                                                         </div>
                                                                     </button>
                                                                 );
@@ -1522,14 +1527,14 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                                     })()}
                                                                     {(['2K', '4K'] as const).map(tier => {
                                                                         const sizes = getModelSizes(generationModel as any);
-                                                                        const displayTier = tier === '4K' && generationModel === 'seedream-v5-pro' ? '3K' : tier;
+                                                                        const displayTier = atlasModelSupportsTransparency(generationModel) ? (tier === '4K' ? '大尺寸（最高 3840px）' : '標準尺寸（約 2K）') : tier === '4K' && generationModel === 'seedream-v5-pro' ? '3K' : tier;
                                                                         return (
                                                                             <div key={tier}>
                                                                                 <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-[#86868B] tracking-widest uppercase">{displayTier}</div>
                                                                                 {sizes.filter(s => tier === '2K' || s.w4k !== s.w2k).map(s => {
                                                                                     const px = tier === '4K' ? s.w4k : s.w2k;
                                                                                     const [pw, ph] = px.includes('x') ? px.split('x') : px.split('*');
-                                                                                    const isSel = imageAspectRatio === s.ratio && imageSize === tier;
+                                                                                    const isSel = imageAspectRatio === s.ratio && (imageSize === '4K' ? '4K' : '2K') === tier;
                                                                                     return (
                                                                                         <button key={s.ratio + tier}
                                                                                             onClick={() => { onSetImageAspectRatio(s.ratio); onSetImageSize(tier); setRatioOpen(false); }}
@@ -1567,6 +1572,19 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         );
                                     })()}
 
+                                    {atlasModelSupportsTransparency(generationModel) && (
+                                        <div className="flex flex-col gap-1.5">
+                                            <label htmlFor="gpt-image-quality" className="text-[11px] font-medium text-gray-500">圖片品質</label>
+                                            <select id="gpt-image-quality" value={gptQuality}
+                                                onChange={e => onSetGptQuality(e.target.value as GptImageQuality)}
+                                                className="w-full min-w-0 max-w-full rounded-lg border border-gray-200 bg-[#f8fafc] px-3 py-2 text-[13px] text-gray-700">
+                                                {GPT_IMAGE_QUALITIES.map(q => <option key={q} value={q}>{({ low: 'Low · 快速草稿', medium: 'Medium · 標準', high: 'High · 精細', xhigh: 'XHigh · 更精細', max: 'Max · 最高品質' })[q]}</option>)}
+                                            </select>
+                                            <p className="text-[10px] text-gray-400">品質與像素尺寸分開設定；較高品質可能增加耗時與費用。尺寸請在「輸出比例」選擇。</p>
+                                            {imageSize === '4K' && <p className="text-[10px] text-amber-600">超過 2560×1440 的解析度屬實驗性支援；實際像素依比例顯示。</p>}
+                                        </div>
+                                    )}
+
                                     {/* 輸出解析度（Gemini 才顯示，Atlas 已整合進比例下拉） */}
                                     {(generationModel === 'gemini' || !generationModel) && <div className="flex flex-col gap-1.5">
                                         <label className="text-[11px] font-medium text-gray-500">輸出解析度</label>
@@ -1598,7 +1616,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                             <div className="flex items-center justify-between">
                                                 <div>
                                                     <div className="text-[11px] font-medium text-gray-600">透明背景</div>
-                                                    <div className="mt-0.5 text-[10px] text-gray-400">生成完成後自動去背</div>
+                                                    <div className="mt-0.5 text-[10px] text-gray-400">{atlasModelSupportsTransparency(generationModel || '') ? '直接生成原生透明 PNG' : '生成完成後自動去背'}</div>
                                                 </div>
                                                 <button
                                                     type="button"
@@ -1887,7 +1905,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                           {/* 保留透明背景 */}
                                           {(hasImageOrDrawingOrShape || hasNote) && (
                                               <div className="flex items-center justify-between">
-                                                  <span className="text-[11px] font-medium text-gray-500">透明背景（生成後自動去背）</span>
+                                                  <span className="text-[11px] font-medium text-gray-500">{atlasModelSupportsTransparency(generationModel || '') ? '保留透明背景（原生透明 PNG）' : '透明背景（生成後自動去背）'}</span>
                                                   <div
                                                       className={`w-11 h-6 rounded-full p-1 cursor-pointer transition-colors ${preserveTransparency ? 'bg-[#34C759]' : 'bg-[#E5E5EA]'}`}
                                                       onClick={() => onSetPreserveTransparency(!preserveTransparency)}

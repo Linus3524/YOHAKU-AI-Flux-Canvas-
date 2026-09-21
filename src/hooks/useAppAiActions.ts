@@ -104,7 +104,7 @@ export const useAppAiActions = ({
           return;
       }
       setIsGenerating(true);
-      const modeLabel = selectedModel === 'seedream-v5-pro' ? '即夢 Seedream 5.0 Pro' : selectedModel === 'gpt-image-2' ? 'GPT Image 2' : 'Gemini';
+      const modeLabel = selectedModel === 'gpt-image-2.5-sunburst' ? 'GPT Image 2.5 Sunburst' : selectedModel === 'gpt-image-2.5-flare' ? 'GPT Image 2.5 Flare' : selectedModel === 'seedream-v5-pro' ? '即夢 Seedream 5.0 Pro' : selectedModel === 'gpt-image-2' ? 'GPT Image 2' : 'Gemini';
       showToast(`✨ 魔法分層啟動中（${modeLabel}）...`);
 
       const taskIds = [...(options.includeBackground ? ['background'] : []), ...plan.layers.map(layer => layer.id)];
@@ -177,7 +177,7 @@ export const useAppAiActions = ({
               falApiKey || undefined,
               (msg) => showToast(msg),
               imageModel,
-              selectedModel === 'seedream-v5-pro' ? 'seedream-v5-pro' : 'gpt-image-2',
+              selectedModel === 'gemini' ? 'gpt-image-2' : selectedModel,
               options,
               {
                   onLayerComplete: (taskId, layer) => {

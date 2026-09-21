@@ -106,7 +106,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
 
   // Inpaint engine selector
   const canSwitchEngine = !!(atlasKey || apiKey);
-  const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'seedream-v5-pro' | 'gemini'>(atlasKey ? 'gpt' : 'gemini');
+  const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'seedream-v5-pro' | 'gemini' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare'>(atlasKey ? 'gpt' : 'gemini');
   const [lamaReady, setLamaReady] = useState(false);
   const [lamaBackend, setLamaBackend] = useState<'webgpu' | 'wasm' | null>(null);
   const [miGanReady, setMiGanReady] = useState(false);
@@ -1204,7 +1204,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       }
 
       // ══ 路線 A：Atlas 編輯模型 ══════
-      if (atlasKey && inpaintEngine === 'gpt') {
+      if (atlasKey && (inpaintEngine === 'gpt' || inpaintEngine === 'gpt-image-2.5-sunburst' || inpaintEngine === 'gpt-image-2.5-flare')) {
         // 先用 Gemini Flash Lite 分析周圍環境，幫助 GPT Image 2 更好融合
         const surroundingContext = await analyzeSurroundingContext(context.baseImageSrc, bwMaskBase64Url);
         const outputSize = await gptSizeForImage(context.baseImageSrc);
@@ -1240,6 +1240,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
           surroundingContext || undefined,
           undefined,
           outputSize,
+          inpaintEngine === 'gpt' ? 'gpt-image-2' : inpaintEngine,
         );
 
         // GPT Image 2 Edit 原生支援透明遮罩 inpainting，
@@ -1248,7 +1249,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
         setPreviewImageSrc(generatedBase64);
         setGenerationMetadata({
             seed: activeSeed,
-            model: 'gpt-image-2',
+            model: inpaintEngine === 'gpt' ? 'gpt-image-2' : inpaintEngine,
             prompt: fluxPrompt
         });
         return;
@@ -1569,13 +1570,15 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                   <select
                     value={inpaintEngine}
                     onChange={e => {
-                      const val = e.target.value as 'gpt' | 'seedream-v5-pro' | 'gemini';
+                      const val = e.target.value as 'gpt' | 'seedream-v5-pro' | 'gemini' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare';
                       if (val === 'gemini' && !apiKey) return;
                       setInpaintEngine(val);
                     }}
                     className="appearance-none bg-transparent py-1 pl-2 pr-6 text-[11px] font-bold text-purple-600 focus:outline-none cursor-pointer"
                   >
                     {atlasKey && <option value="gpt">GPT Image 2（建議）</option>}
+                    {atlasKey && <option value="gpt-image-2.5-sunburst">GPT 2.5 Sunburst · 精細</option>}
+                    {atlasKey && <option value="gpt-image-2.5-flare">GPT 2.5 Flare · 快速</option>}
                     {atlasKey && <option value="seedream-v5-pro">即夢 Seedream 5.0 Pro</option>}
                     <option value="gemini" disabled={!apiKey}>Gemini（相容模式）{!apiKey ? ' (需 Key)' : ''}</option>
                   </select>

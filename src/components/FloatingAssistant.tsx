@@ -726,6 +726,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {[
                         { t: '一鍵生成圖片', d: '框選圖片、手繪或便利貼，AI 生成高品質圖片。生成中畫布不鎖定。' },
                         { t: '多參考圖', d: '便利貼可直接上傳最多 8 張參考圖。「自由融合」讓 AI 綜合全部視覺線索；「指定用途」可標記人物、服裝、姿勢、風格、背景與光線。便利貼與畫布圖片混合生成時，送入模型的圖片總上限仍為 8 張。' },
+                        { t: 'GPT Image 2.5 Sunburst／Flare', d: '使用 Atlas Cloud Key，支援文生圖與圖生圖。開啟透明背景時直接輸出含 alpha 通道的 PNG，可用於 Logo、圖示和貼圖，不需另外去背，也不是畫出棋盤格。兩款支援相同主要功能；依 Atlas 官方定位，Flare 適合快速試稿、變體與大量生成，Sunburst 耗時較長，適合精細編輯、產品圖與正式廣告素材。' },
                         { t: '即夢 Seedream 5.0 Pro', d: '新一代旗艦模型，支援精細的文字生成與排版。需要透明背景時，軟體會在生成完成後自動去背並輸出 PNG。' },
                         { t: '隨機種子 (Seed)', d: '支援開啟自訂 Seed 隨機碼。便於鎖定特定光影特徵或構圖結構，進行連續性的一致畫面生成。' },
                         { t: '圖片逆向分析', d: '右鍵「提取提示詞」，AI 生成中英對照的詠唱咒語。' },
@@ -902,7 +903,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         { t: '圖層面板 / 群組', d: '拖曳排序、隱藏/鎖定。Ctrl+G 綁定多物件為群組。' },
                         { t: '對齊與分佈', d: '選取 2 個以上物件，選取框上方浮現對齊列：靠左/置中/靠右、靠上/置中/靠下。3 個以上可水平/垂直等距分佈。鎖定物件與工作區域不受影響，可復原。' },
                         { t: '合併圖層', d: '選取多物件壓平為 PNG，自動裁切透明邊界，3x 高清渲染，保留陰影淡出效果。' },
-                        { t: '保留透明背景', d: '風格轉換時先壓平為安全底色，完成後 BiRefNet → Gemini → ChromaKey 依序還原透明通道。' },
+                        { t: '保留透明背景', d: 'GPT Image 2.5 Sunburst／Flare 可直接保留透明參考圖並生成原生透明 PNG，避免色底壓平與二次去背。其他模型沿用先壓平、生成後還原透明的流程。' },
                       ].map((item, i) => (
                         <div key={i}>
                           <h4 className="font-bold text-gray-800 text-[12px] mb-0.5">{item.t}</h4>
@@ -1144,7 +1145,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {/* Atlas Cloud 模型 */}
                       <div>
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">🟠 Atlas Cloud 生圖模型（需 Atlas Cloud Key）</span>
-                        <p className="text-xs text-gray-500 mb-3">由 Atlas Cloud 代理的多家頂級生圖模型，於生成設定面板中選擇，支援文生圖與圖生圖，一次輸出 2 張結果。</p>
+                        <p className="text-xs text-gray-500 mb-3">由 Atlas Cloud 代理的生圖模型，於生成設定面板中選擇，支援文生圖與圖生圖。依 Atlas 官方定位，Flare 優先追求速度，適合日常生成、試稿及大量變體；Sunburst 耗時較長，優先追求精細度，適合精準編輯、產品圖及正式廣告素材。兩者支援相同主要 API 功能，實際耗時與成圖效果依任務而異。相較 App 內舊模型的透明處理流程，GPT 2.5 可直接要求原生透明 PNG，省去生成後去背。</p>
                         <div className="overflow-x-auto">
                           <table className="w-full text-[10px] text-gray-600 border-collapse">
                             <thead>
@@ -1155,6 +1156,16 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2.5 Sunburst</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">OpenAI／Atlas</td>
+                                <td className="py-2 text-gray-600 align-top">精細度優先，耗時較長；適合細節要求高的編輯、產品圖與正式廣告素材。支援文生圖、圖生圖及原生透明 PNG，畫布生成設定提供 Low／Medium／High／XHigh／Max 五檔品質，與輸出尺寸獨立設定；尺寸依比例最高可達 3840×2160，超過 2560×1440 屬實驗性支援。</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2.5 Flare</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">OpenAI／Atlas</td>
+                                <td className="py-2 text-gray-600 align-top">速度優先，適合日常生成、快速試稿與大量變體。支援文生圖、圖生圖及原生透明 PNG，畫布生成設定提供 Low／Medium／High／XHigh／Max 五檔品質，與輸出尺寸獨立設定；尺寸依比例最高可達 3840×2160，超過 2560×1440 屬實驗性支援。</td>
+                              </tr>
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">OpenAI</td>

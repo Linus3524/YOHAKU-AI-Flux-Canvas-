@@ -1,5 +1,5 @@
 // 設計大師面板 — 更加精緻的 iOS/macOS 玻璃質感介面，解決多重滾動條與按鈕沉重感
-import { modelSupportsSeed } from '../utils/atlasImage';
+import { atlasModelSupportsTransparency, modelSupportsSeed } from '../utils/atlasImage';
 import React, { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { STYLE_PRESETS } from '../utils/helpers';
@@ -87,6 +87,8 @@ export interface DesignMasterPersistState {
 const MODEL_OPTIONS: { id: string; label: string; badge: string; needsAtlas: boolean }[] = [
   { id: 'gemini', label: 'Gemini 3 Flash / Pro', badge: 'Gemini Key', needsAtlas: false },
   { id: 'gpt-image-2', label: 'GPT Image 2', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'gpt-image-2.5-sunburst', label: 'GPT Image 2.5 Sunburst', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'gpt-image-2.5-flare', label: 'GPT Image 2.5 Flare', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'flux-2-pro', label: 'FLUX.2 Pro', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', badge: 'Atlas Cloud', needsAtlas: true },
@@ -257,7 +259,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
 
   const handleGenerate = () => {
     if (isGenerating) return;
-    const prompt = buildSkillPrompt(activeSkill, content, configs[activeSkill], referenceImages);
+    const prompt = buildSkillPrompt(activeSkill, content, { ...configs[activeSkill], nativeTransparency: atlasModelSupportsTransparency(model) }, referenceImages);
     const isSticker = activeSkill === 'sticker';
     const isIcon = activeSkill === 'icon';
     const autoRemoveBg = (isSticker && configs.sticker.background === 'transparent') 
@@ -1017,7 +1019,7 @@ export const DesignMasterPanel: React.FC<DesignMasterPanelProps> = ({
                   }))}
                   className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-1.5 text-[12px] text-[#1E293B]"
                 >
-                  <option value="transparent">透明背景（生成後自動去背）</option>
+                  <option value="transparent">{atlasModelSupportsTransparency(model) ? '透明背景（原生透明 PNG）' : '透明背景（生成後自動去背）'}</option>
                   <option value="white">純白背景</option>
                   <option value="colored">彩色背景</option>
                   <option value="pattern">格線圖案背景</option>

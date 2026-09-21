@@ -2,6 +2,7 @@
 import { SkillOption } from './sticker';
 
 export interface LogoSkillConfig {
+  nativeTransparency?: boolean;
   type: string;
   style: string;
   palette: string;
@@ -126,7 +127,9 @@ export function buildLogoPrompt(content: string, config: LogoSkillConfig): strin
   const industryMod = LOGO_INDUSTRIES.find(o => o.id === config.industry)?.promptModifier ?? '';
   const moodMod = LOGO_MOODS.find(o => o.id === config.mood)?.promptModifier ?? '';
   const sizeMod = LOGO_SIZES.find(o => o.id === config.size)?.promptModifier ?? '';
-  const backgroundMod = LOGO_BACKGROUNDS.find(o => o.id === config.background)?.promptModifier ?? '';
+  const backgroundMod = config.nativeTransparency && config.background === 'transparent'
+    ? 'Background: Real transparent PNG alpha channel, including empty space around and between subjects. No solid backdrop or checkerboard.'
+    : LOGO_BACKGROUNDS.find(o => o.id === config.background)?.promptModifier ?? '';
   const isTransparent = config.background === 'transparent';
 
   return `

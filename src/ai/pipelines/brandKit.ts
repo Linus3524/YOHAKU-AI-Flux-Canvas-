@@ -1,6 +1,6 @@
 import type { ImageElement, NoteElement, TextElement } from '../../types';
 import { loadImage } from '../../utils/helpers';
-import { downloadImageAsBase64 } from '../../utils/atlasImage';
+import { atlasModelSupportsTransparency, downloadImageAsBase64 } from '../../utils/atlasImage';
 import { generateOneImage, type ImageEngineConfig } from '../generateImage';
 import {
     type LogoSkillConfig,
@@ -66,10 +66,10 @@ export async function runLogoBrandKitPipeline({
     // ── Step 1：先獨立生成主 Logo（純文字創作，使用者最終要的標誌長相由這步決定）──
     onToast(`🎯 品牌視覺套件：主 Logo（1/${total}）...`);
     const logoAspect = brief.size || '1:1';
-    const logoPrompt = buildLogoPrompt(content, brief);
+    const logoPrompt = buildLogoPrompt(content, { ...brief, nativeTransparency: !!engine.atlasApiKey && atlasModelSupportsTransparency(engine.model) });
     let logoSrc = '';
     try {
-        logoSrc = await generateOneImage({ prompt: logoPrompt, aspectRatio: logoAspect }, engine);
+        logoSrc = await generateOneImage({ prompt: logoPrompt, aspectRatio: logoAspect, transparentBackground: brief.background === 'transparent' }, engine);
     } catch (e) {
         console.warn('[logoBrandKit] 主 Logo 生成失敗', e);
     }

@@ -7,6 +7,7 @@
 import { SkillOption } from './sticker';
 
 export interface IconSkillConfig {
+  nativeTransparency?: boolean;
   layoutMode: 'single' | 'collection';
   sheetCount: number;
   collectionItemPrompts: string[];
@@ -195,7 +196,9 @@ export function buildIconPrompt(content: string, config: IconSkillConfig): strin
   
   const styleMod = ICON_STYLES.find(o => o.id === config.style)?.promptModifier ?? '';
   const complexityMod = ICON_COMPLEXITIES.find(o => o.id === config.complexity)?.promptModifier ?? '';
-  const bgMod = ICON_BACKGROUNDS.find(o => o.id === config.background)?.promptModifier ?? '';
+  const bgMod = config.nativeTransparency && config.background === 'transparent'
+    ? 'Background: Real transparent PNG alpha channel, including empty space around and between subjects. No solid backdrop or checkerboard.'
+    : ICON_BACKGROUNDS.find(o => o.id === config.background)?.promptModifier ?? '';
 
   let layoutInstruction = '';
   if (isSheet) {

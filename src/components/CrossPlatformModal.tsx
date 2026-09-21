@@ -5,6 +5,8 @@ import { CROSS_PLATFORM_SPECS, crossPlatformRatioForModel } from '../skills/cros
 const MODEL_OPTIONS: { id: string; label: string; badge: string; needsAtlas: boolean }[] = [
   { id: 'gemini', label: 'Gemini 3 Flash / Pro', badge: 'Gemini Key', needsAtlas: false },
   { id: 'gpt-image-2', label: 'GPT Image 2', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'gpt-image-2.5-sunburst', label: 'GPT Image 2.5 Sunburst', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'gpt-image-2.5-flare', label: 'GPT Image 2.5 Flare', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'flux-2-pro', label: 'FLUX.2 Pro', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', badge: 'Atlas Cloud', needsAtlas: true },
@@ -31,7 +33,7 @@ function resolutionOptionsForModel(model: string): ResolutionOption[] {
   if (model === 'seedream-v5') return [{ id: '2K', label: '2K' }, { id: '4K', label: '3K（高畫質）' }];
   if (model === 'seedream-v4.5') return [{ id: '2K', label: '2K' }, { id: '4K', label: '4K（高畫質）' }];
   if (model === 'qwen-image-2' || model === 'flux-2-pro') return [{ id: '2K', label: '約 1.5K' }, { id: '4K', label: '2K（最高）' }];
-  if (model === 'gpt-image-2') return [{ id: '2K', label: 'Medium' }, { id: '4K', label: 'High' }];
+  if (model === 'gpt-image-2' || model === 'gpt-image-2.5-sunburst' || model === 'gpt-image-2.5-flare') return [{ id: '2K', label: 'Medium' }, { id: '4K', label: 'High' }];
   return [{ id: '2K', label: '2K' }, { id: '4K', label: '4K' }];
 }
 

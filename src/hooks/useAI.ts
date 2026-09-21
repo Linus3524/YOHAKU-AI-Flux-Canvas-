@@ -13,7 +13,7 @@ import {
     checkCompositionSimilarity
 } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
-import { callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type AtlasGenerationModel } from '../utils/atlasImage';
+import { atlasModelSupportsTransparency, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type GptImageQuality, type AtlasGenerationModel } from '../utils/atlasImage';
 import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
 import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
 import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
@@ -98,6 +98,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [imageStyle, setImageStyle] = useState<string>('Default');
     const [imageAspectRatio, setImageAspectRatio] = useState<string>('Original');
     const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('1K');
+    const [gptQuality, setGptQuality] = useState<GptImageQuality>('medium');
     const [preserveTransparency, setPreserveTransparency] = useState(false);
     const [useCustomSeed, setUseCustomSeed] = useState<boolean>(false);
     const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
@@ -228,6 +229,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
                 geminiImageModel: imageModel,
                 imageSize,
                 atlasWait: withAtlasWaitToast,
+                gptQuality,
             };
             const transparencyKeys = { falApiKey, geminiApiKey: apiKey, imageModel };
             await generateCopiedStyleAssets({
@@ -259,7 +261,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, falApiKey, imageModel, imageSize, generationModelGlobal, atlasApiKey, withAtlasWaitToast]);
+    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, falApiKey, imageModel, imageSize, generationModelGlobal, atlasApiKey, withAtlasWaitToast, gptQuality]);
 
     // handlePasteStyle: 僅供 Style Library 預設風格使用（styleOverride 一定存在）
     // 優先順序：非 Gemini 模型且有 Atlas key → Atlas img2img；否則 → Gemini
@@ -294,6 +296,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
                 geminiImageModel: imageModel,
                 imageSize,
                 atlasWait: withAtlasWaitToast,
+                gptQuality,
             };
             const transparencyKeys = { falApiKey, geminiApiKey: apiKey, imageModel };
 
@@ -327,7 +330,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModelGlobal, atlasApiKey, imageSize, imageModel, falApiKey, withAtlasWaitToast]);
+    }, [copiedStyle, elements, setElements, preserveTransparency, showToast, setHasApiKey, apiKey, generationModelGlobal, atlasApiKey, imageSize, imageModel, falApiKey, withAtlasWaitToast, gptQuality]);
 
     const handleCameraAngle = useCallback(async (anglePrompt: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
@@ -383,6 +386,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
                 geminiImageModel: imageModel,
                 imageSize,
                 atlasWait: withAtlasWaitToast,
+                gptQuality,
             };
             const transparencyKeys = { falApiKey, geminiApiKey: apiKey, imageModel };
 
@@ -404,7 +408,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [selectedElementIds, elements, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, imageAspectRatio, imageSize, preserveTransparency, falApiKey, withAtlasWaitToast]);
+    }, [selectedElementIds, elements, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, imageAspectRatio, imageSize, preserveTransparency, falApiKey, withAtlasWaitToast, gptQuality]);
 
     const handleRemoveBackground = useCallback(async (mode: string) => {
         const targetElements = elements.filter(el => selectedElementIds.includes(el.id) && el.type === 'image') as ImageElement[];
@@ -557,7 +561,7 @@ CONSTRAINTS:
                 // Atlas img2img 調和路徑
                 const images = await atlasBatch(
                     { prompt: promptText, count: 1, ratio: 'Original', imageSize, refImage: base64 },
-                    { model: generationModelGlobal as AtlasGenerationModel, apiKey: atlasApiKey!, wait: withAtlasWaitToast },
+                    { gptQuality, model: generationModelGlobal as AtlasGenerationModel, apiKey: atlasApiKey!, wait: withAtlasWaitToast },
                 );
                 if (images.length > 0) aiResultSrc = images[0];
             } else {
@@ -619,7 +623,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, withAtlasWaitToast]);
+    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, withAtlasWaitToast, gptQuality]);
 
     const handleStartOutpainting = useCallback((elementId: string) => {
         const el = elements.find(e => e.id === elementId);
@@ -635,7 +639,7 @@ CONSTRAINTS:
         }
     }, [elements]);
 
-    const handleOutpaintingGenerate = useCallback(async (prompt: string, model: 'gemini' | 'gpt' | 'seedream-v5-pro' = 'gemini') => {
+    const handleOutpaintingGenerate = useCallback(async (prompt: string, model: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' = 'gemini') => {
         if (!outpaintingState) return;
         const { element, frame } = outpaintingState;
 
@@ -677,7 +681,7 @@ CONSTRAINTS:
                 showToast('擴圖完成！已新增為新圖層 ✨');
             };
 
-            if (model === 'gpt' || model === 'seedream-v5-pro') {
+            if (model === 'gpt' || model === 'seedream-v5-pro' || atlasModelSupportsTransparency(model)) {
                 // ── GPT Image 2 Edit 遮罩外擴 ──
                 // GPT edit 只支援三種輸出尺寸 → 把外框比例「吸附」到最接近的一種，
                 // 並把 size 帶進 API（不帶 size 它會輸出近似原圖比例 → 完全不擴）。
@@ -721,8 +725,8 @@ CONSTRAINTS:
                 const outPrompt = prompt.trim()
                     ? prompt.trim()
                     : 'Naturally extend and continue the existing scene outward into the surrounding area — keep the same lighting, color palette, perspective, depth and artistic style so it looks like one continuous photograph.';
-                const resultSrc = model === 'gpt'
-                    ? await withAtlasWaitToast(() => callAtlasInpaint(outPrompt, compositeB64, maskB64, atlasApiKey!, undefined, undefined, undefined, `${outW}x${outH}`))
+                const resultSrc = model !== 'seedream-v5-pro'
+                    ? await withAtlasWaitToast(() => callAtlasInpaint(outPrompt, compositeB64, maskB64, atlasApiKey!, undefined, undefined, undefined, `${outW}x${outH}`, model === 'gpt' ? 'gpt-image-2' : model as 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare'))
                     : (await withAtlasWaitToast(() => callAtlasImg2Img(
                         `${outPrompt} Extend only the transparent outer area. Preserve the existing subject and all visible details exactly.`,
                         'seedream-v5-pro', atlasApiKey!, compositeB64, 1,
@@ -812,7 +816,7 @@ CONSTRAINTS:
             setIsGenerating(false);
             setGeneratingElementIds([]);
         }
-    }, [outpaintingState, elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, imageModel, withAtlasWaitToast]);
+    }, [outpaintingState, elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, imageModel, withAtlasWaitToast, gptQuality]);
   
     const handleAutoPromptGenerate = useCallback(async (state: OutpaintingState): Promise<string> => {
         try {
@@ -854,6 +858,7 @@ CONSTRAINTS:
                 geminiImageModel: imageModel,
                 imageSize: requestedResolution,
                 atlasWait: withAtlasWaitToast,
+                gptQuality,
             };
             const resultSrc = await generateStyledImage({
                 srcImage: element.src,
@@ -899,7 +904,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, preserveTransparency, falApiKey, withAtlasWaitToast]);
+    }, [elements, selectedElementIds, setElements, showToast, setHasApiKey, apiKey, imageModel, generationModelGlobal, atlasApiKey, preserveTransparency, falApiKey, withAtlasWaitToast, gptQuality]);
 
     // ── 本機 ONNX 高清放大（pipeline 實作在 src/ai/pipelines/localModels.ts）──
     const handleLocalUpscale = useCallback(async (modelKey: OnnxModelKey, factor: number = 4) => {
@@ -981,10 +986,11 @@ CONSTRAINTS:
     const handleGenerate = useCallback(async (selectedElements: CanvasElement[], count: 1 | 2 | 3 | 4 = 2, intentOverride?: string, modelOverride?: string, autoRemoveBg: boolean = false, aspectRatioOverride?: string, imageSizeOverride?: '1K' | '2K' | '4K', refStyleIndex?: number, refStyleScope?: 'all' | 'style-only', stickerDebgBorder?: boolean, customSeed?: number, transparentBgOverride = false) => {
         const generationModel = modelOverride || generationModelGlobal;
         const wantsTransparent = autoRemoveBg || transparentBgOverride;
+        const nativeTransparency = atlasModelSupportsTransparency(generationModel);
         const baseSeed = customSeed !== undefined ? customSeed : Math.floor(Math.random() * 2147483647);
         // 解析度：呼叫端可覆寫（例：LINE 貼圖強制 4K 高解析），否則用全域設定
         const effImageSize = imageSizeOverride || imageSize;
-        setPendingAutoDebg(wantsTransparent);
+        setPendingAutoDebg(wantsTransparent && !nativeTransparency);
         // LINE 貼圖去背走泛洪 chroma 主路：null = 非貼圖（用語意去背）；true/false = 貼圖有無白邊
         setPendingStickerBorder(stickerDebgBorder === undefined ? null : stickerDebgBorder);
         const imageElements = selectedElements.filter(el => el.type === 'image' || el.type === 'drawing' || el.type === 'shape');
@@ -1072,7 +1078,7 @@ CONSTRAINTS:
             const hasNoteRefs = noteRefImgs.length > 0;
             const canDoImg2Img = atlasModelSupportsImg2Img(atlasModel);
             // 引擎葉子統一走 src/ai/pipelines/generate.ts 的 atlasBatch
-            const atlasEngine = { model: atlasModel, apiKey: atlasApiKey, wait: withAtlasWaitToast };
+            const atlasEngine = { gptQuality, model: atlasModel, apiKey: atlasApiKey, wait: withAtlasWaitToast };
 
             // 畫框模式：每個畫框獨立生成並填入
             if (frameElements.length > 0) {
@@ -1095,6 +1101,7 @@ CONSTRAINTS:
                         const imgs = await atlasBatch({
                             prompt: framePrompt, count: 1, ratio: frameRatio, imageSize: effImageSize,
                             seed: frameSeed,
+                            transparentBackground: nativeTransparency && wantsTransparent,
                             refImage: (hasNoteRefs && canDoImg2Img) ? noteRefImgs[0] : undefined,
                             extraRefImages: (hasNoteRefs && canDoImg2Img) ? noteRefImgs.slice(1) : undefined,
                         }, atlasEngine);
@@ -1146,7 +1153,7 @@ CONSTRAINTS:
                     rawRefImage = await downloadImageAsBase64(rawRefImage);
                     if (!rawRefImage.startsWith('data:')) { showToast("無法讀取參考圖片，請確認圖片已正確載入 ⚠️"); return; }
                 }
-                const { src: refImage, hadTransparency: refHadTransparency, bgColor: refBgColor } = await prepareForGeneration(rawRefImage);
+                const { src: refImage, hadTransparency: refHadTransparency, bgColor: refBgColor } = await prepareImageForGeneration(rawRefImage, preserveTransparency, { nativeTransparency, preferWhitePlate: !falApiKey });
                 const baseImg2imgPrompt = atlasPrompt || 'Keep the overall composition, enhance details and quality';
 
                 // 除了主參考圖，畫布上其餘一併選取的圖片/手繪/形狀也要當額外參考圖送出，
@@ -1180,11 +1187,12 @@ CONSTRAINTS:
                     const rawImages = await atlasBatch({
                         prompt: img2imgPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
                         seed: baseSeed,
+                        transparentBackground: nativeTransparency && (wantsTransparent || refHadTransparency),
                         refImage, extraRefImages: allExtraRefs.length > 0 ? allExtraRefs : undefined,
                     }, atlasEngine);
                     if (rawImages.length === 0) throw new Error('未收到任何圖片');
                     // 若來源有透明背景，生成後自動還原透明
-                    const images = refHadTransparency
+                    const images = refHadTransparency && !nativeTransparency
                         ? await Promise.all(rawImages.map(img => restoreTransparencyFn(img, refBgColor).catch(() => img)))
                         : rawImages;
                     setGeneratedImages(images);
@@ -1216,6 +1224,7 @@ CONSTRAINTS:
                     const images = await atlasBatch({
                         prompt: noteOnlyPrompt, count, ratio: resolvedAtlasRatio, imageSize: effImageSize,
                         seed: baseSeed,
+                        transparentBackground: nativeTransparency && wantsTransparent,
                         refImage: noteRefImgs[0], extraRefImages: noteRefImgs.slice(1),
                     }, atlasEngine);
                     if (images.length === 0) throw new Error('未收到任何圖片');
@@ -1248,6 +1257,7 @@ CONSTRAINTS:
                     ratio: (resolvedAtlasRatio === 'Original' || !resolvedAtlasRatio) ? '1:1' : resolvedAtlasRatio,
                     imageSize: effImageSize,
                     seed: baseSeed,
+                        transparentBackground: nativeTransparency && wantsTransparent,
                 }, atlasEngine);
                 if (images.length === 0) throw new Error('未收到任何圖片');
                 setGeneratedImages(images);
@@ -1432,7 +1442,7 @@ CONSTRAINTS:
           setGeneratingElementIds([]);
           setIsGenerating(false);
         }
-      }, [imageStyle, imageAspectRatio, imageSize, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, prepareForGeneration, restoreTransparencyFn]);
+      }, [imageStyle, imageAspectRatio, imageSize, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, falApiKey, prepareForGeneration, restoreTransparencyFn, gptQuality]);
 
     /**
      * 一鍵跨平台適配：1 張來源圖 → 依所選平台逐張重構（比例/安全區/智能擴圖）。
@@ -1508,6 +1518,7 @@ CONSTRAINTS:
                 geminiImageModel: imageModel,
                 imageSize: opts.imageSize || imageSize,
                 atlasWait: withAtlasWaitToast,
+                gptQuality,
             };
             await runCrossPlatformPipeline({
                 sourceElement: imgEl,
@@ -1565,7 +1576,7 @@ CONSTRAINTS:
             setIsGenerating(false);
             resumeAutoSave();
         }
-    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast, setGeneratingLabels, pauseAutoSave, resumeAutoSave]);
+    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast, gptQuality, setGeneratingLabels, pauseAutoSave, resumeAutoSave]);
 
     /**
      * 品牌視覺套件生成：依品牌簡報循序生成 5 張成品圖（主Logo、備用Logo、品牌視覺板、App圖示、應用預覽），並排放至右側。
@@ -1594,6 +1605,7 @@ CONSTRAINTS:
             geminiImageModel: imageModel,
             imageSize: imageSizeOverride || imageSize,
             atlasWait: withAtlasWaitToast,
+                gptQuality,
         };
 
         try {
@@ -1621,7 +1633,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast]);
+    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast, gptQuality]);
 
     /**
      * 品牌視覺套件延伸：以用戶選定的主 Logo 圖片作為錨點，延伸生成其餘 4 個品牌資產。
@@ -1653,6 +1665,7 @@ CONSTRAINTS:
             geminiImageModel: imageModel,
             imageSize: imageSizeOverride || imageSize,
             atlasWait: withAtlasWaitToast,
+                gptQuality,
         };
 
         try {
@@ -1680,7 +1693,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast]);
+    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast, gptQuality]);
 
     /**
      * 產品行銷組圖：以用戶選定的商品圖片作為錨點，延伸生成成套的行銷物料。
@@ -1713,6 +1726,7 @@ CONSTRAINTS:
             geminiImageModel: imageModel,
             imageSize: imageSizeOverride || imageSize,
             atlasWait: withAtlasWaitToast,
+                gptQuality,
         };
 
         try {
@@ -1742,7 +1756,7 @@ CONSTRAINTS:
             setGeneratingElementIds([]);
             setIsGenerating(false);
         }
-    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast]);
+    }, [elements, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, imageModel, imageSize, withAtlasWaitToast, gptQuality]);
 
     return {
         createAiClient,
@@ -1767,6 +1781,8 @@ CONSTRAINTS:
         setImageAspectRatio,
         imageSize,
         setImageSize,
+        gptQuality,
+        setGptQuality,
         preserveTransparency,
         setPreserveTransparency,
         useCustomSeed,

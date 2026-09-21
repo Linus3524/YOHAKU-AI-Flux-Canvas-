@@ -160,7 +160,7 @@ export function crossPlatformSpec(id: string): CrossPlatformSpec | undefined {
 
 /** 平台適配時，換成模型端點真正接受的最接近比例；不裁切、不拉伸。 */
 export function crossPlatformRatioForModel(model: string, desiredRatio: string): string {
-  if (model === 'gpt-image-2' || model === 'qwen-image-2' || model === 'flux-2-pro') return desiredRatio;
+  if (model === 'gpt-image-2' || model === 'gpt-image-2.5-sunburst' || model === 'gpt-image-2.5-flare' || model === 'qwen-image-2' || model === 'flux-2-pro') return desiredRatio;
   if (model === 'seedream-v5-pro') {
     if (desiredRatio === '4:5') return '3:4';
     if (['21:9', '2.6:1', '3:1'].includes(desiredRatio)) return '16:9';

@@ -9,7 +9,7 @@ import { useSemanticEditor, CATEGORY_META } from './useSemanticEditor';
 import type { SmartLayer, SmartLayerCategory } from '../../types';
 import { getModelStatus } from '../../utils/onnxModelCache';
 import { sam2EncodeInWorker, sam2DecodeInWorker } from '../../utils/sam2WorkerClient';
-import { buildSmartLayerFromMask, describeLayerWithGemini } from './semanticLayerUtils';
+import { buildSmartLayerFromMask, describeLayerWithGemini, type SemanticInpaintEngine } from './semanticLayerUtils';
 import { Icon } from '../Icon';
 import { LayerThumb, LayerRow, RightPanel, VersionThumb, NavBtn, HoverHitArea } from './LayerListPanel';
 import { BBoxOverlay } from './BBoxOverlay';
@@ -106,7 +106,7 @@ export function SemanticEditorView({
     // 重繪引擎
     const canUseGpt    = !!atlasApiKey;
     const canUseGemini = !!geminiApiKey;
-    const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'seedream-v5-pro' | 'gemini'>(canUseGpt ? 'gpt' : 'gemini');
+    const [inpaintEngine, setInpaintEngine] = useState<SemanticInpaintEngine>(canUseGpt ? 'gpt' : 'gemini');
     const [onnxSAM2Ready, setOnnxSAM2Ready] = useState(false);
     const [onnxEmbeddingLoading, setOnnxEmbeddingLoading] = useState(false);
     const [onnxEmbeddingReady, setOnnxEmbeddingReady] = useState(false);
@@ -381,7 +381,7 @@ export function SemanticEditorView({
 
     // Apply：單層重繪
     const handleApply = useCallback(async (layer: SmartLayer) => {
-        if ((inpaintEngine === 'gpt' || inpaintEngine === 'seedream-v5-pro') && !atlasApiKey)  { showToast('⚠️ Atlas 重繪需要 Atlas API Key'); return; }
+        if (inpaintEngine !== 'gemini' && !atlasApiKey)  { showToast('⚠️ Atlas 重繪需要 Atlas API Key'); return; }
         if (inpaintEngine === 'gemini' && !geminiApiKey) { showToast('⚠️ Gemini 重繪需要 Gemini API Key'); return; }
         if (!falApiKey) { showToast('⚠️ 需要 fal.ai Key（SAM2 分割用）'); return; }
         applyLayerRegen(layer, inpaintEngine).catch(e => {
@@ -393,7 +393,7 @@ export function SemanticEditorView({
     // 與物件重繪一致，跟隨使用者的引擎切換鈕（inpaintEngine）：選 GPT 用 GPT、選 Gemini 用 Gemini。
     const handleApplyText = useCallback((layer: SmartLayer, newText: string) => {
         if (!newText.trim()) { showToast('⚠️ 請輸入文字內容'); return; }
-        if ((inpaintEngine === 'gpt' || inpaintEngine === 'seedream-v5-pro') && !atlasApiKey)  { showToast('⚠️ Atlas 重繪需要 Atlas API Key'); return; }
+        if (inpaintEngine !== 'gemini' && !atlasApiKey)  { showToast('⚠️ Atlas 重繪需要 Atlas API Key'); return; }
         if (inpaintEngine === 'gemini' && !geminiApiKey) { showToast('⚠️ Gemini 重繪需要 Gemini API Key'); return; }
         applyTextLayerEdit(layer, newText, inpaintEngine).catch(e => {
             showToast(`❌ 文字重繪失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
@@ -402,7 +402,7 @@ export function SemanticEditorView({
 
     // Apply All（批次）
     const handleApplyAll = useCallback(() => {
-        if ((inpaintEngine === 'gpt' || inpaintEngine === 'seedream-v5-pro') && !atlasApiKey)  { showToast('⚠️ Atlas 重繪需要 Atlas API Key'); return; }
+        if (inpaintEngine !== 'gemini' && !atlasApiKey)  { showToast('⚠️ Atlas 重繪需要 Atlas API Key'); return; }
         if (inpaintEngine === 'gemini' && !geminiApiKey) { showToast('⚠️ Gemini 重繪需要 Gemini API Key'); return; }
         applyAllDirtyLayers(inpaintEngine).catch(e => {
             showToast(`❌ 批次重繪失敗：${e?.message?.slice(0, 60) || '未知錯誤'}`);
@@ -523,7 +523,7 @@ export function SemanticEditorView({
                 showToast(`❌ SAM2 點選失敗：${err?.message?.slice(0, 60) || ''}`)
             );
         }
-    }, [activeTool, isLoading, useOnnxSAM2, addClickLayer, showToast, getImgCoords]);
+    }, [activeTool, isLoading, useOnnxSAM2, onnxEmbeddingLoading, onnxEmbeddingReady, state.compositeBase64, setStatus, buildSmartLayerFromMask, addLayerFromMaskBase64, addClickLayer, showToast, getImgCoords]);
 
     // A：矩形框選 — 全部用 window 層級監聽，游標離圖片也能更新，座標 clamp 到 [0,1]
     const getRectCoords = useCallback((clientX: number, clientY: number) => {
@@ -1011,25 +1011,24 @@ export function SemanticEditorView({
                         )}
                         {/* 重繪模型切換 */}
                         {(canUseGpt || canUseGemini) && (
-                            <button
-                                onClick={() => setInpaintEngine(inpaintEngine === 'gpt' ? (canUseGpt ? 'seedream-v5-pro' : 'gemini') : inpaintEngine === 'seedream-v5-pro' ? 'gemini' : 'gpt')}
-                                title="重繪模型：點選切換"
+                            <select
+                                aria-label="物件感知編輯重繪模型"
+                                value={inpaintEngine}
+                                onChange={e => setInpaintEngine(e.target.value as SemanticInpaintEngine)}
+                                title="物件、文字與套用全部使用的重繪模型"
                                 style={{
-                                    display: 'flex', alignItems: 'center', gap: 5,
+                                    maxWidth: 200, minWidth: 0,
                                     padding: '4px 10px', borderRadius: 9999,
-                                    border: '1px solid #8b5cf6',
-                                    background: '#f5f3ff',
-                                    color: '#7c3aed',
-                                    fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                                    transition: 'all 0.15s',
+                                    border: '1px solid #8b5cf6', background: '#f5f3ff',
+                                    color: '#7c3aed', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                                 }}
                             >
-                                <span style={{
-                                    width: 6, height: 6, borderRadius: '50%',
-                                    background: '#7c3aed', flexShrink: 0,
-                                }} />
-                                {inpaintEngine === 'gpt' ? 'GPT Image 2' : inpaintEngine === 'seedream-v5-pro' ? '即夢 Pro' : 'Gemini'}
-                            </button>
+                                <option value="gpt" disabled={!canUseGpt}>GPT Image 2</option>
+                                <option value="gpt-image-2.5-sunburst" disabled={!canUseGpt}>GPT Image 2.5 Sunburst</option>
+                                <option value="gpt-image-2.5-flare" disabled={!canUseGpt}>GPT Image 2.5 Flare</option>
+                                <option value="seedream-v5-pro" disabled={!canUseGpt}>即夢 Pro</option>
+                                <option value="gemini" disabled={!canUseGemini}>Gemini</option>
+                            </select>
                         )}
                         {onImportToCanvas && (
                             <NavBtn title="匯入目前版本到畫布" onClick={() => { onImportToCanvas(state.compositeBase64, { compositeBase64: state.compositeBase64, layers: state.layers, versions: state.versions }); showToast('✅ 已匯入目前版本到畫布'); }}>

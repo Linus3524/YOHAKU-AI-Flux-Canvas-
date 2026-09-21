@@ -16,7 +16,7 @@ import {
     addLayerByClick, addLayerByBox, addLayerByPoints,
     describeLayerWithGemini, buildSmartLayerFromMask,
     layerToFullCanvas, transparentPngToInpaintMask,
-    type SAM2Point,
+    type SAM2Point, type SemanticInpaintEngine,
 } from './semanticLayerUtils';
 
 // 安全取字串：防止非字串值（如曾誤存的物件）導致 .trim() 崩潰
@@ -279,7 +279,7 @@ export function useSemanticEditor({
     // ── 單層 Apply（inpaint → 全部重新切割）────────────────────────────────
     const applyLayerRegen = useCallback(async (
         layer: SmartLayer,
-        engine: 'gpt' | 'seedream-v5-pro' | 'gemini' = 'gpt',
+        engine: SemanticInpaintEngine = 'gpt',
         opts: {
             /** 覆蓋 layer.prompt 作為重繪指令（文字編輯模式用，不污染圖層 prompt 欄位） */
             promptOverride?: string;
@@ -289,7 +289,7 @@ export function useSemanticEditor({
             textEdit?: boolean;
         } = {},
     ) => {
-        if ((engine === 'gpt' || engine === 'seedream-v5-pro') && !atlasApiKey)  throw new Error('Atlas 重繪需要 Atlas API Key');
+        if (engine !== 'gemini' && !atlasApiKey)  throw new Error('Atlas 重繪需要 Atlas API Key');
         if (engine === 'gemini' && !geminiApiKey) throw new Error('Gemini 重繪需要 Gemini API Key');
 
         const effectivePrompt = opts.promptOverride ?? layer.prompt;
@@ -414,7 +414,7 @@ export function useSemanticEditor({
     const applyTextLayerEdit = useCallback(async (
         layer: SmartLayer,
         newText: string,
-        engine: 'gpt' | 'gemini' = 'gpt',
+        engine: SemanticInpaintEngine = 'gpt',
     ) => {
         const original = (layer.text ?? '').trim();
         const target   = newText.trim();
@@ -437,8 +437,8 @@ export function useSemanticEditor({
     }, [applyLayerRegen]);
 
     // ── 批次 Apply（所有 prompt 已修改但未套用的圖層）────────────────────────
-    const applyAllDirtyLayers = useCallback(async (engine: 'gpt' | 'gemini' = 'gpt') => {
-        if (engine === 'gpt'    && !atlasApiKey)  throw new Error('GPT 重繪需要 Atlas（GPT Image 2）API Key');
+    const applyAllDirtyLayers = useCallback(async (engine: SemanticInpaintEngine = 'gpt') => {
+        if (engine !== 'gemini' && !atlasApiKey)  throw new Error('Atlas 重繪需要 Atlas API Key');
         if (engine === 'gemini' && !geminiApiKey) throw new Error('Gemini 重繪需要 Gemini API Key');
 
         // 找出所有「prompt 已改但未套用」的圖層
