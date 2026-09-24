@@ -14,7 +14,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { callAtlasImg2Img, compressForAtlas, detectClosestRatio, type AtlasGenerationModel } from './atlasImage';
+import { callAtlasImg2Img, compressForAtlas, detectClosestRatio, atlasModelSupportsTransparency, type AtlasGenerationModel } from './atlasImage';
 import { birefnetRemoveBg, selectBiRefNetModel } from './geminiLayer';
 import { triangulationMatte, isMatteTrustworthy, isCleanWhitePlate } from './triangulationMatting';
 import { trimTransparentPixels, LayerResult } from './falImage';
@@ -704,73 +704,177 @@ function generateBboxMask(imageBase64: string, objects: DetectedObject[]): Promi
     });
 }
 
-// ── 通用 Chroma Key 去背（任意目標色）───────────────────────────────────────
-// edgeComplexity = 'complex' → 收緊容差，減少誤刪邊緣細節
-async function removeColorBackground(
-    base64: string,
-    targetHex: string,
-    edgeComplexity: 'simple' | 'complex' = 'simple',
-): Promise<string> {
-    const tR = parseInt(targetHex.slice(1, 3), 16);
-    const tG = parseInt(targetHex.slice(3, 5), 16);
-    const tB = parseInt(targetHex.slice(5, 7), 16);
+// ── 底色遮罩：只認「跟圖片邊緣相連」的平坦底色 ─────────────────────────────
+// 舊版是全圖逐像素色鍵（門檻 60/110），物件內任何接近底色的像素都會被挖掉：
+// 照片畫在深灰底上時，黑窗框、深色葉子、陰影全部破洞。改為從邊緣往內擴散，
+// 並依實測底色雜訊決定門檻（生成模型的底色極平整，實測 p95≈4；物件上的
+// 近似色像素如黑窗框對深灰底只差 11–30，寫死的大門檻會一路吃進物件）。
+interface PlateMask {
+    plate: Uint8Array;       // 1 = 底色
+    dist: Float32Array;      // 每個像素與底色的 RGB 距離
+    color: [number, number, number];
+    threshold: number;
+}
 
-    // simple：容差寬鬆（去色乾淨）；complex：容差收緊（保留細節邊緣）
-    const hardThreshold = edgeComplexity === 'complex' ? 45  : 60;
-    const softThreshold = edgeComplexity === 'complex' ? 85  : 110;
+function hexToRgb(hex: string): [number, number, number] {
+    return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+}
 
+function computePlateMask(
+    d: Uint8ClampedArray,
+    w: number,
+    h: number,
+    hintHex: string,
+    allowEnclosed: boolean,
+): PlateMask {
+    const n = w * h;
+    const border: number[] = [];
+    for (let x = 0; x < w; x++) border.push(x, (h - 1) * w + x);
+    for (let y = 1; y < h - 1; y++) border.push(y * w, y * w + w - 1);
+
+    // 實際底色取邊緣像素眾數：模型畫的底色常與要求的色碼差幾個單位。
+    // 眾數若離要求色太遠，代表邊緣大多是物件本身 → 改信任要求色。
+    const hint = hexToRgb(hintHex);
+    const bucket = (p: number) => { const i = p * 4; return ((d[i] >> 3) << 10) | ((d[i + 1] >> 3) << 5) | (d[i + 2] >> 3); };
+    const counts = new Map<number, number>();
+    for (const p of border) { const k = bucket(p); counts.set(k, (counts.get(k) ?? 0) + 1); }
+    let modeKey = -1, modeCount = 0;
+    counts.forEach((c, k) => { if (c > modeCount) { modeCount = c; modeKey = k; } });
+    let sr = 0, sg = 0, sb = 0, sn = 0;
+    for (const p of border) {
+        if (bucket(p) !== modeKey) continue;
+        const i = p * 4; sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; sn++;
+    }
+    const mode: [number, number, number] = [sr / sn, sg / sn, sb / sn];
+    const modeFromHint = Math.hypot(mode[0] - hint[0], mode[1] - hint[1], mode[2] - hint[2]);
+    const color = modeCount / border.length >= 0.25 && modeFromHint <= 60 ? mode : hint;
+
+    const dist = new Float32Array(n);
+    for (let p = 0; p < n; p++) {
+        const i = p * 4;
+        dist[p] = Math.hypot(d[i] - color[0], d[i + 1] - color[1], d[i + 2] - color[2]);
+    }
+
+    const nearBorder = border.map(p => dist[p]).filter(v => v < 30).sort((a, b) => a - b);
+    const noise = nearBorder.length ? nearBorder[Math.floor(nearBorder.length * 0.95)] : 6;
+    const threshold = Math.min(24, Math.max(8, noise * 1.5 + 4));
+
+    const plate = new Uint8Array(n);
+    const queue = new Int32Array(n);
+    let head = 0, tail = 0;
+    const visit = (q: number) => {
+        if (!plate[q] && dist[q] < threshold) { plate[q] = 1; queue[tail++] = q; }
+    };
+    for (const p of border) visit(p);
+    while (head < tail) {
+        const p = queue[head++];
+        const x = p % w;
+        if (x > 0) visit(p - 1);
+        if (x < w - 1) visit(p + 1);
+        if (p >= w) visit(p - w);
+        if (p < n - w) visit(p + w);
+    }
+
+    // 被物件包住的底色（字的內框、把手孔洞）只在文字/裝飾類挖除：照片類物件內
+    // 常有與底色幾乎同色的平坦區（實測窗框直欄與底色只差 5.7–7.2，底色雜訊 3.7），
+    // 單靠顏色無法區分，挖掉就會破洞。
+    if (allowEnclosed) {
+        const seen = new Uint8Array(n);
+        const minArea = Math.max(64, Math.round(n * 0.00005));
+        for (let s = 0; s < n; s++) {
+            if (plate[s] || seen[s] || dist[s] >= threshold) continue;
+            let h2 = 0, t2 = 0;
+            queue[t2++] = s; seen[s] = 1;
+            while (h2 < t2) {
+                const p = queue[h2++];
+                const x = p % w;
+                const neighbors = [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p >= w ? p - w : -1, p < n - w ? p + w : -1];
+                for (const q of neighbors) {
+                    if (q >= 0 && !seen[q] && !plate[q] && dist[q] < threshold) { seen[q] = 1; queue[t2++] = q; }
+                }
+            }
+            if (t2 >= minArea) for (let k = 0; k < t2; k++) plate[queue[k]] = 1;
+        }
+    }
+
+    return { plate, dist, color, threshold };
+}
+
+function loadImageData(base64: string): Promise<{ canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; imageData: ImageData } | null> {
     return new Promise(resolve => {
         const img = new Image();
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            canvas.width  = img.naturalWidth;
+            canvas.width = img.naturalWidth;
             canvas.height = img.naturalHeight;
             const ctx = canvas.getContext('2d')!;
             ctx.drawImage(img, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const d = imageData.data;
-            for (let i = 0; i < d.length; i += 4) {
-                const dr = d[i] - tR, dg = d[i + 1] - tG, db = d[i + 2] - tB;
-                const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-                if (dist < hardThreshold)
-                    d[i + 3] = 0;
-                else if (dist < softThreshold)
-                    d[i + 3] = Math.round(((dist - hardThreshold) / (softThreshold - hardThreshold)) * 255);
-            }
-            ctx.putImageData(imageData, 0, 0);
-            resolve(canvas.toDataURL('image/png'));
+            resolve({ canvas, ctx, imageData: ctx.getImageData(0, 0, canvas.width, canvas.height) });
         };
-        img.onerror = () => resolve(base64);
+        img.onerror = () => resolve(null);
         img.src = base64;
     });
 }
 
-// ── Step 1.5：背景均一化（Gemini 輸出背景可能有雜訊，強制清乾淨讓 BiRefNet 看到好對比）──
-async function uniformizeBackground(base64: string, bgHex: string): Promise<string> {
-    const tR = parseInt(bgHex.slice(1, 3), 16);
-    const tG = parseInt(bgHex.slice(3, 5), 16);
-    const tB = parseInt(bgHex.slice(5, 7), 16);
-    const threshold = 55;
-    return new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-            const ctx = canvas.getContext('2d')!;
-            ctx.drawImage(img, 0, 0);
-            const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const d = id.data;
-            for (let i = 0; i < d.length; i += 4) {
-                const dr = d[i] - tR, dg = d[i + 1] - tG, db = d[i + 2] - tB;
-                if (Math.sqrt(dr * dr + dg * dg + db * db) < threshold) {
-                    d[i] = tR; d[i + 1] = tG; d[i + 2] = tB;
-                }
-            }
-            ctx.putImageData(id, 0, 0);
-            resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = () => resolve(base64);
-        img.src = base64;
+// ── 通用 Chroma Key 去背（任意底色）─────────────────────────────────────────
+async function removeColorBackground(base64: string, bgHex: string, allowEnclosed: boolean): Promise<string> {
+    const loaded = await loadImageData(base64);
+    if (!loaded) return base64;
+    const { canvas, ctx, imageData } = loaded;
+    const d = imageData.data;
+    const w = canvas.width, h = canvas.height;
+    const { plate, dist, threshold } = computePlateMask(d, w, h, bgHex, allowEnclosed);
+
+    for (let p = 0; p < w * h; p++) {
+        if (plate[p]) { d[p * 4 + 3] = 0; continue; }
+        // 緊鄰底色的邊緣帶：以「往物件內 2px 的顏色」當純物件色，估計此像素的混色比例
+        const x = p % w, y = (p / w) | 0;
+        let dx = 0, dy = 0;
+        if (x > 0 && plate[p - 1]) dx = 1; else if (x < w - 1 && plate[p + 1]) dx = -1;
+        if (y > 0 && plate[p - w]) dy = 1; else if (y < h - 1 && plate[p + w]) dy = -1;
+        if (!dx && !dy) continue;
+        const rx = Math.min(w - 1, Math.max(0, x + 2 * dx));
+        const ry = Math.min(h - 1, Math.max(0, y + 2 * dy));
+        const r = ry * w + rx;
+        const ref = Math.max(plate[r] ? 0 : dist[r], dist[p]);
+        const alpha = ref < threshold ? 1 : Math.min(1, dist[p] / ref);
+        d[p * 4 + 3] = Math.round(d[p * 4 + 3] * alpha);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png');
+}
+
+// ── Step 1.5：背景均一化（輸出底色可能有雜訊，清乾淨讓 BiRefNet 看到好對比）──
+// 只重上色底色遮罩內的像素；物件內剛好同色的像素保持原色。
+async function uniformizeBackground(base64: string, bgHex: string, allowEnclosed: boolean): Promise<string> {
+    const loaded = await loadImageData(base64);
+    if (!loaded) return base64;
+    const { canvas, ctx, imageData } = loaded;
+    const d = imageData.data;
+    const { plate, color } = computePlateMask(d, canvas.width, canvas.height, bgHex, allowEnclosed);
+    const [r, g, b] = color.map(Math.round);
+    for (let p = 0; p < plate.length; p++) {
+        if (!plate[p]) continue;
+        const i = p * 4;
+        d[i] = r; d[i + 1] = g; d[i + 2] = b;
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png');
+}
+
+// 原生透明輸出是否真的有透明度：模型偶爾無視 background=transparent 回傳不透明圖
+function measureAlpha(base64: string): Promise<{ transparent: number; opaque: number } | null> {
+    return loadImageData(base64).then(loaded => {
+        if (!loaded) return null;
+        const d = loaded.imageData.data;
+        const n = d.length / 4;
+        let transparent = 0, opaque = 0;
+        for (let i = 3; i < d.length; i += 4) {
+            if (d[i] < 16) transparent++;
+            else if (d[i] > 240) opaque++;
+        }
+        return { transparent: transparent / n, opaque: opaque / n };
     });
 }
 
@@ -1015,6 +1119,11 @@ async function extractOneLayer(
     // → 強制走 Chroma Key（純色背景下效果更準確）
     const isTextLayer = obj.category === 'TEXT' || obj.category === 'DECOR';
     const useBiRefNet = !!falKey && !isTextLayer;
+    // GPT 2.5 有原生 alpha 輸出：直接要透明背景，免去實色底 + 軟體去背
+    //（軟體色鍵會把物件上接近底色的像素一起挖掉）。三角測量需要白/黑兩版實色底，
+    // 與原生透明互斥；原生 alpha 本身已有半透明邊緣，故此時略過三角測量。
+    const nativeAlpha = !!atlasKey && atlasModelSupportsTransparency(atlasModel);
+    highPrecisionEdge = highPrecisionEdge && !nativeAlpha;
     // fallback：文字/Logo 用白底（灰階最安全）；一般物件用中綠（含白色部位也吃得掉）
     // 有色半透明物件 → 用帶色調的淡灰底色（保留透明色調）
     const isTintedGray = !highPrecisionEdge
@@ -1045,7 +1154,13 @@ async function extractOneLayer(
         if (atlasKey) {
             const isSeedreamPro = atlasModel === 'seedream-v5-pro';
             const isolated = await callAtlasImg2Img(
-                isSeedreamPro
+                nativeAlpha
+                    ? `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
+                      `Remove every other element so all remaining areas are fully transparent. ` +
+                      `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position, including dark, black and white areas of the object. ` +
+                      `Solid parts of the object must stay fully opaque; only keep partial transparency where the object is genuinely translucent in the source (glass, smoke, liquid, sheer fabric, fine hair).` +
+                      perspectiveHint + refHint + EXCLUSIVITY_HINT + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox)
+                    : isSeedreamPro
                     ? `Extract ONLY the "${obj.labelEn}" (${obj.label}) and place it on a perfectly solid, uniform flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
                       `Do not make the output transparent. Do not add a checkerboard, scenery, shadow plate, border, texture, gradient or matte to the background. ` +
                       `Preserve the exact original position, scale, perspective, colors, materials, lighting and edges. ` +
@@ -1068,6 +1183,8 @@ async function extractOneLayer(
                 1,
                 isSeedreamPro
                     ? { ratio: detectedRatio, quality: '2K' }
+                    : nativeAlpha
+                    ? { ratio: detectedRatio, transparentBackground: true }
                     : { ratio: detectedRatio },
                 referenceCrop ? [referenceCrop] : undefined,
             );
@@ -1084,6 +1201,22 @@ async function extractOneLayer(
         }
 
         let transparent = isolatedSrc;
+
+        // 原生透明：確認模型真的給了 alpha；沒給就落回下方一般去背
+        let nativeAlphaOk = false;
+        if (nativeAlpha) {
+            const alpha = await measureAlpha(isolatedSrc);
+            if (alpha && alpha.opaque < 0.002) {
+                console.warn(`[magicLayer] "${obj.label}" 原生透明輸出幾乎全空，略過`, alpha);
+                return null;
+            }
+            if (alpha && alpha.transparent >= 0.01) {
+                nativeAlphaOk = true;
+            } else {
+                console.warn(`[magicLayer] "${obj.label}" 模型未回傳透明背景，改用一般去背`, alpha);
+                onProgress?.(`↩️ ${obj.label}：模型未回傳透明背景，改用一般去背`);
+            }
+        }
 
         // ── 2b'：高精度邊緣（三角測量）──────────────────────────────────────
         // isolatedSrc 已經是「物件在純白底上」，等於白底版；只要再生一張黑底版，
@@ -1122,12 +1255,13 @@ async function extractOneLayer(
             }
         }
 
-        if (!triangulated) {
-            // 所有生成模型都先產生實色背景，再由軟體去背建立 Alpha。
-            const fallbackBgColor = atlasModel === 'seedream-v5-pro'
+        if (!triangulated && !nativeAlphaOk) {
+            // 非原生透明模型（或原生透明失敗）：實色背景 → 軟體去背建立 Alpha。
+            // 原生透明失敗時並未要求特定底色，同 Seedream 改用偵測值。
+            const fallbackBgColor = atlasModel === 'seedream-v5-pro' || nativeAlpha
                 ? await detectBackgroundColor(isolatedSrc)
                 : bgColor.hex;
-            isolatedSrc = await uniformizeBackground(isolatedSrc, fallbackBgColor);
+            isolatedSrc = await uniformizeBackground(isolatedSrc, fallbackBgColor, isTextLayer);
             const birefnetModel = selectBiRefNetModel(obj.edgeComplexity, obj.category);
             const method = useBiRefNet ? `BiRefNet(${birefnetModel})` : 'Chroma Key';
             onProgress?.(`✂️ 去背：${obj.label}（${method}）`);
@@ -1136,10 +1270,10 @@ async function extractOneLayer(
                 transparent = await withTimeout(
                     birefnetRemoveBg(isolatedSrc, falKey!, birefnetModel),
                     birefnetTimeout,
-                    () => removeColorBackground(isolatedSrc, fallbackBgColor, obj.edgeComplexity),
+                    () => removeColorBackground(isolatedSrc, fallbackBgColor, isTextLayer),
                 );
             } else {
-                transparent = await removeColorBackground(isolatedSrc, fallbackBgColor, obj.edgeComplexity);
+                transparent = await removeColorBackground(isolatedSrc, fallbackBgColor, isTextLayer);
             }
         }
 

@@ -86,24 +86,26 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, onClose, onStart, o
         <div className="grid overflow-y-auto gap-5 p-5 md:grid-cols-[1.1fr_.9fr]">
           <div className="space-y-5">
             <div>
-              <label className="mb-2 block text-xs font-semibold text-neutral-700">分層模型</label>
-              <div className="space-y-2">
-                {(Object.keys(MODEL_INFO) as MagicLayerModel[]).map(model => {
-                  const unavailable = model !== 'gemini' && !hasAtlasKey;
-                  return (
-                    <button
-                      key={model}
-                      type="button"
-                      disabled={unavailable}
-                      onClick={() => set('model', model)}
-                      className={`w-full border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${options.model === model ? 'border-violet-500 bg-violet-50' : 'border-neutral-200 hover:border-neutral-400'}`}
-                    >
-                      <span className="block text-sm font-medium text-neutral-900">{MODEL_INFO[model].title}</span>
-                      <span className="mt-0.5 block text-xs text-neutral-500">{MODEL_INFO[model].detail}{unavailable ? '，需要 Atlas Key' : ''}</span>
-                    </button>
-                  );
-                })}
+              <label htmlFor="magic-layer-model" className="mb-2 block text-xs font-semibold text-neutral-700">分層模型</label>
+              <div className="relative">
+                <select
+                  id="magic-layer-model"
+                  value={options.model}
+                  onChange={event => set('model', event.target.value as MagicLayerModel)}
+                  className="h-10 w-full cursor-pointer appearance-none border border-neutral-200 bg-white pl-3 pr-9 text-sm font-medium text-neutral-900 outline-none transition-colors hover:border-neutral-400 focus:border-violet-500"
+                >
+                  {(Object.keys(MODEL_INFO) as MagicLayerModel[]).map(model => {
+                    const unavailable = model !== 'gemini' && !hasAtlasKey;
+                    return (
+                      <option key={model} value={model} disabled={unavailable}>
+                        {MODEL_INFO[model].title}{unavailable ? '（需要 Atlas Key）' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                <Icon name="expand_more" size={18} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500" />
               </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-500">{MODEL_INFO[options.model].detail}</p>
             </div>
 
             <div>
