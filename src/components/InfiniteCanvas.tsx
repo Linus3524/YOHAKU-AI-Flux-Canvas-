@@ -108,12 +108,15 @@ const CameraIcons = {
     SE:      () => <Icon name="south_east" size={16} />,
 };
 
+// 使用者上次選的生成張數；展開面板的分裂按鈕與折疊時的圓形按鈕共用，避免兩邊張數不一致
+const readSavedGenCount = (): 1 | 2 | 3 | 4 => {
+    const saved = Number(localStorage.getItem('yohaku_gen_count'));
+    return ([1, 2, 3, 4].includes(saved) ? saved : 2) as 1 | 2 | 3 | 4;
+};
+
 // ── 生成分裂按鈕（左：生成、右：選張數）────────────────────────────────────
 const GenerateSplitButton: React.FC<{ onGenerate: (count: 1 | 2 | 3 | 4) => void }> = ({ onGenerate }) => {
-    const [count, setCount] = useState<1 | 2 | 3 | 4>(() => {
-        const saved = localStorage.getItem('yohaku_gen_count');
-        return ([1, 2, 3, 4].includes(Number(saved)) ? Number(saved) : 2) as 1 | 2 | 3 | 4;
-    });
+    const [count, setCount] = useState<1 | 2 | 3 | 4>(readSavedGenCount);
     const [open, setOpen] = useState(false);
     return (
         <div className="relative w-full">
@@ -2020,9 +2023,9 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                 >
                      {elements.filter(el => selectedElementIds.includes(el.id)).some(el => ['image', 'drawing', 'shape', 'text', 'note'].includes(el.type)) && (
                          <button 
-                            onClick={() => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)), undefined, preserveTransparency)}
+                            onClick={() => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)), readSavedGenCount(), preserveTransparency)}
                             className="w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-tr from-[#AF52DE] to-[#5856D6] text-white shadow-md hover:scale-105 active:scale-95 transition-all"
-                            title="一鍵生成圖片"
+                            title={`一鍵生成圖片（${readSavedGenCount()} 張）`}
                          >
                              <SelectionMenuIcons.MagicFilled />
                          </button>
