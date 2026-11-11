@@ -163,8 +163,8 @@ export const DraggableOutpaintingPanel: React.FC<{
     handleAutoPrompt: () => void;
     onGenerate: () => void;
     onCancel: () => void;
-    model: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare';
-    setModel: (m: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare') => void;
+    model: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare';
+    setModel: (m: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare') => void;
     hasAtlasKey: boolean;
     // Screen coordinates of the image's RIGHT edge and TOP edge, for initial placement
     frameScreenRight?: number;
@@ -287,6 +287,8 @@ export const DraggableOutpaintingPanel: React.FC<{
                             <option value="gpt" disabled={!hasAtlasKey}>GPT Image 2</option>
                             <option value="gpt-image-2.5-sunburst" disabled={!hasAtlasKey}>GPT 2.5 Sunburst · 精細</option>
                             <option value="gpt-image-2.5-flare" disabled={!hasAtlasKey}>GPT 2.5 Flare · 快速</option>
+                            <option value="gpt-image-2.6-sunburst" disabled={!hasAtlasKey}>GPT 2.6 Sunburst · 精細</option>
+                            <option value="gpt-image-2.6-flare" disabled={!hasAtlasKey}>GPT 2.6 Flare · 快速</option>
                             <option value="gemini">Gemini</option>
                             <option value="seedream-v5-pro" disabled={!hasAtlasKey}>即夢 Pro</option>
                         </select>

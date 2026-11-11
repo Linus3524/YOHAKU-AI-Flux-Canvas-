@@ -13,7 +13,7 @@
  */
 import { GoogleGenAI, GenerateContentResponse, type Part } from '@google/genai';
 import { callGeminiWithRetry } from '../../utils/helpers';
-import { callAtlasGenerate, callAtlasImg2Img, type GptImageQuality, type AtlasGenerationModel } from '../../utils/atlasImage';
+import { callAtlasGenerate, callAtlasImg2Img, type GptAdvancedOptions, type GptImageQuality, type AtlasGenerationModel } from '../../utils/atlasImage';
 
 export interface AtlasBatchOpts {
     prompt: string;
@@ -32,6 +32,8 @@ export interface AtlasBatchOpts {
 
 export interface AtlasEngine {
     gptQuality?: GptImageQuality;
+    /** GPT 2.6 的輸出格式／複雜度／GIF 設定（僅主生成流帶入） */
+    advanced?: GptAdvancedOptions;
     model: AtlasGenerationModel;
     apiKey: string;
     /** 長任務等待包裝（hook 注入 withAtlasWaitToast）；未提供則直接執行 */
@@ -42,7 +44,16 @@ export interface AtlasEngine {
 export function atlasBatch(opts: AtlasBatchOpts, engine: AtlasEngine): Promise<string[]> {
     const quality: '2K' | '4K' = opts.imageSize === '4K' ? '4K' : '2K';
     const wait = engine.wait ?? (<T,>(fn: () => Promise<T>) => fn());
-    const atlasOpts = { gptQuality: engine.gptQuality, ratio: opts.ratio, quality, seed: opts.seed, transparentBackground: opts.transparentBackground, keepAlpha: opts.transparentBackground };
+    const adv = engine.advanced;
+    const atlasOpts = {
+        gptQuality: engine.gptQuality, ratio: opts.ratio, quality, seed: opts.seed, transparentBackground: opts.transparentBackground, keepAlpha: opts.transparentBackground,
+        ...(adv ? {
+            outputFormat: adv.outputFormat === 'png' ? undefined : adv.outputFormat,
+            complexity: adv.complexity === 'auto' ? undefined : adv.complexity,
+            gifFrameCount: adv.gifFrameCount,
+            gifFrameDurationMs: adv.gifFrameDurationMs,
+        } : {}),
+    };
 
     return opts.refImage
         ? wait(() => callAtlasImg2Img(opts.prompt, engine.model, engine.apiKey, opts.refImage!, opts.count, atlasOpts, opts.extraRefImages))

@@ -11,6 +11,8 @@ const MODEL_OPTIONS: { id: string; label: string; badge: string; needsAtlas: boo
   { id: 'gpt-image-2', label: 'GPT Image 2', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'gpt-image-2.5-sunburst', label: 'GPT Image 2.5 Sunburst', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'gpt-image-2.5-flare', label: 'GPT Image 2.5 Flare', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'gpt-image-2.6-sunburst', label: 'GPT Image 2.6 Sunburst', badge: 'Atlas Cloud', needsAtlas: true },
+  { id: 'gpt-image-2.6-flare', label: 'GPT Image 2.6 Flare', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'flux-2-pro', label: 'FLUX.2 Pro', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', badge: 'Atlas Cloud', needsAtlas: true },
   { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', badge: 'Atlas Cloud', needsAtlas: true },

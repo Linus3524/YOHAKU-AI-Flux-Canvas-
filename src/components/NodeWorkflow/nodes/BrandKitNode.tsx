@@ -11,6 +11,8 @@ const MODEL_OPTIONS = [
   { value: 'gpt-image-2', label: 'GPT Image 2' },
   { value: 'gpt-image-2.5-sunburst', label: 'GPT Image 2.5 Sunburst' },
   { value: 'gpt-image-2.5-flare', label: 'GPT Image 2.5 Flare' },
+  { value: 'gpt-image-2.6-sunburst', label: 'GPT Image 2.6 Sunburst' },
+  { value: 'gpt-image-2.6-flare', label: 'GPT Image 2.6 Flare' },
 ];
 
 const IMAGE_SIZES: BrandKitParams['imageSize'][] = ['1K', '2K', '4K'];

@@ -8,14 +8,41 @@ const ATLAS_BASE_URL = 'https://api.atlascloud.ai/api/v1';
 const POLL_INTERVAL_MS = 2500;
 const MAX_WAIT_MS = 600000; // 10 minutes（參考圖模式需要更長時間）
 
-export type AtlasGenerationModel = 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'seedream-v5-pro' | 'qwen-image-2' | 'flux-2-pro';
+export type AtlasGenerationModel = 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare' | 'gpt-image-2' | 'seedream-v4.5' | 'seedream-v5' | 'seedream-v5-pro' | 'qwen-image-2' | 'flux-2-pro';
 
 export const GPT_IMAGE_QUALITIES = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type GptImageQuality = typeof GPT_IMAGE_QUALITIES[number];
 
-/** Atlas GPT 2.5 exposes a native output alpha channel via background=transparent. */
+/** GPT Image 2.6 新增：複雜度（規劃程度）、GIF 動圖、SVG 向量輸出。 */
+export type GptOutputFormat = 'png' | 'gif' | 'svg';
+export type GptComplexity = 'auto' | 'low' | 'medium' | 'high';
+export interface GptAdvancedOptions {
+    outputFormat: GptOutputFormat;
+    /** auto = 不送，由模型用預設（high） */
+    complexity: GptComplexity;
+    /** GIF 影格數 2~64 */
+    gifFrameCount: number;
+    /** GIF 每格毫秒 20~2000 */
+    gifFrameDurationMs: number;
+}
+export const DEFAULT_GPT_ADVANCED: GptAdvancedOptions = { outputFormat: 'png', complexity: 'auto', gifFrameCount: 9, gifFrameDurationMs: 200 };
+
+export function atlasModelSupportsGpt26Features(model: string): boolean {
+    return model === 'gpt-image-2.6-sunburst' || model === 'gpt-image-2.6-flare';
+}
+
+/**
+ * GIF 的 size 是「單格」尺寸；所有影格排在同一張 sheet 上且 sheet 要符合模型上限，
+ * 單格太大會被拒。這裡只在 9 格以內用 Atlas 文件列出可行的量級，其餘交給 auto。
+ */
+const GIF_FRAME_SIZES: Record<string, string> = {
+    '1:1': '512x512', '16:9': '960x544', '9:16': '544x960',
+    '4:3': '768x576', '3:4': '576x768', '3:2': '768x512', '2:3': '512x768',
+};
+
+/** Atlas GPT 2.5 / 2.6 expose a native output alpha channel via background=transparent. */
 export function atlasModelSupportsTransparency(model: string): boolean {
-    return model === 'gpt-image-2.5-sunburst' || model === 'gpt-image-2.5-flare';
+    return model === 'gpt-image-2.5-sunburst' || model === 'gpt-image-2.5-flare' || model === 'gpt-image-2.6-sunburst' || model === 'gpt-image-2.6-flare';
 }
 
 const NATIVE_ALPHA_PROMPT = '\nOUTPUT BACKGROUND: Use a real transparent alpha channel. This overrides any solid white, black or chroma-key background instructions above. Do not paint a checkerboard or any background color. Preserve the subject, white outlines, interior whites and semi-transparent details.';
@@ -103,7 +130,7 @@ export const GPT_SIZES: { ratio: string; label: string; w2k: string; w4k: string
     { ratio: '3:1', label: '3:1', w2k: '2304x768', w4k: '2304x768' },
 ];
 
-/** GPT 2.5: dimensions are independent of rendering quality; max 8,294,400 pixels. */
+/** GPT 2.5 / 2.6: dimensions are independent of rendering quality; max 8,294,400 pixels. */
 export const GPT_25_SIZES = [
     { ratio: '1:1', label: '1:1', w2k: '2048x2048', w4k: '2880x2880' },
     { ratio: '4:3', label: '4:3', w2k: '2048x1536', w4k: '3264x2448' },
@@ -141,6 +168,7 @@ interface ModelConfig {
     useSeedreamProSizes?: boolean; // true = 使用 SEEDREAM_PRO_SIZES（* 分隔，總畫素 ≤2K）
     supportsBase64Output?: boolean; // 支援 enable_base64_output
     supportsTransparentBackground?: boolean;
+    supportsGpt26Features?: boolean; // complexity / GIF / SVG（GPT Image 2.6）
     supportsQualityParam?: boolean; // 支援 quality: low/medium/high（GPT Image 2）
     supportsSeed?: boolean;         // 支援 seed 種子碼（OpenAI gpt-image 系列不支援）
     extraParams?: Record<string, unknown>; // 固定附加參數
@@ -180,6 +208,40 @@ const MODEL_CONFIGS: Record<AtlasGenerationModel, ModelConfig> = {
         supportsQualityParam: true,
         extraParams: { output_format: 'png', n: 1 },
         img2imgId: 'openai/gpt-image-2.5-flare/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
+        maxReferenceImages: 16,
+    },
+    'gpt-image-2.6-sunburst': {
+        id: 'openai/gpt-image-2.6-sunburst/text-to-image',
+        predictionPath: 'prediction',
+        supportsGpt26Features: true,
+        supportsTransparentBackground: true,
+        useGpt25Sizes: true,
+        useInputWrapper: false,
+        sizeParam: 'size',
+        useGptSizes: true,
+        supportsQualityParam: true,
+        extraParams: { output_format: 'png', n: 1 },
+        img2imgId: 'openai/gpt-image-2.6-sunburst/edit',
+        img2imgUseInputWrapper: false,
+        img2imgImageParam: 'images',
+        img2imgImageIsArray: true,
+        maxReferenceImages: 16,
+    },
+    'gpt-image-2.6-flare': {
+        id: 'openai/gpt-image-2.6-flare/text-to-image',
+        predictionPath: 'prediction',
+        supportsGpt26Features: true,
+        supportsTransparentBackground: true,
+        useGpt25Sizes: true,
+        useInputWrapper: false,
+        sizeParam: 'size',
+        useGptSizes: true,
+        supportsQualityParam: true,
+        extraParams: { output_format: 'png', n: 1 },
+        img2imgId: 'openai/gpt-image-2.6-flare/edit',
         img2imgUseInputWrapper: false,
         img2imgImageParam: 'images',
         img2imgImageIsArray: true,
@@ -305,7 +367,9 @@ async function blobToBase64(blob: Blob, fallback: string): Promise<string> {
         const mime = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
             ? 'image/png' : bytes[0] === 0xff && bytes[1] === 0xd8 ? 'image/jpeg'
             : String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
-                ? 'image/webp' : null;
+                ? 'image/webp'
+                : String.fromCharCode(...bytes.slice(0, 4)) === 'GIF8' ? 'image/gif'
+                : /^\s*<(\?xml|svg)/i.test(await blob.slice(0, 256).text()) ? 'image/svg+xml' : null;
         if (!mime) return fallback;
         blob = new Blob([blob], { type: mime });
     }
@@ -502,7 +566,36 @@ interface AtlasCallOptions {
     transparentBackground?: boolean; // 原生透明輸出（僅支援的模型送出）
     keepAlpha?: boolean;     // 壓縮時使用 PNG 保留 alpha（預設 JPEG 會破壞透明）
     seed?: number;           // 鎖定隨機種子碼以利批次風格一致
-    outputFormat?: 'jpeg' | 'png';
+    outputFormat?: 'jpeg' | 'png' | 'gif' | 'svg';
+    /** GPT 2.6：模型渲染前的規劃程度；不給 = 模型預設（high） */
+    complexity?: 'low' | 'medium' | 'high';
+    gifFrameCount?: number;
+    gifFrameDurationMs?: number;
+}
+
+/** 這次請求是否真的會輸出 GIF（模型不支援時視同一般圖片）。 */
+const wantsGif = (config: ModelConfig, options?: AtlasCallOptions) =>
+    !!config.supportsGpt26Features && options?.outputFormat === 'gif';
+
+/** GPT 2.6 專屬參數；不支援的模型一律不送，避免多餘欄位。 */
+function applyGpt26Options(config: ModelConfig, extra: Record<string, unknown>, options: AtlasCallOptions | undefined, isEdit: boolean) {
+    if (!config.supportsGpt26Features) {
+        if (extra['output_format'] === 'gif' || extra['output_format'] === 'svg') extra['output_format'] = 'png';
+        return;
+    }
+    if (options?.complexity) extra['complexity'] = options.complexity;
+    if (options?.outputFormat === 'gif') {
+        const frames = Math.round(Math.max(2, Math.min(64, options.gifFrameCount ?? 9)));
+        extra['output_format'] = 'gif';
+        extra['frame_count'] = frames;
+        extra['frame_duration_ms'] = Math.round(Math.max(20, Math.min(2000, options.gifFrameDurationMs ?? 200)) / 10) * 10;
+        delete extra['background']; // GIF 不支援透明背景
+        if (config.sizeParam) extra[config.sizeParam] = (frames <= 9 && GIF_FRAME_SIZES[options.ratio ?? '']) || 'auto';
+    } else if (options?.outputFormat === 'svg') {
+        // SVG 只有文生圖端點支援，且一次一張；編輯端點改回 PNG
+        extra['output_format'] = isEdit ? 'png' : 'svg';
+        if (!isEdit) extra['n'] = 1;
+    }
 }
 
 function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
@@ -511,7 +604,7 @@ function qualityToGpt(q?: '2K' | '4K'): 'low' | 'medium' | 'high' {
 
 function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOptions) {
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
-    if (config.supportsTransparentBackground && options?.transparentBackground) {
+    if (config.supportsTransparentBackground && options?.transparentBackground && !wantsGif(config, options)) {
         extra.background = 'transparent';
         prompt += NATIVE_ALPHA_PROMPT;
     }
@@ -530,6 +623,7 @@ function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOp
     } else if (options?.outputFormat) {
         extra['output_format'] = options.outputFormat;
     }
+    applyGpt26Options(config, extra, options, false);
     // 僅支援 seed 的模型才送；OpenAI gpt-image 系列沒有此參數，送了是多餘欄位。
     if (options?.seed !== undefined && config.supportsSeed) {
         extra['seed'] = options.seed;
@@ -585,7 +679,7 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
     const isArray  = config.img2imgImageIsArray ?? true;
     const imgValue = isArray ? images : images[0];
     const extra: Record<string, unknown> = { ...(config.extraParams ?? {}) };
-    if (config.supportsTransparentBackground && options?.transparentBackground) {
+    if (config.supportsTransparentBackground && options?.transparentBackground && !wantsGif(config, options)) {
         extra.background = 'transparent';
         prompt += NATIVE_ALPHA_PROMPT;
     }
@@ -604,6 +698,7 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
     } else if (options?.outputFormat) {
         extra['output_format'] = options.outputFormat;
     }
+    applyGpt26Options(config, extra, options, true);
     // 僅支援 seed 的模型才送；OpenAI gpt-image 系列沒有此參數，送了是多餘欄位。
     if (options?.seed !== undefined && config.supportsSeed) {
         extra['seed'] = options.seed;
@@ -824,6 +919,62 @@ async function createTransparentMaskedImage(imageBase64: string, maskBase64: str
 }
 
 /**
+ * 標記編輯（GPT Image 2.6）：不挖洞，改送一張透明的標記層（圈、箭頭、草圖）
+ * 指出要改哪裡，改什麼由 prompt 說明。標記層必須與第一張圖同尺寸，且不能與 mask 併用。
+ * 比起塗滿遮罩，使用者只要隨手圈一下；代價是實際修改範圍由模型判斷。
+ */
+export async function callAtlasMarkupEdit(
+    prompt: string,
+    imageBase64: string,
+    markupBase64: string,   // 透明底 + 不透明筆畫，尺寸不拘（這裡會對齊主圖）
+    atlasKey: string,
+    referenceImages: string[] | undefined,
+    size: string | undefined,
+    model: 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare',
+    signal?: AbortSignal,
+): Promise<string> {
+    const config = MODEL_CONFIGS[model];
+    const mainImage = await compressForAtlas(imageBase64, 1536, 1, true, true);
+    // 標記層對齊「壓縮後」的主圖像素尺寸，否則 API 會因尺寸不符而拒絕
+    const markup = await new Promise<string>((resolve, reject) => {
+        const main = new Image();
+        main.onload = () => {
+            const layer = new Image();
+            layer.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = main.naturalWidth;
+                canvas.height = main.naturalHeight;
+                canvas.getContext('2d')!.drawImage(layer, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            layer.onerror = () => reject(new Error('標記圖層讀取失敗'));
+            layer.src = markupBase64;
+        };
+        main.onerror = () => reject(new Error('圖片讀取失敗'));
+        main.src = mainImage;
+    });
+    const references = await Promise.all((referenceImages ?? []).filter(Boolean).slice(0, 9).map(image =>
+        image.startsWith('http') ? image : compressForAtlas(image, 1536, 0.9, false, true)));
+
+    const body: Record<string, unknown> = {
+        model: config.img2imgId,
+        prompt: `${prompt} The markup layer contains hand-drawn red strokes (circles, arrows or scribbles) that only indicate WHERE to apply this change. ` +
+            `Apply the edit at the marked location only and keep every other part of the image unchanged. ` +
+            `The red strokes are instructions, not content — never render them in the output.`,
+        images: [mainImage, ...references],
+        markup,
+        quality: 'medium',
+        output_format: 'png',
+        complexity: 'low',
+        ...(size ? { size } : {}),
+    };
+    const predId = await postGeneration(body, atlasKey);
+    const results = await pollPrediction(predId, atlasKey, signal, config.predictionPath);
+    if (!results[0]) throw new Error('Atlas 標記編輯未回傳圖片');
+    return results[0];
+}
+
+/**
  * Inpainting via GPT Image 2 Edit
  * 策略：遮罩區域設透明 → 送 GPT Image 2 Edit（原生支援透明遮罩 inpainting）
  * mask: B&W 圖（白=填充區域、黑=保留區域）
@@ -837,7 +988,8 @@ export async function callAtlasInpaint(
     surroundingContext?: string,
     signal?: AbortSignal,    // ← 傳入後可中止輪詢
     size?: string,           // ← 指定輸出尺寸（外擴必填，e.g. '1024x1536'）；同尺寸 inpaint 可省略
-    model: 'gpt-image-2' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' = 'gpt-image-2',
+    model: 'gpt-image-2' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare' = 'gpt-image-2',
+    complexity?: 'low' | 'medium' | 'high', // GPT 2.6：聚焦的局部編輯用 low 較快、也較不會動到洞外
 ): Promise<string> {
     const config = MODEL_CONFIGS[model];
     const nativeMask = atlasModelSupportsTransparency(model);
@@ -895,6 +1047,7 @@ export async function callAtlasInpaint(
         quality: 'medium',
         output_format: 'png',
         ...(size ? { size } : {}),
+        ...(config.supportsGpt26Features && complexity ? { complexity } : {}),
     };
     const predId = await postGeneration(body, atlasKey);
     const results = await pollPrediction(predId, atlasKey, signal, config.predictionPath);

@@ -3,7 +3,7 @@ import { analyzeImagePrompt } from '../utils/ImageAnalysisService';
 import { downloadImageAsBase64 } from '../utils/atlasImage';
 import { cacheImage } from '../utils/imageCache';
 import { birefnetRemoveBg } from '../utils/geminiLayer';
-import { gptLayerSegment, type MagicLayerOptions } from '../utils/gptLayerSplit';
+import { DEFAULT_MAGIC_LAYER_OPTIONS, gptLayerSegment, magicLayerNeedsBackground, type MagicLayerModel, type MagicLayerOptions } from '../utils/gptLayerSplit';
 import type { LayerResult } from '../utils/falImage';
 import { detectTextBlocks } from '../utils/ocrService';
 import { splitStickerCollectionDetailed } from '../utils/imageProcessing';
@@ -14,6 +14,33 @@ type ElementSetter = (
   updater: CanvasElement[] | ((prev: CanvasElement[]) => CanvasElement[]),
   options?: { addToHistory?: boolean }
 ) => void;
+
+/** 魔法分層圖層在畫布上的尺寸與落點（相對原圖）。首次放置與單層重做共用，確保兩邊算法一致。 */
+const computeMagicLayerBox = (layer: LayerResult, srcW: number, srcH: number, preservePosition: boolean) => {
+  const bboxX = layer.bbox?.x ?? layer.cropRatioX;
+  const bboxY = layer.bbox?.y ?? layer.cropRatioY;
+  const bboxRatioW = layer.bboxW ?? layer.cropRatioW;
+  const bboxRatioH = layer.bboxH ?? layer.cropRatioH;
+  const unionLeft = Math.max(0, Math.min(bboxX, layer.cropRatioX));
+  const unionTop = Math.max(0, Math.min(bboxY, layer.cropRatioY));
+  const unionRight = Math.min(1, Math.max(bboxX + bboxRatioW, layer.cropRatioX + layer.cropRatioW));
+  const unionBottom = Math.min(1, Math.max(bboxY + bboxRatioH, layer.cropRatioY + layer.cropRatioH));
+  const naturalRatio = layer.pixelWidth && layer.pixelHeight ? layer.pixelWidth / layer.pixelHeight : layer.cropRatioH > 0 ? layer.cropRatioW / layer.cropRatioH : 1;
+  const bboxW = Math.max(1, (unionRight - unionLeft) * srcW);
+  const bboxH = Math.max(1, (unionBottom - unionTop) * srcH);
+  let width = Math.round(layer.cropRatioW * srcW);
+  let height = Math.round(width / naturalRatio);
+  if (preservePosition) {
+      width = bboxW;
+      height = width / naturalRatio;
+      if (height > bboxH) { height = bboxH; width = height * naturalRatio; }
+  }
+  return {
+      width, height, unionLeft, unionTop, bboxW, bboxH,
+      centerRX: (unionLeft + unionRight) / 2,
+      centerRY: (unionTop + unionBottom) / 2,
+  };
+};
 
 export const useAppAiActions = ({
   elements,
@@ -83,7 +110,8 @@ export const useAppAiActions = ({
 
 
   // --- 魔法分層：語意提取 + 背景補圖（GPT Image 2 優先；無 Atlas Key 降級 Gemini）---
-  const handleMagicLayer = useCallback(async (elementId: string, options: MagicLayerOptions) => {
+  const handleMagicLayer = useCallback(async (elementId: string, requestedOptions: MagicLayerOptions) => {
+      let options = requestedOptions;
       const el = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
       if (!el) return;
 
@@ -103,8 +131,14 @@ export const useAppAiActions = ({
           showToast('⚠️ 找不到已確認的分層規劃，請重新分析');
           return;
       }
+      // 透明底的原圖沒有背景可補：直接略過背景層，不佔一次生成、也不會多出一張白底。
+      if (options.includeBackground && !(await magicLayerNeedsBackground(el.src, plan.layers))) {
+          options = { ...options, includeBackground: false };
+          if (plan.layers.length === 0) { showToast('⚠️ 原圖為透明背景且沒有前景圖層，沒有可拆的內容'); return; }
+          showToast('ℹ️ 原圖為透明背景，已略過背景圖層');
+      }
       setIsGenerating(true);
-      const modeLabel = selectedModel === 'gpt-image-2.5-sunburst' ? 'GPT Image 2.5 Sunburst' : selectedModel === 'gpt-image-2.5-flare' ? 'GPT Image 2.5 Flare' : selectedModel === 'seedream-v5-pro' ? '即夢 Seedream 5.0 Pro' : selectedModel === 'gpt-image-2' ? 'GPT Image 2' : 'Gemini';
+      const modeLabel = selectedModel === 'gpt-image-2.6-sunburst' ? 'GPT Image 2.6 Sunburst' : selectedModel === 'gpt-image-2.6-flare' ? 'GPT Image 2.6 Flare' : selectedModel === 'gpt-image-2.5-sunburst' ? 'GPT Image 2.5 Sunburst' : selectedModel === 'gpt-image-2.5-flare' ? 'GPT Image 2.5 Flare' : selectedModel === 'seedream-v5-pro' ? '即夢 Seedream 5.0 Pro' : selectedModel === 'gpt-image-2' ? 'GPT Image 2' : 'Gemini';
       showToast(`✨ 魔法分層啟動中（${modeLabel}）...`);
 
       const taskIds = [...(options.includeBackground ? ['background'] : []), ...plan.layers.map(layer => layer.id)];
@@ -132,6 +166,7 @@ export const useAppAiActions = ({
           zIndex: batchBaseZ + index,
           name: taskId === 'background' ? '背景處理中' : `${plan.layers.find(layer => layer.id === taskId)?.label || '圖層'}處理中`,
           isLocked: true,
+          magicLayer: undefined,
       }));
       pauseAutoSave();
       setElements(prev => [...prev, ...placeholders]);
@@ -144,29 +179,27 @@ export const useAppAiActions = ({
       const createLayerElement = (taskId: string, layer: LayerResult): ImageElement => {
           const index = taskIndex.get(taskId) ?? 0;
           const isBackground = !!layer.isBackground;
-          const bboxX = layer.bbox?.x ?? layer.cropRatioX;
-          const bboxY = layer.bbox?.y ?? layer.cropRatioY;
-          const bboxRatioW = layer.bboxW ?? layer.cropRatioW;
-          const bboxRatioH = layer.bboxH ?? layer.cropRatioH;
-          const unionLeft = Math.max(0, Math.min(bboxX, layer.cropRatioX));
-          const unionTop = Math.max(0, Math.min(bboxY, layer.cropRatioY));
-          const unionRight = Math.min(1, Math.max(bboxX + bboxRatioW, layer.cropRatioX + layer.cropRatioW));
-          const unionBottom = Math.min(1, Math.max(bboxY + bboxRatioH, layer.cropRatioY + layer.cropRatioH));
-          const naturalRatio = layer.pixelWidth && layer.pixelHeight ? layer.pixelWidth / layer.pixelHeight : layer.cropRatioH > 0 ? layer.cropRatioW / layer.cropRatioH : 1;
-          const bboxW = Math.max(1, (unionRight - unionLeft) * el.width);
-          const bboxH = Math.max(1, (unionBottom - unionTop) * el.height);
-          let width = isBackground ? el.width : Math.round(layer.cropRatioW * el.width);
-          let height = isBackground ? el.height : Math.round(width / naturalRatio);
-          if (!isBackground && options.preservePosition) {
-              width = bboxW;
-              height = width / naturalRatio;
-              if (height > bboxH) { height = bboxH; width = height * naturalRatio; }
-          }
+          const box = computeMagicLayerBox(layer, el.width, el.height, options.preservePosition);
+          const { unionLeft, unionTop, bboxW, bboxH } = box;
+          const width = isBackground ? el.width : box.width;
+          const height = isBackground ? el.height : box.height;
           const gridColumn = index % 3;
           const gridRow = Math.floor(index / 3);
           const x = isBackground ? layerAreaLeft + el.width / 2 : options.preservePosition ? layerAreaLeft + unionLeft * el.width + bboxW / 2 : layerAreaLeft + gridColumn * (el.width * 0.38) + width / 2;
           const y = isBackground ? (options.autoArrange ? el.position.y : layerAreaTop + el.height / 2) : options.preservePosition ? layerAreaTop + unionTop * el.height + bboxH / 2 : layerAreaTop + gridRow * (el.height * 0.38) + height / 2;
-          return { ...el, id: placeholderIds.get(taskId)!, src: layer.base64, position: { x, y }, width, height, zIndex: batchBaseZ + index, name: layer.name ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name) : `圖層 ${index + 1}`, isLocked: false };
+          return { ...el, id: placeholderIds.get(taskId)!, src: layer.base64, position: { x, y }, width, height, zIndex: batchBaseZ + index, name: layer.name ? (layer.category ? `[${layer.category}] ${layer.name}` : layer.name) : `圖層 ${index + 1}`, isLocked: false,
+              magicLayer: {
+                  sourceId: el.id,
+                  model: selectedModel,
+                  highPrecisionEdge: options.highPrecisionEdge,
+                  preservePosition: options.preservePosition,
+                  isBackground,
+                  items: isBackground ? plan.layers : plan.layers.filter(item => item.id === taskId),
+                  placedWidth: width,
+                  centerRX: !isBackground && options.preservePosition ? box.centerRX : undefined,
+                  centerRY: !isBackground && options.preservePosition ? box.centerRY : undefined,
+              },
+          };
       };
 
       try {
@@ -218,6 +251,83 @@ export const useAppAiActions = ({
           setGeneratingLabels({});
       }
   }, [atlasApiKey, effectiveApiKey, falApiKey, imageModel, generationModel, elements, setElements, showToast, setShowKeyModal, setIsGenerating, setGeneratingElementIds, setGeneratingLabels, pauseAutoSave, resumeAutoSave]);
+
+  // --- 魔法分層：只重做其中一層（其他層與使用者之後的搬移、縮放都不動）---
+  const handleRedoMagicLayer = useCallback(async (elementId: string) => {
+      const layerEl = elements.find(e => e.id === elementId && e.type === 'image') as ImageElement | undefined;
+      const info = layerEl?.magicLayer;
+      if (!layerEl || !info || info.items.length === 0) return;
+      const source = elements.find(e => e.id === info.sourceId && e.type === 'image') as ImageElement | undefined;
+      if (!source) { showToast('⚠️ 找不到分層前的原圖（可能已刪除），無法重做此圖層'); return; }
+      const model = info.model as MagicLayerModel;
+      if (model !== 'gemini' && !atlasApiKey) { showToast('⚠️ 此分層模型需要 Atlas Cloud Key'); setShowKeyModal(true); return; }
+      if (!effectiveApiKey) { showToast('⚠️ 重做圖層需要 Gemini API Key'); setShowKeyModal(true); return; }
+
+      const label = info.isBackground ? '背景' : info.items[0].label;
+      setIsGenerating(true);
+      setGeneratingElementIds([elementId]);
+      setGeneratingLabels({ [elementId]: '重做中' });
+      showToast(`↻ 重做圖層「${label}」...`);
+      pauseAutoSave();
+      try {
+          const layers = await gptLayerSegment(
+              source.src,
+              effectiveApiKey,
+              model === 'gemini' ? undefined : atlasApiKey || undefined,
+              falApiKey || undefined,
+              (msg) => showToast(msg),
+              imageModel,
+              model === 'gemini' ? 'gpt-image-2' : model,
+              {
+                  ...DEFAULT_MAGIC_LAYER_OPTIONS,
+                  model,
+                  highPrecisionEdge: !!info.highPrecisionEdge,
+                  includeBackground: !!info.isBackground,
+                  backgroundOnly: !!info.isBackground,
+                  plan: { detectedObjectCount: info.items.length, targetForegroundCount: info.items.length, layers: info.items },
+              },
+          );
+          const result = layers.find(layer => !!layer.isBackground === !!info.isBackground);
+          if (!result) throw new Error('未收到圖層');
+          setElements(prev => prev.map(item => {
+              if (item.id !== elementId || item.type !== 'image') return item;
+              if (info.isBackground) return { ...item, src: result.base64 };
+              const preserve = info.preservePosition !== false;
+              const box = computeMagicLayerBox(result, source.width, source.height, preserve);
+              // 使用者在分層後可能縮放過這一層：沿用同樣的倍率，並依新舊裁切中心的差距微調位置。
+              const userScale = info.placedWidth ? item.width / info.placedWidth : 1;
+              const hasCenter = preserve && info.centerRX !== undefined && info.centerRY !== undefined;
+              const position = hasCenter
+                  ? {
+                      x: item.position.x + (box.centerRX - info.centerRX!) * source.width * userScale,
+                      y: item.position.y + (box.centerRY - info.centerRY!) * source.height * userScale,
+                  }
+                  : item.position;
+              return {
+                  ...item,
+                  src: result.base64,
+                  width: box.width * userScale,
+                  height: box.height * userScale,
+                  position,
+                  magicLayer: {
+                      ...info,
+                      placedWidth: box.width,
+                      centerRX: hasCenter ? box.centerRX : info.centerRX,
+                      centerRY: hasCenter ? box.centerRY : info.centerRY,
+                  },
+              };
+          }));
+          if (result.base64.startsWith('data:')) cacheImage(elementId, result.base64);
+          showToast(`✅ 圖層「${label}」已重做`);
+      } catch (e: any) {
+          showToast(`❌ 重做圖層失敗：${e.message?.slice(0, 60) || '未知錯誤'}`);
+      } finally {
+          resumeAutoSave();
+          setIsGenerating(false);
+          setGeneratingElementIds([]);
+          setGeneratingLabels({});
+      }
+  }, [atlasApiKey, effectiveApiKey, falApiKey, imageModel, elements, setElements, showToast, setShowKeyModal, setIsGenerating, setGeneratingElementIds, setGeneratingLabels, pauseAutoSave, resumeAutoSave]);
 
   // --- OCR 文字辨識轉換 ---
   const handleOCRConvert = useCallback(async (elementId: string) => {
@@ -530,6 +640,7 @@ export const useAppAiActions = ({
   return {
     handleBiRefNetRemoveBackground,
     handleMagicLayer,
+    handleRedoMagicLayer,
     handleOCRConvert,
     handleSplitSticker,
     handleExtractPrompt,

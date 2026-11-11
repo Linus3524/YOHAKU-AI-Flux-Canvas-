@@ -13,7 +13,7 @@ import {
     checkCompositionSimilarity
 } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
-import { atlasModelSupportsTransparency, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type GptImageQuality, type AtlasGenerationModel } from '../utils/atlasImage';
+import { DEFAULT_GPT_ADVANCED, atlasModelSupportsGpt26Features, type GptAdvancedOptions, atlasModelSupportsTransparency, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type GptImageQuality, type AtlasGenerationModel } from '../utils/atlasImage';
 import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
 import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
 import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
@@ -99,6 +99,7 @@ export const useAI = ({ elements, setElements, selectedElementIds, showToast, se
     const [imageAspectRatio, setImageAspectRatio] = useState<string>('Original');
     const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('1K');
     const [gptQuality, setGptQuality] = useState<GptImageQuality>('medium');
+    const [gptAdvanced, setGptAdvanced] = useState<GptAdvancedOptions>(DEFAULT_GPT_ADVANCED);
     const [preserveTransparency, setPreserveTransparency] = useState(false);
     const [useCustomSeed, setUseCustomSeed] = useState<boolean>(false);
     const [customSeedValue, setCustomSeedValue] = useState<number | ''>('');
@@ -639,7 +640,7 @@ CONSTRAINTS:
         }
     }, [elements]);
 
-    const handleOutpaintingGenerate = useCallback(async (prompt: string, model: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' = 'gemini') => {
+    const handleOutpaintingGenerate = useCallback(async (prompt: string, model: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare' = 'gemini') => {
         if (!outpaintingState) return;
         const { element, frame } = outpaintingState;
 
@@ -726,7 +727,7 @@ CONSTRAINTS:
                     ? prompt.trim()
                     : 'Naturally extend and continue the existing scene outward into the surrounding area — keep the same lighting, color palette, perspective, depth and artistic style so it looks like one continuous photograph.';
                 const resultSrc = model !== 'seedream-v5-pro'
-                    ? await withAtlasWaitToast(() => callAtlasInpaint(outPrompt, compositeB64, maskB64, atlasApiKey!, undefined, undefined, undefined, `${outW}x${outH}`, model === 'gpt' ? 'gpt-image-2' : model as 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare'))
+                    ? await withAtlasWaitToast(() => callAtlasInpaint(outPrompt, compositeB64, maskB64, atlasApiKey!, undefined, undefined, undefined, `${outW}x${outH}`, model === 'gpt' ? 'gpt-image-2' : model as 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare'))
                     : (await withAtlasWaitToast(() => callAtlasImg2Img(
                         `${outPrompt} Extend only the transparent outer area. Preserve the existing subject and all visible details exactly.`,
                         'seedream-v5-pro', atlasApiKey!, compositeB64, 1,
@@ -1078,7 +1079,10 @@ CONSTRAINTS:
             const hasNoteRefs = noteRefImgs.length > 0;
             const canDoImg2Img = atlasModelSupportsImg2Img(atlasModel);
             // 引擎葉子統一走 src/ai/pipelines/generate.ts 的 atlasBatch
-            const atlasEngine = { gptQuality, model: atlasModel, apiKey: atlasApiKey, wait: withAtlasWaitToast };
+            const atlasEngine = { gptQuality, advanced: gptAdvanced, model: atlasModel, apiKey: atlasApiKey, wait: withAtlasWaitToast };
+            if (atlasModelSupportsGpt26Features(atlasModel) && gptAdvanced.outputFormat === 'svg' && (hasImages || hasNoteRefs)) {
+                showToast('ℹ️ SVG 向量輸出只支援純文字生成；這次有參考圖，改以 PNG 輸出');
+            }
 
             // 畫框模式：每個畫框獨立生成並填入
             if (frameElements.length > 0) {
@@ -1442,7 +1446,7 @@ CONSTRAINTS:
           setGeneratingElementIds([]);
           setIsGenerating(false);
         }
-      }, [imageStyle, imageAspectRatio, imageSize, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, falApiKey, prepareForGeneration, restoreTransparencyFn, gptQuality]);
+      }, [gptAdvanced, imageStyle, imageAspectRatio, imageSize, preserveTransparency, setElements, showToast, setHasApiKey, apiKey, atlasApiKey, generationModelGlobal, falApiKey, prepareForGeneration, restoreTransparencyFn, gptQuality]);
 
     /**
      * 一鍵跨平台適配：1 張來源圖 → 依所選平台逐張重構（比例/安全區/智能擴圖）。
@@ -1783,6 +1787,8 @@ CONSTRAINTS:
         setImageSize,
         gptQuality,
         setGptQuality,
+        gptAdvanced,
+        setGptAdvanced,
         preserveTransparency,
         setPreserveTransparency,
         useCustomSeed,

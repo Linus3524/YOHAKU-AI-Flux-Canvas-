@@ -4,7 +4,7 @@ import type { Point, CanvasElement, ImageElement, ShapeType, ShapeElement } from
 import type { AlignMode } from '../hooks/useCanvas';
 import type { OutpaintingState } from '../types';
 import { AppearancePanel } from './AppearancePanel';
-import { GPT_IMAGE_QUALITIES, type GptImageQuality, atlasModelSupportsTransparency, getModelSizes } from '../utils/atlasImage';
+import { GPT_IMAGE_QUALITIES, type GptAdvancedOptions, type GptComplexity, type GptImageQuality, type GptOutputFormat, atlasModelSupportsGpt26Features, atlasModelSupportsTransparency, getModelSizes } from '../utils/atlasImage';
 import { Icon } from './Icon';
 import { OutpaintingFrame, DraggableOutpaintingPanel } from './OutpaintingFrame';
 import { CropManager } from './CropManager';
@@ -33,6 +33,8 @@ interface InfiniteCanvasProps {
   onSetImageAspectRatio: (ratio: string) => void;
   gptQuality: GptImageQuality;
   onSetGptQuality: (quality: GptImageQuality) => void;
+  gptAdvanced: GptAdvancedOptions;
+  onSetGptAdvanced: (options: GptAdvancedOptions) => void;
   imageSize: '1K' | '2K' | '4K';
   onSetImageSize: (size: '1K' | '2K' | '4K') => void;
   preserveTransparency: boolean;
@@ -44,7 +46,7 @@ interface InfiniteCanvasProps {
   outpaintingState: OutpaintingState | null;
   onUpdateOutpaintingFrame: (newFrame: { position: Point; width: number; height: number; }) => void;
   onCancelOutpainting: () => void;
-  onOutpaintingGenerate: (prompt: string, model: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare') => void;
+  onOutpaintingGenerate: (prompt: string, model: 'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare') => void;
   onAutoPromptGenerate: (state: OutpaintingState) => Promise<string>;
   stylePresets: { id: string, name: string, label: string }[];
   onCameraAngle: (prompt: string) => void;
@@ -242,6 +244,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   imageSize,
   onSetImageSize,
   gptQuality,
+  gptAdvanced,
+  onSetGptAdvanced,
   onSetGptQuality,
   preserveTransparency,
   onSetPreserveTransparency,
@@ -298,7 +302,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
   const [outpaintingPrompt, setOutpaintingPrompt] = useState('');
   const [isAutoPrompting, setIsAutoPrompting] = useState(false);
-  const [outpaintModel, setOutpaintModel] = useState<'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare'>(hasAtlasKey ? 'gpt' : 'gemini');
+  const [outpaintModel, setOutpaintModel] = useState<'gemini' | 'gpt' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare'>(hasAtlasKey ? 'gpt' : 'gemini');
   
   const [menuOffset, setMenuOffset] = useState<Point>({ x: 20, y: 0 }); 
   const [isDraggingMenu, setIsDraggingMenu] = useState(false);
@@ -1322,6 +1326,8 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                             { id: 'gpt-image-2', label: 'GPT Image 2', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'gpt-image-2.5-sunburst', label: 'GPT Image 2.5 Sunburst', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'gpt-image-2.5-flare', label: 'GPT Image 2.5 Flare', badge: 'Atlas Cloud', needsAtlas: true },
+                                            { id: 'gpt-image-2.6-sunburst', label: 'GPT Image 2.6 Sunburst', badge: 'Atlas Cloud', needsAtlas: true },
+                                            { id: 'gpt-image-2.6-flare', label: 'GPT Image 2.6 Flare', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'flux-2-pro', label: 'FLUX.2 Pro', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'seedream-v4.5', label: '即夢 Seedream v4.5', badge: 'Atlas Cloud', needsAtlas: true },
                                             { id: 'seedream-v5', label: '即夢 Seedream v5 Lite', badge: 'Atlas Cloud', needsAtlas: true },
@@ -1585,6 +1591,56 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                             </select>
                                             <p className="text-[10px] text-gray-400">品質與像素尺寸分開設定；較高品質可能增加耗時與費用。尺寸請在「輸出比例」選擇。</p>
                                             {imageSize === '4K' && <p className="text-[10px] text-amber-600">超過 2560×1440 的解析度屬實驗性支援；實際像素依比例顯示。</p>}
+                                        </div>
+                                    )}
+
+                                    {atlasModelSupportsGpt26Features(generationModel) && (
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-[11px] font-medium text-gray-500">輸出格式</label>
+                                            <div className="flex bg-[#f1f5f9] p-1 rounded-lg gap-1">
+                                                {([['png', '圖片'], ['gif', 'GIF 動圖'], ['svg', 'SVG 向量']] as Array<[GptOutputFormat, string]>).map(([format, label]) => (
+                                                    <button
+                                                        key={format}
+                                                        type="button"
+                                                        onClick={() => onSetGptAdvanced({ ...gptAdvanced, outputFormat: format })}
+                                                        className={`flex-1 rounded-md py-1.5 text-[12px] font-medium transition-colors ${gptAdvanced.outputFormat === format ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {gptAdvanced.outputFormat === 'gif' && (
+                                                <>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <label className="flex flex-col gap-1 text-[10px] text-gray-500">
+                                                            影格數（2–64）
+                                                            <input type="number" min={2} max={64} value={gptAdvanced.gifFrameCount}
+                                                                onChange={e => onSetGptAdvanced({ ...gptAdvanced, gifFrameCount: Math.max(2, Math.min(64, Math.round(Number(e.target.value) || 9))) })}
+                                                                className="w-full min-w-0 rounded-lg border border-gray-200 bg-[#f8fafc] px-2 py-1.5 text-[13px] text-gray-700" />
+                                                        </label>
+                                                        <label className="flex flex-col gap-1 text-[10px] text-gray-500">
+                                                            每格毫秒（20–2000）
+                                                            <input type="number" min={20} max={2000} step={10} value={gptAdvanced.gifFrameDurationMs}
+                                                                onChange={e => onSetGptAdvanced({ ...gptAdvanced, gifFrameDurationMs: Math.max(20, Math.min(2000, Math.round(Number(e.target.value) || 200))) })}
+                                                                className="w-full min-w-0 rounded-lg border border-gray-200 bg-[#f8fafc] px-2 py-1.5 text-[13px] text-gray-700" />
+                                                        </label>
+                                                    </div>
+                                                    <p className="text-[10px] text-gray-400">在提示詞描述主體、動作與如何循環。選取圖片再生成＝把那張圖做成動圖。約 {((gptAdvanced.gifFrameCount * gptAdvanced.gifFrameDurationMs) / 1000).toFixed(1)} 秒一輪；GIF 不支援透明背景，單格尺寸較小（9 格以內約 512–960px，更多格由模型自動決定）。右鍵「下載圖片」可存成 .gif。</p>
+                                                </>
+                                            )}
+                                            {gptAdvanced.outputFormat === 'svg' && (
+                                                <p className="text-[10px] text-gray-400">輸出可編輯路徑的向量檔，適合 Logo、圖示、簡單插圖。只支援純文字生成（有參考圖時會改回 PNG）；費用含參考圖與向量轉寫兩段。右鍵「下載圖片」可存成 .svg。</p>
+                                            )}
+                                            <label htmlFor="gpt-image-complexity" className="mt-1 text-[11px] font-medium text-gray-500">構圖規劃（Complexity）</label>
+                                            <select id="gpt-image-complexity" value={gptAdvanced.complexity}
+                                                onChange={e => onSetGptAdvanced({ ...gptAdvanced, complexity: e.target.value as GptComplexity })}
+                                                className="w-full min-w-0 max-w-full rounded-lg border border-gray-200 bg-[#f8fafc] px-3 py-2 text-[13px] text-gray-700">
+                                                <option value="auto">自動（模型預設＝高）</option>
+                                                <option value="low">低 · 最快，適合小改動</option>
+                                                <option value="medium">中 · 平衡</option>
+                                                <option value="high">高 · 密集文字與複雜版面</option>
+                                            </select>
+                                            <p className="text-[10px] text-gray-400">模型下筆前「想多久」，與品質（細節精細度）是兩件事，不另外計費。換背景、換 Logo 這類單點修改用低；海報、多元素、文字多的版面用中或高。</p>
                                         </div>
                                     )}
 

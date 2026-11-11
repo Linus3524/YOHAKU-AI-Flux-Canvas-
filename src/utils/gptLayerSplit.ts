@@ -20,8 +20,19 @@ import { triangulationMatte, isMatteTrustworthy, isCleanWhitePlate } from './tri
 import { trimTransparentPixels, LayerResult } from './falImage';
 import { detectBackgroundColor } from './imageProcessing';
 
-export type MagicLayerModel = 'gemini' | 'gpt-image-2' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare';
+export type MagicLayerModel = 'gemini' | 'gpt-image-2' | 'seedream-v5-pro' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare';
 export type MagicLayerGroupingStrategy = 'smart' | 'separate' | 'category' | 'custom';
+
+/** 規劃層內的原子物件。保留下來才能在面板上把一層「拆開」回各個成員。 */
+export interface MagicLayerMember {
+    label: string;
+    labelEn: string;
+    category: 'SUBJECT' | 'PRODUCT' | 'OBJECTS' | 'DECOR' | 'TEXT';
+    bbox: { x: number; y: number; w: number; h: number };
+    description?: string;
+    bgColor: BgColorKey;
+    edgeComplexity: 'simple' | 'complex';
+}
 
 export interface MagicLayerPlanItem {
     id: string;
@@ -34,6 +45,8 @@ export interface MagicLayerPlanItem {
     groupReason: string;
     bgColor: BgColorKey;
     edgeComplexity: 'simple' | 'complex';
+    /** 組成這一層的原子物件（舊存檔可能沒有 → 視為單一成員）。 */
+    members?: MagicLayerMember[];
 }
 
 export interface MagicLayerPlan {
@@ -59,6 +72,8 @@ export interface MagicLayerOptions {
     highPrecisionEdge: boolean;
     /** 執行前確認過的 runtime plan，不進畫布存檔。 */
     plan?: MagicLayerPlan;
+    /** 單層重做用：只重跑背景補全，不提取任何前景層（plan.layers 僅用來告知要移除哪些物件）。 */
+    backgroundOnly?: boolean;
 }
 
 export interface MagicLayerExecutionCallbacks {
@@ -381,7 +396,7 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     }));
 }
 
-function unionObjectBboxes(objects: DetectedObject[]): DetectedObject['bbox'] {
+function unionObjectBboxes(objects: Array<{ bbox: DetectedObject['bbox'] }>): DetectedObject['bbox'] {
     const left = Math.min(...objects.map(object => object.bbox.x));
     const top = Math.min(...objects.map(object => object.bbox.y));
     const right = Math.max(...objects.map(object => object.bbox.x + object.bbox.w));
@@ -389,7 +404,7 @@ function unionObjectBboxes(objects: DetectedObject[]): DetectedObject['bbox'] {
     return { x: left, y: top, w: right - left, h: bottom - top };
 }
 
-function buildPlanItem(members: DetectedObject[], index: number, label?: string, reason?: string): MagicLayerPlanItem {
+function buildPlanItem(members: MagicLayerMember[], index: number, label?: string, reason?: string): MagicLayerPlanItem {
     const categoryPriority: Record<string, number> = { SUBJECT: 0, PRODUCT: 1, TEXT: 2, OBJECTS: 3, DECOR: 4 };
     const primary = [...members].sort((a, b) => (categoryPriority[a.category] ?? 5) - (categoryPriority[b.category] ?? 5))[0];
     return {
@@ -403,7 +418,129 @@ function buildPlanItem(members: DetectedObject[], index: number, label?: string,
         groupReason: reason?.trim() || (members.length === 1 ? '獨立物件' : '依目標層數合併'),
         bgColor: primary.bgColor,
         edgeComplexity: members.some(member => member.edgeComplexity === 'complex') ? 'complex' : 'simple',
+        members: members.map(member => ({
+            label: member.label,
+            labelEn: member.labelEn,
+            category: member.category,
+            bbox: member.bbox,
+            description: member.description,
+            bgColor: member.bgColor,
+            edgeComplexity: member.edgeComplexity,
+        })),
     };
+}
+
+// ── 規劃的手動編輯（面板用，純函式）──────────────────────────────────────────
+let planEditSeq = 0;
+const newPlanItemId = () => `layer_e${Date.now().toString(36)}_${++planEditSeq}`;
+
+function membersOfPlanItem(item: MagicLayerPlanItem): MagicLayerMember[] {
+    if (item.members?.length) return item.members;
+    return [{
+        label: item.label,
+        labelEn: item.labelEn,
+        category: item.category,
+        bbox: item.bbox,
+        description: item.description,
+        bgColor: item.bgColor,
+        edgeComplexity: item.edgeComplexity,
+    }];
+}
+
+/** 把多個規劃層合併成一層（成員全部保留，之後仍可拆開）。 */
+export function mergeMagicLayerPlanItems(items: MagicLayerPlanItem[]): MagicLayerPlanItem {
+    const merged = buildPlanItem(items.flatMap(membersOfPlanItem), 0, undefined, '手動合併');
+    return { ...merged, id: newPlanItemId() };
+}
+
+/** 把一層拆回各個成員；只有一個成員時原樣回傳。 */
+export function splitMagicLayerPlanItem(item: MagicLayerPlanItem): MagicLayerPlanItem[] {
+    const members = membersOfPlanItem(item);
+    if (members.length < 2) return [item];
+    return members.map(member => ({ ...buildPlanItem([member], 0, undefined, '手動拆開'), id: newPlanItemId() }));
+}
+
+/**
+ * 追加一層：使用者在預覽圖上拉框和／或輸入名稱，只針對那一個物件做辨識，
+ * 不重跑整張圖的盤點（重跑會把已調整好的規劃洗掉，也常常再漏一次同一個東西）。
+ */
+export async function describeMagicLayerRegion(
+    imageBase64: string,
+    apiKey: string,
+    request: { bbox?: { x: number; y: number; w: number; h: number }; hint?: string },
+): Promise<MagicLayerPlanItem> {
+    const hint = request.hint?.trim() ?? '';
+    const userBox = request.bbox;
+    if (!userBox && !hint) throw new Error('請在圖上拉框，或輸入要追加的物件名稱');
+
+    const clamp = (box: { x: number; y: number; w: number; h: number }) => {
+        const x = Math.max(0, Math.min(0.99, box.x ?? 0));
+        const y = Math.max(0, Math.min(0.99, box.y ?? 0));
+        return { x, y, w: Math.max(0.01, Math.min(1 - x, box.w ?? 1)), h: Math.max(0.01, Math.min(1 - y, box.h ?? 1)) };
+    };
+    const fallback = (): MagicLayerPlanItem => {
+        if (!userBox) throw new Error(`找不到「${hint}」，請改在圖上拉框指出位置`);
+        const label = hint || '自訂區域';
+        return {
+            ...buildPlanItem([{
+                label, labelEn: hint || 'the element inside the marked region', category: 'OBJECTS',
+                bbox: clamp(userBox), description: hint, bgColor: 'DARKGRAY', edgeComplexity: 'complex',
+            }], 0, label, '手動追加'),
+            id: newPlanItemId(),
+        };
+    };
+
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+        const mimeType = imageBase64.match(/data:(.*);base64/)?.[1] ?? 'image/png';
+        const target = userBox
+            ? `The user drew a rectangle at x=${userBox.x.toFixed(3)}, y=${userBox.y.toFixed(3)}, w=${userBox.w.toFixed(3)}, h=${userBox.h.toFixed(3)} (fractions of image width/height, origin top-left). Identify the ONE main element inside that rectangle${hint ? ` — the user calls it "${hint}"` : ''}. Return its tight bbox; it must stay inside or very close to the rectangle.`
+            : `Locate the ONE element the user calls "${hint}" and return its tight bbox.`;
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.1-flash-lite',
+            contents: { parts: [
+                { inlineData: { mimeType, data: cleanBase64 } },
+                { text: `You are adding one extra editable design layer to an existing layer plan.
+${target}
+Fields:
+- label: short Traditional Chinese name${hint ? ' (use the user\'s wording)' : ''}; labelEn: short English name.
+- category: SUBJECT (person/character), PRODUCT (hero product), OBJECTS (props), DECOR (shapes/icons/illustrations), TEXT (text/logo).
+- bbox: {x,y,w,h} fractions of image width/height, tightest box around the visible pixels.
+- bgColor: isolation background with maximum contrast against the element. Opaque elements: GREEN (warm or white/pale objects), BLUE (green/nature objects), RED (blue/cool objects), DARKGRAY (multicolored or unsure). TEXT: WHITE (dark/colored text), LIGHTGRAY (mixed), DARKGRAY (white/pale text). Never GREEN/BLUE/RED for TEXT.
+- edgeComplexity: "simple" (hard clean edges) or "complex" (hair, fur, glass, smoke).
+- description: 15-40 word English visual description usable as an image prompt.
+Return ONLY one JSON object, no markdown:
+{"label":"招牌","labelEn":"shop sign","category":"OBJECTS","bgColor":"GREEN","edgeComplexity":"simple","bbox":{"x":0.1,"y":0.1,"w":0.2,"h":0.1},"description":"..."}` },
+            ] },
+        });
+        const match = (response.text ?? '').replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').match(/\{[\s\S]*\}/);
+        if (!match) return fallback();
+        const raw = JSON.parse(match[0]) as Partial<MagicLayerMember>;
+        if (!raw.bbox && !userBox) return fallback();
+        let bbox = clamp(raw.bbox ?? userBox!);
+        if (userBox) {
+            // 模型回傳的框跑到使用者框外 → 以使用者拉的框為準
+            const ix = Math.max(0, Math.min(bbox.x + bbox.w, userBox.x + userBox.w) - Math.max(bbox.x, userBox.x));
+            const iy = Math.max(0, Math.min(bbox.y + bbox.h, userBox.y + userBox.h) - Math.max(bbox.y, userBox.y));
+            if ((ix * iy) / (bbox.w * bbox.h) < 0.6) bbox = clamp(userBox);
+        }
+        const categories = ['SUBJECT', 'PRODUCT', 'OBJECTS', 'DECOR', 'TEXT'];
+        const label = hint || raw.label?.trim() || '追加圖層';
+        const member: MagicLayerMember = {
+            label,
+            labelEn: raw.labelEn?.trim() || hint || 'element',
+            category: categories.includes(raw.category as string) ? raw.category! : 'OBJECTS',
+            bbox,
+            description: raw.description,
+            bgColor: (raw.bgColor && raw.bgColor in BG_COLOR_MAP) ? raw.bgColor : 'DARKGRAY',
+            edgeComplexity: raw.edgeComplexity === 'simple' ? 'simple' : 'complex',
+        };
+        return { ...buildPlanItem([member], 0, label, '手動追加'), id: newPlanItemId() };
+    } catch (error) {
+        console.warn('[magicLayer] describeMagicLayerRegion fallback:', error);
+        return fallback();
+    }
 }
 
 function fallbackLayerPlan(objects: DetectedObject[], targetCount: number): MagicLayerPlanItem[] {
@@ -1025,6 +1162,29 @@ const OCCLUSION_COMPLETION_HINT =
     `where a removed element used to be. Every pixel that is not the target object must be the exact solid background color, ` +
     `and every pixel of the target object must be fully painted — no gaps.`;
 
+/**
+ * 點名「已規劃成獨立圖層」的重疊物件。
+ * EXCLUSIVITY_HINT 只是泛稱「其他物件」，模型會把戴著的眼鏡、穿著的上衣當成主體的一部分
+ * 留下來（實測人物層還戴著眼鏡、穿著上衣，蘋果倒是移掉了）。規劃清單本身就是使用者的意圖：
+ * 某樣東西既然自成一層，就不該再出現在別層，被它蓋住的地方要補回來。
+ * 想讓它留在主體上 → 在面板把兩層合併即可。
+ */
+function buildSeparateLayersHint(target: DetectedObject, all: DetectedObject[]): string {
+    const overlaps = (a: DetectedObject['bbox'], b: DetectedObject['bbox']) =>
+        Math.min(a.x + a.w, b.x + b.w) > Math.max(a.x, b.x) && Math.min(a.y + a.h, b.y + b.h) > Math.max(a.y, b.y);
+    const others = all.filter(other => other.id !== target.id && overlaps(other.bbox, target.bbox)).slice(0, 12);
+    if (others.length === 0) return '';
+    const pct = (v: number) => Math.round(v * 100);
+    const list = others.map(other =>
+        `"${other.labelEn}" (${other.label}, around x ${pct(other.bbox.x)}%–${pct(other.bbox.x + other.bbox.w)}%, y ${pct(other.bbox.y)}%–${pct(other.bbox.y + other.bbox.h)}%)`,
+    ).join('; ');
+    return ` The following elements are extracted as their OWN separate layers, so they must NOT appear in this output at all, ` +
+        `even though they overlap, are worn by, held by, attached to or cover the target: ${list}. ` +
+        `Remove each of them completely and repaint the area it covered so the target looks as it would WITHOUT that element ` +
+        `(for example: removing eyewear reveals the eyes, brows and skin; removing clothing or an accessory reveals what is underneath it; removing a held item reveals the hand or body behind it), ` +
+        `drawn in the same art style, line quality, colors and lighting as the rest of the target.`;
+}
+
 /** 位置消歧：畫面有多個相似物件時，只靠名字模型無從分辨要哪一個 */
 function buildPositionHint(bbox: { x: number; y: number; w: number; h: number }): string {
     const pct = (v: number) => Math.round(v * 100);
@@ -1114,12 +1274,13 @@ async function extractOneLayer(
     referenceCrop?: string,        // PRODUCT/TEXT：原圖 bbox 特寫，視角與字形錨點
     highPrecisionEdge = false,     // 三角測量：隔離到純白 → 再生純黑版 → 反解連續 alpha
     originalAR?: number,           // 原圖長寬比：用於抵銷生成模型的比例擠壓
+    separateLayersHint = '',       // 與本層重疊、但已規劃成獨立圖層的其他物件（要移除並補全）
 ): Promise<LayerResult | null> {
     // TEXT / DECOR 類別：硬邊幾何形狀，BiRefNet 反而會誤判字母負空間
     // → 強制走 Chroma Key（純色背景下效果更準確）
     const isTextLayer = obj.category === 'TEXT' || obj.category === 'DECOR';
     const useBiRefNet = !!falKey && !isTextLayer;
-    // GPT 2.5 有原生 alpha 輸出：直接要透明背景，免去實色底 + 軟體去背
+    // GPT 2.5 / 2.6 有原生 alpha 輸出：直接要透明背景，免去實色底 + 軟體去背
     //（軟體色鍵會把物件上接近底色的像素一起挖掉）。三角測量需要白/黑兩版實色底，
     // 與原生透明互斥；原生 alpha 本身已有半透明邊緣，故此時略過三角測量。
     const nativeAlpha = !!atlasKey && atlasModelSupportsTransparency(atlasModel);
@@ -1141,10 +1302,13 @@ async function extractOneLayer(
         // ── 2a：隔離生成（GPT Image 2 優先；無 Atlas Key 降級 Gemini Flash Image）──
         // A'：條件式視角約束（只套 PRODUCT/TEXT——產品與文字最常被模型「轉正」成型錄視角；
         // 條件式寫法：斜的保持斜、正面的保持正面，不會誘發反向錯誤）
-        const needsAngleLock = obj.category === 'PRODUCT' || obj.category === 'TEXT';
-        const perspectiveHint = needsAngleLock
-            ? ` Reproduce the "${obj.labelEn}" at the EXACT same viewing angle, perspective, rotation and foreshortening as it appears in the source image — if it is photographed at an angle or tilted, keep that exact angle; if frontal, keep it frontal. Do NOT normalize it into a straight catalog-style view. Text and letterforms must keep their original font, weight, spacing, and angle.`
-            : '';
+        // 原本只套 PRODUCT/TEXT，但實測 OBJECTS 類的眼鏡被拆成正面型錄視角、還補出原圖
+        // 看不到的鏡腳。分層的原則是每一層疊回去要跟原圖完全重合，所以所有類別都鎖。
+        const perspectiveHint =
+            ` GEOMETRY LOCK: the output must overlay pixel-for-pixel on the source image. Reproduce the "${obj.labelEn}" at the EXACT same position, size, viewing angle, perspective, rotation, tilt and foreshortening as it appears in the source — if it is seen at an angle, three-quarter view or tilted, keep that exact angle; if frontal, keep it frontal. ` +
+            `Do NOT turn it to face the camera, straighten it, re-pose it, re-draw it as a standalone catalog/icon view, or change its proportions or drawing style. ` +
+            `Any part you reconstruct because it was hidden must follow the same perspective and stay within the object's natural silhouette at that angle — do not invent extra parts that would not be visible from this viewpoint (for example the full temple arms of glasses worn on a face).` +
+            (obj.category === 'TEXT' ? ` Text and letterforms must keep their original font, weight, spacing, and angle.` : '');
         // B：參考圖用途說明（特寫只當視角/字形錨點，不要複製它的背景）
         const refHint = referenceCrop
             ? ` The second image is a close-up crop of this exact object from the source image — use it ONLY as a reference for the precise viewing angle, proportions and letterforms. Do NOT copy its background.`
@@ -1159,7 +1323,7 @@ async function extractOneLayer(
                       `Remove every other element so all remaining areas are fully transparent. ` +
                       `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position, including dark, black and white areas of the object. ` +
                       `Solid parts of the object must stay fully opaque; only keep partial transparency where the object is genuinely translucent in the source (glass, smoke, liquid, sheer fabric, fine hair).` +
-                      perspectiveHint + refHint + EXCLUSIVITY_HINT + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox)
+                      perspectiveHint + refHint + EXCLUSIVITY_HINT + separateLayersHint + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox)
                     : isSeedreamPro
                     ? `Extract ONLY the "${obj.labelEn}" (${obj.label}) and place it on a perfectly solid, uniform flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
                       `Do not make the output transparent. Do not add a checkerboard, scenery, shadow plate, border, texture, gradient or matte to the background. ` +
@@ -1167,7 +1331,7 @@ async function extractOneLayer(
                       `Preserve the source object's original opacity: solid objects such as paper, sticky notes, labels, products, logos and text panels must remain solid and must not become translucent, faded, ghosted or see-through. ` +
                       `Only preserve translucency when it is clearly present in the source, such as glass, smoke, liquid, sheer fabric or glow. Preserve shadows and highlights without reducing the opacity of the object's main body.` +
                       (isTintedGray ? ` CRITICAL for this translucent/glass/sheer object: keep the object's own coloration and internal transparency VIVID and INTACT. The colored transparency must remain as saturated and vibrant as in the original image. Do NOT desaturate, gray-out, or neutralize the colored transparent areas. The background color (${bgColor.hex}) is intentionally tinted to match the object — let it show through the transparent parts naturally.` : '') +
-                      perspectiveHint + refHint + EXCLUSIVITY_HINT + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox)
+                      perspectiveHint + refHint + EXCLUSIVITY_HINT + separateLayersHint + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox)
                     : `In this image, keep ONLY the "${obj.labelEn}" (${obj.label}) visible at its exact original position and scale. ` +
                       `Replace ALL other areas with a perfectly solid flat background color (RGB ${bgColor.rgb} / hex ${bgColor.hex}). ` +
                       `Preserve every detail of the "${obj.labelEn}": exact colors, lighting, proportions, edges and position. ` +
@@ -1176,7 +1340,7 @@ async function extractOneLayer(
                       `The boundary between the "${obj.labelEn}" and the background must be hard and clean — ` +
                       `no color from the background (${bgColor.hex}) should tint or contaminate the object's edge pixels.` +
                       (isTintedGray ? ` CRITICAL for this translucent/glass/sheer object: keep the object's own coloration and internal transparency VIVID and INTACT. The colored transparency must remain as saturated and vibrant as in the original image. Do NOT desaturate, gray-out, or neutralize the colored transparent areas. The background color (${bgColor.hex}) is intentionally tinted to match the object — let it show through the transparent parts naturally.` : '') +
-                      perspectiveHint + refHint + EXCLUSIVITY_HINT + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox),
+                      perspectiveHint + refHint + EXCLUSIVITY_HINT + separateLayersHint + OCCLUSION_COMPLETION_HINT + buildPositionHint(obj.bbox),
                 atlasModel,
                 atlasKey,
                 compressedImage,
@@ -1184,14 +1348,16 @@ async function extractOneLayer(
                 isSeedreamPro
                     ? { ratio: detectedRatio, quality: '2K' }
                     : nativeAlpha
-                    ? { ratio: detectedRatio, transparentBackground: true }
+                    // complexity 只有 GPT 2.6 會送出：隔離是「照原樣取出」而非重新構圖，
+                    // 預設的 high 規劃較多、較容易自作主張改視角，降到 medium。
+                    ? { ratio: detectedRatio, transparentBackground: true, complexity: 'medium' as const }
                     : { ratio: detectedRatio },
                 referenceCrop ? [referenceCrop] : undefined,
             );
             if (!isolated[0]) return null;
             isolatedSrc = isolated[0];
         } else {
-            isolatedSrc = await geminiIsolateOnSolidBg(obj, compressedImage, geminiApiKey, geminiImageModel, bgColor, perspectiveHint);
+            isolatedSrc = await geminiIsolateOnSolidBg(obj, compressedImage, geminiApiKey, geminiImageModel, bgColor, perspectiveHint + separateLayersHint);
         }
 
         // 抵銷生成時的比例擠壓，必須在 trim 之前 —— trim 量到的 pixelWidth/Height
@@ -1376,6 +1542,50 @@ async function lamaBackgroundFill(
     return current;
 }
 
+/**
+ * 原圖是否真的有「背景」可補。
+ * 透明底的圖（去背過的角色、貼圖、Logo）把前景全部拿掉後什麼都不剩，硬補只會生出
+ * 一張白底／亂畫的背景，白花一次生成。判準：圖上有明顯透明區域，且所有圖層框以外
+ * 幾乎沒有不透明像素。讀不到像素（跨網域圖片）時保守回傳 true。
+ */
+export function magicLayerNeedsBackground(
+    imageBase64: string,
+    layers: Array<{ bbox: { x: number; y: number; w: number; h: number } }>,
+): Promise<boolean> {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            try {
+                const scale = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight));
+                const w = Math.max(1, Math.round(img.naturalWidth * scale));
+                const h = Math.max(1, Math.round(img.naturalHeight * scale));
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d')!;
+                ctx.drawImage(img, 0, 0, w, h);
+                const data = ctx.getImageData(0, 0, w, h).data;
+                const total = w * h;
+                let transparent = 0, opaqueOutside = 0;
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const alpha = data[(y * w + x) * 4 + 3];
+                        if (alpha < 16) { transparent++; continue; }
+                        if (alpha < 128) continue;
+                        const rx = (x + 0.5) / w, ry = (y + 0.5) / h;
+                        const inside = layers.some(({ bbox }) => rx >= bbox.x && rx <= bbox.x + bbox.w && ry >= bbox.y && ry <= bbox.y + bbox.h);
+                        if (!inside) opaqueOutside++;
+                    }
+                }
+                resolve(!(transparent / total >= 0.05 && opaqueOutside / total < 0.02));
+            } catch {
+                resolve(true);
+            }
+        };
+        img.onerror = () => resolve(true);
+        img.src = imageBase64;
+    });
+}
+
 // ── 主要入口 ─────────────────────────────────────────────────────────────────
 export async function gptLayerSegment(
     imageBase64: string,
@@ -1526,12 +1736,15 @@ export async function gptLayerSegment(
     });
 
     // 前景任務最多同時執行三張；每張獨立 timeout、retry、完成通知。
-    const objectResults = await mapWithConcurrency(objects, 3, async (obj, i) => {
+    const extractTargets = options.backgroundOnly ? [] : objects;
+    const objectResults = await mapWithConcurrency(extractTargets, 3, async (obj, i) => {
         try {
-            onProgress?.(`🎨 提取第 ${i + 1}/${objects.length} 層：${obj.label}`);
-            // B：PRODUCT/TEXT 附原圖 bbox 特寫當參考圖（視角與字形錨點，本機裁切零成本）
+            onProgress?.(`🎨 提取第 ${i + 1}/${extractTargets.length} 層：${obj.label}`);
+            const separateLayersHint = buildSeparateLayersHint(obj, objects);
+            // B：附原圖 bbox 特寫當參考圖（視角、比例與字形錨點，本機裁切零成本）。
+            // 原本只給 PRODUCT/TEXT；眼鏡這類 OBJECTS 同樣會被「轉正」，所以一律附上。
             let referenceCrop: string | undefined;
-            if (atlasKey && (obj.category === 'PRODUCT' || obj.category === 'TEXT')) {
+            if (atlasKey) {
                 try {
                     const rawCrop = await cropBBoxWithPad(imageBase64, obj.bbox);
                     if (rawCrop) referenceCrop = await compressForAtlas(rawCrop, 768, 0.9, false);
@@ -1543,6 +1756,7 @@ export async function gptLayerSegment(
                 options.highPrecisionEdge,
 
                 originalAR,
+                separateLayersHint,
             ), obj.label);
             const isUsable = (r: LayerResult | null): r is LayerResult =>
                 !!r &&
@@ -1559,6 +1773,7 @@ export async function gptLayerSegment(
                     options.highPrecisionEdge,
 
                     originalAR,
+                    separateLayersHint,
                 ), obj.label);
             }
             // 重試後仍不可用 → 必須明確回報失敗。舊版直接 return null，不丟例外也不

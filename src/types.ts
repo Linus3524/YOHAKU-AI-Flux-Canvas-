@@ -61,6 +61,20 @@ export interface ImageElement extends BaseElement {
     model?: string;
     prompt?: string;
   };
+  /** 魔法分層產出的圖層：記下來源與規劃，之後可以只重做這一層。 */
+  magicLayer?: {
+    sourceId: string;
+    model: string;
+    highPrecisionEdge?: boolean;
+    preservePosition?: boolean;
+    isBackground?: boolean;
+    /** 前景層：本層的規劃（一筆）；背景層：所有前景規劃（補背景要知道移除哪些物件）。 */
+    items: import('./utils/gptLayerSplit').MagicLayerPlanItem[];
+    /** 放上畫布當下的寬度與中心（相對原圖 0~1），重做時用來維持使用者之後的縮放與位移。 */
+    placedWidth?: number;
+    centerRX?: number;
+    centerRY?: number;
+  };
   /** 語意編輯器的編輯紀錄（隨圖片一起存入 JSON/檔案，換電腦也能繼續編輯） */
   semanticState?: {
     compositeBase64: string;

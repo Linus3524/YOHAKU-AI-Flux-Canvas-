@@ -53,13 +53,18 @@ import type {
 } from './types';
 import { TEXT_STYLE_KEYS } from './types';
 import type { NodeGraphData } from './components/NodeWorkflow/types';
-import { analyzeMagicLayerPlan, type MagicLayerModel, type MagicLayerOptions } from './utils/gptLayerSplit';
+import { analyzeMagicLayerPlan, describeMagicLayerRegion, type MagicLayerModel, type MagicLayerOptions } from './utils/gptLayerSplit';
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 
 // 畫布物件複製時寫入系統剪貼簿的標記：
 // 自訂型別供本站辨識，SENTINEL 是 text/plain 後備（部分瀏覽器不保留自訂型別）
 const CANVAS_CLIPBOARD_TYPE = 'application/x-yohaku-canvas';
 const CANVAS_CLIPBOARD_SENTINEL = '【YOHAKU 畫布物件】';
+
+/** GIF 動圖與 SVG 向量：下載時要保留原檔，不能經過 Canvas 合成（會變成靜態點陣圖）。 */
+const isAnimatedOrVectorSrc = (src: string) => /^data:image\/(gif|svg\+xml)/i.test(src);
+const downloadExtForSrc = (src: string) =>
+  /^data:image\/gif/i.test(src) ? '.gif' : /^data:image\/svg\+xml/i.test(src) ? '.svg' : '.png';
 
 const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -311,6 +316,8 @@ const App: React.FC = () => {
       setImageSize,
       gptQuality,
       setGptQuality,
+      gptAdvanced,
+      setGptAdvanced,
       preserveTransparency,
       setPreserveTransparency,
       useCustomSeed,
@@ -356,6 +363,7 @@ const App: React.FC = () => {
   const {
     handleBiRefNetRemoveBackground,
     handleMagicLayer,
+    handleRedoMagicLayer,
     handleOCRConvert,
     handleSplitSticker,
     handleExtractPrompt,
@@ -1059,7 +1067,7 @@ const App: React.FC = () => {
       if (!imageUrl) return;
       const link = document.createElement('a');
       link.href = imageUrl;
-      link.download = `generated-canvas-image-${Date.now()}.png`;
+      link.download = `generated-canvas-image-${Date.now()}${downloadExtForSrc(imageUrl)}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1158,7 +1166,7 @@ const App: React.FC = () => {
       );
       for (let i = 0; i < imageEls.length; i++) {
           const element = imageEls[i] as any;
-          const hasEffects = element.shadowEnabled || (element.fade && element.fade.direction !== 'none');
+          const hasEffects = !isAnimatedOrVectorSrc(element.src) && (element.shadowEnabled || (element.fade && element.fade.direction !== 'none'));
           const dataUrl = hasEffects
               ? await renderImageElementToDataUrl({
                     src: element.src,
@@ -1175,7 +1183,8 @@ const App: React.FC = () => {
           const link = document.createElement('a');
           link.href = dataUrl;
           let filename = element.name ? element.name.trim() : `canvas-image-${i + 1}`;
-          if (!filename.toLowerCase().endsWith('.png')) filename = `${filename}.png`;
+          const ext = downloadExtForSrc(dataUrl);
+          if (!filename.toLowerCase().endsWith(ext)) filename = `${filename}${ext}`;
           link.download = filename;
           document.body.appendChild(link);
           link.click();
@@ -1190,7 +1199,7 @@ const App: React.FC = () => {
     if (!element || (element.type !== 'image' && element.type !== 'drawing') || !element.src) return;
 
     const el = element as any;
-    const hasEffects = el.shadowEnabled || (el.fade && el.fade.direction !== 'none');
+    const hasEffects = !isAnimatedOrVectorSrc(element.src) && (el.shadowEnabled || (el.fade && el.fade.direction !== 'none'));
 
     // 有效果時透過 Canvas 合成（所見即所得），否則直接下載原圖
     const dataUrl = hasEffects
@@ -1210,7 +1219,8 @@ const App: React.FC = () => {
     const link = document.createElement('a');
     link.href = dataUrl;
     let filename = element.name ? element.name.trim() : `canvas-image-${Date.now()}`;
-    if (!filename.toLowerCase().endsWith('.png')) filename = `${filename}.png`;
+    const ext = downloadExtForSrc(dataUrl);
+    if (!filename.toLowerCase().endsWith(ext)) filename = `${filename}${ext}`;
     link.download = filename;
     document.body.appendChild(link);
     link.click();
@@ -1673,6 +1683,8 @@ const App: React.FC = () => {
         onSetImageSize={setImageSize}
         gptQuality={gptQuality}
         onSetGptQuality={setGptQuality}
+        gptAdvanced={gptAdvanced}
+        onSetGptAdvanced={setGptAdvanced}
         preserveTransparency={preserveTransparency}
         onSetPreserveTransparency={setPreserveTransparency}
         useCustomSeed={useCustomSeed}
@@ -1944,6 +1956,16 @@ const App: React.FC = () => {
             ? generationModel as MagicLayerModel
             : atlasApiKey ? 'gpt-image-2' : 'gemini'}
           hasAtlasKey={!!atlasApiKey}
+          imageSrc={(elements.find(element => element.id === magicLayerTargetId && element.type === 'image') as ImageElement | undefined)?.src ?? ''}
+          onAddLayer={async request => {
+            const target = elements.find(element => element.id === magicLayerTargetId && element.type === 'image') as ImageElement | undefined;
+            if (!target) throw new Error('找不到要分層的圖片');
+            if (!effectiveApiKey) {
+              setShowKeyModal(true);
+              throw new Error('需要 Gemini API Key 才能追加圖層');
+            }
+            return describeMagicLayerRegion(target.src, effectiveApiKey, request);
+          }}
           onClose={() => setMagicLayerTargetId(null)}
           onAnalyze={async (options: MagicLayerOptions) => {
             const target = elements.find(element => element.id === magicLayerTargetId && element.type === 'image') as ImageElement | undefined;
@@ -2018,6 +2040,7 @@ const App: React.FC = () => {
             optimizeNotePrompt: handleOptimizeNotePrompt,
             designMaster: handleOpenDesignMaster,
             magicLayer: (elementId: string) => setMagicLayerTargetId(elementId),
+            redoMagicLayer: handleRedoMagicLayer,
             semanticEditor: handleOpenSemanticEditor,
             ocrConvert: handleOCRConvert,
             splitSticker: handleSplitSticker,

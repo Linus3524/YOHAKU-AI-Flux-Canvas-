@@ -1482,9 +1482,9 @@ export async function pasteInpaintRegion(
     return compositeLayerOverOriginal(fullResBase64, feathered);
 }
 
-export type SemanticInpaintEngine = 'gpt' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'seedream-v5-pro' | 'gemini';
-type SemanticGptModel = 'gpt-image-2' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare';
-const gptModelLabel = (model: SemanticGptModel) => model === 'gpt-image-2' ? 'GPT Image 2' : model === 'gpt-image-2.5-sunburst' ? 'GPT Image 2.5 Sunburst' : 'GPT Image 2.5 Flare';
+export type SemanticInpaintEngine = 'gpt' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare' | 'seedream-v5-pro' | 'gemini';
+type SemanticGptModel = 'gpt-image-2' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare';
+const gptModelLabel = (model: SemanticGptModel) => model === 'gpt-image-2' ? 'GPT Image 2' : model === 'gpt-image-2.5-sunburst' ? 'GPT Image 2.5 Sunburst' : model === 'gpt-image-2.5-flare' ? 'GPT Image 2.5 Flare' : model === 'gpt-image-2.6-sunburst' ? 'GPT Image 2.6 Sunburst' : 'GPT Image 2.6 Flare';
 
 export interface RegenerateLayerOptions {
     layer: SmartLayer;

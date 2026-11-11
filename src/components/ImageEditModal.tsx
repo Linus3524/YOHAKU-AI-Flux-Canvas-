@@ -5,7 +5,7 @@ import type { ImageElement, Point } from '../types';
 import { callGeminiWithRetry, analyzeDominantColor, loadImage } from '../utils/helpers';
 import { Icon } from './Icon';
 import { rgbToHsl, hslToRgb, compositeImagesPixelPerfect, createPrefilledImage } from '../utils/imageProcessing';
-import { callAtlasImg2Img, callAtlasInpaint, compressForAtlas, gptSizeForImage } from '../utils/atlasImage';
+import { atlasModelSupportsGpt26Features, callAtlasImg2Img, callAtlasInpaint, callAtlasMarkupEdit, compressForAtlas, gptSizeForImage } from '../utils/atlasImage';
 import { getModelStatus } from '../utils/onnxModelCache';
 import { runLamaInWorker, warmUpLamaWorker, getLamaBackend } from '../utils/lamaWorkerClient';
 import { runUpscaleInWorker } from '../utils/upscaleWorkerClient';
@@ -31,6 +31,8 @@ interface GenerationContext {
   prompt: string;
   type: 'remove' | 'edit';
   referenceIntent: ReferenceIntent;
+  /** 圈選標記模式：筆畫只是「指出位置」，不是要挖掉重畫的遮罩 */
+  markup?: boolean;
 }
 
 type ReferenceIntent = 'subject' | 'style' | 'background';
@@ -106,7 +108,9 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
 
   // Inpaint engine selector
   const canSwitchEngine = !!(atlasKey || apiKey);
-  const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'seedream-v5-pro' | 'gemini' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare'>(atlasKey ? 'gpt' : 'gemini');
+  // 指定範圍的方式：塗抹＝遮罩重繪（所有模型）；圈選標記＝GPT 2.6 的 markup 編輯
+  const [selectionStyle, setSelectionStyle] = useState<'mask' | 'markup'>('mask');
+  const [inpaintEngine, setInpaintEngine] = useState<'gpt' | 'seedream-v5-pro' | 'gemini' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare'>(atlasKey ? 'gpt' : 'gemini');
   const [lamaReady, setLamaReady] = useState(false);
   const [lamaBackend, setLamaBackend] = useState<'webgpu' | 'wasm' | null>(null);
   const [miGanReady, setMiGanReady] = useState(false);
@@ -1161,6 +1165,28 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
     }
   }, []);
 
+  /** 把半透明的筆刷圖層轉成「透明底 + 不透明紅色筆畫」的標記層 */
+  const createMarkupLayer = async (maskDataUrl: string): Promise<string> => {
+    const maskImage = new Image();
+    maskImage.src = maskDataUrl;
+    await new Promise((resolve, reject) => { maskImage.onload = resolve; maskImage.onerror = reject; });
+    const canvas = document.createElement('canvas');
+    canvas.width = maskImage.naturalWidth;
+    canvas.height = maskImage.naturalHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('Could not create canvas context');
+    ctx.drawImage(maskImage, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const drawn = data[i + 3] > 24;
+      data[i] = 255; data[i + 1] = 0; data[i + 2] = 40;
+      data[i + 3] = drawn ? 255 : 0;
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png');
+  };
+
   const runGeneration = async (context: GenerationContext) => {
     const activeSeed = lockSeed
       ? (customSeed !== '' ? Number(customSeed) : Math.floor(Math.random() * 2147483647))
@@ -1169,6 +1195,29 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
     // ── 準備黑白遮罩（兩條路都需要） ──────────────────────────
     setIsLoading(true);
     try {
+      // ══ 圈選標記（GPT 2.6 markup）：不挖洞，只告訴模型「改這裡」══════
+      if (context.markup && atlasKey && atlasModelSupportsGpt26Features(inpaintEngine)) {
+        const markupModel = inpaintEngine as 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare';
+        const instruction = context.prompt.trim();
+        const markupPrompt = context.type === 'remove'
+          ? `Remove the object indicated by the markup and seamlessly reconstruct the background behind it with natural texture and lighting.${instruction ? ` Background hint: ${instruction}.` : ''}`
+          : referenceImages.length > 0
+            ? `${instruction || 'Place the principal subject or object from the reference image naturally at the marked location.'} Use the additional image(s) only as visual reference for this change; never create a collage.`
+            : instruction;
+        const generated = await callAtlasMarkupEdit(
+          markupPrompt,
+          context.baseImageSrc,
+          await createMarkupLayer(context.maskDataUrl),
+          atlasKey,
+          referenceImages.length > 0 ? referenceImages : undefined,
+          await gptSizeForImage(context.baseImageSrc),
+          markupModel,
+        );
+        setPreviewImageSrc(generated);
+        setGenerationMetadata({ seed: activeSeed, model: markupModel, prompt: markupPrompt });
+        return;
+      }
+
       const bwMaskBase64Url = await createBlackAndWhiteMask(context.baseImageSrc, context.maskDataUrl);
 
       // ══ 移除物件 (Remove Object) ══════
@@ -1204,7 +1253,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
       }
 
       // ══ 路線 A：Atlas 編輯模型 ══════
-      if (atlasKey && (inpaintEngine === 'gpt' || inpaintEngine === 'gpt-image-2.5-sunburst' || inpaintEngine === 'gpt-image-2.5-flare')) {
+      if (atlasKey && (inpaintEngine === 'gpt' || inpaintEngine === 'gpt-image-2.5-sunburst' || inpaintEngine === 'gpt-image-2.5-flare' || inpaintEngine === 'gpt-image-2.6-sunburst' || inpaintEngine === 'gpt-image-2.6-flare')) {
         // 先用 Gemini Flash Lite 分析周圍環境，幫助 GPT Image 2 更好融合
         const surroundingContext = await analyzeSurroundingContext(context.baseImageSrc, bwMaskBase64Url);
         const outputSize = await gptSizeForImage(context.baseImageSrc);
@@ -1241,6 +1290,7 @@ export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave,
           undefined,
           outputSize,
           inpaintEngine === 'gpt' ? 'gpt-image-2' : inpaintEngine,
+          'low', // GPT 2.6：局部重繪屬聚焦編輯，低複雜度較快、也較不會動到遮罩外
         );
 
         // GPT Image 2 Edit 原生支援透明遮罩 inpainting，
@@ -1384,6 +1434,9 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
     }
   };
 
+  const markupAvailable = !!atlasKey && atlasModelSupportsGpt26Features(inpaintEngine);
+  const useMarkup = markupAvailable && selectionStyle === 'markup';
+
   const handleSubmit = async (type: 'remove' | 'edit') => {
     // 手動模式下沒有遮罩層：先把手動塗改套用進圖片、切回 AI 模式，再請使用者塗遮罩
     if (editMode === 'pixel') {
@@ -1393,7 +1446,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
     }
     // For 'edit', prompt is required unless reference images are provided
     if (type === 'edit' && !prompt.trim() && referenceImages.length === 0) {
-      alert("請輸入編輯描述，或上傳參考圖。");
+      alert(useMarkup ? "圈選標記需要文字說明要改成什麼，請輸入編輯描述（或上傳參考圖）。" : "請輸入編輯描述，或上傳參考圖。");
       return;
     }
     const maskCanvas = maskCanvasRef.current;
@@ -1408,7 +1461,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
         if (data[i] > 0) { hasMask = true; break; }
       }
       if (!hasMask) {
-        alert('請先用筆刷塗抹要編輯或移除的區域。');
+        alert(useMarkup ? '請先在圖上圈出或標記要修改的位置。' : '請先用筆刷塗抹要編輯或移除的區域。');
         return;
       }
     }
@@ -1423,6 +1476,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
         prompt: prompt,
         type,
         referenceIntent,
+        markup: useMarkup,
       };
       setGenerationContext(newContext);
       await runGeneration(newContext);
@@ -1560,6 +1614,26 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
               </button>
             </div>
 
+            {/* 指定範圍的方式（GPT 2.6 才有圈選標記） */}
+            {editMode === 'ai' && markupAvailable && (
+              <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                {([['mask', '塗抹', '把要重畫的區域塗滿，範圍由你決定'], ['markup', '圈選標記', '隨手圈一下或畫箭頭指出位置，改什麼寫在指令裡；範圍由 AI 判斷']] as const).map(([value, label, hint]) => (
+                  <button
+                    key={value}
+                    onClick={() => { setSelectionStyle(value); if (value === 'markup') setBrushSize(10); }}
+                    title={hint}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                      selectionStyle === value
+                        ? 'bg-white text-gray-900 shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
+                        : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Model / Engine switcher */}
             {canSwitchEngine ? (
               <div className="relative flex items-center bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -1570,7 +1644,7 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                   <select
                     value={inpaintEngine}
                     onChange={e => {
-                      const val = e.target.value as 'gpt' | 'seedream-v5-pro' | 'gemini' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare';
+                      const val = e.target.value as 'gpt' | 'seedream-v5-pro' | 'gemini' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare';
                       if (val === 'gemini' && !apiKey) return;
                       setInpaintEngine(val);
                     }}
@@ -1579,6 +1653,8 @@ Render the full image. Outside the white mask, keep everything as close to IMAGE
                     {atlasKey && <option value="gpt">GPT Image 2（建議）</option>}
                     {atlasKey && <option value="gpt-image-2.5-sunburst">GPT 2.5 Sunburst · 精細</option>}
                     {atlasKey && <option value="gpt-image-2.5-flare">GPT 2.5 Flare · 快速</option>}
+                    {atlasKey && <option value="gpt-image-2.6-sunburst">GPT 2.6 Sunburst · 精細</option>}
+                    {atlasKey && <option value="gpt-image-2.6-flare">GPT 2.6 Flare · 快速</option>}
                     {atlasKey && <option value="seedream-v5-pro">即夢 Seedream 5.0 Pro</option>}
                     <option value="gemini" disabled={!apiKey}>Gemini（相容模式）{!apiKey ? ' (需 Key)' : ''}</option>
                   </select>

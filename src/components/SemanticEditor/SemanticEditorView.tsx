@@ -1026,6 +1026,8 @@ export function SemanticEditorView({
                                 <option value="gpt" disabled={!canUseGpt}>GPT Image 2</option>
                                 <option value="gpt-image-2.5-sunburst" disabled={!canUseGpt}>GPT Image 2.5 Sunburst</option>
                                 <option value="gpt-image-2.5-flare" disabled={!canUseGpt}>GPT Image 2.5 Flare</option>
+                                <option value="gpt-image-2.6-sunburst" disabled={!canUseGpt}>GPT Image 2.6 Sunburst</option>
+                                <option value="gpt-image-2.6-flare" disabled={!canUseGpt}>GPT Image 2.6 Flare</option>
                                 <option value="seedream-v5-pro" disabled={!canUseGpt}>即夢 Pro</option>
                                 <option value="gemini" disabled={!canUseGemini}>Gemini</option>
                             </select>

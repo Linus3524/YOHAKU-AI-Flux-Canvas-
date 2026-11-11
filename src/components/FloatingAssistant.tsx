@@ -726,7 +726,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {[
                         { t: '一鍵生成圖片', d: '框選圖片、手繪或便利貼，AI 生成高品質圖片。生成中畫布不鎖定。' },
                         { t: '多參考圖', d: '便利貼可直接上傳最多 8 張參考圖。「自由融合」讓 AI 綜合全部視覺線索；「指定用途」可標記人物、服裝、姿勢、風格、背景與光線。便利貼與畫布圖片混合生成時，送入模型的圖片總上限仍為 8 張。' },
-                        { t: 'GPT Image 2.5 Sunburst／Flare', d: '使用 Atlas Cloud Key，支援文生圖與圖生圖。開啟透明背景時直接輸出含 alpha 通道的 PNG，可用於 Logo、圖示和貼圖，不需另外去背，也不是畫出棋盤格。兩款支援相同主要功能；依 Atlas 官方定位，Flare 適合快速試稿、變體與大量生成，Sunburst 耗時較長，適合精細編輯、產品圖與正式廣告素材。' },
+                        { t: 'GPT Image 2.6／2.5 Sunburst／Flare', d: '使用 Atlas Cloud Key，支援文生圖與圖生圖。開啟透明背景時直接輸出含 alpha 通道的 PNG，可用於 Logo、圖示和貼圖，不需另外去背，也不是畫出棋盤格。兩款支援相同主要功能；依 Atlas 官方定位，Flare 適合快速試稿、變體與大量生成，Sunburst 耗時較長，適合精細編輯、產品圖與正式廣告素材。' },
                         { t: '即夢 Seedream 5.0 Pro', d: '新一代旗艦模型，支援精細的文字生成與排版。需要透明背景時，軟體會在生成完成後自動去背並輸出 PNG。' },
                         { t: '隨機種子 (Seed)', d: '支援開啟自訂 Seed 隨機碼。便於鎖定特定光影特徵或構圖結構，進行連續性的一致畫面生成。' },
                         { t: '圖片逆向分析', d: '右鍵「提取提示詞」，AI 生成中英對照的詠唱咒語。' },
@@ -792,7 +792,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     {/* 魔法分層 */}
                     <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 魔法分層 (Magic Layering)</h4>
-                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素進行分割並補全背景。支援「兩階段規劃與圖層清單預覽」，可於生成前自由刪除預計圖層。提供任務佇列與漸進式回貼機制；即夢負責逐物件隔離生成，再由軟體去背並依分析座標精確回貼。</p>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素進行分割並補全背景。支援「兩階段規劃」：分析後會在原圖上以編號框線標出每一層的位置，生成前可改名、合併、拆開、刪除圖層，也能在圖上拉框或輸入名稱追加 AI 漏掉的物件；調整拆分設定不會清掉已規劃的圖層。每一層只包含它自己的成員：已自成一層的東西（例如眼鏡、上衣、手上的物品）會從其他層移除並補回被遮住的部分，想保留在主體上就把兩層合併；各層維持原圖的角度與比例。原圖是透明背景時自動略過背景層。完成後若某一層不理想，對該圖層按右鍵選「AI 圖像工具 → 重做此圖層」即可只重跑那一層。選用 GPT Image 2.5／2.6 時直接輸出原生透明圖層，不需勾選三角測量。提供任務佇列與漸進式回貼機制；即夢負責逐物件隔離生成，再由軟體去背並依分析座標精確回貼。</p>
                       <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 支援即夢逐物件生成，並由軟體完成去背與圖層整理。需 <code className="font-mono bg-purple-50 px-1 rounded">Atlas Key</code>；未設定時降級為 Gemini 模式。</div>
                     </div>
 
@@ -903,7 +903,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         { t: '圖層面板 / 群組', d: '拖曳排序、隱藏/鎖定。Ctrl+G 綁定多物件為群組。' },
                         { t: '對齊與分佈', d: '選取 2 個以上物件，選取框上方浮現對齊列：靠左/置中/靠右、靠上/置中/靠下。3 個以上可水平/垂直等距分佈。鎖定物件與工作區域不受影響，可復原。' },
                         { t: '合併圖層', d: '選取多物件壓平為 PNG，自動裁切透明邊界，3x 高清渲染，保留陰影淡出效果。' },
-                        { t: '保留透明背景', d: 'GPT Image 2.5 Sunburst／Flare 可直接保留透明參考圖並生成原生透明 PNG，避免色底壓平與二次去背。其他模型沿用先壓平、生成後還原透明的流程。' },
+                        { t: '保留透明背景', d: 'GPT Image 2.6／2.5 Sunburst／Flare 可直接保留透明參考圖並生成原生透明 PNG，避免色底壓平與二次去背。其他模型沿用先壓平、生成後還原透明的流程。' },
                       ].map((item, i) => (
                         <div key={i}>
                           <h4 className="font-bold text-gray-800 text-[12px] mb-0.5">{item.t}</h4>
@@ -1145,7 +1145,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {/* Atlas Cloud 模型 */}
                       <div>
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">🟠 Atlas Cloud 生圖模型（需 Atlas Cloud Key）</span>
-                        <p className="text-xs text-gray-500 mb-3">由 Atlas Cloud 代理的生圖模型，於生成設定面板中選擇，支援文生圖與圖生圖。依 Atlas 官方定位，Flare 優先追求速度，適合日常生成、試稿及大量變體；Sunburst 耗時較長，優先追求精細度，適合精準編輯、產品圖及正式廣告素材。兩者支援相同主要 API 功能，實際耗時與成圖效果依任務而異。相較 App 內舊模型的透明處理流程，GPT 2.5 可直接要求原生透明 PNG，省去生成後去背。</p>
+                        <p className="text-xs text-gray-500 mb-3">由 Atlas Cloud 代理的生圖模型，於生成設定面板中選擇，支援文生圖與圖生圖。依 Atlas 官方定位，Flare 優先追求速度，適合日常生成、試稿及大量變體；Sunburst 耗時較長，優先追求精細度，適合精準編輯、產品圖及正式廣告素材。兩者支援相同主要 API 功能，實際耗時與成圖效果依任務而異。相較 App 內舊模型的透明處理流程，GPT 2.5／2.6 可直接要求原生透明 PNG，省去生成後去背。GPT 2.6 為 2026 年 11 月推出的新版，生成速度較前代提升約 50%，Flare 的海報與產品圖排版更佳；低／中品質每張成本高於 2.5，大量試稿仍可用 2.5。選用 GPT 2.6 時，生成設定會多出「輸出格式」（圖片／GIF 動圖／SVG 向量）與「構圖規劃（Complexity）」：GIF 可設定影格數與每格時間，選取圖片再生成即把該圖做成動圖；SVG 只支援純文字生成，適合 Logo 與圖示；兩者都用右鍵「下載圖片」存成原始檔。構圖規劃是模型下筆前的思考程度，小改動用低、文字多或版面複雜用中／高。筆刷局部重繪選 GPT 2.6 時可切換「塗抹／圈選標記」：圈選標記只要隨手圈出位置並用文字說明要改什麼，不必塗滿，但實際修改範圍由 AI 判斷；需要精準範圍仍用塗抹。</p>
                         <div className="overflow-x-auto">
                           <table className="w-full text-[10px] text-gray-600 border-collapse">
                             <thead>
@@ -1156,6 +1156,16 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2.6 Sunburst</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">OpenAI／Atlas</td>
+                                <td className="py-2 text-gray-600 align-top">新版・精細度優先；多輪編輯時角色、產品與品牌細節更一致，適合細節要求高的編輯、產品圖與正式廣告素材。支援文生圖、圖生圖及原生透明 PNG，畫布生成設定提供 Low／Medium／High／XHigh／Max 五檔品質，與輸出尺寸獨立設定；尺寸依比例最高可達 3840×2160，超過 2560×1440 屬實驗性支援。</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2.6 Flare</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">OpenAI／Atlas</td>
+                                <td className="py-2 text-gray-600 align-top">新版・速度優先，生成較前代快約 50%，排版更佳；適合日常生成、快速試稿與大量變體。支援文生圖、圖生圖及原生透明 PNG，畫布生成設定提供 Low／Medium／High／XHigh／Max 五檔品質，與輸出尺寸獨立設定；尺寸依比例最高可達 3840×2160，超過 2560×1440 屬實驗性支援。</td>
+                              </tr>
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2.5 Sunburst</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">OpenAI／Atlas</td>

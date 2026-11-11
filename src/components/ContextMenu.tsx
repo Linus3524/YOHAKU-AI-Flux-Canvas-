@@ -65,6 +65,7 @@ interface ContextMenuProps {
     designMaster: (elementId: string) => void;
     magicLayer: (elementId: string) => void;
     semanticEditor: (elementId: string) => void;
+    redoMagicLayer: (elementId: string) => void;
     ocrConvert: (elementId: string) => void;
     clearStorage: () => void;
     splitSticker?: (elementId: string) => void;
@@ -465,6 +466,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                             <MenuItem icon={<MenuIcons.Wand />} onClick={() => handleAction(() => actions.magicLayer(menuData.elementId!))}>
                                                 魔法分層
                                             </MenuItem>
+                                            {selectedElement?.type === 'image' && selectedElement.id === menuData.elementId && selectedElement.magicLayer && (
+                                                <MenuItem icon={<Icon name="refresh" size={15} />} onClick={() => handleAction(() => actions.redoMagicLayer(menuData.elementId!))}>
+                                                    重做此圖層
+                                                </MenuItem>
+                                            )}
                                             <MenuItem
                                                 icon={<Icon name="wallpaper" size={15} />}
                                                 onClick={() => handleAction(() => actions.semanticEditor(menuData.elementId!))}
