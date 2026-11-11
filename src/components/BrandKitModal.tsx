@@ -396,7 +396,7 @@ export const BrandKitModal: React.FC<BrandKitModalProps> = ({ imageName, hasAtla
             value={newAssetInput}
             onChange={e => setNewAssetInput(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
                 e.preventDefault();
                 addCustomAsset();
               }

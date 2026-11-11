@@ -1,4 +1,5 @@
 
+import { specialImageFormat } from '../utils/imageFormat';
 import React, { useRef, useEffect, useState } from 'react';
 import type { Point, ElementType } from '../types';
 import { COLORS } from '../utils/helpers';
@@ -35,6 +36,7 @@ interface ContextMenuProps {
     flipVertical: (elementId: string) => void;
     changeColor: (color: string) => void;
     downloadImage: (elementId: string) => void;
+    rasterizeImage: (elementId: string) => void;
     downloadImages: (elementIds: string[]) => void;
     exportArtboard: (elementId: string) => void;
     copyStyle: (elementId: string) => void;
@@ -188,6 +190,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     selectedElement,
 }) => {
     const menuRef = useRef<HTMLDivElement>(null);
+    // GIF／SVG 元素：下載原檔的文案與「轉成靜態圖片」
+    const menuFormat = selectedElement?.type === 'image' && selectedElement.id === menuData.elementId
+        ? specialImageFormat(selectedElement.src)
+        : null;
     type SubMenuType = 'color' | 'frame' | 'layerOrder' | 'layout' | 'aiImageTools' | 'aiMarketing' | null;
     const [activeSubMenu, setActiveSubMenu] = useState<SubMenuType>(null);
     const toggleSubMenu = (name: SubMenuType) =>
@@ -597,8 +603,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                                             : actions.downloadImage(menuData.elementId!)
                                     )}
                                 >
-                                    {selectionCount > 1 ? `下載圖片（${selectionCount} 張）` : '下載圖片'}
+                                    {selectionCount > 1
+                                        ? `下載圖片（${selectionCount} 張）`
+                                        : menuFormat === 'gif' ? '下載 GIF 動圖' : menuFormat === 'svg' ? '下載 SVG 向量檔' : '下載圖片'}
                                 </MenuItem>
+                                {menuFormat && selectionCount <= 1 && (
+                                    <MenuItem icon={<Icon name="image" size={15} />} onClick={() => handleAction(() => actions.rasterizeImage(menuData.elementId!))}>
+                                        轉成靜態圖片（PNG）
+                                    </MenuItem>
+                                )}
                                 <div className="border-t my-0.5 border-gray-100/50" />
                             </>
                         )}

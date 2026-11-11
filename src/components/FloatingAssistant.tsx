@@ -378,7 +378,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
       const now = Date.now();
       if (now - lastEnterRef.current < 500) { e.preventDefault(); handleSend(); lastEnterRef.current = 0; }
       else lastEnterRef.current = now;
@@ -633,9 +633,9 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                 <div className="grid grid-cols-1 gap-4">
                   {[
                     { color: 'bg-indigo-50 text-indigo-600', emoji: '✨', title: 'Gemini AI 全程輔助', desc: '懸浮「靈感助手」隨時待命，從提示詞優化到 AI 生圖，所有過程都在畫布上直接完成。' },
-                    { color: 'bg-purple-50 text-purple-600', emoji: '🎨', title: '設計大師 (Design Master)', desc: '整合 60+ 種 Markdown 設計系統規格書、50+ 套品牌規格書與 9 大排版創作技能，支援常用比例、裝置解析度選擇及客製化受眾，並提供 AI 提示詞優化以生成極具設計感的排版圖卡。' },
+                    { color: 'bg-purple-50 text-purple-600', emoji: '🎨', title: '設計大師 (Design Master)', desc: '整合 60+ 種 Markdown 設計系統規格書、50+ 套品牌規格書與 10 種創作技能，支援常用比例、裝置解析度選擇及客製化受眾，並提供 AI 提示詞優化以生成極具設計感的排版圖卡。' },
                     { color: 'bg-amber-50 text-amber-600', emoji: '📐', title: '專業工作區域系統', desc: '建立多個獨立設計版面，內建 IG、A4、名片等預設尺寸，一鍵同時匯出多個工作區域。' },
-                    { color: 'bg-emerald-50 text-emerald-600', emoji: '📸', title: '設計師級影像處理', desc: '風格複製、圖片調和、AI 去背、高畫質放大、外擴繪圖、局部重繪，Moodboard 製作效率倍增。' },
+                    { color: 'bg-emerald-50 text-emerald-600', emoji: '📸', title: '設計師級影像處理', desc: '風格複製、圖片調和、AI 去背、高畫質放大、外擴繪圖、局部重繪、魔法分層，Moodboard 製作效率倍增。' },
                     { color: 'bg-rose-50 text-rose-600', emoji: '📝', title: '便利貼即是 AI 指令', desc: '便利貼不只是記事，更是生圖的起點。支援上傳最多 8 張參考圖，可自由融合或指定每張用途。' },
                     { color: 'bg-blue-50 text-blue-600', emoji: '🖋️', title: '完整排版工具', desc: '多字體、彎曲文字、精細行距字距、邊框陰影光暈，讓文字排版也能設計到底。' },
                   ].map((item, i) => (
@@ -684,8 +684,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {[
                         { t: '建立工作區域', d: '建立固定尺寸設計框，適合海報、貼文等有明確邊界的作品。' },
                         { t: '預設尺寸', d: '內建社群媒體 (IG/FB)、網頁 (1920/手機)、印刷 (A4/名片) 及自訂。' },
-                        { t: '命名與管理', d: '點擊工作區域開啟設定面板，自訂名稱、調整尺寸。' },
-                        { t: '批次匯出 PNG', d: '圖層面板選取 2 個以上工作區域，一鍵批次匯出所有獨立 PNG。' },
+                        { t: '命名與管理', d: '點擊工作區域開啟設定面板，自訂名稱、調整尺寸。拖曳名稱標籤可連同內容一起移動。' },
+                        { t: '匯出格式與尺寸', d: '可選 PNG／JPG／WebP 與 1x–3x 尺寸，面板即時預估檔案大小。選取 2 個以上工作區域可一鍵批次匯出。' },
                       ].map((item, i) => (
                         <div key={i}>
                           <h4 className="font-bold text-gray-800 text-[13px] mb-1">{item.t}</h4>
@@ -694,8 +694,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       ))}
                     </div>
                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                      <h4 className="font-bold text-gray-800 text-[13px] mb-1">匯出 SVG（向量圖層）</h4>
-                      <p className="text-[11px] text-gray-500 leading-relaxed">選取工作區域後點「匯出工作區域 (SVG)」，每個各自輸出為獨立 <code className="bg-white px-1 py-0.5 rounded border border-gray-200 text-gray-600 font-mono text-[10px]">.svg</code>。圖片、文字、形狀均為獨立物件，Adobe Illustrator 開啟後可個別編輯。</p>
+                      <h4 className="font-bold text-gray-800 text-[13px] mb-1">匯出 SVG／PDF（向量圖層）</h4>
+                      <p className="text-[11px] text-gray-500 leading-relaxed">選取工作區域後點「匯出工作區域 (SVG)」，每個各自輸出為獨立 <code className="bg-white px-1 py-0.5 rounded border border-gray-200 text-gray-600 font-mono text-[10px]">.svg</code>。圖片、文字、形狀均為獨立物件，Adobe Illustrator 開啟後可個別編輯。另可匯出 PDF，文字可選擇保留可編輯或轉為外框。</p>
                     </div>
                   </div>
 
@@ -705,10 +705,10 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                       {[
                         { t: '便利貼', d: '記錄想法或作為 AI 提示詞。可上傳最多 8 張參考圖，並選擇自由融合或逐張指定用途。' },
-                        { t: '文字工具', d: '橫/直書、曲線文字、字距調整。進階效果含邊框、背景色、陰影、光暈、3x 高清轉換。' },
+                        { t: '文字工具', d: '橫/直書、曲線文字、字距調整。進階效果含邊框、背景色、陰影、光暈、3x 高清轉換。右鍵可複製／貼上文字樣式。' },
                         { t: '手繪工具', d: '自由繪製草圖，筆刷與橡皮擦，支援透明背景繪圖。' },
                         { t: '線條 / 箭頭', d: '直線、雙向箭頭、圓點端點，可自訂虛線與顏色。' },
-                        { t: '形狀工具', d: '矩形、圓形、多邊形等，支援鎖定長寬比與 3x 高清轉換。' },
+                        { t: '形狀工具', d: '矩形、圓形、多邊形等，支援漸層填色與漸層邊框、鎖定長寬比與 3x 高清轉換。' },
                         { t: '畫框工具', d: '建立特定比例虛線框 (如 16:9)，搭配便利貼直接生成圖片填入。' },
                       ].map((item, i) => (
                         <div key={i}>
@@ -726,14 +726,16 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {[
                         { t: '一鍵生成圖片', d: '框選圖片、手繪或便利貼，AI 生成高品質圖片。生成中畫布不鎖定。' },
                         { t: '多參考圖', d: '便利貼可直接上傳最多 8 張參考圖。「自由融合」讓 AI 綜合全部視覺線索；「指定用途」可標記人物、服裝、姿勢、風格、背景與光線。便利貼與畫布圖片混合生成時，送入模型的圖片總上限仍為 8 張。' },
-                        { t: 'GPT Image 2.6／2.5 Sunburst／Flare', d: '使用 Atlas Cloud Key，支援文生圖與圖生圖。開啟透明背景時直接輸出含 alpha 通道的 PNG，可用於 Logo、圖示和貼圖，不需另外去背，也不是畫出棋盤格。兩款支援相同主要功能；依 Atlas 官方定位，Flare 適合快速試稿、變體與大量生成，Sunburst 耗時較長，適合精細編輯、產品圖與正式廣告素材。' },
+                        { t: 'GPT Image 2.6／2.5 Sunburst／Flare', d: '使用 Atlas Cloud Key，支援文生圖與圖生圖，開啟透明背景時直接輸出含 alpha 通道的 PNG。Flare 速度優先、適合試稿與大量變體；Sunburst 精細度優先、適合產品圖與正式素材。' },
+                        { t: 'GIF 動圖（GPT 2.6）', d: '生成設定的輸出格式選「GIF 動圖」，可設定影格數與每格時間。只選便利貼是文字生動圖，選取圖片則把該圖做成動圖。畫布上直接播放，右鍵可下載 .gif 或轉成靜態圖片。' },
+                        { t: '構圖規劃（GPT 2.6）', d: '設定模型下筆前的思考程度，與品質分開、不另計費。換背景等小改動用低，文字多或版面複雜用中／高。' },
                         { t: '即夢 Seedream 5.0 Pro', d: '新一代旗艦模型，支援精細的文字生成與排版。需要透明背景時，軟體會在生成完成後自動去背並輸出 PNG。' },
                         { t: '隨機種子 (Seed)', d: '支援開啟自訂 Seed 隨機碼。便於鎖定特定光影特徵或構圖結構，進行連續性的一致畫面生成。' },
                         { t: '圖片逆向分析', d: '右鍵「提取提示詞」，AI 生成中英對照的詠唱咒語。' },
                         { t: '風格複製', d: 'AI 解構色彩、光影、畫風等 10 個維度，紋理/藝術樣式/手動三種貼上方式。' },
-                        { t: '智慧去背', d: '右鍵「智慧去背」，由 Gemini AI 分析並去除背景，不需額外 API Key。' },
+                        { t: '智慧去背', d: '右鍵「智慧去背」，依目前選擇的生圖模型（Gemini／GPT Image 2／即夢 Pro）隔離主體並去除背景，髮絲與半透明邊緣過渡更自然。' },
                         { t: '本機 AI 去背', d: '選取圖片後於編輯面板點擊「本機 AI 去背 (ISNet)」，推論完全在本機離線執行，免 API 額度（需下載本機 ISNet 模型）。' },
-                        { t: '擴展圖片 (Outpainting)', d: '拖曳定義邊界，AI 自動進行擴圖與漸降 Poisson 拼接融合，100% 無縫保留原圖像素無痕接合（支援自動發想提示詞）。' },
+                        { t: '擴展圖片 (Outpainting)', d: '拖曳定義邊界，AI 自動進行擴圖與漸降 Poisson 拼接融合，100% 無縫保留原圖像素無痕接合（支援自動發想提示詞）。可選 Gemini、GPT Image 2／2.5／2.6 或即夢 Pro。' },
                         { t: '影像調和', d: '選取多張圖片，AI 調整光影色調融合為自然畫面（支援 2K 高清）。' },
                         { t: '原圖比例輸出', d: '生成設定選「原圖比例」，AI 依據參考圖的寬高比輸出，結果更貼合原始構圖。' },
                         { t: '視角轉換 & 智能放大', d: '改變拍攝角度。2x/4x 放大，智慧保持透明背景邊緣清晰。' },
@@ -751,8 +753,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       <p className="text-[11px] text-gray-700 leading-relaxed mb-2">整合 60+ 種 Markdown 設計系統規格書與 50+ 品牌設計規格書，專為高排版性圖卡與插圖設計。支援 10 種專業創作技能，可自訂版面、裝置解析度、比例與受眾定位。</p>
                       <div className="grid grid-cols-2 gap-1.5 mb-2">
                         {[
-                          { label: '模切貼圖', desc: '可切換「單圖、三視圖、貼貼套組」版面，支援一鍵表情與自訂壓字效果。' },
-                          { label: '圖示設計', desc: '一鍵生成單張或一整套 Icon 系列。支援 12 種對標風格與自訂背景底色設定。' },
+                          { label: '模切貼圖', desc: '可切換「單圖、三視圖、貼貼套組」版面，支援一鍵表情與自訂壓字效果。選白色背景時會自動純化成純白。' },
+                          { label: '圖示設計', desc: '一鍵生成單張或一整套 Icon 系列。支援 12 種對標風格與自訂背景底色設定，純白背景會自動純化。' },
                           { label: '精緻封面', desc: '適用於部落格、簡報或社群網站首圖封面' },
                           { label: '標誌設計', desc: '品牌標準字、徽章與商標 LOGO 設計' },
                           { label: '資訊圖表', desc: '便當網格、流程圖、對比圖等數據視覺化' },
@@ -779,6 +781,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         {[
                           { label: 'AI 重繪', desc: '塗抹遮罩以替換或移除物件，支援本機 LaMa/MI-GAN WebGPU 極速推理與 4x 局部超分縫合。' },
                           { label: '手繪編輯', desc: '直接像素塗抹改色，提供軟硬筆刷、去背橡皮擦（直接擦除為透明格底）、吸管吸色、拉幾何色塊與獨立 Undo/Redo。' },
+                          { label: '圈選標記', desc: '選用 GPT 2.6 時可切換：隨手圈出位置並用文字說明要改什麼，不必塗滿；實際範圍由 AI 判斷。' },
+                          { label: '模型選擇', desc: '可選 GPT Image 2／2.5／2.6、即夢 Seedream 5.0 Pro 或 Gemini，並可上傳參考圖指定替換物件或風格。' },
                         ].map((m, i) => (
                           <div key={i} className="bg-white/80 border border-purple-100/50 rounded-lg px-2.5 py-2">
                             <div className="font-bold text-purple-700 text-[11px] mb-0.5">{m.label}</div>
@@ -792,8 +796,8 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     {/* 魔法分層 */}
                     <div className="bg-purple-50/20 border border-purple-100/80 rounded-xl p-4 mb-3">
                       <h4 className="font-bold text-purple-950 text-[13px] mb-1">✦ 魔法分層 (Magic Layering)</h4>
-                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素進行分割並補全背景。支援「兩階段規劃」：分析後會在原圖上以編號框線標出每一層的位置，生成前可改名、合併、拆開、刪除圖層，也能在圖上拉框或輸入名稱追加 AI 漏掉的物件；調整拆分設定不會清掉已規劃的圖層。每一層只包含它自己的成員：已自成一層的東西（例如眼鏡、上衣、手上的物品）會從其他層移除並補回被遮住的部分，想保留在主體上就把兩層合併；各層維持原圖的角度與比例。原圖是透明背景時自動略過背景層。完成後若某一層不理想，對該圖層按右鍵選「AI 圖像工具 → 重做此圖層」即可只重跑那一層。選用 GPT Image 2.5／2.6 時直接輸出原生透明圖層，不需勾選三角測量。提供任務佇列與漸進式回貼機制；即夢負責逐物件隔離生成，再由軟體去背並依分析座標精確回貼。</p>
-                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 支援即夢逐物件生成，並由軟體完成去背與圖層整理。需 <code className="font-mono bg-purple-50 px-1 rounded">Atlas Key</code>；未設定時降級為 Gemini 模式。</div>
+                      <p className="text-[11px] text-gray-700 leading-relaxed mb-2">右鍵「魔法分層」，AI 自動識別人物、產品、文字、裝飾等語意元素進行分割並補全背景。分析後會在原圖上以編號框線標出每一層，生成前可改名、合併、拆開、刪除，也能拉框或輸入名稱追加漏掉的物件。已自成一層的東西（如眼鏡、手上的物品）會從其他層移除並補回被遮住的部分，各層維持原圖的角度與比例。完成後可對單一圖層右鍵「重做此圖層」。</p>
+                      <div className="text-[11px] text-purple-900 bg-white/80 px-3 py-2 rounded-lg">✔ 可選 Gemini、GPT Image 2／2.5／2.6 或即夢 Pro。GPT 2.5／2.6 直接輸出透明圖層；其他模型可勾「高精度邊緣」。透明背景的原圖自動略過背景層。需 <code className="font-mono bg-purple-50 px-1 rounded">Atlas Key</code>；未設定時降級為 Gemini 模式。</div>
                     </div>
 
                     {/* 一鍵拆分貼圖 */}
@@ -839,7 +843,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           { label: '多點精確選取', desc: '左鍵放前景點、右鍵放背景排除點，多點組合精準控制分割範圍' },
                           { label: '文字編輯', desc: '切換至文字模式，點選並直接修改圖中文字內容，字數增減自動適配排版重繪' },
                           { label: 'OCR 雙引擎', desc: '支援 Gemini 雲端或本機 PaddleOCR-v4 離線偵測，精確掃描圖中所有設計字塊' },
-                          { label: '物件重繪', desc: '選物件改提示詞，GPT Image 2 或 Gemini 重繪後自動切割回貼' },
+                          { label: '物件重繪', desc: '選物件改提示詞，GPT Image 2／2.5／2.6、即夢 Pro 或 Gemini 重繪後自動切割回貼' },
                           { label: '版本管理', desc: '每次重繪產生新版本分頁，可切換比較或刪除' },
                           { label: 'LaMa 純背景', desc: '一鍵移除所有前景，生成乾淨純背景圖層' },
                         ].map((m, i) => (
@@ -885,7 +889,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         { t: '邊距裁剪', d: '非破壞性裁剪。數值面板支援直觀的「上、下、左、右」邊距輸入，支援失焦或回車防呆約束，並動態呈現裁剪後的最終解析度。' },
                         { t: '陰影效果', d: '投影跟隨像素形狀，下載或合併均能完美保留去背圖層的陰影邊界。' },
                         { t: '精準尺寸調整', d: '右鍵點擊圖片選「調整圖片尺寸」，可直接輸入寬高數值，支援比例鎖定鈕 🔗（防止拉伸）或解鎖，並提供 50%/150%/200% 與「還原原圖大小」快捷鍵。' },
-                        { t: '下載圖片', d: '右鍵點擊圖片選「下載圖片」，存為 PNG，透明背景完整保留。多選圖片後右鍵可批次下載，自動逐一匯出所有選取圖片。' },
+                        { t: '下載圖片', d: '右鍵點擊圖片選「下載圖片」，存為 PNG，透明背景完整保留；GIF 動圖會保留原檔。多選圖片後右鍵可批次下載，自動逐一匯出所有選取圖片。' },
                       ].map((item, i) => (
                         <div key={i}>
                           <h4 className="font-bold text-gray-800 text-[12px] mb-0.5">{item.t}</h4>
@@ -900,7 +904,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                     <h3 className="text-[10px] font-bold text-gray-400 tracking-widest mb-4 uppercase border-b border-gray-100 pb-2">6. 圖層管理 (Layer Management)</h3>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                       {[
-                        { t: '圖層面板 / 群組', d: '拖曳排序、隱藏/鎖定。Ctrl+G 綁定多物件為群組。' },
+                        { t: '圖層面板 / 群組', d: '拖曳排序、隱藏/鎖定。Ctrl+G 綁定多物件為群組。多選物件可一起縮放與旋轉。' },
                         { t: '對齊與分佈', d: '選取 2 個以上物件，選取框上方浮現對齊列：靠左/置中/靠右、靠上/置中/靠下。3 個以上可水平/垂直等距分佈。鎖定物件與工作區域不受影響，可復原。' },
                         { t: '合併圖層', d: '選取多物件壓平為 PNG，自動裁切透明邊界，3x 高清渲染，保留陰影淡出效果。' },
                         { t: '保留透明背景', d: 'GPT Image 2.6／2.5 Sunburst／Flare 可直接保留透明參考圖並生成原生透明 PNG，避免色底壓平與二次去背。其他模型沿用先壓平、生成後還原透明的流程。' },
@@ -969,7 +973,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         { t: '輸入與輸出節點', d: '輸入節點傳遞原始圖片/文字，輸出節點回傳最終合成結果。工具列「插入圖片」支援工作流內圖片直接合成。' },
                         { t: '即夢圖層分離', d: '在工作流中可串接「圖層分離 (Layer Split)」節點，由 Gemini 分析物件、即夢逐層生成，再由軟體去背並整理成可編輯圖層。' },
                         { t: '多參考圖生圖', d: '生圖節點（Atlas 路徑）支援連接多張圖片作為風格與特徵參考圖，進行高品質多圖融合生成。' },
-                        { t: '豐富的節點種類', d: '包含：生圖、去背、智慧放大、視角轉換、風格複製、產品行銷組圖、品牌套件、跨平台適配、提示詞優化、擴圖等多達 20 餘種專業節點。' },
+                        { t: '豐富的節點種類', d: '包含：生圖、去背、智慧放大、視角轉換、風格複製、產品行銷組圖、品牌套件、跨平台適配、LINE 貼圖、提示詞優化、擴圖等多達 20 餘種專業節點。' },
                         { t: '連線與執行', d: '滑鼠拖曳節點連接埠即可建立連線，點擊節點的「執行」或最外層一鍵批次執行，運算完成後可預覽各節點產出。' },
                       ].map((item, i) => (
                         <div key={i}>
@@ -1091,7 +1095,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">🔵 Gemini 生圖模型（需 Gemini API Key）</span>
                         <ul className="text-xs text-gray-600 space-y-2 leading-relaxed mb-3 [&>li]:pl-[1.3em] [&>li]:[text-indent:-1.3em]">
                           <li>・ <span className="font-bold text-gray-600">gemini-3.1-flash-lite</span>：提示詞生成、圖片分析。免費額度高（約 2,000 次/日）。</li>
-                          <li>・ <span className="font-bold text-gray-600">生圖模型</span>：可在頂部狀態欄切換 Lite / Flash / Pro，依需求選擇。需付費使用。</li>
+                          <li>・ <span className="font-bold text-gray-600">生圖模型</span>：可在頂部狀態欄切換 Lite / Flash / Pro，依需求選擇。Flash 使用最新的 Nano Banana 2.1。需付費使用。</li>
                         </ul>
                         <span className="text-xs font-bold text-yohaku-text-main block mb-2">Gemini 生圖模型比較：</span>
                         <div className="overflow-x-auto">
@@ -1099,17 +1103,17 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                             <thead>
                               <tr className="border-b border-gray-200">
                                 <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-muted w-1/4">維度</th>
-                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-main">3.1 Flash-Lite (極速)</th>
-                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-main">3.1 Flash (預設)</th>
-                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">3.1 Pro</th>
+                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-main">Flash-Lite (極速)</th>
+                                <th className="text-left py-1.5 pr-2 font-medium text-yohaku-text-main">Nano Banana 2.1 (預設)</th>
+                                <th className="text-left py-1.5 font-medium text-yohaku-text-main">Pro</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                               {[
-                                ['底層架構', 'gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-3-pro-image'],
+                                ['底層架構', 'gemini-3.1-flash-lite-image', 'gemini-nano-banana-2.1', 'gemini-3-pro-image'],
                                 ['生成速度', '小於 4 秒', '4–6 秒', '8–12 秒'],
-                                ['輸出解析度', '1K', '512 / 1K / 2K / 4K', '1K / 2K / 4K'],
-                                ['文字渲染', '短句・標籤準確', '短句・標籤準確', '長句・複雜排版精準'],
+                                ['輸出解析度', '1K', '1K / 2K / 4K', '1K / 2K / 4K'],
+                                ['文字渲染', '短句・標籤準確', '標題・圖表排版更準', '長句・複雜排版精準'],
                                 ['提示詞理解', '高吞吐量・低成本', '視覺直覺・大眾描述', '精確參數（焦距・材質）'],
                               ].map(([dim, lite, flash, pro]) => (
                                 <tr key={dim}>
@@ -1122,7 +1126,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                               <tr>
                                 <td className="py-1.5 pr-2 text-yohaku-text-muted align-top">物件連續性</td>
                                 <td className="py-1.5 pr-2 text-gray-600 align-top">每次獨立生成</td>
-                                <td className="py-1.5 pr-2 text-gray-600 align-top">每次獨立生成<br/>跨圖角色外觀易跑掉</td>
+                                <td className="py-1.5 pr-2 text-gray-600 align-top">多輪編輯一致性提升<br/>最多 4 角色・10 物件</td>
                                 <td className="py-1.5 text-gray-600 align-top">鎖定角色視覺特徵<br/>跨圖外觀一致・最多 14 物件</td>
                               </tr>
                             </tbody>
@@ -1136,7 +1140,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                           </div>
                           <ul className="list-disc list-inside space-y-1">
                             <li><span className="font-bold">Lite (極速)</span>：適合快速草稿預覽，**最大輸出解析度限制為 1K**，不支援角色/物件一致性特徵鎖定。</li>
-                            <li><span className="font-bold">Flash (預設)</span>：最平衡的選擇，**支援 2K/4K 輸出**，適合日常大多數插畫與常規去背調和。</li>
+                            <li><span className="font-bold">Flash (預設)</span>：已升級為 Nano Banana 2.1，速度與費用維持 Flash 等級，畫質、文字渲染與多輪編輯一致性提升，**支援 2K/4K 輸出**，適合日常大多數插畫與常規去背調和。</li>
                             <li><span className="font-bold">Pro (高階)</span>：速度慢但品質最佳，特別適合複雜的文字渲染與物理排版，且**支援最多 14 物件的跨圖特徵鎖定**。</li>
                           </ul>
                         </div>
@@ -1145,7 +1149,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                       {/* Atlas Cloud 模型 */}
                       <div>
                         <span className="text-sm font-bold text-yohaku-text-main block mb-2">🟠 Atlas Cloud 生圖模型（需 Atlas Cloud Key）</span>
-                        <p className="text-xs text-gray-500 mb-3">由 Atlas Cloud 代理的生圖模型，於生成設定面板中選擇，支援文生圖與圖生圖。依 Atlas 官方定位，Flare 優先追求速度，適合日常生成、試稿及大量變體；Sunburst 耗時較長，優先追求精細度，適合精準編輯、產品圖及正式廣告素材。兩者支援相同主要 API 功能，實際耗時與成圖效果依任務而異。相較 App 內舊模型的透明處理流程，GPT 2.5／2.6 可直接要求原生透明 PNG，省去生成後去背。GPT 2.6 為 2026 年 11 月推出的新版，生成速度較前代提升約 50%，Flare 的海報與產品圖排版更佳；低／中品質每張成本高於 2.5，大量試稿仍可用 2.5。選用 GPT 2.6 時，生成設定會多出「輸出格式」（圖片／GIF 動圖／SVG 向量）與「構圖規劃（Complexity）」：GIF 可設定影格數與每格時間，選取圖片再生成即把該圖做成動圖；SVG 只支援純文字生成，適合 Logo 與圖示；兩者都用右鍵「下載圖片」存成原始檔。構圖規劃是模型下筆前的思考程度，小改動用低、文字多或版面複雜用中／高。筆刷局部重繪選 GPT 2.6 時可切換「塗抹／圈選標記」：圈選標記只要隨手圈出位置並用文字說明要改什麼，不必塗滿，但實際修改範圍由 AI 判斷；需要精準範圍仍用塗抹。</p>
+                        <p className="text-xs text-gray-500 mb-3">由 Atlas Cloud 代理的生圖模型，於生成設定面板中選擇，支援文生圖與圖生圖。GPT 2.5／2.6 分為 Flare（速度優先）與 Sunburst（精細度優先），皆可直接輸出原生透明 PNG，提供 Low～Max 五檔品質，尺寸最高 3840×2160（超過 2560×1440 屬實驗性支援）。GPT 2.6 生成較快，並新增 GIF 動圖、構圖規劃與重繪的圈選標記；低／中品質每張成本高於 2.5，大量試稿可用 2.5。</p>
                         <div className="overflow-x-auto">
                           <table className="w-full text-[10px] text-gray-600 border-collapse">
                             <thead>
@@ -1159,22 +1163,22 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2.6 Sunburst</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">OpenAI／Atlas</td>
-                                <td className="py-2 text-gray-600 align-top">新版・精細度優先；多輪編輯時角色、產品與品牌細節更一致，適合細節要求高的編輯、產品圖與正式廣告素材。支援文生圖、圖生圖及原生透明 PNG，畫布生成設定提供 Low／Medium／High／XHigh／Max 五檔品質，與輸出尺寸獨立設定；尺寸依比例最高可達 3840×2160，超過 2560×1440 屬實驗性支援。</td>
+                                <td className="py-2 text-gray-600 align-top">新版・精細度優先；多輪編輯時角色、產品與品牌細節更一致，適合產品圖與正式廣告素材。</td>
                               </tr>
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2.6 Flare</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">OpenAI／Atlas</td>
-                                <td className="py-2 text-gray-600 align-top">新版・速度優先，生成較前代快約 50%，排版更佳；適合日常生成、快速試稿與大量變體。支援文生圖、圖生圖及原生透明 PNG，畫布生成設定提供 Low／Medium／High／XHigh／Max 五檔品質，與輸出尺寸獨立設定；尺寸依比例最高可達 3840×2160，超過 2560×1440 屬實驗性支援。</td>
+                                <td className="py-2 text-gray-600 align-top">新版・速度優先，生成較前代快約 50%，排版更佳；適合日常生成、快速試稿與大量變體。</td>
                               </tr>
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2.5 Sunburst</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">OpenAI／Atlas</td>
-                                <td className="py-2 text-gray-600 align-top">精細度優先，耗時較長；適合細節要求高的編輯、產品圖與正式廣告素材。支援文生圖、圖生圖及原生透明 PNG，畫布生成設定提供 Low／Medium／High／XHigh／Max 五檔品質，與輸出尺寸獨立設定；尺寸依比例最高可達 3840×2160，超過 2560×1440 屬實驗性支援。</td>
+                                <td className="py-2 text-gray-600 align-top">精細度優先，耗時較長；適合細節要求高的編輯、產品圖與正式廣告素材。</td>
                               </tr>
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2.5 Flare</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">OpenAI／Atlas</td>
-                                <td className="py-2 text-gray-600 align-top">速度優先，適合日常生成、快速試稿與大量變體。支援文生圖、圖生圖及原生透明 PNG，畫布生成設定提供 Low／Medium／High／XHigh／Max 五檔品質，與輸出尺寸獨立設定；尺寸依比例最高可達 3840×2160，超過 2560×1440 屬實驗性支援。</td>
+                                <td className="py-2 text-gray-600 align-top">速度優先、成本較低；適合日常生成、快速試稿與大量變體。</td>
                               </tr>
                               <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">GPT Image 2</td>
@@ -1192,6 +1196,16 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                                 <td className="py-2 text-gray-600 align-top">v4.5 升級版，畫面細節更豐富、構圖更穩定，文字渲染提升，兼顧速度與品質。支援<span className="font-bold text-orange-600">圖生圖</span>。</td>
                               </tr>
                               <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">即夢 Seedream v5 Pro</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">ByteDance</td>
+                                <td className="py-2 text-gray-600 align-top">即夢旗艦款，文字生成與排版最精細，支援 3K 輸出。需要透明背景時於生成後自動去背。支援<span className="font-bold text-orange-600">圖生圖</span>，亦可用於局部重繪、擴圖與魔法分層。</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 pr-2 font-bold text-gray-700 align-top">FLUX.2 Pro</td>
+                                <td className="py-2 pr-2 text-gray-500 align-top">Black Forest Labs</td>
+                                <td className="py-2 text-gray-600 align-top">寫實質感與光影表現出色，適合攝影風格、產品與場景圖。支援<span className="font-bold text-orange-600">圖生圖</span>。</td>
+                              </tr>
+                              <tr>
                                 <td className="py-2 pr-2 font-bold text-gray-700 align-top">通義千問 Qwen Image 2.0</td>
                                 <td className="py-2 pr-2 text-gray-500 align-top">Alibaba</td>
                                 <td className="py-2 text-gray-600 align-top">阿里巴巴頂級多模態生圖模型，中文理解能力出色，支援中英文提示詞（最多 800 字），適合電商、設計素材與創意圖片生成。支援<span className="font-bold text-orange-600">圖生圖</span>。</td>
@@ -1201,7 +1215,7 @@ export const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ onAskAI, o
                         </div>
                         <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
                           <p className="text-[10px] text-blue-700 leading-relaxed">
-                            <span className="font-bold">🎨 筆刷局部重繪：</span>設定 Atlas Cloud Key 後，自動升級為 <span className="font-bold">GPT Image 2 Edit</span>（OpenAI 原生 inpainting 模型，透明遮罩精準填充）。未設定 Atlas Key 時，使用 <span className="font-bold">Gemini</span> 作為預設引擎。
+                            <span className="font-bold">🎨 筆刷局部重繪：</span>設定 Atlas Cloud Key 後預設使用 <span className="font-bold">GPT Image 2 Edit</span>（透明遮罩精準填充），並可切換 GPT 2.5／2.6 或即夢 Pro；選 GPT 2.6 時另有「圈選標記」模式。未設定 Atlas Key 時，使用 <span className="font-bold">Gemini</span> 作為預設引擎。
                           </p>
                         </div>
                       </div>

@@ -1,5 +1,6 @@
 // src/components/TransformableElement.tsx
 
+import { specialImageFormat } from '../utils/imageFormat';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useDisplaySrc } from '../utils/displayThumb';
 import type { CanvasElement, Point, ArrowElement, NoteElement, NoteReferenceMode, NoteReferenceRole, TextElement, ShapeElement, NodeGroupElement } from '../types';
@@ -1821,8 +1822,26 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                             el.flipX ? 'scaleX(-1)' : '',
                             el.flipY ? 'scaleY(-1)' : '',
                         ].filter(Boolean).join(' ') || undefined;
+                        const specialFormat = specialImageFormat(el.src);
+                        // 角標反向縮放：縮小畫布時仍維持可讀（同手繪提示的做法）
+                        const badgeScale = 1 / Math.min(zoom, 1);
                         return (
-                            <div style={{ ...style }}> {/* 外層不加 boxShadow，避免方形框陰影 */}
+                            <div style={{ ...style, position: 'relative' }}> {/* 外層不加 boxShadow，避免方形框陰影 */}
+                                {specialFormat && (
+                                    <span
+                                        title={specialFormat === 'gif' ? 'GIF 動圖：畫布上會播放；匯出畫布或使用 AI 工具時會變成靜態圖' : 'SVG 向量圖：放大不失真；使用 AI 工具前請先轉成靜態圖片'}
+                                        style={{
+                                            position: 'absolute', left: 0, top: 0, zIndex: 2,
+                                            transform: `translate(${6 * badgeScale}px, ${6 * badgeScale}px) scale(${Math.min(badgeScale, 6)})`,
+                                            transformOrigin: 'top left',
+                                            padding: '1px 5px', borderRadius: 4, fontSize: 9, fontWeight: 700, lineHeight: '14px', letterSpacing: '0.04em',
+                                            color: '#fff', background: specialFormat === 'gif' ? 'rgba(124,58,237,0.92)' : 'rgba(8,145,178,0.92)',
+                                            pointerEvents: 'none', userSelect: 'none', whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        {specialFormat === 'gif' ? 'GIF' : 'SVG'}
+                                    </span>
+                                )}
                                 <div style={{
                                     width: '100%',
                                     height: '100%',

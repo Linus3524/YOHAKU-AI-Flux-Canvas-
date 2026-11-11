@@ -9,6 +9,7 @@
  * This file contains proprietary enhancements and logic specific to YOHAKU.
  */
 
+import { rasterizeToPng, specialImageFormat } from './utils/imageFormat';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { InfiniteCanvas, CanvasApi } from './components/InfiniteCanvas';
 import { ContextMenu } from './components/ContextMenu';
@@ -62,9 +63,11 @@ const CANVAS_CLIPBOARD_TYPE = 'application/x-yohaku-canvas';
 const CANVAS_CLIPBOARD_SENTINEL = '【YOHAKU 畫布物件】';
 
 /** GIF 動圖與 SVG 向量：下載時要保留原檔，不能經過 Canvas 合成（會變成靜態點陣圖）。 */
-const isAnimatedOrVectorSrc = (src: string) => /^data:image\/(gif|svg\+xml)/i.test(src);
-const downloadExtForSrc = (src: string) =>
-  /^data:image\/gif/i.test(src) ? '.gif' : /^data:image\/svg\+xml/i.test(src) ? '.svg' : '.png';
+const isAnimatedOrVectorSrc = (src: string) => specialImageFormat(src) !== null;
+const downloadExtForSrc = (src: string) => {
+  const format = specialImageFormat(src);
+  return format === 'gif' ? '.gif' : format === 'svg' ? '.svg' : '.png';
+};
 
 const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -78,9 +81,9 @@ const App: React.FC = () => {
   // localStorage 可能殘留改名前的舊模型 ID（如 *-image-preview），與 Lite/Flash/Pro 三顆按鈕
   // 的現行 ID 都對不上 → 造成「三顆都沒選中」。讀取時驗證，非法值一律落回 Flash 預設。
   const [imageModel, setImageModel] = useState<string>(() => {
-    const VALID_IMAGE_MODELS = ['gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-3-pro-image'];
+    const VALID_IMAGE_MODELS = ['gemini-3.1-flash-lite-image', 'gemini-nano-banana-2.1', 'gemini-3-pro-image'];
     const saved = localStorage.getItem('yohaku_image_model');
-    return saved && VALID_IMAGE_MODELS.includes(saved) ? saved : 'gemini-3.1-flash-image';
+    return saved && VALID_IMAGE_MODELS.includes(saved) ? saved : 'gemini-nano-banana-2.1';
   });
   const handleSetImageModel = (model: string) => {
     localStorage.setItem('yohaku_image_model', model);
@@ -906,22 +909,27 @@ const App: React.FC = () => {
     if (!generatedImages || generatedImages.length === 0) return;
     if (logoBgProcessedRef.current === generatedImages) return; // 已是處理後的結果
     const prompt = generatedImagesMetadata?.[0]?.prompt || '';
-    if (!prompt.includes('Design a professional logo for the brand')) return;
+    // 純白／純黑背景：Logo、貼圖、圖示共用（提示詞帶有 BACKGROUND: white／black 標記）。
+    // 模型幾乎不會給出真正的純色底（偏色、陰影、紙紋、雜點），所以一律在這裡純化。
+    const isLogo = prompt.includes('Design a professional logo for the brand');
     const wantWhite = prompt.includes('BACKGROUND: white');
     const wantBlack = prompt.includes('BACKGROUND: black');
-    const wantTransparent = prompt.includes('BACKGROUND: transparent');
+    const wantTransparent = isLogo && prompt.includes('BACKGROUND: transparent');
     if (wantTransparent && atlasModelSupportsTransparency(generatedImagesMetadata?.[0]?.model || '')) return;
     if (!wantWhite && !wantBlack && !wantTransparent) return;
 
     const sourceImages = generatedImages;
     (async () => {
-      showToast(wantTransparent ? '🪄 Logo 自動去背中…' : '🪄 Logo 背景純化中…');
+      showToast(wantTransparent ? '🪄 Logo 自動去背中…' : '🪄 背景純化中…');
       const processed = await Promise.all(sourceImages.map(async (url) => {
         try {
           const src = url.startsWith('data:') ? url : await downloadImageAsBase64(url);
           if (wantWhite || wantBlack) {
             // 白/黑背景：原地把「邊緣連通的背景區(含髒污/紙紋)」重塗成純色，主體不動
-            return await flattenBackgroundToColor(src, wantWhite ? '#ffffff' : '#000000');
+            // Logo 維持原本的做法；貼圖／圖示主體常有淡色，改用「只吃無彩度像素」並清掉雜點
+            return isLogo
+              ? await flattenBackgroundToColor(src, wantWhite ? '#ffffff' : '#000000')
+              : await flattenBackgroundToColor(src, wantWhite ? '#ffffff' : '#000000', 110, { neutralOnly: true, despeckle: true });
           }
           // 透明背景：量測邊緣底色後走語意去背流程
           const detectedBg = await detectBackgroundColor(src);
@@ -934,7 +942,7 @@ const App: React.FC = () => {
       setGeneratedImages(prev => (prev === sourceImages ? processed : prev));
       // 已在結果階段處理完，加入畫布時不要再跑一次去背
       setPendingAutoDebg(false);
-      showToast('✅ Logo 背景處理完成！');
+      showToast('✅ 背景處理完成！');
     })();
   }, [generatedImages, generatedImagesMetadata, restoreTransparencyFn, setGeneratedImages, setPendingAutoDebg, showToast]);
 
@@ -1226,6 +1234,21 @@ const App: React.FC = () => {
     link.click();
     document.body.removeChild(link);
   }, [elements]);
+
+  // GIF／SVG → 靜態 PNG（就地取代，可復原）。之後所有點陣工具都能正常處理。
+  const rasterizeImage = useCallback(async (elementId: string) => {
+    const element = elements.find(el => el.id === elementId);
+    if (!element || element.type !== 'image') return;
+    const format = specialImageFormat(element.src);
+    if (!format) return;
+    try {
+      const png = await rasterizeToPng(element.src);
+      setElements(prev => prev.map(el => el.id === elementId && el.type === 'image' ? { ...el, src: png } : el));
+      showToast(format === 'gif' ? '已轉成靜態圖片（保留目前這一格），可按復原還原成動圖' : '已轉成靜態圖片（2048px），可按復原還原成向量');
+    } catch {
+      showToast('⚠️ 轉換失敗，請稍後再試');
+    }
+  }, [elements, setElements, showToast]);
 
   const handleExportCanvas = originalExportCanvas;
 
@@ -2010,6 +2033,7 @@ const App: React.FC = () => {
             flipVertical: handleFlipVertical,
             changeColor: handleColorChange,
             downloadImage,
+            rasterizeImage,
             downloadImages,
             copyStyle: handleCopyStyle,
             pasteStyle: (elementIds: string[]) => setStylePasteModal({ targetIds: elementIds }),

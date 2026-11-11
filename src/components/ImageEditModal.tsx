@@ -37,7 +37,7 @@ interface GenerationContext {
 
 type ReferenceIntent = 'subject' | 'style' | 'background';
 
-export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-3.1-flash-image', atlasKey }) => {
+export const ImageEditModal: React.FC<ImageEditModalProps> = ({ element, onSave, onClose, apiKey, imageModel = 'gemini-nano-banana-2.1', atlasKey }) => {
   const imageRef = useRef<HTMLImageElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

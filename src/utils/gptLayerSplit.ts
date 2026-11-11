@@ -32,6 +32,8 @@ export interface MagicLayerMember {
     description?: string;
     bgColor: BgColorKey;
     edgeComplexity: 'simple' | 'complex';
+    /** 僅建立規劃時使用：併入本成員的部件（存進規劃時會攤平成同層成員） */
+    parts?: MagicLayerMember[];
 }
 
 export interface MagicLayerPlanItem {
@@ -155,6 +157,8 @@ interface DetectedObject {
     subjectHue?: number;
     /** 是否為深色半透明物件（墨鏡、深酒瓶等） */
     darkTranslucent?: boolean;
+    /** 幾乎完全位在本物件範圍內的部件（眼鏡、手上的物品…）。預設跟著本物件同一層，可在面板拆開。 */
+    parts?: DetectedObject[];
 }
 
 // ── withTimeout 包裹 ─────────────────────────────────────────────────────────
@@ -232,12 +236,12 @@ Do not reduce the inventory to match a requested final layer count.
 - TEXT: text overlays, logos, typography, labels, titles
 
 ━━━ BBOX RULES (critical) ━━━
-bbox = tightest possible rectangle enclosing ALL visible pixels of this element only.
-- x, y = top-left corner (fraction of image width/height)
-- w, h = width and height (fraction of image width/height)
-- The box must TOUCH the outermost visible pixel — no padding, no rounding outward
+box_2d = tightest possible rectangle enclosing ALL visible pixels of this element only.
+- Format: [ymin, xmin, ymax, xmax], each an integer from 0 to 1000, normalized to the image height (y) and width (x). Origin is the top-left corner.
+- Use this SAME 0–1000 scale for every object. Never use pixels, percentages or 0–1 fractions.
+- The box must TOUCH the outermost visible pixel on all four sides — no padding, no rounding outward
 - Bad: whole-image box for a small object. Good: tight box that just wraps the object
-- If an element is near an edge, x or y can be 0.0; w or h can reach 1.0 only if truly full-width/height
+- A small object (an apple, a pair of glasses, a logo) must get a small box around itself only, never the box of the larger thing it sits on
 
 ━━━ ISOLATION BACKGROUND ━━━
 Pick the isolation background with MAXIMUM contrast against the object's own colors. The background will be removed by software matting/chroma-key afterwards, so the chosen color must NOT appear anywhere ON the object itself.
@@ -277,7 +281,7 @@ Preferred categories to notice: ${requestedCategories}.
 Additional instruction: ${options?.customInstruction?.trim() || 'None'}.
 
 Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
-[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","edgeComplexity":"complex","bbox":{"x":0.10,"y":0.05,"w":0.35,"h":0.85},"description":"A young East Asian woman wearing a white shirt, smiling at camera."},{"label":"藍色玻璃瓶","labelEn":"blue glass bottle","category":"PRODUCT","bgColor":"TINTED_GRAY","subjectHue":220,"darkTranslucent":false,"edgeComplexity":"complex","bbox":{"x":0.60,"y":0.20,"w":0.15,"h":0.50},"description":"A translucent blue glass bottle with highlights."},{"label":"標題文字","labelEn":"headline text","category":"TEXT","bgColor":"DARKGRAY","edgeComplexity":"simple","bbox":{"x":0.55,"y":0.08,"w":0.38,"h":0.12},"description":"White bold sans-serif headline text in two lines."}]`
+[{"label":"人物","labelEn":"person","category":"SUBJECT","bgColor":"GREEN","edgeComplexity":"complex","box_2d":[50,100,900,450],"description":"A young East Asian woman wearing a white shirt, smiling at camera."},{"label":"藍色玻璃瓶","labelEn":"blue glass bottle","category":"PRODUCT","bgColor":"TINTED_GRAY","subjectHue":220,"darkTranslucent":false,"edgeComplexity":"complex","box_2d":[200,600,700,750],"description":"A translucent blue glass bottle with highlights."},{"label":"標題文字","labelEn":"headline text","category":"TEXT","bgColor":"DARKGRAY","edgeComplexity":"simple","box_2d":[80,550,200,930],"description":"White bold sans-serif headline text in two lines."}]`
                 }
             ]
         },
@@ -295,6 +299,10 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         throw new Error('Gemini 回傳 JSON 解析失敗');
     }
     if (!objects || objects.length === 0) throw new Error('Gemini 未偵測到任何物件');
+    // 先把座標統一成 0~1（模型可能回 box_2d、0–1000、百分比或像素），框不合法的物件直接丟掉
+    const boxes = normalizeDetectedBoxes(objects);
+    objects = objects.map((object, index) => ({ ...object, bbox: boxes[index]! })).filter(object => !!object.bbox);
+    if (objects.length === 0) throw new Error('Gemini 回傳的物件位置無法解析，請重新分析');
     objects = objects.slice(0, 20).map((object, index) => ({ ...object, id: `object_${index + 1}` }));
 
     // 按重要性排序，確保截取時重要層（主體、產品、文字）優先保留
@@ -357,8 +365,11 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
     // 消失，盤點只剩它自己（實測就是「偵測 1 個物件」）。
     const FRAME_COVER_LIMIT = 0.8;
     const area = (b: BBox) => b.w * b.h;
-    const absorbed = new Set<string>();
-    for (const inner of objects) {
+    // 「盡量分開」與「依照指令」是使用者明講要細拆，部件不併入主體（眼鏡、手上的東西要能各自成層）。
+    // 其餘策略照舊併入，但部件不再丟掉 —— 它們成為同一層的成員，面板上按「拆開」就能獨立出來。
+    const absorbParts = options?.groupingStrategy !== 'separate' && options?.groupingStrategy !== 'custom';
+    const absorbed = new Map<string, string>(); // 部件 id → 吸收它的物件 id
+    for (const inner of absorbParts ? objects : []) {
         if (absorbed.has(inner.id)) continue;
         for (const outer of objects) {
             if (inner.id === outer.id || absorbed.has(outer.id)) continue;
@@ -373,13 +384,26 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
             if (area(outer.bbox) <= area(inner.bbox)) continue;
             if (area(inner.bbox) > area(outer.bbox) * PART_MAX_AREA_RATIO) continue;
             if (containedRatio(inner.bbox, outer.bbox) >= CONTAINMENT_THRESHOLD) {
-                absorbed.add(inner.id);
+                absorbed.set(inner.id, outer.id);
                 console.info(`[magicLayer] 「${inner.label}」是「${outer.label}」的部件（同類別、面積 ${(area(inner.bbox) / area(outer.bbox) * 100).toFixed(0)}%、包含 ${(containedRatio(inner.bbox, outer.bbox) * 100).toFixed(0)}%）→ 併入後者，避免像素重複`);
                 break;
             }
         }
     }
-    if (absorbed.size > 0) objects = objects.filter(o => !absorbed.has(o.id));
+    if (absorbed.size > 0) {
+        const byId = new Map(objects.map(o => [o.id, o]));
+        const rootOf = (id: string): string => {
+            let current = id;
+            for (let hops = 0; hops < 20 && absorbed.has(current); hops++) current = absorbed.get(current)!;
+            return current;
+        };
+        for (const partId of absorbed.keys()) {
+            const root = byId.get(rootOf(partId));
+            const part = byId.get(partId);
+            if (root && part && root !== part) (root.parts ??= []).push(part);
+        }
+        objects = objects.filter(o => !absorbed.has(o.id));
+    }
 
     // 安全夾值：bbox + edgeComplexity 預設值
     return objects.map(o => ({
@@ -387,13 +411,62 @@ Return ONLY a valid JSON array — no markdown, no explanation, no extra text:
         edgeComplexity: (o.edgeComplexity === 'complex' || o.edgeComplexity === 'simple')
             ? o.edgeComplexity
             : 'simple' as const,
-        bbox: {
-            x: Math.max(0, Math.min(1, o.bbox?.x ?? 0)),
-            y: Math.max(0, Math.min(1, o.bbox?.y ?? 0)),
-            w: Math.max(0.01, Math.min(1, o.bbox?.w ?? 1)),
-            h: Math.max(0.01, Math.min(1, o.bbox?.h ?? 1)),
-        },
+        bbox: clampBBox(o.bbox),
     }));
+}
+
+type RatioBBox = { x: number; y: number; w: number; h: number };
+
+/** 夾進圖片範圍：左上角在圖內，且框不超出右／下邊界。 */
+function clampBBox(box: Partial<RatioBBox> | undefined): RatioBBox {
+    const x = Math.max(0, Math.min(0.99, Number(box?.x) || 0));
+    const y = Math.max(0, Math.min(0.99, Number(box?.y) || 0));
+    const w = Math.max(0.01, Math.min(1 - x, Number(box?.w) || 1));
+    const h = Math.max(0.01, Math.min(1 - y, Number(box?.h) || 1));
+    return { x, y, w, h };
+}
+
+/**
+ * 把模型回傳的各種座標格式統一成 0~1 的 {x,y,w,h}。
+ *
+ * 實測 Gemini 不一定照 prompt 指定的格式回：同一份回應裡，有的物件給 0~1 比例、
+ * 有的給它原生的 0–1000 刻度。舊版直接把數值夾到 0~1，於是 0–1000 的框全部變成
+ * {x:1,y:1,w:1,h:1} —— 面板上的框線整個掉到圖外右下角，後續的位置提示與特寫裁切也跟著錯。
+ * 接受的輸入：box_2d / bbox 陣列 [ymin,xmin,ymax,xmax]、{x,y,w,h}、{x,y,width,height}、
+ * {xmin,ymin,xmax,ymax}；刻度由「整批物件的最大值」判斷（單看一個小物件會分不出百分比與千分比）。
+ * 回傳陣列與輸入等長；無法解析者為 null。
+ */
+function normalizeDetectedBoxes(rawObjects: any[]): Array<RatioBBox | null> {
+    const parsed = rawObjects.map(raw => {
+        const source = raw?.box_2d ?? raw?.bbox ?? raw?.box;
+        let x: number, y: number, w: number, h: number;
+        if (Array.isArray(source) && source.length >= 4) {
+            const [ymin, xmin, ymax, xmax] = source.map(Number);
+            x = xmin; y = ymin; w = xmax - xmin; h = ymax - ymin;
+        } else if (source && typeof source === 'object') {
+            if (source.xmin !== undefined && source.xmax !== undefined) {
+                x = Number(source.xmin); y = Number(source.ymin);
+                w = Number(source.xmax) - x; h = Number(source.ymax) - y;
+            } else {
+                x = Number(source.x); y = Number(source.y);
+                w = Number(source.w ?? source.width); h = Number(source.h ?? source.height);
+            }
+        } else {
+            return null;
+        }
+        if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) return null;
+        return { x, y, w, h };
+    });
+    const extentOf = (box: RatioBBox) => Math.max(box.x + box.w, box.y + box.h);
+    // 只看「不是 0~1 比例」的那些框來決定刻度
+    const scaled = parsed.filter((box): box is RatioBBox => !!box && extentOf(box) > 1.5);
+    const maxExtent = scaled.reduce((max, box) => Math.max(max, extentOf(box)), 0);
+    const divisor = maxExtent <= 100 ? 100 : maxExtent <= 1000 ? 1000 : maxExtent;
+    return parsed.map(box => {
+        if (!box) return null;
+        const d = extentOf(box) > 1.5 ? divisor : 1;
+        return clampBBox({ x: box.x / d, y: box.y / d, w: box.w / d, h: box.h / d });
+    });
 }
 
 function unionObjectBboxes(objects: Array<{ bbox: DetectedObject['bbox'] }>): DetectedObject['bbox'] {
@@ -407,18 +480,20 @@ function unionObjectBboxes(objects: Array<{ bbox: DetectedObject['bbox'] }>): De
 function buildPlanItem(members: MagicLayerMember[], index: number, label?: string, reason?: string): MagicLayerPlanItem {
     const categoryPriority: Record<string, number> = { SUBJECT: 0, PRODUCT: 1, TEXT: 2, OBJECTS: 3, DECOR: 4 };
     const primary = [...members].sort((a, b) => (categoryPriority[a.category] ?? 5) - (categoryPriority[b.category] ?? 5))[0];
+    // 部件攤平成同層成員：名稱與提示詞仍以主體為準，但面板可把它們拆開成獨立圖層
+    const expanded = members.flatMap(member => [member, ...(member.parts ?? [])]);
     return {
         id: `layer_${index + 1}`,
         label: label?.trim() || members.map(member => member.label).join('＋'),
         labelEn: members.map(member => member.labelEn).join(' and '),
         category: primary.category,
-        memberLabels: members.map(member => member.label),
-        bbox: unionObjectBboxes(members),
+        memberLabels: expanded.map(member => member.label),
+        bbox: unionObjectBboxes(expanded),
         description: members.map(member => member.description).filter(Boolean).join('; '),
         groupReason: reason?.trim() || (members.length === 1 ? '獨立物件' : '依目標層數合併'),
         bgColor: primary.bgColor,
         edgeComplexity: members.some(member => member.edgeComplexity === 'complex') ? 'complex' : 'simple',
-        members: members.map(member => ({
+        members: expanded.map(member => ({
             label: member.label,
             labelEn: member.labelEn,
             category: member.category,
@@ -506,19 +581,20 @@ ${target}
 Fields:
 - label: short Traditional Chinese name${hint ? ' (use the user\'s wording)' : ''}; labelEn: short English name.
 - category: SUBJECT (person/character), PRODUCT (hero product), OBJECTS (props), DECOR (shapes/icons/illustrations), TEXT (text/logo).
-- bbox: {x,y,w,h} fractions of image width/height, tightest box around the visible pixels.
+- box_2d: [ymin, xmin, ymax, xmax], integers 0–1000 normalized to image height/width, tightest box around the visible pixels.
 - bgColor: isolation background with maximum contrast against the element. Opaque elements: GREEN (warm or white/pale objects), BLUE (green/nature objects), RED (blue/cool objects), DARKGRAY (multicolored or unsure). TEXT: WHITE (dark/colored text), LIGHTGRAY (mixed), DARKGRAY (white/pale text). Never GREEN/BLUE/RED for TEXT.
 - edgeComplexity: "simple" (hard clean edges) or "complex" (hair, fur, glass, smoke).
 - description: 15-40 word English visual description usable as an image prompt.
 Return ONLY one JSON object, no markdown:
-{"label":"招牌","labelEn":"shop sign","category":"OBJECTS","bgColor":"GREEN","edgeComplexity":"simple","bbox":{"x":0.1,"y":0.1,"w":0.2,"h":0.1},"description":"..."}` },
+{"label":"招牌","labelEn":"shop sign","category":"OBJECTS","bgColor":"GREEN","edgeComplexity":"simple","box_2d":[100,100,200,300],"description":"..."}` },
             ] },
         });
         const match = (response.text ?? '').replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').match(/\{[\s\S]*\}/);
         if (!match) return fallback();
         const raw = JSON.parse(match[0]) as Partial<MagicLayerMember>;
-        if (!raw.bbox && !userBox) return fallback();
-        let bbox = clamp(raw.bbox ?? userBox!);
+        const detected = normalizeDetectedBoxes([raw])[0];
+        if (!detected && !userBox) return fallback();
+        let bbox = detected ?? clamp(userBox!);
         if (userBox) {
             // 模型回傳的框跑到使用者框外 → 以使用者拉的框為準
             const ix = Math.max(0, Math.min(bbox.x + bbox.w, userBox.x + userBox.w) - Math.max(bbox.x, userBox.x));
@@ -1593,7 +1669,7 @@ export async function gptLayerSegment(
     atlasKey: string | undefined,  // 可選：有則用 GPT Image 2，無則 Gemini fallback
     falKey?: string,
     onProgress?: (msg: string) => void,
-    geminiImageModel = 'gemini-3.1-flash-image',
+    geminiImageModel = 'gemini-nano-banana-2.1',
     atlasModel: AtlasGenerationModel = 'gpt-image-2',
     options: Partial<MagicLayerOptions> = {},
     callbacks: MagicLayerExecutionCallbacks = {},

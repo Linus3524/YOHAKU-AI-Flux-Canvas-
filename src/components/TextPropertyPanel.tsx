@@ -182,7 +182,7 @@ const NumericInput = ({ label, value, min, max, step, decimals, unit, disabled =
                     if (Number.isFinite(parsed) && parsed >= min && parsed <= max) onChange(parsed);
                 }}
                 onKeyDown={(e) => {
-                    if (e.key === 'Enter') e.currentTarget.blur();
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) e.currentTarget.blur();
                     if (e.key === 'Escape') {
                         setDraft(format(value));
                         e.currentTarget.blur();

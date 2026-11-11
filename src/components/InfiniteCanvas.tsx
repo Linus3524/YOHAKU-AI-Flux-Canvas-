@@ -125,7 +125,9 @@ const GenerateSplitButton: React.FC<{ onGenerate: (count: 1 | 2 | 3 | 4) => void
             <div className="flex w-full rounded-xl bg-gradient-to-r from-[#AF52DE] to-[#5856D6] shadow-lg shadow-purple-500/20">
                 {/* 左：生成按鈕，用目前選的張數 */}
                 <button
-                    onClick={() => onGenerate(count)}
+                    // 點完立刻放掉鍵盤焦點：按鈕留著焦點時，之後按 Enter／空白鍵會再觸發一次生成，
+                    // 中文輸入法用 Enter 確認選字時特別容易誤觸。
+                    onClick={(e) => { e.currentTarget.blur(); if (e.detail === 0) return; onGenerate(count); }}
                     className="flex-1 flex items-center justify-center gap-2 text-white py-3 text-sm font-semibold hover:bg-white/10 transition-colors active:bg-white/20 rounded-l-xl"
                 >
                     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
@@ -1598,7 +1600,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                         <div className="flex flex-col gap-1.5">
                                             <label className="text-[11px] font-medium text-gray-500">輸出格式</label>
                                             <div className="flex bg-[#f1f5f9] p-1 rounded-lg gap-1">
-                                                {([['png', '圖片'], ['gif', 'GIF 動圖'], ['svg', 'SVG 向量']] as Array<[GptOutputFormat, string]>).map(([format, label]) => (
+                                                {([['png', '圖片'], ['gif', 'GIF 動圖']] as Array<[GptOutputFormat, string]>).map(([format, label]) => (
                                                     <button
                                                         key={format}
                                                         type="button"
@@ -1627,9 +1629,6 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                                                     </div>
                                                     <p className="text-[10px] text-gray-400">在提示詞描述主體、動作與如何循環。選取圖片再生成＝把那張圖做成動圖。約 {((gptAdvanced.gifFrameCount * gptAdvanced.gifFrameDurationMs) / 1000).toFixed(1)} 秒一輪；GIF 不支援透明背景，單格尺寸較小（9 格以內約 512–960px，更多格由模型自動決定）。右鍵「下載圖片」可存成 .gif。</p>
                                                 </>
-                                            )}
-                                            {gptAdvanced.outputFormat === 'svg' && (
-                                                <p className="text-[10px] text-gray-400">輸出可編輯路徑的向量檔，適合 Logo、圖示、簡單插圖。只支援純文字生成（有參考圖時會改回 PNG）；費用含參考圖與向量轉寫兩段。右鍵「下載圖片」可存成 .svg。</p>
                                             )}
                                             <label htmlFor="gpt-image-complexity" className="mt-1 text-[11px] font-medium text-gray-500">構圖規劃（Complexity）</label>
                                             <select id="gpt-image-complexity" value={gptAdvanced.complexity}
@@ -2079,7 +2078,9 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
                 >
                      {elements.filter(el => selectedElementIds.includes(el.id)).some(el => ['image', 'drawing', 'shape', 'text', 'note'].includes(el.type)) && (
                          <button 
-                            onClick={() => onGenerate(elements.filter(el => selectedElementIds.includes(el.id)), readSavedGenCount(), preserveTransparency)}
+                            // 生成只接受滑鼠／觸控的點擊：按鈕點過後會留著鍵盤焦點，之後每按一次 Enter 或空白鍵
+                            // 瀏覽器都會再「點」它一次（e.detail === 0）。中文輸入法用 Enter 確認選字時會連續誤觸生成。
+                            onClick={(e) => { e.currentTarget.blur(); if (e.detail === 0) return; onGenerate(elements.filter(el => selectedElementIds.includes(el.id)), readSavedGenCount(), preserveTransparency); }}
                             className="w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-tr from-[#AF52DE] to-[#5856D6] text-white shadow-md hover:scale-105 active:scale-95 transition-all"
                             title={`一鍵生成圖片（${readSavedGenCount()} 張）`}
                          >

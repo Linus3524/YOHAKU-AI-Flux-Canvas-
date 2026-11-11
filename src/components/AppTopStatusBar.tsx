@@ -40,9 +40,9 @@ export const AppTopStatusBar = ({
             Lite
           </button>
           <button
-            onClick={() => onSetImageModel('gemini-3.1-flash-image')}
+            onClick={() => onSetImageModel('gemini-nano-banana-2.1')}
             className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide transition-all duration-200 ${
-              imageModel === 'gemini-3.1-flash-image'
+              imageModel === 'gemini-nano-banana-2.1'
                 ? 'bg-white text-[#1D1D1F] shadow-sm'
                 : 'text-gray-400 hover:text-gray-600'
             }`}

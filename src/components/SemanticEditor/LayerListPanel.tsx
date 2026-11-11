@@ -186,7 +186,7 @@ export function LayerRow({
                         value={editVal}
                         onChange={e => setEditVal(e.target.value)}
                         onBlur={commitEdit}
-                        onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(false); }}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) commitEdit(); if (e.key === 'Escape') setEditing(false); }}
                         onClick={e => e.stopPropagation()}
                         style={{
                             fontSize: 13, fontWeight: 700, color: '#111827',
@@ -540,7 +540,7 @@ export function VersionThumb({
                     value={editVal}
                     onChange={e => setEditVal(e.target.value)}
                     onBlur={commitEdit}
-                    onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(false); }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) commitEdit(); if (e.key === 'Escape') setEditing(false); }}
                     onClick={e => e.stopPropagation()}
                     style={{
                         fontSize: 10, fontWeight: 700, color: '#7c3aed',

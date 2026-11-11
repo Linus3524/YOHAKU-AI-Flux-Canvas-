@@ -148,8 +148,8 @@ export const STICKER_SIZES: SkillOption[] = [
 export const STICKER_BACKGROUNDS: SkillOption[] = [
   { id: 'transparent', name: 'Transparent', name_zh: '透明背景', desc: '生成後自動去背',
     promptModifier: 'Background: A single FLAT, FULLY-SATURATED solid chroma-key background color. YOU choose the exact color per design, using this rule: pick whichever vivid, fully-saturated color is VISUALLY FARTHEST from EVERY color used in the subject (good options: vivid green, magenta/hot-pink, cyan, or electric blue) — e.g. for a warm/red subject use green, for a green subject use magenta, for a blue subject use magenta/green. The background must be plain and evenly lit: no scenery, gradients, patterns, texture, or shading. CRITICAL FOR CLEAN CUTOUT: the background must NEVER be white, off-white, cream, beige, grey, pastel, or any light/near-white tone, and must never share a hue with the subject — the subject (INCLUDING its white die-cut border and any pale, light, or white areas) must stay pure and clearly distinct from the background, otherwise the white border and light areas get wrongly removed during background removal. Keep the subject fully inside the frame with generous margin and crisp, high-contrast edges. Do NOT render a checkerboard or fake-transparency pattern.' },
-  { id: 'white', name: 'White', name_zh: '白色背景', desc: '商品攝影感',
-    promptModifier: 'Background: Clean solid white background, product photography style, soft shadow underneath the sticker.' },
+  { id: 'white', name: 'White', name_zh: '白色背景', desc: '乾淨純白背景',
+    promptModifier: 'BACKGROUND: white. The entire canvas background MUST be a single, uniform, 100% solid flat pure white (#FFFFFF). No shadows, no contact shadow, no gradients, no vignette, no texture, no paper grain, no scenery. Every pixel that is not part of the subject must be exactly #FFFFFF.' },
   { id: 'colored', name: 'Colored', name_zh: '彩色背景', desc: '配合主色調',
     promptModifier: 'Background: Solid colored background that complements the sticker color palette, harmonious and intentional color choice.' },
   { id: 'pattern', name: 'Patterned', name_zh: '圖案背景', desc: '裝飾性圖樣',

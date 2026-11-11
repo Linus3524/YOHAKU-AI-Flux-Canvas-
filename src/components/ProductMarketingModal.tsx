@@ -518,7 +518,7 @@ export const ProductMarketingModal: React.FC<ProductMarketingModalProps> = ({ im
             value={newAssetInput}
             onChange={e => setNewAssetInput(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
                 e.preventDefault();
                 addCustomAsset();
               }

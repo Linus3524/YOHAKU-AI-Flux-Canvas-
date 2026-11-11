@@ -47,7 +47,7 @@ export function GroupNode({ id, data, selected }: NodeProps) {
               setIsEditing(false);
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur();
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) event.currentTarget.blur();
               if (event.key === 'Escape') setIsEditing(false);
             }}
           />

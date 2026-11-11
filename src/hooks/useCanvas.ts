@@ -9,6 +9,7 @@
  * This file contains proprietary enhancements and logic specific to YOHAKU.
  */
 
+import { normalizeSvgDataUrl } from '../utils/imageFormat';
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { 
     CanvasElement, Point, ShapeType, 
@@ -516,8 +517,10 @@ export const useCanvas = (showToast: (msg: string) => void) => {
           return new Promise<Omit<ImageElement, 'id' | 'zIndex' | 'isVisible' | 'isLocked' | 'name' | 'groupId'> | null>((resolve) => {
             const reader = new FileReader();
             reader.onload = (e) => {
-              const src = e.target?.result as string;
-              if (!src) return resolve(null);
+              const rawSrc = e.target?.result as string;
+              if (!rawSrc) return resolve(null);
+              // SVG 補上寬高（只有 viewBox 時瀏覽器會當成 300×150，後續工具會拿到很小的圖）
+              const src = normalizeSvgDataUrl(rawSrc);
               // 匯入當下即建立獨立快取；之後即使來源是外接硬碟或自動存檔中斷，
               // 仍可從瀏覽器本機 IndexedDB 還原圖片。
               const img = new Image();

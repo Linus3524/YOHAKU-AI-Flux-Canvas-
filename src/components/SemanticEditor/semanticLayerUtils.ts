@@ -1551,7 +1551,7 @@ async function regenerateTextFullImageGemini({
     parts.push({ text: newPrompt });
 
     const response = await callGeminiWithRetry(() => ai.models.generateContent({
-        model: imageModel || 'gemini-3.1-flash-image',
+        model: imageModel || 'gemini-nano-banana-2.1',
         contents: { parts },
     }));
     for (const part of response.candidates?.[0]?.content?.parts ?? []) {
@@ -1731,7 +1731,7 @@ export async function regenerateLayer({
         const cropMime = cropHeader.match(/data:(.*);base64/)?.[1] || 'image/png';
 
         const response = await callGeminiWithRetry(() => ai.models.generateContent({
-            model: imageModel || 'gemini-3.1-flash-image',
+            model: imageModel || 'gemini-nano-banana-2.1',
             contents: {
                 parts: [
                     { inlineData: { data: cropData, mimeType: cropMime } },

@@ -282,7 +282,11 @@ const getBackgroundCandidates = (
   options: TransparencyRepairOptions = {},
 ) => {
   const candidates: BackgroundCandidate[] = [];
-  const baseTolerance = options.tolerance ?? 44;
+  // 底色有雜訊時自動放寬容差。黑底（有白邊）主體被白邊隔開，可以放得比較寬；
+  // 白底沒有白邊保護，放太寬會啃到淺色主體，所以上限較低。
+  const expected = (options.hasStickerBorder ? NAMED_COLORS.black : NAMED_COLORS.white);
+  const noise = measureEdgeNoise(data, width, height, parseCssColor(options.backgroundColor) ?? expected);
+  const baseTolerance = (options.tolerance ?? 44) + Math.min(options.hasStickerBorder ? 34 : 18, Math.round(noise * 3));
 
   addCandidate(candidates, parseCssColor(options.backgroundColor), baseTolerance + 8);
   addCandidate(
@@ -296,6 +300,73 @@ const getBackgroundCandidates = (
   });
 
   return candidates;
+};
+
+/**
+ * 清掉背景裡的小雜點。
+ * 泛洪只會吃掉「與邊緣連通、且顏色夠接近」的背景；模型在底色上灑的雜色顆粒
+ * 顏色偏離太多，會留成一粒粒孤島。這裡把面積極小的孤島（預設約整張圖的十萬分之 1.5）
+ * 一併當成背景處理。主體、文字、標點遠大於這個門檻，不受影響。
+ * @returns 被清掉的像素數
+ */
+const clearTinyIslands = (
+  width: number,
+  height: number,
+  isBackground: (position: number) => boolean,
+  clear: (position: number) => void,
+  maxArea = Math.max(12, Math.round(width * height * 0.000015)),
+): number => {
+  const total = width * height;
+  const seen = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let cleared = 0;
+  for (let start = 0; start < total; start += 1) {
+    if (seen[start] || isBackground(start)) continue;
+    let head = 0, tail = 0;
+    queue[tail++] = start;
+    seen[start] = 1;
+    while (head < tail) {
+      const position = queue[head++];
+      const x = position % width;
+      const y = (position - x) / width;
+      const push = (next: number) => {
+        if (seen[next] || isBackground(next)) return;
+        seen[next] = 1;
+        queue[tail++] = next;
+      };
+      if (x > 0) push(position - 1);
+      if (x < width - 1) push(position + 1);
+      if (y > 0) push(position - width);
+      if (y < height - 1) push(position + width);
+    }
+    if (tail <= maxArea) {
+      for (let i = 0; i < tail; i += 1) clear(queue[i]);
+      cleared += tail;
+    }
+  }
+  return cleared;
+};
+
+/**
+ * 量測四邊的背景有多「髒」：邊緣像素相對於背景色的平均偏移量（每通道最大差）。
+ * 乾淨純色底接近 0；有顆粒、壓縮雜訊或輕微漸層時會升高，用來自動放寬去背容差。
+ */
+const measureEdgeNoise = (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  color: { r: number; g: number; b: number },
+): number => {
+  let sum = 0, count = 0;
+  for (const position of getEdgePixelPositions(width, height)) {
+    const idx = position * 4;
+    if (data[idx + 3] <= 10) continue;
+    const diff = Math.max(Math.abs(data[idx] - color.r), Math.abs(data[idx + 1] - color.g), Math.abs(data[idx + 2] - color.b));
+    if (diff > 110) continue; // 貼到邊的主體不算背景雜訊
+    sum += diff;
+    count += 1;
+  }
+  return count > 0 ? sum / count : 0;
 };
 
 /**
@@ -388,6 +459,9 @@ export const repairStickerTransparency = async (
       data[idx + 3] = 0;
     });
   }
+
+  // 清掉殘留在透明區裡的小雜點（底色上顏色偏離太多、泛洪吃不到的顆粒）
+  clearTinyIslands(width, height, position => data[position * 4 + 3] <= 10, position => { data[position * 4 + 3] = 0; });
 
   // 幾何收縮：無條件往內削 erodePx 圈（不分顏色），清掉抗鋸齒/非背景色的殘邊。
   // 每輪先收集「碰到透明的不透明邊緣像素」再一次清掉（確保是 1px/輪，不串聯）。
@@ -482,11 +556,15 @@ export const repairStickerTransparency = async (
  *
  * @param targetHex 目標純色（如 '#ffffff' / '#000000'）
  * @param tolerance 每通道容差；越大越能吃掉髒污，但也越可能啃到與底色相近的主體邊緣
+ * @param options.neutralOnly 只把「接近無彩度」的像素當背景。貼圖／圖示的主體常有淺粉、淺黃等
+ *   淡色，光看亮度會被當成白底吃掉；陰影、灰階髒污與紙紋則幾乎沒有彩度，用彩度就能分開。
+ * @param options.despeckle 泛洪後再清掉背景上的小雜點
  */
 export const flattenBackgroundToColor = async (
   dataUrl: string,
   targetHex: string,
   tolerance = 96,
+  options: { neutralOnly?: boolean; despeckle?: boolean } = {},
 ): Promise<string> => {
   const { canvas, ctx, imageData, width, height } = await loadImageSnapshot(dataUrl);
   const { data } = imageData;
@@ -498,11 +576,13 @@ export const flattenBackgroundToColor = async (
 
   const isBg = (position: number) => {
     const idx = position * 4;
-    return (
-      Math.abs(data[idx]     - target.r) <= tolerance &&
-      Math.abs(data[idx + 1] - target.g) <= tolerance &&
-      Math.abs(data[idx + 2] - target.b) <= tolerance
-    );
+    const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+    if (
+      Math.abs(r - target.r) > tolerance ||
+      Math.abs(g - target.g) > tolerance ||
+      Math.abs(b - target.b) > tolerance
+    ) return false;
+    return !options.neutralOnly || Math.max(r, g, b) - Math.min(r, g, b) <= 26;
   };
   const enqueue = (position: number) => {
     if (visited[position] || !isBg(position)) return;
@@ -526,6 +606,16 @@ export const flattenBackgroundToColor = async (
     if (x < width - 1) enqueue(position + 1);
     if (y > 0) enqueue(position - width);
     if (y < height - 1) enqueue(position + width);
+  }
+
+  if (options.despeckle) {
+    clearTinyIslands(width, height, position => visited[position] === 1, position => {
+      const idx = position * 4;
+      data[idx] = target.r;
+      data[idx + 1] = target.g;
+      data[idx + 2] = target.b;
+      visited[position] = 1;
+    });
   }
 
   // 輸出為完全不透明（主體保留原色，背景已統一為目標純色）

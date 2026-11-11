@@ -163,8 +163,8 @@ export const ICON_BACKGROUNDS: SkillOption[] = [
     id: 'white',
     name: 'White',
     name_zh: '白色背景',
-    desc: '乾淨的白色底，帶有微弱環境陰影',
-    promptModifier: 'Background: Solid pure white background, clean presentation, soft contact shadow underneath the icon.'
+    desc: '乾淨純白背景，生成後自動純化',
+    promptModifier: 'BACKGROUND: white. The entire canvas background MUST be a single, uniform, 100% solid flat pure white (#FFFFFF). No shadows, no contact shadow, no gradients, no vignette, no texture, no paper grain, no scenery. Every pixel that is not part of the subject must be exactly #FFFFFF.'
   },
   {
     id: 'colored',

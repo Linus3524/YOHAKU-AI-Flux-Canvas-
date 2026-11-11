@@ -385,7 +385,7 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, imageSrc, onClose, 
                   {/* 原圖預覽 + 位置框 */}
                   <div>
                     <div className="flex justify-center bg-neutral-100 p-2">
-                      <div ref={previewRef} className="relative inline-block select-none">
+                      <div ref={previewRef} className="relative inline-block select-none overflow-hidden">
                         {imageSrc && <img src={imageSrc} alt="要分層的原圖" draggable={false} className="block max-h-[42vh] max-w-full" />}
                         {plan.layers.map((layer, index) => {
                           const active = hoveredId === layer.id || selectedIds.includes(layer.id);
@@ -446,7 +446,7 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, imageSrc, onClose, 
                         <input
                           value={addHint}
                           onChange={event => setAddHint(event.target.value)}
-                          onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void confirmAdd(); } }}
+                          onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void confirmAdd(); } }}
                           placeholder="物件名稱，例如：招牌"
                           aria-label="要追加的物件名稱"
                           className="h-8 w-full border border-neutral-200 bg-white px-2 text-xs outline-none focus:border-violet-500"
@@ -497,7 +497,7 @@ export function MagicLayerModal({ defaultModel, hasAtlasKey, imageSrc, onClose, 
                                   onChange={event => setRenameDraft(event.target.value)}
                                   onBlur={commitRename}
                                   onKeyDown={event => {
-                                    if (event.key === 'Enter') { event.preventDefault(); commitRename(); }
+                                    if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); commitRename(); }
                                     if (event.key === 'Escape') { event.stopPropagation(); setRenamingId(null); }
                                   }}
                                   aria-label="圖層名稱"

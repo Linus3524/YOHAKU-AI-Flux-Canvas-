@@ -13,7 +13,7 @@ import {
     checkCompositionSimilarity
 } from '../utils/helpers';
 import { executeDynamicRemoval } from '../utils/DynamicBackgroundRemoval';
-import { DEFAULT_GPT_ADVANCED, atlasModelSupportsGpt26Features, type GptAdvancedOptions, atlasModelSupportsTransparency, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type GptImageQuality, type AtlasGenerationModel } from '../utils/atlasImage';
+import { DEFAULT_GPT_ADVANCED, type GptAdvancedOptions, atlasModelSupportsTransparency, callAtlasImg2Img, callAtlasInpaint, atlasModelSupportsImg2Img, downloadImageAsBase64, type GptImageQuality, type AtlasGenerationModel } from '../utils/atlasImage';
 import { createGeminiClient, classifyAIError } from '../ai/geminiClient';
 import { prepareImageForGeneration, restoreTransparency } from '../ai/transparency';
 import { generateOneImage, type ImageEngineConfig } from '../ai/generateImage';
@@ -81,7 +81,7 @@ function buildStyledPrompt(userContent: string, stylePrompt: string, fallbackLab
     return styleDesc || `${fallbackLabel} style`;
 }
 
-export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-3.1-flash-image', atlasApiKey, generationModel: generationModelGlobal = 'gemini', falApiKey, setGeneratingLabels, pauseAutoSave, resumeAutoSave }: UseAIProps) => {
+export const useAI = ({ elements, setElements, selectedElementIds, showToast, setHasApiKey, apiKey, imageModel = 'gemini-nano-banana-2.1', atlasApiKey, generationModel: generationModelGlobal = 'gemini', falApiKey, setGeneratingLabels, pauseAutoSave, resumeAutoSave }: UseAIProps) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatingElementIds, setGeneratingElementIds] = useState<string[]>([]);
     // 設計大師「透明背景」：非 Seedream Pro 的本批生成圖在放入畫布時自動去背
@@ -1080,9 +1080,6 @@ CONSTRAINTS:
             const canDoImg2Img = atlasModelSupportsImg2Img(atlasModel);
             // 引擎葉子統一走 src/ai/pipelines/generate.ts 的 atlasBatch
             const atlasEngine = { gptQuality, advanced: gptAdvanced, model: atlasModel, apiKey: atlasApiKey, wait: withAtlasWaitToast };
-            if (atlasModelSupportsGpt26Features(atlasModel) && gptAdvanced.outputFormat === 'svg' && (hasImages || hasNoteRefs)) {
-                showToast('ℹ️ SVG 向量輸出只支援純文字生成；這次有參考圖，改以 PNG 輸出');
-            }
 
             // 畫框模式：每個畫框獨立生成並填入
             if (frameElements.length > 0) {

@@ -372,7 +372,7 @@ const LayerPanelInner: React.FC<LayerPanelProps> = ({
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
             handleFinishRename();
         } else if (e.key === 'Escape') {
             setEditingId(null);

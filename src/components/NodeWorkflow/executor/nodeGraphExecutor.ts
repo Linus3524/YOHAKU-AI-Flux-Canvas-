@@ -72,7 +72,7 @@ function resolveImageEngine(
   return {
     model: 'gemini',
     geminiApiKey: engine.geminiApiKey,
-    geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image',
+    geminiImageModel: engine.geminiImageModel || 'gemini-nano-banana-2.1',
     imageSize: params.imageSize ?? '1K',
   };
 }
@@ -115,7 +115,7 @@ async function runImageGen(
   parts.push({ text: prompt });
   const src = await geminiGenerateImage(
     { parts, aspectRatio, imageSize: engine.imageSize || '1K' },
-    { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image' },
+    { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-nano-banana-2.1' },
   );
   if (!src) throw new Error('生圖沒有回傳圖片');
   return src;
@@ -191,7 +191,7 @@ async function runStyleTransfer(
       model: useAtlas ? engine.generationModel! : 'gemini',
       geminiApiKey: engine.geminiApiKey,
       atlasApiKey: useAtlas ? engine.atlasApiKey : undefined,
-      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image',
+      geminiImageModel: engine.geminiImageModel || 'gemini-nano-banana-2.1',
       imageSize: engine.imageSize || '1K',
     },
   );
@@ -231,7 +231,7 @@ async function runCameraAngle(
       model: useAtlas ? atlasModel as AtlasGenerationModel : 'gemini',
       geminiApiKey: engine.geminiApiKey ?? undefined,
       atlasApiKey: useAtlas ? engine.atlasApiKey : undefined,
-      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image',
+      geminiImageModel: engine.geminiImageModel || 'gemini-nano-banana-2.1',
       imageSize: engine.imageSize || '1K',
     },
   );
@@ -311,7 +311,7 @@ Enhance details and sharpness significantly while keeping the structure identica
         model: useAtlas ? engine.generationModel! : 'gemini',
         geminiApiKey: engine.geminiApiKey,
         atlasApiKey: useAtlas ? engine.atlasApiKey : undefined,
-        geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image',
+        geminiImageModel: engine.geminiImageModel || 'gemini-nano-banana-2.1',
         imageSize: requestedResolution,
       },
     );
@@ -554,7 +554,7 @@ async function runOutpaint(
         aspectRatio,
         imageSize: '4K',
       },
-      { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-3.1-flash-image' },
+      { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-nano-banana-2.1' },
     ) || '';
   }
   if (!generated) throw new Error('外擴沒有回傳圖片');
@@ -612,7 +612,7 @@ async function runApplyStyle(
       model: useAtlas ? requestedModel : 'gemini',
       geminiApiKey: engine.geminiApiKey,
       atlasApiKey: useAtlas ? engine.atlasApiKey : null,
-      geminiImageModel: engine.geminiImageModel || 'gemini-3.1-flash-image',
+      geminiImageModel: engine.geminiImageModel || 'gemini-nano-banana-2.1',
       imageSize: engine.imageSize || '1K',
     },
     onAsset: (_source, finalSrc) => {

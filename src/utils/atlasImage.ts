@@ -4,6 +4,8 @@
  * Async polling pattern: POST → prediction_id → poll until completed
  */
 
+import { normalizeSvgDataUrl } from './imageFormat';
+
 const ATLAS_BASE_URL = 'https://api.atlascloud.ai/api/v1';
 const POLL_INTERVAL_MS = 2500;
 const MAX_WAIT_MS = 600000; // 10 minutes（參考圖模式需要更長時間）
@@ -13,8 +15,8 @@ export type AtlasGenerationModel = 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-fla
 export const GPT_IMAGE_QUALITIES = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type GptImageQuality = typeof GPT_IMAGE_QUALITIES[number];
 
-/** GPT Image 2.6 新增：複雜度（規劃程度）、GIF 動圖、SVG 向量輸出。 */
-export type GptOutputFormat = 'png' | 'gif' | 'svg';
+/** GPT Image 2.6 新增：複雜度（規劃程度）與 GIF 動圖輸出。 */
+export type GptOutputFormat = 'png' | 'gif';
 export type GptComplexity = 'auto' | 'low' | 'medium' | 'high';
 export interface GptAdvancedOptions {
     outputFormat: GptOutputFormat;
@@ -168,7 +170,7 @@ interface ModelConfig {
     useSeedreamProSizes?: boolean; // true = 使用 SEEDREAM_PRO_SIZES（* 分隔，總畫素 ≤2K）
     supportsBase64Output?: boolean; // 支援 enable_base64_output
     supportsTransparentBackground?: boolean;
-    supportsGpt26Features?: boolean; // complexity / GIF / SVG（GPT Image 2.6）
+    supportsGpt26Features?: boolean; // complexity / GIF（GPT Image 2.6）
     supportsQualityParam?: boolean; // 支援 quality: low/medium/high（GPT Image 2）
     supportsSeed?: boolean;         // 支援 seed 種子碼（OpenAI gpt-image 系列不支援）
     extraParams?: Record<string, unknown>; // 固定附加參數
@@ -375,7 +377,8 @@ async function blobToBase64(blob: Blob, fallback: string): Promise<string> {
     }
     return new Promise((resolve) => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve((reader.result as string) || fallback);
+        // SVG 進來時補上寬高，之後顯示與所有走 Canvas 的工具才有足夠解析度
+        reader.onloadend = () => resolve(normalizeSvgDataUrl((reader.result as string) || fallback));
         reader.onerror  = () => resolve(fallback);
         reader.readAsDataURL(blob);
     });
@@ -566,7 +569,7 @@ interface AtlasCallOptions {
     transparentBackground?: boolean; // 原生透明輸出（僅支援的模型送出）
     keepAlpha?: boolean;     // 壓縮時使用 PNG 保留 alpha（預設 JPEG 會破壞透明）
     seed?: number;           // 鎖定隨機種子碼以利批次風格一致
-    outputFormat?: 'jpeg' | 'png' | 'gif' | 'svg';
+    outputFormat?: 'jpeg' | 'png' | 'gif';
     /** GPT 2.6：模型渲染前的規劃程度；不給 = 模型預設（high） */
     complexity?: 'low' | 'medium' | 'high';
     gifFrameCount?: number;
@@ -578,9 +581,9 @@ const wantsGif = (config: ModelConfig, options?: AtlasCallOptions) =>
     !!config.supportsGpt26Features && options?.outputFormat === 'gif';
 
 /** GPT 2.6 專屬參數；不支援的模型一律不送，避免多餘欄位。 */
-function applyGpt26Options(config: ModelConfig, extra: Record<string, unknown>, options: AtlasCallOptions | undefined, isEdit: boolean) {
+function applyGpt26Options(config: ModelConfig, extra: Record<string, unknown>, options: AtlasCallOptions | undefined) {
     if (!config.supportsGpt26Features) {
-        if (extra['output_format'] === 'gif' || extra['output_format'] === 'svg') extra['output_format'] = 'png';
+        if (extra['output_format'] === 'gif') extra['output_format'] = 'png';
         return;
     }
     if (options?.complexity) extra['complexity'] = options.complexity;
@@ -591,10 +594,6 @@ function applyGpt26Options(config: ModelConfig, extra: Record<string, unknown>, 
         extra['frame_duration_ms'] = Math.round(Math.max(20, Math.min(2000, options.gifFrameDurationMs ?? 200)) / 10) * 10;
         delete extra['background']; // GIF 不支援透明背景
         if (config.sizeParam) extra[config.sizeParam] = (frames <= 9 && GIF_FRAME_SIZES[options.ratio ?? '']) || 'auto';
-    } else if (options?.outputFormat === 'svg') {
-        // SVG 只有文生圖端點支援，且一次一張；編輯端點改回 PNG
-        extra['output_format'] = isEdit ? 'png' : 'svg';
-        if (!isEdit) extra['n'] = 1;
     }
 }
 
@@ -623,7 +622,7 @@ function buildT2IBody(config: ModelConfig, prompt: string, options?: AtlasCallOp
     } else if (options?.outputFormat) {
         extra['output_format'] = options.outputFormat;
     }
-    applyGpt26Options(config, extra, options, false);
+    applyGpt26Options(config, extra, options);
     // 僅支援 seed 的模型才送；OpenAI gpt-image 系列沒有此參數，送了是多餘欄位。
     if (options?.seed !== undefined && config.supportsSeed) {
         extra['seed'] = options.seed;
@@ -698,7 +697,7 @@ function buildI2IBody(config: ModelConfig, prompt: string, images: string[], opt
     } else if (options?.outputFormat) {
         extra['output_format'] = options.outputFormat;
     }
-    applyGpt26Options(config, extra, options, true);
+    applyGpt26Options(config, extra, options);
     // 僅支援 seed 的模型才送；OpenAI gpt-image 系列沒有此參數，送了是多餘欄位。
     if (options?.seed !== undefined && config.supportsSeed) {
         extra['seed'] = options.seed;
