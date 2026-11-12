@@ -467,10 +467,14 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
     }
 
     if (isSpacebarPressed || e.button === 1 || interactionMode === 'hand') {
+      e.preventDefault();
       setIsPanning(true);
       setStartPan({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     } else if (e.button === 0) {
       if (!outpaintingState && !croppingElementId) { 
+        // 框選是畫布手勢，避免同時啟動瀏覽器的原生文字拖選。
+        // 編輯中的輸入框會自行攔截 mousedown，不會走到這裡。
+        e.preventDefault();
         if (!e.shiftKey) {
             onSelectElement(null, false);
         }
