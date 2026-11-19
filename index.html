@@ -118,6 +118,8 @@
         margin: 0;
       }
       .num-no-spin { -moz-appearance: textfield; appearance: textfield; }
+      /* 建立工具啟用時，畫布物件層全部讓滑鼠穿透（見 InfiniteCanvas） */
+      .canvas-creating, .canvas-creating * { pointer-events: none !important; }
       /* 輸入框寬度貼合內容 → 標籤 / 數字 / 上下鈕之間的間距固定相等，不隨位數變動 */
       @supports (field-sizing: content) {
         .num-fit { field-sizing: content; }

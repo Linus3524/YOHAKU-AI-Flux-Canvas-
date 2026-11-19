@@ -551,6 +551,8 @@ const App: React.FC = () => {
   // 便利貼「點擊放置」模式：true = 等待使用者在畫布點一下決定位置
   // 點擊放置模式：按工具列「便利貼／文字」後，下一次點畫布就在該處建立
   const [placingKind, setPlacingKind] = useState<'note' | 'text' | null>(null);
+  // 線條工具（直線／箭頭／雙向）：選取後在畫布上拖曳畫出，存的是箭頭樣式設定
+  const [activeLineTool, setActiveLineTool] = useState<Partial<ArrowElement> | null>(null);
   // 最近一次滑鼠螢幕座標 —— 供「在游標位置貼上」使用
   const lastPointerScreenRef = useRef<Point | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -841,6 +843,15 @@ const App: React.FC = () => {
 
   const handleSelectShapeTool = useCallback((shapeType: ShapeType) => {
       setActiveShapeTool(shapeType);
+      setActiveLineTool(null);
+      setInteractionMode('select');
+      setSelectedElementIds([]);
+      setPlacingKind(null);
+  }, [setActiveShapeTool, setSelectedElementIds]);
+
+  const handleSelectLineTool = useCallback((config: Partial<ArrowElement>) => {
+      setActiveLineTool(config);
+      setActiveShapeTool(null);
       setInteractionMode('select');
       setSelectedElementIds([]);
       setPlacingKind(null);
@@ -850,6 +861,7 @@ const App: React.FC = () => {
   const handleStartPlacing = useCallback((kind: 'note' | 'text') => {
       setPlacingKind(prev => prev === kind ? null : kind);
       setActiveShapeTool(null);
+      setActiveLineTool(null);
       setInteractionMode('select');
       setSelectedElementIds([]);
   }, [setActiveShapeTool, setSelectedElementIds]);
@@ -1310,10 +1322,58 @@ const App: React.FC = () => {
               strokeStyle: 'solid',
           });
           if (id) { setCreatingShapeId(id); setSelectedElementIds([id]); }
+          return;
       }
-  }, [placingKind, addNote, addText, activeShapeTool, addElement, setCreatingShapeId, setSelectedElementIds, shapeStartPointRef]);
+      if (activeLineTool && canvasApiRef.current && e.button === 0) {
+          if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.floating-menu') || (e.target as HTMLElement).closest('.fixed')) return;
+          e.stopPropagation();
+          const worldPoint = canvasApiRef.current.screenToWorld({ x: e.clientX, y: e.clientY });
+          shapeStartPointRef.current = worldPoint;
+          // 起訖點先重合，拖曳時再拉出終點（mousemove 更新）
+          const id = addElement({
+              type: 'arrow',
+              start: worldPoint,
+              end: worldPoint,
+              position: worldPoint,
+              width: 1,
+              height: 30,
+              rotation: 0,
+              color: '#1D1D1F',
+              strokeWidth: 4,
+              strokeStyle: 'solid',
+              startArrowhead: 'none',
+              endArrowhead: 'triangle',
+              ...activeLineTool,
+          });
+          if (id) { setCreatingShapeId(id); setSelectedElementIds([id]); }
+      }
+  }, [placingKind, addNote, addText, activeShapeTool, activeLineTool, addElement, setCreatingShapeId, setSelectedElementIds, shapeStartPointRef]);
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
+      if (creatingShapeId && canvasApiRef.current && shapeStartPointRef.current && activeLineTool) {
+          e.preventDefault();
+          const start = shapeStartPointRef.current;
+          const cur = canvasApiRef.current.screenToWorld({ x: e.clientX, y: e.clientY });
+          let dx = cur.x - start.x;
+          let dy = cur.y - start.y;
+          if (e.shiftKey) {
+              // Shift：角度鎖定 45° 倍數
+              const len = Math.hypot(dx, dy);
+              const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+              dx = Math.cos(ang) * len;
+              dy = Math.sin(ang) * len;
+          }
+          const end = { x: start.x + dx, y: start.y + dy };
+          setElements(prev => prev.map(el => el.id === creatingShapeId ? {
+              ...el,
+              start,
+              end,
+              position: { x: start.x + dx / 2, y: start.y + dy / 2 },
+              width: Math.max(1, Math.hypot(dx, dy)),
+              rotation: Math.atan2(dy, dx) * (180 / Math.PI),
+          } as CanvasElement : el), { addToHistory: false });
+          return;
+      }
       if (creatingShapeId && canvasApiRef.current && shapeStartPointRef.current) {
           e.preventDefault();
           const currentWorldPoint = canvasApiRef.current.screenToWorld({ x: e.clientX, y: e.clientY });
@@ -1339,13 +1399,31 @@ const App: React.FC = () => {
               position: { x: centerX, y: centerY }
           } : el), { addToHistory: false }); 
       }
-  }, [creatingShapeId, setElements, shapeStartPointRef]);
+  }, [creatingShapeId, activeLineTool, setElements, shapeStartPointRef]);
 
   const handleCanvasMouseUp = useCallback(() => {
+      if (creatingShapeId && activeLineTool) {
+          const element = elements.find(el => el.id === creatingShapeId);
+          if (element && element.type === 'arrow' && element.width < 5) {
+              // 只點一下沒拖：從點擊處往右放一條預設長度的線
+              const start = element.start;
+              const end = { x: start.x + 150, y: start.y };
+              setElements(prev => prev.map(el => el.id === creatingShapeId ? {
+                  ...el, start, end, width: 150, rotation: 0,
+                  position: { x: start.x + 75, y: start.y },
+              } as CanvasElement : el), { addToHistory: false });
+          }
+          setElements(prev => prev, { addToHistory: true });
+          setCreatingShapeId(null);
+          shapeStartPointRef.current = null;
+          setActiveLineTool(null);
+          return;
+      }
       if (creatingShapeId) {
           const element = elements.find(el => el.id === creatingShapeId);
           if (element && (element.width < 5 || element.height < 5)) {
-              setElements(prev => prev.map(el => el.id === creatingShapeId ? { ...el, width: 100, height: 100, } : el));
+              // 覆寫建立時那筆歷史（不另開一筆），一次復原就能移除整個形狀
+              setElements(prev => prev.map(el => el.id === creatingShapeId ? { ...el, width: 100, height: 100, } : el), { addToHistory: false });
           }
           setElements(prev => prev, { addToHistory: true });
           setCreatingShapeId(null);
@@ -1353,7 +1431,7 @@ const App: React.FC = () => {
           setActiveShapeTool(null);
           setInteractionMode('select');
       }
-  }, [creatingShapeId, elements, setElements, setCreatingShapeId, setActiveShapeTool, shapeStartPointRef]);
+  }, [creatingShapeId, activeLineTool, elements, setElements, setCreatingShapeId, setActiveShapeTool, shapeStartPointRef]);
 
   const contextMenuElement = contextMenu?.elementId ? elements.find(el => el.id === contextMenu.elementId) : null;
   const isGrouped = selectedElements.length > 0 && selectedElements.every(el => el.groupId && el.groupId === selectedElements[0].groupId);
@@ -1402,6 +1480,11 @@ const App: React.FC = () => {
           if (creatingShapeId) setElements(prev => prev.filter(el => el.id !== creatingShapeId));
       }
       if (placingKind && e.key === 'Escape') setPlacingKind(null);
+      if (activeLineTool && e.key === 'Escape') {
+          setActiveLineTool(null);
+          setCreatingShapeId(null);
+          if (creatingShapeId) setElements(prev => prev.filter(el => el.id !== creatingShapeId));
+      }
       const target = e.target as HTMLElement;
       const isEditingText = ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !(target as HTMLInputElement | HTMLTextAreaElement).readOnly) || target.isContentEditable;
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText) { e.preventDefault(); deleteElement(); return; }
@@ -1427,7 +1510,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [deleteElement, undo, redo, editingDrawing, editingImage, activeNodeGroupId, outpaintingState, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, placingKind, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
+  }, [deleteElement, undo, redo, editingDrawing, editingImage, activeNodeGroupId, outpaintingState, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, activeLineTool, creatingShapeId, placingKind, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
   
   useEffect(() => {
     const clearDragState = () => {
@@ -1572,7 +1655,7 @@ const App: React.FC = () => {
   return (
     <>
     <main
-        className={`relative w-screen h-screen bg-[#F5F5F7] font-sans text-[#1D1D1F] ${activeShapeTool || placingKind ? 'cursor-crosshair' : ''}`}
+        className={`relative w-screen h-screen bg-[#F5F5F7] font-sans text-[#1D1D1F] ${activeShapeTool || placingKind || activeLineTool ? 'cursor-crosshair' : ''}`}
         onClick={() => { setContextMenu(null); setShowStyleLibrary(false); }}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleCanvasMouseMove}
@@ -1748,7 +1831,7 @@ const App: React.FC = () => {
         onApplyCrop={handleApplyCrop}
         interactionMode={interactionMode}
         activeShapeTool={activeShapeTool}
-        placingElement={!!placingKind}
+        placingElement={!!placingKind || !!activeLineTool}
         onUpscale={handleAIUpscale}
         onLocalUpscale={handleLocalUpscale}
         onLocalRemoveBackground={handleLocalRemoveBackground}
@@ -1766,7 +1849,7 @@ const App: React.FC = () => {
             notePlacing={placingKind === 'note'}
             textPlacing={placingKind === 'text'}
             onAddText={() => handleStartPlacing('text')}
-            onAddArrow={(config) => addArrow(config)}
+            onAddArrow={(config) => handleSelectLineTool(config ?? {})}
             onAddDrawing={() => addDrawing()}
             onAddImage={() => triggerImageUpload()}
             onAddFrame={(ratioLabel, ratioValue) => addFrame(ratioLabel, ratioValue)}

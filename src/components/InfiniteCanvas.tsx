@@ -893,7 +893,9 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
       />
 
       <div
-        className="absolute inset-0 origin-top-left"
+        // 形狀／線條／放置工具啟用時，畫布上的物件（圖片、工作區域…）全部不接滑鼠，
+        // 點擊穿透到畫布 → 可以直接在圖片上拖出形狀，而不是拖動圖片
+        className={`absolute inset-0 origin-top-left ${activeShapeTool || placingElement ? 'canvas-creating' : ''}`}
         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, willChange: 'transform' }}
       >
         <ElementsLayer
