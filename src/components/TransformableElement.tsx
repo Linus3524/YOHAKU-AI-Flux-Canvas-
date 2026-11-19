@@ -2001,7 +2001,9 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                         
                         return (
                             <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <svg width="100%" height="100%" viewBox={`0 -20 ${el.width} 40`} style={{ overflow: 'visible' }}>
+                                {/* viewBox 必須與元素同尺寸（1:1）。原本固定高 40 而元素高 30，
+                                    等比縮放會把整條線縮成 75% 置中，端點對不上把手、也和匯出長度不同 */}
+                                <svg width="100%" height="100%" viewBox={`0 ${-el.height / 2} ${el.width} ${el.height}`} style={{ overflow: 'visible' }}>
                                     <path 
                                         d={`M 0 0 L ${el.width} 0`} 
                                         stroke={arrowEl.color || '#000'} 
@@ -2094,7 +2096,13 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
             {isSelected && !isOutpainting && !element.isLocked && interactionMode === 'select' && element.type !== 'artboard' && (
                 <>
                     {/* 選取框：1px 貼齊 element 邊緣 */}
-                    <div className={`absolute inset-0 border pointer-events-none ${borderRadiusClass}`} style={{ borderColor: getLayerColor(element.type) }} />
+                    {element.type === 'arrow' ? (
+                        // 線條：不畫外框，改沿線本身畫一條細線（Figma 做法），選取狀態貼齊線條
+                        <div className="absolute left-0 right-0 top-1/2 pointer-events-none"
+                            style={{ height: 0, borderTop: `${Math.max(1, 1 / zoom)}px solid ${getLayerColor(element.type)}`, transform: 'translateY(-50%)' }} />
+                    ) : (
+                        <div className={`absolute inset-0 border pointer-events-none ${borderRadiusClass}`} style={{ borderColor: getLayerColor(element.type) }} />
+                    )}
 
                     {/* 圖片尺寸標籤 */}
                     {showImageSizes && (element.type === 'image' || element.type === 'drawing') && (() => {
@@ -2148,11 +2156,12 @@ const getShapePath = (shapeEl: ShapeElement, w: number, h: number) => {
                         const layerColor = getLayerColor(element.type);
                         return element.type === 'arrow' ? (
                             <>
-                                <div className="absolute top-1/2 -translate-y-1/2 cursor-grab transform-handle"
-                                    style={{ left: HO, width: HS, height: HS, backgroundColor: 'white', border: `${HBW} solid ${layerColor}`, borderRadius: 2 }}
+                                {/* 端點把手：圓形、中心正好落在起點／終點上 */}
+                                <div className="absolute top-1/2 -translate-y-1/2 cursor-crosshair transform-handle hover:scale-125 transition-transform"
+                                    style={{ left: HO, width: HS, height: HS, backgroundColor: 'white', border: `${HBW} solid ${layerColor}`, borderRadius: '50%' }}
                                     onMouseDown={(e) => handleInteractionStart(e, 'resize-arrow-start')} />
-                                <div className="absolute top-1/2 -translate-y-1/2 cursor-grab transform-handle"
-                                    style={{ right: HO, width: HS, height: HS, backgroundColor: 'white', border: `${HBW} solid ${layerColor}`, borderRadius: 2 }}
+                                <div className="absolute top-1/2 -translate-y-1/2 cursor-crosshair transform-handle hover:scale-125 transition-transform"
+                                    style={{ right: HO, width: HS, height: HS, backgroundColor: 'white', border: `${HBW} solid ${layerColor}`, borderRadius: '50%' }}
                                     onMouseDown={(e) => handleInteractionStart(e, 'resize-arrow-end')} />
                             </>
                         ) : (
