@@ -6,8 +6,10 @@ import { NodeResultPreview } from './NodeResultPreview';
 import { NodeDeleteButton } from './NodeDeleteButton';
 import { useNodeGraphStore } from '../../../store/nodeGraphStore';
 import { Icon } from '../../Icon';
+import { NODE_IMAGE_MODELS } from '../modelOptions';
+import { atlasModelSupportsTransparency } from '../../../utils/atlasImage';
 
-const MODEL_OPTIONS = ['gemini', 'seedream-v5-pro', 'seedream-v5', 'seedream-v4.5', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'flux-2-pro'];
+const SIZE_OPTIONS: NonNullable<ImageGenParams['imageSize']>[] = ['1K', '2K', '4K'];
 const RATIO_OPTIONS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
 
 /**
@@ -29,6 +31,8 @@ export function ImageGenNode({ id, data, selected }: NodeProps) {
   // 檢查是否有結果圖片以決定是否能摺疊
   const hasResult = useNodeGraphStore(s => !!s.nodeResults[id]);
   const isCollapsed = hasResult && !!params.isCollapsed;
+
+  const supportsAlpha = atlasModelSupportsTransparency(params.model ?? 'gemini');
 
   const toggleCollapse = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -66,7 +70,7 @@ export function ImageGenNode({ id, data, selected }: NodeProps) {
               onChange={(e) => setParam({ model: e.target.value })}
               className="nodrag flex-1 min-w-0 border border-neutral-200 px-1 py-1 text-[11px] focus:outline-none focus:border-neutral-400 bg-neutral-50"
             >
-              {MODEL_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+              {NODE_IMAGE_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
             <select
               value={params.aspectRatio ?? '1:1'}
@@ -76,6 +80,38 @@ export function ImageGenNode({ id, data, selected }: NodeProps) {
               {RATIO_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
+          <div className="flex gap-1">
+            <select
+              value={params.imageSize ?? ''}
+              onChange={(e) => setParam({ imageSize: (e.target.value || undefined) as ImageGenParams['imageSize'] })}
+              title="解析度"
+              className="nodrag w-[64px] border border-neutral-200 px-1 py-1 text-[11px] focus:outline-none focus:border-neutral-400 bg-neutral-50"
+            >
+              <option value="">預設</option>
+              {SIZE_OPTIONS.map(size => <option key={size} value={size}>{size}</option>)}
+            </select>
+            <input
+              type="number"
+              min={0}
+              value={params.seed ?? ''}
+              onChange={(e) => setParam({ seed: e.target.value === '' ? undefined : Math.max(0, Math.floor(Number(e.target.value))) })}
+              placeholder="種子碼（隨機）"
+              title="固定種子碼可重現相同結果；留空則每次隨機"
+              className="nodrag num-no-spin flex-1 min-w-0 border border-neutral-200 px-1.5 py-1 text-[11px] focus:outline-none focus:border-neutral-400 bg-neutral-50"
+            />
+          </div>
+          <label
+            className={`nodrag flex items-center gap-1.5 text-[10px] ${supportsAlpha ? 'text-neutral-600 cursor-pointer' : 'text-neutral-300 cursor-not-allowed'}`}
+            title={supportsAlpha ? '由模型直接輸出透明背景' : '此模型不支援原生透明，請在後面串接「去背」節點'}
+          >
+            <input
+              type="checkbox"
+              disabled={!supportsAlpha}
+              checked={supportsAlpha && !!params.transparentBackground}
+              onChange={(e) => setParam({ transparentBackground: e.target.checked })}
+            />
+            透明背景{supportsAlpha ? '' : '（僅 GPT 2.5 / 2.6）'}
+          </label>
         </div>
       )}
       <NodeResultPreview id={id} />

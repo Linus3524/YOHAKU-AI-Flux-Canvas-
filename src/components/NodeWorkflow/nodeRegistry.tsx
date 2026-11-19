@@ -20,6 +20,7 @@ import { LayerSplitNode } from './nodes/LayerSplitNode';
 import { BrandKitNode } from './nodes/BrandKitNode';
 import { CrossPlatformNode } from './nodes/CrossPlatformNode';
 import { ProductMarketingNode } from './nodes/ProductMarketingNode';
+import { CompositeNode } from './nodes/CompositeNode';
 import { GroupNode } from './nodes/GroupNode';
 import { NoteNode } from './nodes/NoteNode';
 
@@ -225,6 +226,11 @@ export const NODE_REGISTRY = {
     needsUpstream: true,
     input: 'image',
     output: 'imageBatch',
+  },
+  composite: {
+    kind: 'composite', component: CompositeNode, label: '疊合', addLabel: '＋ 疊合',
+    // 已停用的新建功能；保留註冊以便既有工作流仍可開啟、刪除或讀取結果。
+    addable: false, category: 'process', needsUpstream: true, input: 'image', output: 'image',
   },
   group: {
     kind: 'group',

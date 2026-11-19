@@ -1,6 +1,6 @@
 import type { BiRefNetModel } from '../../utils/geminiLayer';
 
-export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'lineSticker' | 'style' | 'cameraAngle' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'inpaint' | 'adjustments' | 'copyStyle' | 'applyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing' | 'group' | 'note';
+export type NodeKind = 'input' | 'output' | 'removeBg' | 'imageGen' | 'lineSticker' | 'style' | 'cameraAngle' | 'upscale' | 'promptOptimize' | 'analyze' | 'outpaint' | 'inpaint' | 'adjustments' | 'copyStyle' | 'applyStyle' | 'layerSplit' | 'brandKit' | 'crossPlatform' | 'productMarketing' | 'composite' | 'group' | 'note';
 
 export interface NoteParams {
   text: string;
@@ -22,6 +22,12 @@ export interface ImageGenParams {
   prompt: string;
   model: string;
   aspectRatio?: string;
+  /** 解析度；未設定時 Gemini 跟隨全域設定、Atlas 用 2K。 */
+  imageSize?: '1K' | '2K' | '4K';
+  /** 原生透明背景（僅支援的模型有效，其餘請串接「去背」節點）。 */
+  transparentBackground?: boolean;
+  /** 固定種子碼；留空則每次隨機。 */
+  seed?: number;
 }
 export interface LineStickerParams {
   subject: string;
@@ -55,6 +61,8 @@ export interface PromptOptimizeParams {
 }
 export interface AnalyzeParams {
   format: 'summary';
+  /** 自訂問題；留空則輸出風格／光影／構圖摘要。 */
+  question?: string;
 }
 export interface OutpaintParams {
   direction: 'all' | 'left' | 'right' | 'top' | 'bottom';
@@ -70,6 +78,15 @@ export interface CopyStyleParams {
 export interface ApplyStyleParams { preserveTransparency: boolean; model?: string; }
 export interface InpaintParams {
   prompt: string;
+  /** 在節點上手繪的遮罩（白＝重繪、黑＝保留）；有接「遮罩」輸入時以輸入為準。 */
+  maskSrc?: string;
+}
+export interface CompositeParams {
+  /** 前景寬度佔背景寬度的百分比（1–200）。 */
+  scale: number;
+  /** 前景中心點在背景上的位置（0–100%）。 */
+  x: number;
+  y: number;
 }
 export interface AdjustmentsParams {
   brightness: number;
@@ -103,9 +120,14 @@ export interface ProductMarketingParams {
   lockStyleConsistency: boolean;
 }
 export interface LayerSplitParams {
-  engine: 'gemini' | 'seedream-v5-pro';
+  /** 'gemini' = Gemini + BiRefNet 舊路徑；其餘為魔法分層（gptLayerSegment）的模型。 */
+  engine: 'gemini' | 'seedream-v5-pro' | 'gpt-image-2' | 'gpt-image-2.5-sunburst' | 'gpt-image-2.5-flare' | 'gpt-image-2.6-sunburst' | 'gpt-image-2.6-flare';
+  /** 補充指令（指定要拆出哪些物件）。 */
   prompt?: string;
   imageSize?: '1K' | '2K';
+  layerCount?: 'auto' | number;
+  groupingStrategy?: 'smart' | 'separate' | 'category';
+  includeBackground?: boolean;
 }
 export interface GroupParams {
   label?: string;

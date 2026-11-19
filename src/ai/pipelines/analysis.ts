@@ -72,6 +72,17 @@ export async function analyzeImageStyleFull(
     return JSON.parse(rawText);
 }
 
+/** 看圖回答自訂問題（節點工作流的圖片分析節點用）。未回文字時回傳 ''。 */
+export async function askAboutImage(src: string, question: string, geminiApiKey?: string | null): Promise<string> {
+    const genAI = createGeminiClient(geminiApiKey);
+    const { data, mimeType } = splitDataUrl(src);
+    const response = await callGeminiWithRetry<GenerateContentResponse>(() => genAI.models.generateContent({
+        model: GEMINI_ANALYSIS_MODEL,
+        contents: { parts: [{ inlineData: { data, mimeType } }, { text: `${question}\n\nAnswer directly and concisely in plain text, with no preamble and no markdown.` }] },
+    }));
+    return response.text?.trim() || '';
+}
+
 /** 影像調和 Pass 1：分析底圖的 VFX 合成視覺特徵（光源/色溫/曝光/陰影/氛圍）。未回文字時回傳 ''。 */
 export async function analyzeBaseImageForCompositing(src: string, geminiApiKey?: string | null): Promise<string> {
     const genAI = createGeminiClient(geminiApiKey);

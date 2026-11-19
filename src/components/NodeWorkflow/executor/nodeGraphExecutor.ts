@@ -1,7 +1,7 @@
 // 節點圖執行引擎（純 TS，不碰 React）。
 // #3 階段 A：線性鏈 + 本機去背。重用 src/ai/pipelines/* 現成函式，不重寫 AI 邏輯。
 // 中間結果只在本函式回傳的 Map（記憶體），呼叫端不得寫進 graph 存檔。
-import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, AdjustmentsParams, ApplyStyleParams, BrandKitParams, CameraAngleParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, InpaintParams, LayerSplitParams, LineStickerParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
+import type { GraphNode, GraphEdge, NodeGraphData, NodeRunStatus, AdjustmentsParams, ApplyStyleParams, BrandKitParams, CameraAngleParams, CompositeParams, CopyStyleParams, CrossPlatformParams, ImageGenParams, InpaintParams, LayerSplitParams, LineStickerParams, NodeKind, OutpaintParams, ProductMarketingParams, PromptOptimizeParams, RemoveBgParams, UpscaleParams } from '../types';
 import type { Part } from '@google/genai';
 import type { ImageElement, OutpaintingState } from '../../../types';
 import { runLocalRmbgPipeline, runLocalUpscalePipeline, checkLocalModelReady } from '../../../ai/pipelines/localModels';
@@ -10,11 +10,11 @@ import { callAtlasImg2Img, callAtlasInpaint } from '../../../utils/atlasImage';
 import { runExtendBrandKitPipeline } from '../../../ai/pipelines/brandKit';
 import { runCrossPlatformPipeline } from '../../../ai/pipelines/crossPlatform';
 import { runProductMarketingPipeline } from '../../../ai/pipelines/productMarketing';
-import { analyzeImageStyleFull, optimizePromptWithAI } from '../../../ai/pipelines/analysis';
+import { analyzeImageStyleFull, askAboutImage, optimizePromptWithAI } from '../../../ai/pipelines/analysis';
 import { generateOutpaintingPrompt } from '../../../ai/pipelines/outpainting';
 import { analyzeCopiedStyle, buildCameraAnglePrompt, buildCopiedStylePrompt, buildPresetStylePrompt, generateCopiedStyleAssets, generateStyledImage } from '../../../ai/pipelines/styleTransfer';
 import type { AtlasGenerationModel } from '../../../utils/atlasImage';
-import { atlasModelSupportsImg2Img } from '../../../utils/atlasImage';
+import { atlasModelSupportsImg2Img, atlasModelSupportsTransparency } from '../../../utils/atlasImage';
 import { birefnetRemoveBg, geminiLayerSegment } from '../../../utils/geminiLayer';
 import { gptLayerSegment } from '../../../utils/gptLayerSplit';
 import { executeDynamicRemoval } from '../../../utils/DynamicBackgroundRemoval';
@@ -97,7 +97,12 @@ async function runImageGen(
     if (!engine.atlasApiKey) throw new Error('此模型需要 Atlas API Key');
     // 多參考圖：第一張為主參考，其餘走 extraRefImages（如即夢 Pro 支援多圖融合/合成）。
     const out = await atlasBatch(
-      { prompt, ratio: aspectRatio, count: 1, refImage: refImages[0], extraRefImages: refImages.slice(1) },
+      {
+        prompt, ratio: aspectRatio, count: 1, refImage: refImages[0], extraRefImages: refImages.slice(1),
+        imageSize: params.imageSize,
+        seed: params.seed,
+        transparentBackground: !!params.transparentBackground && atlasModelSupportsTransparency(model),
+      },
       { model: model as AtlasGenerationModel, apiKey: engine.atlasApiKey },
     );
     if (!out[0]) throw new Error('生圖沒有回傳圖片');
@@ -114,7 +119,7 @@ async function runImageGen(
   }
   parts.push({ text: prompt });
   const src = await geminiGenerateImage(
-    { parts, aspectRatio, imageSize: engine.imageSize || '1K' },
+    { parts, aspectRatio, imageSize: params.imageSize || engine.imageSize || '1K', seed: params.seed },
     { apiKey: engine.geminiApiKey, model: engine.geminiImageModel || 'gemini-nano-banana-2.1' },
   );
   if (!src) throw new Error('生圖沒有回傳圖片');
@@ -411,9 +416,15 @@ function createImageElementForPipeline(src: string, name: string): ImageElement 
 async function runAnalyze(
   input: string,
   engine: ExecutorEngine,
+  question?: string,
 ): Promise<string> {
   if (!isImageSrc(input)) throw new Error('圖片分析節點需要上游圖片');
   if (!engine.geminiApiKey) throw new Error('圖片分析需要 Gemini API Key');
+  if (question?.trim()) {
+    const answer = await askAboutImage(input, question.trim(), engine.geminiApiKey);
+    if (!answer) throw new Error('圖片分析沒有回傳文字');
+    return answer;
+  }
   const analysis = await analyzeImageStyleFull(input, engine.geminiApiKey);
   const text = formatStyleAnalysis(analysis);
   if (!text) throw new Error('圖片分析沒有回傳文字');
@@ -633,12 +644,42 @@ async function runInpaint(
   if (!engine.atlasApiKey) throw new Error('AI 局部重繪需要 Atlas API Key');
   const images = inputs.filter(isImageValue);
   const source = inputsByHandle.image?.find(isImageValue) ?? images[0];
-  const mask = inputsByHandle.mask?.find(isImageValue) ?? images.find(src => src !== source);
+  // 遮罩優先序：接到「遮罩」接口的圖 → 節點上手繪的遮罩 → 第二張未標記的輸入圖（舊接法）
+  const paintedMask = typeof params.maskSrc === 'string' && isImageValue(params.maskSrc) ? params.maskSrc : undefined;
+  const mask = inputsByHandle.mask?.find(isImageValue) ?? paintedMask ?? images.find(src => src !== source);
   if (!source) throw new Error('AI 局部重繪需要連接「原圖」');
-  if (!mask) throw new Error('AI 局部重繪需要連接黑白「遮罩」');
+  if (!mask) throw new Error('AI 局部重繪需要遮罩：請按節點上的「繪製遮罩」，或接一張黑白遮罩圖');
   const references = images.filter(src => src !== source && src !== mask);
   if (references.length > 6) throw new Error('局部重繪最多支援 6 張額外參考圖（加上原圖與遮罩共 8 張）');
   return callAtlasInpaint(params.prompt ?? '', source, mask, engine.atlasApiKey, references, undefined, signal);
+}
+
+/** 疊合：前景依比例與位置畫到背景上，輸出尺寸等於背景。純瀏覽器處理。 */
+async function runComposite(
+  params: Partial<CompositeParams>,
+  inputs: string[],
+  inputsByHandle: Record<string, string[]>,
+): Promise<string> {
+  const images = inputs.filter(isImageValue);
+  const backgroundSrc = inputsByHandle.background?.find(isImageValue) ?? images[0];
+  const foregroundSrc = inputsByHandle.foreground?.find(isImageValue) ?? images.find(src => src !== backgroundSrc);
+  if (!backgroundSrc) throw new Error('疊合需要連接「背景」圖片');
+  if (!foregroundSrc) throw new Error('疊合需要連接「前景」圖片');
+  const [background, foreground] = await Promise.all([loadImage(backgroundSrc), loadImage(foregroundSrc)]);
+  const canvas = document.createElement('canvas');
+  canvas.width = background.naturalWidth;
+  canvas.height = background.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas context failed');
+  ctx.drawImage(background, 0, 0);
+  const scale = Math.min(200, Math.max(1, Number(params.scale ?? 60)));
+  const width = canvas.width * scale / 100;
+  const height = width * foreground.naturalHeight / foreground.naturalWidth;
+  const centerX = canvas.width * Math.min(100, Math.max(0, Number(params.x ?? 50))) / 100;
+  const centerY = canvas.height * Math.min(100, Math.max(0, Number(params.y ?? 50))) / 100;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(foreground, centerX - width / 2, centerY - height / 2, width, height);
+  return canvas.toDataURL('image/png');
 }
 
 async function runBrandKit(
@@ -759,9 +800,11 @@ async function runLayerSplit(
   engine: ExecutorEngine,
   onProgress?: (message: string) => void,
 ): Promise<string[]> {
-  if (params.engine === 'seedream-v5-pro') {
-    if (!engine.atlasApiKey) throw new Error('即夢圖層分離需要 Atlas API Key');
-    if (!engine.geminiApiKey) throw new Error('即夢圖層分離需要 Gemini API Key 分析物件');
+  // 'gemini' 以外皆走魔法分層（與主畫布同一條 gptLayerSegment 流程）
+  if (params.engine && params.engine !== 'gemini') {
+    if (!engine.atlasApiKey) throw new Error('此分層模型需要 Atlas API Key');
+    if (!engine.geminiApiKey) throw new Error('圖層分離需要 Gemini API Key 分析物件');
+    const instruction = params.prompt?.trim() || '';
     const layers = await gptLayerSegment(
       input,
       engine.geminiApiKey,
@@ -769,21 +812,21 @@ async function runLayerSplit(
       engine.falApiKey,
       onProgress,
       engine.geminiImageModel,
-      'seedream-v5-pro',
+      params.engine,
       {
-        model: 'seedream-v5-pro',
-        layerCount: 'auto',
+        model: params.engine,
+        layerCount: params.layerCount ?? 'auto',
         categories: [],
-        customInstruction: params.prompt?.trim() || '',
-        includeBackground: true,
+        customInstruction: instruction,
+        includeBackground: params.includeBackground ?? true,
         preservePosition: true,
         autoArrange: false,
-        groupingStrategy: params.prompt?.trim() ? 'custom' : 'smart',
+        groupingStrategy: instruction ? 'custom' : (params.groupingStrategy ?? 'smart'),
       },
     );
     const srcs = layers.map(layer => layer.base64).filter(isImageSrc);
-    if (srcs.length === 0) throw new Error('即夢圖層分離沒有產生任何圖層');
-    onProgress?.(`即夢已產生 ${srcs.length} 個圖層`);
+    if (srcs.length === 0) throw new Error('圖層分離沒有產生任何圖層');
+    onProgress?.(`已產生 ${srcs.length} 個圖層`);
     return srcs;
   }
   if (!engine.geminiApiKey) throw new Error('圖層分離需要 Gemini API Key');
@@ -859,9 +902,10 @@ const nodeRunners: Record<ExecutableNodeKind, NodeRunner> = {
     inputs,
     engine,
   )),
-  analyze: async ({ input, engine }) => singleResult(await runAnalyze(
+  analyze: async ({ node, input, engine }) => singleResult(await runAnalyze(
     requireInput(input, '圖片分析'),
     engine,
+    typeof node.data.params?.question === 'string' ? node.data.params.question : undefined,
   )),
   outpaint: async ({ node, input, engine, onProgress }) => singleResult(await runOutpaint(
     (node.data.params ?? {}) as Partial<OutpaintParams>,
@@ -913,6 +957,9 @@ const nodeRunners: Record<ExecutableNodeKind, NodeRunner> = {
     requireInput(input, '商品行銷圖'),
     engine,
     onProgress,
+  )),
+  composite: async ({ node, inputs, inputsByHandle }) => singleResult(await runComposite(
+    (node.data.params ?? {}) as Partial<CompositeParams>, inputs, inputsByHandle,
   )),
   note: ({ node }) => singleResult(typeof node.data.params?.text === 'string' ? node.data.params.text : ''),
 };
