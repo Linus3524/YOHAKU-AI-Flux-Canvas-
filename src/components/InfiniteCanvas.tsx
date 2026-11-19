@@ -65,7 +65,7 @@ interface InfiniteCanvasProps {
   onApplyCrop: (cropRect: { x: number, y: number, width: number, height: number }) => void;
   interactionMode: 'select' | 'hand';
   activeShapeTool: ShapeType | null;
-  notePlacing?: boolean;
+  placingElement?: boolean;
   onUpscale: (factor: number) => void;
   onLocalUpscale?: (modelKey: 'upscale_photo' | 'upscale_anime' | 'upscale_art') => void;
   onDragStart?: () => void;
@@ -273,7 +273,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
   onApplyCrop,
   interactionMode,
   activeShapeTool,
-  notePlacing,
+  placingElement,
   onUpscale,
   onLocalUpscale,
   onDragStart,
@@ -462,7 +462,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
         if (!isSpacebarPressed && e.button !== 1) return;
     }
 
-    if ((activeShapeTool || notePlacing) && e.button === 0) {
+    if ((activeShapeTool || placingElement) && e.button === 0) {
         return;
     }
 
@@ -482,7 +482,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
         setMarqueeRect({ start: point, end: point });
       }
     }
-  }, [isSpacebarPressed, pan, outpaintingState, onSelectElement, screenToWorld, croppingElementId, interactionMode, activeShapeTool, notePlacing]);
+  }, [isSpacebarPressed, pan, outpaintingState, onSelectElement, screenToWorld, croppingElementId, interactionMode, activeShapeTool, placingElement]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     // ── 群組旋轉攔截 ──
@@ -875,7 +875,7 @@ export const InfiniteCanvas = forwardRef<CanvasApi, InfiniteCanvasProps>(({
     <div 
       ref={canvasRef}
       className={`w-full h-full overflow-hidden relative 
-        ${isSpacebarPressed || interactionMode === 'hand' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : (activeShapeTool || notePlacing ? 'cursor-crosshair' : 'cursor-default')}
+        ${isSpacebarPressed || interactionMode === 'hand' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : (activeShapeTool || placingElement ? 'cursor-crosshair' : 'cursor-default')}
       `}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}

@@ -549,7 +549,8 @@ const App: React.FC = () => {
   const [activeNodeGroupId, setActiveNodeGroupId] = useState<string | null>(null);
   const [interactionMode, setInteractionMode] = useState<'select' | 'hand'>('select');
   // 便利貼「點擊放置」模式：true = 等待使用者在畫布點一下決定位置
-  const [placingNote, setPlacingNote] = useState(false);
+  // 點擊放置模式：按工具列「便利貼／文字」後，下一次點畫布就在該處建立
+  const [placingKind, setPlacingKind] = useState<'note' | 'text' | null>(null);
   // 最近一次滑鼠螢幕座標 —— 供「在游標位置貼上」使用
   const lastPointerScreenRef = useRef<Point | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -842,12 +843,12 @@ const App: React.FC = () => {
       setActiveShapeTool(shapeType);
       setInteractionMode('select');
       setSelectedElementIds([]);
-      setPlacingNote(false);
+      setPlacingKind(null);
   }, [setActiveShapeTool, setSelectedElementIds]);
 
-  // 進入/退出便利貼點擊放置模式（再按一次按鈕取消）
-  const handleStartPlaceNote = useCallback(() => {
-      setPlacingNote(prev => !prev);
+  // 進入/退出點擊放置模式（再按一次同一個按鈕取消）
+  const handleStartPlacing = useCallback((kind: 'note' | 'text') => {
+      setPlacingKind(prev => prev === kind ? null : kind);
       setActiveShapeTool(null);
       setInteractionMode('select');
       setSelectedElementIds([]);
@@ -1277,13 +1278,18 @@ const App: React.FC = () => {
   }, [addImagesToCanvas, getCenterOfViewport]);
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
-      if (placingNote && canvasApiRef.current) {
+      if (placingKind && canvasApiRef.current) {
           if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.floating-menu') || (e.target as HTMLElement).closest('.fixed')) return;
           e.stopPropagation();
           const worldPoint = canvasApiRef.current.screenToWorld({ x: e.clientX, y: e.clientY });
-          const id = addNote(worldPoint);
-          if (id) setSelectedElementIds([id]);
-          setPlacingNote(false);
+          if (placingKind === 'note') {
+              const id = addNote(worldPoint);
+              if (id) setSelectedElementIds([id]);
+          } else {
+              // 點擊處＝文字左緣（像在設計軟體放置文字游標），建立後直接進入編輯
+              addText(worldPoint, undefined, 'left');
+          }
+          setPlacingKind(null);
           return;
       }
       if (activeShapeTool && canvasApiRef.current) {
@@ -1305,7 +1311,7 @@ const App: React.FC = () => {
           });
           if (id) { setCreatingShapeId(id); setSelectedElementIds([id]); }
       }
-  }, [placingNote, addNote, activeShapeTool, addElement, setCreatingShapeId, setSelectedElementIds, shapeStartPointRef]);
+  }, [placingKind, addNote, addText, activeShapeTool, addElement, setCreatingShapeId, setSelectedElementIds, shapeStartPointRef]);
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
       if (creatingShapeId && canvasApiRef.current && shapeStartPointRef.current) {
@@ -1395,7 +1401,7 @@ const App: React.FC = () => {
           setCreatingShapeId(null);
           if (creatingShapeId) setElements(prev => prev.filter(el => el.id !== creatingShapeId));
       }
-      if (placingNote && e.key === 'Escape') setPlacingNote(false);
+      if (placingKind && e.key === 'Escape') setPlacingKind(null);
       const target = e.target as HTMLElement;
       const isEditingText = ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !(target as HTMLInputElement | HTMLTextAreaElement).readOnly) || target.isContentEditable;
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText) { e.preventDefault(); deleteElement(); return; }
@@ -1421,7 +1427,7 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [deleteElement, undo, redo, editingDrawing, editingImage, activeNodeGroupId, outpaintingState, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, placingNote, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
+  }, [deleteElement, undo, redo, editingDrawing, editingImage, activeNodeGroupId, outpaintingState, duplicateSelection, handleGroup, handleUngroup, activeShapeTool, creatingShapeId, placingKind, setElements, handleCancelOutpainting, handleSaveFileWithConfirm, handleSaveAsFile]);
   
   useEffect(() => {
     const clearDragState = () => {
@@ -1566,7 +1572,7 @@ const App: React.FC = () => {
   return (
     <>
     <main
-        className={`relative w-screen h-screen bg-[#F5F5F7] font-sans text-[#1D1D1F] ${activeShapeTool || placingNote ? 'cursor-crosshair' : ''}`}
+        className={`relative w-screen h-screen bg-[#F5F5F7] font-sans text-[#1D1D1F] ${activeShapeTool || placingKind ? 'cursor-crosshair' : ''}`}
         onClick={() => { setContextMenu(null); setShowStyleLibrary(false); }}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleCanvasMouseMove}
@@ -1742,7 +1748,7 @@ const App: React.FC = () => {
         onApplyCrop={handleApplyCrop}
         interactionMode={interactionMode}
         activeShapeTool={activeShapeTool}
-        notePlacing={placingNote}
+        placingElement={!!placingKind}
         onUpscale={handleAIUpscale}
         onLocalUpscale={handleLocalUpscale}
         onLocalRemoveBackground={handleLocalRemoveBackground}
@@ -1756,9 +1762,10 @@ const App: React.FC = () => {
       {!isFocusMode && !semanticEditorTarget && (
         <DraggableToolbar
             selectedElement={elements.find(e => e.id === selectedElementIds[0])}
-            onAddNote={handleStartPlaceNote}
-            notePlacing={placingNote}
-            onAddText={() => addText()}
+            onAddNote={() => handleStartPlacing('note')}
+            notePlacing={placingKind === 'note'}
+            textPlacing={placingKind === 'text'}
+            onAddText={() => handleStartPlacing('text')}
             onAddArrow={(config) => addArrow(config)}
             onAddDrawing={() => addDrawing()}
             onAddImage={() => triggerImageUpload()}

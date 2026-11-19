@@ -8,6 +8,7 @@ import { Plus, Copy, Undo, Redo, Crop, Save, FolderOpen, SaveAll } from 'lucide-
 interface DraggableToolbarProps {
   onAddNote: () => void;
   notePlacing?: boolean;
+  textPlacing?: boolean;
   onAddText: () => void;
   onAddArrow: (config?: Partial<ArrowElement>) => void;
   onAddDrawing: () => void;
@@ -96,6 +97,7 @@ const SHAPES = [
 export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
   onAddNote,
   notePlacing,
+  textPlacing,
   onAddText,
   onAddArrow,
   onAddDrawing,
@@ -291,7 +293,7 @@ export const DraggableToolbar: React.FC<DraggableToolbarProps> = ({
 
       {/* Creation Tools */}
       <ToolButton onClick={onAddNote} icon={<Icons.Note />} label={notePlacing ? '點畫布放置便利貼' : '便利貼'} active={notePlacing} />
-      <ToolButton onClick={onAddText} icon={<Icons.Text />} label="文字" />
+      <ToolButton onClick={onAddText} icon={<Icons.Text />} label={textPlacing ? '點畫布放置文字' : '文字'} active={textPlacing} />
       <ToolButton onClick={onAddDrawing} icon={<Icons.Draw />} label="手繪" />
       
       <div className="relative no-drag">

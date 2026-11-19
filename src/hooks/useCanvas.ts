@@ -415,7 +415,8 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         });
     }, [addElement, getCenterOfViewport]);
 
-    const addText = useCallback((position?: Point, content?: string) => {
+    // anchor = 'left'：position 為文字左緣（點擊放置用）；預設為文字中心
+    const addText = useCallback((position?: Point, content?: string, anchor: 'center' | 'left' = 'center') => {
         const draft = {
           type: 'text' as const,
           position: position || getCenterOfViewport(),
@@ -447,6 +448,9 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             const bounds = measureTextVisualBounds(draft as unknown as TextElement, measureCtx);
             draft.width = bounds.width;
             draft.height = bounds.height;
+        }
+        if (anchor === 'left') {
+            draft.position = { x: draft.position.x + draft.width / 2, y: draft.position.y };
         }
 
         const id = addElement(draft);
