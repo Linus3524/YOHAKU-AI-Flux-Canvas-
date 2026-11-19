@@ -553,6 +553,8 @@ const App: React.FC = () => {
   const [placingKind, setPlacingKind] = useState<'note' | 'text' | null>(null);
   // 線條工具（直線／箭頭／雙向）：選取後在畫布上拖曳畫出，存的是箭頭樣式設定
   const [activeLineTool, setActiveLineTool] = useState<Partial<ArrowElement> | null>(null);
+  // 右鍵「匯出工作區域…」→ 遞增，通知 ArtboardPanel 展開並捲到匯出設定
+  const [artboardExportSignal, setArtboardExportSignal] = useState(0);
   // 最近一次滑鼠螢幕座標 —— 供「在游標位置貼上」使用
   const lastPointerScreenRef = useRef<Point | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -1934,6 +1936,7 @@ const App: React.FC = () => {
               ))}
               onExport={(settings) => downloadArtboard(artboardForPanel, elements, settings)}
               onEstimateSize={estimateArtboardExportSize}
+              exportFocusSignal={artboardExportSignal}
               onExportPDF={(textMode) => {
                   const selectedArtboards = selectedElements
                       .filter((el): el is ArtboardElement => el.type === 'artboard')
@@ -2131,8 +2134,9 @@ const App: React.FC = () => {
             pasteTextStyle: handlePasteTextStyle,
             exportCanvas: handleExportCanvas,
             exportArtboard: (elementId: string) => {
-                const artboard = elements.find(e => e.id === elementId) as ArtboardElement;
-                if (artboard) downloadArtboard(artboard, elements);
+                // 不直接下載：選取該工作區域並打開面板的匯出設定，讓使用者選格式／尺寸
+                setSelectedElementIds([elementId]);
+                setArtboardExportSignal(n => n + 1);
             },
             importCanvas: triggerImportCanvas,
             saveFile: handleSaveFileWithConfirm,

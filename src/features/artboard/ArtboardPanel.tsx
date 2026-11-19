@@ -16,6 +16,8 @@ interface ArtboardPanelProps {
     onBatchExport?: (settings: ArtboardExportSettings) => void;
     /** 依目前設定算出實際檔案大小（bytes）；面板用來顯示預估值 */
     onEstimateSize?: (settings: ArtboardExportSettings) => Promise<number>;
+    /** 每次數值改變（右鍵「匯出工作區域…」）就展開面板、捲到匯出設定並短暫標示 */
+    exportFocusSignal?: number;
 }
 
 const SCALES = [1, 2, 3] as const;
@@ -34,7 +36,7 @@ const ArtboardIcon = () => (
     </svg>
 );
 
-export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate, onExport, onExportPDF, onExportSVG, onClose, selectedArtboardCount = 1, onBatchExport, onEstimateSize }) => {
+export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate, onExport, onExportPDF, onExportSVG, onClose, selectedArtboardCount = 1, onBatchExport, onEstimateSize, exportFocusSignal }) => {
     const [exportSettings, setExportSettings] = useState<ArtboardExportSettings>(DEFAULT_EXPORT_SETTINGS);
     const [estBytes, setEstBytes] = useState<number | null>(null);
     const [estimating, setEstimating] = useState(false);
@@ -49,6 +51,20 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
     const initialPosRef = useRef({ x: 0, y: 0 });
     const hasMovedRef = useRef(false);
     const panelRef = useRef<HTMLDivElement>(null);
+    const exportSectionRef = useRef<HTMLDivElement>(null);
+    const [exportHighlight, setExportHighlight] = useState(false);
+
+    // 右鍵選單要求匯出：展開面板 → 等渲染後捲到匯出區塊並閃一下
+    useEffect(() => {
+        if (!exportFocusSignal) return;
+        setIsOpen(true);
+        setExportHighlight(true);
+        const scrollTimer = setTimeout(() => {
+            exportSectionRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }, 50);
+        const fadeTimer = setTimeout(() => setExportHighlight(false), 1400);
+        return () => { clearTimeout(scrollTimer); clearTimeout(fadeTimer); };
+    }, [exportFocusSignal]);
 
     useEffect(() => {
         setWidthInput(String(Math.round(element.width)));
@@ -257,7 +273,10 @@ export const ArtboardPanel: React.FC<ArtboardPanelProps> = ({ element, onUpdate,
                 </div>
 
                 {/* Export Buttons */}
-                <div className="pt-2.5 border-t border-gray-100 flex flex-col gap-1.5">
+                <div
+                    ref={exportSectionRef}
+                    className={`pt-2.5 border-t border-gray-100 flex flex-col gap-1.5 rounded-lg transition-shadow duration-500 ${exportHighlight ? 'ring-2 ring-[#007AFF]/50 ring-offset-4 ring-offset-white' : ''}`}
+                >
                     {/* 匯出設定：尺寸 + 格式 */}
                     <div className="flex flex-col gap-1.5 pb-0.5">
                         <div className="flex items-center gap-1.5">

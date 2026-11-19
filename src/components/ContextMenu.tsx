@@ -257,7 +257,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                             icon={<MenuIcons.Export />}
                             onClick={() => handleAction(() => actions.exportArtboard(menuData.elementId!))}
                         >
-                            匯出工作區域
+                            匯出工作區域…
                         </MenuItem>
                         <div className="border-t my-0.5 border-gray-100/50" />
                         <MenuItem
