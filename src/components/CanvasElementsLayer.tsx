@@ -50,15 +50,20 @@ const ElementsLayerInner: React.FC<ElementsLayerProps> = ({
   const [liveDrag, setLiveDrag] = useState<{ overrides: Map<string, CanvasElement>; guidelines: SnapGuideline[] } | null>(null);
   const liveDragRef = useRef<typeof liveDrag>(null);
 
-  const handleLiveDrag = useCallback((updatedLeader: CanvasElement) => {
-      const orig = elements.find(el => el.id === updatedLeader.id);
+  const handleLiveDrag = useCallback((updatedLeader: CanvasElement, duplicateSet?: CanvasElement[]) => {
+      // Option 拖曳複製：複本才剛建立，elements 可能還沒包含它們（尚未重新渲染），
+      // 所以起點狀態直接取自本次複製出的那一份。
+      const orig = duplicateSet
+          ? duplicateSet.find(el => el.id === updatedLeader.id)
+          : elements.find(el => el.id === updatedLeader.id);
       if (!orig) return;
       const selectedSet = new Set(selectedElementIds);
+      const duplicateIds = new Set(duplicateSet?.map(el => el.id));
       let leader = updatedLeader;
       let guidelines: SnapGuideline[] = [];
       if (snapToObjects) {
           const otherEls = elements.filter(el =>
-              el.isVisible && el.id !== leader.id && !selectedSet.has(el.id)
+              el.isVisible && el.id !== leader.id && !selectedSet.has(el.id) && !duplicateIds.has(el.id)
           );
           const snapped = computeDragSnap(leader, otherEls, 5);
           if (leader.type === 'arrow') {
@@ -79,19 +84,32 @@ const ElementsLayerInner: React.FC<ElementsLayerProps> = ({
       const delta = { x: leader.position.x - orig.position.x, y: leader.position.y - orig.position.y };
       const overrides = new Map<string, CanvasElement>();
       overrides.set(leader.id, leader);
-      const gid = leader.groupId;
-      // 工作區域：範圍內的物件一起移動（鎖定的除外，與 Illustrator 一致）。
-      // 以「手勢起點」的工作區域邊界判定，避免拖曳過程中成員一直變動。
-      const artboardChildIds = new Set<string>();
-      if (orig.type === 'artboard') {
-          for (const el of elements) {
-              if (isElementInArtboard(el, orig as ArtboardElement)) artboardChildIds.add(el.id);
+
+      let followers: CanvasElement[];
+      if (duplicateSet) {
+          // 複製拖曳只帶走本次複製出的那一份。不可用「工作區域範圍」判定：
+          // 複本與原物件完全重疊，會把原物件一起拖走（原工作區域被搬空、新位置疊兩份）。
+          followers = duplicateSet.filter(el => el.id !== leader.id);
+      } else {
+          // 工作區域：範圍內的物件一起移動（鎖定的除外，與 Illustrator 一致）。
+          // 以「手勢起點」的工作區域邊界判定，避免拖曳過程中成員一直變動。
+          const artboardChildIds = new Set<string>();
+          const draggedArtboards = elements.filter(el =>
+              el.type === 'artboard' && (el.id === orig.id || selectedSet.has(el.id))
+          ) as ArtboardElement[];
+          for (const ab of draggedArtboards) {
+              for (const el of elements) {
+                  if (isElementInArtboard(el, ab)) artboardChildIds.add(el.id);
+              }
           }
+          const gid = leader.groupId;
+          followers = elements.filter(el =>
+              el.id !== leader.id
+              && ((gid && el.groupId === gid && el.isVisible) || selectedSet.has(el.id) || artboardChildIds.has(el.id))
+              && !el.isLocked
+          );
       }
-      for (const el of elements) {
-          if (el.id === leader.id) continue;
-          const follows = ((gid && el.groupId === gid && el.isVisible) || selectedSet.has(el.id) || artboardChildIds.has(el.id)) && !el.isLocked;
-          if (!follows) continue;
+      for (const el of followers) {
           if (el.type === 'arrow') {
               overrides.set(el.id, {
                   ...el,

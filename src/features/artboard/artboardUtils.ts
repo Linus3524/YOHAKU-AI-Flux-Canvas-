@@ -23,3 +23,27 @@ export const isElementInArtboard = (el: CanvasElement, ab: ArtboardElement): boo
         elBottom > abTop
     );
 };
+
+/**
+ * 複製用的選取展開：選取中的工作區域連同其範圍內的所有物件一起帶入。
+ * 鎖定物件也包含在內（複本保持鎖定），與 Illustrator 複製工作區域一致；
+ * 跨入範圍的群組整組帶入，避免群組被拆開。
+ * Option 拖曳、Cmd+D、Cmd+C／V 共用，三者複製的內容才會一致。
+ */
+export const expandSelectionWithArtboardContents = (
+    selectedIds: Iterable<string>,
+    elements: readonly CanvasElement[],
+): Set<string> => {
+    const ids = new Set(selectedIds);
+    const artboards = elements.filter(el => el.type === 'artboard' && ids.has(el.id)) as ArtboardElement[];
+    for (const ab of artboards) {
+        for (const el of elements) {
+            if (!isElementInArtboard(el, ab)) continue;
+            ids.add(el.id);
+            if (el.groupId) {
+                for (const member of elements) if (member.groupId === el.groupId) ids.add(member.id);
+            }
+        }
+    }
+    return ids;
+};

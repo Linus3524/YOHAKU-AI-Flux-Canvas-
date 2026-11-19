@@ -24,6 +24,7 @@ import { saveFileHandle, loadFileHandle, clearFileHandle, verifyHandlePermission
 import { computeDragSnap } from '../utils/snapping';
 import { persistCanvasSplit, resolveLightElements, hasPayloadMarkers } from '../utils/canvasPersistence';
 import { cacheImage } from '../utils/imageCache';
+import { expandSelectionWithArtboardContents } from '../features/artboard/artboardUtils';
 import {
     arrangeLayerSelection,
     nextTopLayerIndex,
@@ -1343,7 +1344,9 @@ export const useCanvas = (showToast: (msg: string) => void) => {
 
     const copySelection = useCallback(() => {
         if (selectedElementIds.length === 0) return;
-        const selected = elements.filter(el => selectedElementIds.includes(el.id));
+        // 工作區域連同內容一起複製（與 Option 拖曳、Cmd+D 一致）
+        const idsToCopy = expandSelectionWithArtboardContents(selectedElementIds, elements);
+        const selected = elements.filter(el => idsToCopy.has(el.id));
         setClipboardElements(JSON.parse(JSON.stringify(selected)));
         showToast(`已複製 ${selected.length} 個物件到剪貼簿`);
     }, [elements, selectedElementIds, showToast]);
@@ -1419,9 +1422,11 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         const newIds: string[] = [];
         const groupMapping: { [oldGroupId: string]: string } = {};
 
+        // 工作區域連同內容一起再製（與 Option 拖曳、Cmd+C／V 一致）
+        const idsToDuplicate = expandSelectionWithArtboardContents(selectedElementIds, elements);
         // Sort by original zIndex to maintain layering order
         const sortedSelectedElements = elements
-            .filter(el => selectedElementIds.includes(el.id))
+            .filter(el => idsToDuplicate.has(el.id))
             .sort((a, b) => a.zIndex - b.zIndex);
 
         sortedSelectedElements.forEach(el => {
@@ -1520,17 +1525,6 @@ export const useCanvas = (showToast: (msg: string) => void) => {
         // 1. Expansion Logic (Smart Packaging)
         const toDuplicateIdsSet = new Set<string>(currentSelection);
         
-        // Helper: Check if point is inside artboard
-        const isElementInArtboard = (el: CanvasElement, ab: ArtboardElement) => {
-            if (el.type === 'artboard') return false;
-            const ax = ab.position.x - ab.width / 2;
-            const ay = ab.position.y - ab.height / 2;
-            return (
-                el.position.x >= ax && el.position.x <= ax + ab.width &&
-                el.position.y >= ay && el.position.y <= ay + ab.height
-            );
-        };
-
         // Expand by Group
         currentSelection.forEach(id => {
             const el = elements.find(e => e.id === id);
@@ -1539,27 +1533,9 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             }
         });
 
-        // Expand by Artboard
-        currentSelection.forEach(id => {
-            const el = elements.find(e => e.id === id);
-            if (el && el.type === 'artboard') {
-                elements.forEach(child => {
-                    if (isElementInArtboard(child, el as ArtboardElement)) {
-                        toDuplicateIdsSet.add(child.id);
-                        // If the child is in a group, bring the whole group
-                        if (child.groupId) {
-                            elements.filter(e => e.groupId === child.groupId).forEach(e => toDuplicateIdsSet.add(e.id));
-                        }
-                    }
-                });
-            }
-        });
-
-        // Filter out locked elements
-        const toDuplicateIds = Array.from(toDuplicateIdsSet).filter(id => {
-            const el = elements.find(e => e.id === id);
-            return el && !el.isLocked;
-        });
+        // 工作區域連同內容（含鎖定物件，複本保持鎖定，與 Illustrator 一致）
+        const expandedIds = expandSelectionWithArtboardContents(toDuplicateIdsSet, elements);
+        const toDuplicateIds = Array.from(expandedIds).filter(id => elements.some(e => e.id === id));
 
         if (toDuplicateIds.length === 0) return {};
         
@@ -1648,6 +1624,9 @@ export const useCanvas = (showToast: (msg: string) => void) => {
             setSelectedElementIds(newIds);
             // CRITICAL: Update ref immediately to prevent drag linkage errors during rapid mousemove
             selectedElementIdsRef.current = newIds;
+            // 上面的 setElements 已為「複製前狀態」新增一筆歷史；消耗掉手勢首幀標記，
+            // 讓接著的拖曳提交覆寫同一筆 → Option 拖曳複製只需 Undo 一次。
+            transformPendingRef.current = false;
         }
         return mapping;
     }, [elements, setElements]);

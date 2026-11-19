@@ -21,7 +21,8 @@ interface TransformableElementProps {
   onSelect: (id: string, shiftKey: boolean) => void;
   onUpdate: (element: CanvasElement, dragDelta?: Point) => void;
   /** 拖曳 fast path：提供時，drag 期間改走此路（不進全域 state），mouseup 由外層一次 commit */
-  onLiveDrag?: (element: CanvasElement) => void;
+  /** duplicateSet = Option 拖曳複製中，本次複製出的全部複本 */
+  onLiveDrag?: (element: CanvasElement, duplicateSet?: CanvasElement[]) => void;
   onInteractionStart?: () => void;
   onInteractionEnd: () => void;
   onContextMenu: (e: React.MouseEvent, worldPoint: Point, elementId: string) => void;
@@ -57,6 +58,11 @@ type Interaction = {
   startAngle?: number;
   center?: Point;
   resizeHandle?: ResizeHandle;
+  /** Option 拖曳複製：本次複製出的全部複本（拖曳只帶走這一份） */
+  duplicateSet?: CanvasElement[];
+  /** Option 已按下但還沒真的移動：等移動超過門檻才建立複本，沒動就不複製 */
+  pendingDuplicate?: boolean;
+  shiftKey?: boolean;
 } | null;
 
 // ─── Fan-out positions (1–8 張沿左上四分之一圓展開) ─────────────────────────
@@ -452,6 +458,8 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
   const elementRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasMovedRef = useRef(false);
+  // 本次手勢的 Option 複製結果（同步記錄，避免重新渲染前的下一幀讀到舊狀態而重複複製）
+  const duplicateRef = useRef<{ startElement: CanvasElement; duplicateSet: CanvasElement[] } | 'none' | null>(null);
 
   // 顯示用縮圖代理：畫布上的 <img> 用 ~1600px 縮圖，元素 src 原圖不動
   //（AI/匯出/效果全部照常讀原圖）。非圖片元素傳 undefined，hook 無條件呼叫以符合 hooks 規則。
@@ -628,22 +636,17 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
       // For rotate/resize: never toggle with shiftKey (prevents deselecting during Shift+rotate)
       onSelect(element.id, type === 'drag' ? e.shiftKey : false);
 
-      let startElement = element;
-      if (type === 'drag' && e.altKey && onDuplicateInPlace) {
-          // Batch copy: get mapping of all selected objects (including Artboard)
-          // Pass current element and shift state to lock the selection synchronously
-          const mapping = onDuplicateInPlace(element.id, e.shiftKey);
-          if (mapping[element.id]) {
-              startElement = mapping[element.id];
-          }
-      }
+      const startElement = element;
+      // Option 拖曳複製延到真正開始移動才執行（見 processInteractionMove），
+      // 否則 Option 點一下、或按下後沒拖動，都會在原地留下一份疊著的複本。
+      const pendingDuplicate = type === 'drag' && e.altKey && !!onDuplicateInPlace;
 
       if (type === 'drag') {
           onDragStart?.();
       }
 
       const startPoint = { x: e.clientX, y: e.clientY };
-      let interactionDetails: Interaction = { type, startPoint, startElement, resizeHandle };
+      let interactionDetails: Interaction = { type, startPoint, startElement, resizeHandle, pendingDuplicate, shiftKey: e.shiftKey };
 
       if (type === 'rotate' && elementRef.current) {
           const rect = elementRef.current.getBoundingClientRect();
@@ -653,6 +656,7 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
           interactionDetails.startAngle = Math.atan2(startPoint.y - centerY, startPoint.x - centerX);
       }
       hasMovedRef.current = false;
+      duplicateRef.current = null;
       // 通知手勢開始：讓歷史在首幀新增一筆，保住手勢前狀態（修復幽靈歷史）
       onInteractionStart?.();
       setInteraction(interactionDetails);
@@ -661,7 +665,23 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
     const processInteractionMove = useCallback((e: MouseEvent) => {
         if (!interaction) return;
 
-        const { type, startPoint, startElement } = interaction;
+        let current = interaction;
+        if (current.pendingDuplicate) {
+            if (duplicateRef.current === null) {
+                // 螢幕上移動不到 3px 視為沒拖動：不複製、也不移動原物件
+                if (Math.hypot(e.clientX - current.startPoint.x, e.clientY - current.startPoint.y) < 3) return;
+                const mapping = onDuplicateInPlace?.(element.id, !!current.shiftKey) ?? {};
+                const copy = mapping[element.id];
+                duplicateRef.current = copy ? { startElement: copy, duplicateSet: Object.values(mapping) } : 'none';
+            }
+            const dup = duplicateRef.current;
+            current = dup === 'none'
+                ? { ...current, pendingDuplicate: false }
+                : { ...current, pendingDuplicate: false, startElement: dup.startElement, duplicateSet: dup.duplicateSet };
+            setInteraction(current);
+        }
+
+        const { type, startPoint, startElement } = current;
         const dx = (e.clientX - startPoint.x) / zoom;
         const dy = (e.clientY - startPoint.y) / zoom;
 
@@ -686,7 +706,7 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
             }
             if (onLiveDrag) {
                 // fast path：拖曳期間不進全域 state，由 InfiniteCanvas 以 local override 呈現
-                onLiveDrag(updatedElement);
+                onLiveDrag(updatedElement, current.duplicateSet);
             } else {
                 onUpdate(updatedElement, delta);
             }
@@ -820,7 +840,7 @@ const TransformableElementInner: React.FC<TransformableElementProps> = ({ elemen
                 rotation: newRotation,
             });
         }
-    }, [interaction, onUpdate, onLiveDrag, zoom, element.position.x, element.position.y, element]);
+    }, [interaction, onUpdate, onLiveDrag, onDuplicateInPlace, zoom, element.position.x, element.position.y, element]);
 
     // rAF 節流：高回報率滑鼠（125~1000Hz）一幀可能塞進多個 mousemove，
     // 只保留最新事件、每幀最多處理一次，避免一幀內多次 React commit。
